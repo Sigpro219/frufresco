@@ -84,6 +84,7 @@ export default function ContingencyReconciliationPage() {
     const [cratesReturned, setCratesReturned] = useState<number>(0);
     const [saving, setSaving] = useState(false);
     const [saveToast, setSaveToast] = useState<string | null>(null);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // References for input focusing
     const firstInputRef = useRef<HTMLInputElement | null>(null);
@@ -298,7 +299,8 @@ export default function ContingencyReconciliationPage() {
 
         } catch (err: any) {
             console.error('Error guardando conciliación:', err);
-            alert('Error al guardar: ' + err.message);
+            setSaveError('Error al guardar conciliación: ' + (err.message || 'Error desconocido'));
+            setTimeout(() => setSaveError(null), 6000);
         } finally {
             setSaving(false);
         }
@@ -318,6 +320,13 @@ export default function ContingencyReconciliationPage() {
             return matchesSearch && matchesStatus;
         });
     }, [orders, searchQuery, statusFilter]);
+
+    const stats = useMemo(() => {
+        const total = orders.length;
+        const reconciled = orders.filter(o => o.is_reconciled).length;
+        const pending = total - reconciled;
+        return { total, reconciled, pending };
+    }, [orders]);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
@@ -415,6 +424,24 @@ export default function ContingencyReconciliationPage() {
                 </div>
             )}
 
+            {saveError && (
+                <div style={{
+                    backgroundColor: '#991B1B',
+                    color: '#FFFFFF',
+                    padding: '8px 16px',
+                    textAlign: 'center',
+                    fontSize: '0.82rem',
+                    fontWeight: '800',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                }}>
+                    <AlertTriangle size={16} />
+                    {saveError}
+                </div>
+            )}
+
             {/* Main Content Layout: Two Columns */}
             <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', flex: 1, overflow: 'hidden' }}>
                 
@@ -467,6 +494,18 @@ export default function ContingencyReconciliationPage() {
                                     {st === 'ALL' ? 'Todos' : st === 'PENDING' ? 'Pendientes' : 'Listos'}
                                 </button>
                             ))}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0', fontSize: '0.70rem' }}>
+                            <span style={{ flex: 1, textAlign: 'center', backgroundColor: '#FFFFFF', padding: '3px 4px', borderRadius: '4px', border: '1px solid #E2E8F0', fontWeight: '700', color: '#475569' }}>
+                                Total: <b>{stats.total}</b>
+                            </span>
+                            <span style={{ flex: 1, textAlign: 'center', backgroundColor: '#ECFDF5', padding: '3px 4px', borderRadius: '4px', border: '1px solid #A7F3D0', fontWeight: '800', color: '#065F46' }}>
+                                Listos: <b>{stats.reconciled}</b>
+                            </span>
+                            <span style={{ flex: 1, textAlign: 'center', backgroundColor: '#FEF3C7', padding: '3px 4px', borderRadius: '4px', border: '1px solid #FDE68A', fontWeight: '800', color: '#92400E' }}>
+                                Pend: <b>{stats.pending}</b>
+                            </span>
                         </div>
                     </div>
 
@@ -744,7 +783,7 @@ export default function ContingencyReconciliationPage() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
                                     <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
-                                        * Al guardar, las diferencias se reportan a Facturación y se ajusta el saldo para Word Office.
+                                        * Al guardar, las diferencias se reportan a Facturación y se ajusta el saldo para World Office.
                                     </span>
                                 </div>
 

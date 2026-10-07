@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.146 (Certificación Dominio 8.3: Expediente Oficial de Crédito B2B, SARLAFT & Pagaré en Blanco Art. 622 C.Co. - FAC-03)
+> **Versión:** 1.9.148 (Certificación Dominio 8.4: Conciliación de Remisiones Físicas y Liquidación Definitiva - CIERRE DOMINIO 8 AL 100%)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8511,6 +8511,43 @@ La consola de emisión documental de crédito (`/admin/commercial/billing/print-
   3. El usuario puede alternar la impresión entre "Todo (6 Págs)", "Solicitud (4 Págs)" o "Pagaré (2 Págs)" y cambiar entre Persona Natural y Jurídica desde la barra de control fija.
   4. Al pulsar `[Imprimir Selección]`, se activa la impresión de alta fidelidad con encabezado institucional Investments Cortés S.A.S. (FC-001), texto legal en justificación estricta y recuadros formales para huella y sello de Cámara de Comercio.
   5. Si el cliente no existe en base de datos, se despliega una tarjeta de error amigable con botón directo para regresar a la mesa de facturación.
+
+---
+
+### 39.5 Mesa de Conciliación de Remisiones Físicas y Liquidación Definitiva (`/admin/orders/contingency-reconciliation`) (SDD v1.9.148)
+
+#### A. Misión y Alcance de la Mesa de Conciliación Post-Despacho
+La mesa de conciliación (`/admin/orders/contingency-reconciliation`) opera como el puente de cierre operativo y contable entre la entrega física en los muelles de los clientes B2B y la mesa de facturación masiva. Su propósito es capturar de forma ultra-rápida las cantidades efectivamente recibidas anotadas en las remisiones físicas firmadas, calcular automáticamente cualquier merma o faltante en báscula, registrar las novedades directamente en `billing_returns` para habilitar el Corte ADJ de facturación y auditar el balance de canastillas plásticas en comodato.
+
+#### B. Arquitectura de Liquidación, Poka-Yoke & Integración World Office
+1. **Digitación Numérica Rápida Asistida por Teclado:**
+   - Foco automático en el primer campo de cantidad recibida (`firstInputRef.current.focus()`) tras seleccionar cada orden.
+   - Cálculo en caliente de la diferencia en unidades/kilogramos (`difference_qty = quantity - received_quantity`) y del impacto financiero en pesos (`difference_val = difference_qty * unit_price`).
+   - Resaltado cromático condicional: filas conformes en verde suave (`#F0FDF4`), filas con diferencia o merma en rojo claro (`#FEF2F2`) con selector tipificado de motivo (`Faltante en entrega`, `Rechazo por merma`, `Avería transporte`, `Error de pesaje`).
+2. **Generación Atómica de Novedades de Retorno (`billing_returns`):**
+   - Cuando se detectan diferencias (`totalDifference > 0`), el guardado inserta automáticamente registros aprobados en `billing_returns`, alimentando la cola de devoluciones pendientes de la Mesa de Facturación (Screen 8.1) para que el plano contable de World Office descuente el valor de la Factura de Venta o emita la Nota Crédito oficial (`NC`).
+3. **Control de Custodia de Canastillas Retornables:**
+   - Captura del número de canastillas plásticas entregadas (`cratesDelivered`) y recuperadas en muelle (`cratesReturned`), calculando el balance neto del cliente.
+   - La información se estampa de forma inmutable en `admin_notes` del pedido con timestamp ISO-8601 (`[CONCILIADO_MANUAL ...]`), alimentando la telemetría del Kardex de envases en comodato.
+4. **Vía Rápida de Conformidad 100% (Fast-Path Approval):**
+   - Botón `[Aprobar 100% Exacto (Sin Novedad)]` que concilia el pedido de un solo clic sin diferencias cuando la remisión física no tiene tachaduras ni reclamos.
+   - Avance automático al siguiente pedido pendiente de la ruta para máxima productividad operativa.
+5. **Erradicación Militar de Diálogos Bloqueantes de Navegador:**
+   - Erradicación del `alert()` nativo en el manejador de captura de excepciones (`handleSaveReconciliation`), sustituido por banner reactivo in-UI `saveError` con cierre temporizado automático.
+   - Telemetría reactiva en la barra lateral con chips de conteo (Total, Listos, Pendientes).
+
+---
+
+#### Escenario 185: Conciliación de Remisiones Físicas, Mermas en Báscula y Registro en Retornos (SDD v1.9.148)
+- **Given** el Liquidador de Despachos en `/admin/orders/contingency-reconciliation` con las remisiones físicas firmadas de la ruta del día.
+- **When** selecciona el pedido de "Hotel Tequendama" (Bahía [014]) que despachó 50 Kg de Tomate Chonto a $4.200 COP y en la remisión el chef firmó recibido por 44 Kg por merma de maduración:
+- **Then**:
+  1. El liquidador digita "44" en la casilla de recibido del Tomate Chonto; el sistema resalta la fila en rojo, calcula una diferencia de -6 Kg y un impacto de -$25.200 COP, y habilita el selector de motivo seleccionando "Rechazo por no conformidad / merma".
+  2. El resumen financiero superior actualiza instantáneamente: *Despachado Original*, *Recibido en Firme* y *Ajuste / Nota Crédito: -$25.200*.
+  3. Ingresa las canastillas (4 entregadas / 4 devueltas, balance 0) y presiona `[Guardar y Generar Ajuste]`.
+  4. El sistema inserta la novedad en `billing_returns` con estado `approved`, actualiza la orden a `delivered` con la anotación de conciliación, despliega el banner verde de confirmación y enfoca automáticamente el siguiente pedido pendiente de la lista.
+  5. En la Mesa de Facturación (`/admin/commercial/billing`), la novedad de $25.200 COP queda disponible de inmediato para ser descontada del corte definitivo para World Office.
+
 
 
 
