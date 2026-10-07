@@ -4814,6 +4814,56 @@ function OrderLoadingContent() {
                                             );
                                         })()}
 
+                                        {(() => {
+                                            const proc = getOrderProcurementReferences(selectedOrder);
+                                            if (proc.status === 'none') return null;
+                                            return (
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span style={{
+                                                        padding: '4px 12px',
+                                                        borderRadius: '20px',
+                                                        fontSize: '0.74rem',
+                                                        fontWeight: '900',
+                                                        backgroundColor: proc.status === 'oc_formalizada' ? '#ECFDF5' : '#FEF3C7',
+                                                        color: proc.status === 'oc_formalizada' ? '#065F46' : '#92400E',
+                                                        border: proc.status === 'oc_formalizada' ? '1.5px solid #34D399' : '1.5px solid #F59E0B',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px'
+                                                    }}>
+                                                        <FileText size={12} strokeWidth={2.8} />
+                                                        <span>{proc.status === 'oc_formalizada' ? `OC: ${proc.purchaseOrderNumber}${proc.solpedNumber ? ` (SOLPED: ${proc.solpedNumber})` : ''}` : `SOLPED: ${proc.solpedNumber} (Pendiente OC)`}</span>
+                                                    </span>
+                                                    {proc.status === 'solped_provisional' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setShowFormalizeOcModal(true);
+                                                                setFormalizeOcInput('');
+                                                            }}
+                                                            style={{
+                                                                backgroundColor: '#0D7A57',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '8px',
+                                                                padding: '4px 10px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '800',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                boxShadow: '0 1px 3px rgba(13, 122, 87, 0.25)'
+                                                            }}
+                                                            title="Registrar la Orden de Compra (OC) oficial emitida por Colsubsidio"
+                                                        >
+                                                            <Edit3 size={11} /> Formalizar OC
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
                                         {selectedOrder.created_at && (
                                             <div style={{
                                                 display: 'inline-flex',
@@ -7205,6 +7255,166 @@ function OrderLoadingContent() {
                         </div>
                     </div>
                 )}
+
+                {/* MODAL FORMALIZAR ORDEN DE COMPRA (OC) - SDD §7.5.9 */}
+                {showFormalizeOcModal && selectedOrder && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        backdropFilter: 'blur(4px)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1rem'
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: '16px',
+                            maxWidth: '520px',
+                            width: '100%',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}>
+                            {/* Modal Header */}
+                            <div style={{
+                                padding: '1.25rem 1.5rem',
+                                borderBottom: '1px solid #E2E8F0',
+                                backgroundColor: '#F8FAFC',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '10px',
+                                        backgroundColor: '#ECFDF5',
+                                        color: '#065F46',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <FileText size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '800', color: '#0F172A' }}>
+                                            Formalizar Orden de Compra (OC)
+                                        </h3>
+                                        <p style={{ margin: 0, fontSize: '0.74rem', color: '#64748B', fontWeight: '600' }}>
+                                            Pedido #{getFriendlyOrderId(selectedOrder)} · {selectedOrder.customer_name}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFormalizeOcModal(false)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div style={{
+                                    backgroundColor: '#FEF3C7',
+                                    border: '1px solid #FCD34D',
+                                    borderRadius: '8px',
+                                    padding: '0.75rem',
+                                    fontSize: '0.76rem',
+                                    color: '#92400E',
+                                    lineHeight: 1.4,
+                                    fontWeight: '600'
+                                }}>
+                                    ℹ️ <strong>Protocolo Colsubsidio:</strong> Este pedido fue creado provisionalmente con SOLPED. Ingrese el número de Orden de Compra (OC) definitivo expedido por el cliente para formalizarlo y habilitar la radicación de la factura electrónica.
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#1E293B', marginBottom: '6px', textTransform: 'uppercase' }}>
+                                        Número de Orden de Compra (OC) <span style={{ color: '#DC2626' }}>*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formalizeOcInput}
+                                        onChange={(e) => setFormalizeOcInput(e.target.value)}
+                                        placeholder="Ej: 4500678912 ó OC-98213"
+                                        autoFocus
+                                        style={{
+                                            width: '100%',
+                                            height: '42px',
+                                            padding: '0 0.85rem',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #0D7A57',
+                                            fontSize: '0.95rem',
+                                            fontWeight: '700',
+                                            outline: 'none',
+                                            color: '#0F172A',
+                                            boxSizing: 'border-box'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div style={{
+                                padding: '1rem 1.5rem',
+                                borderTop: '1px solid #E2E8F0',
+                                backgroundColor: '#F8FAFC',
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                gap: '10px'
+                            }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFormalizeOcModal(false)}
+                                    disabled={isSavingFormalizeOc}
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        backgroundColor: 'white',
+                                        fontWeight: '700',
+                                        color: '#64748B',
+                                        cursor: 'pointer',
+                                        fontSize: '0.82rem'
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveFormalizeOc}
+                                    disabled={isSavingFormalizeOc || !formalizeOcInput.trim()}
+                                    style={{
+                                        padding: '8px 20px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        backgroundColor: formalizeOcInput.trim() ? '#0D7A57' : '#94A3B8',
+                                        color: 'white',
+                                        fontWeight: '800',
+                                        cursor: formalizeOcInput.trim() && !isSavingFormalizeOc ? 'pointer' : 'not-allowed',
+                                        fontSize: '0.82rem',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: formalizeOcInput.trim() ? '0 2px 6px rgba(13, 122, 87, 0.3)' : 'none'
+                                    }}
+                                >
+                                    {isSavingFormalizeOc ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                                    {isSavingFormalizeOc ? 'Guardando...' : 'Confirmar y Formalizar OC'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                     </>
                 ) : activeTab === 'emails' ? (
                     <div style={{ marginTop: '0.35rem' }}>
@@ -7359,6 +7569,31 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                                         >
                                             <RotateCcw size={10} strokeWidth={2.8} />
                                             <span>REPOSICIÓN {rep.parentSequenceId ? `DE #${rep.parentSequenceId}` : '($0)'}</span>
+                                        </span>
+                                    );
+                                })()}
+                                {(() => {
+                                    const proc = getOrderProcurementReferences(order);
+                                    if (proc.status === 'none') return null;
+                                    return (
+                                        <span 
+                                            title={proc.status === 'oc_formalizada' ? (proc.solpedNumber ? `OC: ${proc.purchaseOrderNumber} (SOLPED: ${proc.solpedNumber})` : `OC: ${proc.purchaseOrderNumber}`) : `SOLPED: ${proc.solpedNumber} (Pendiente OC)`}
+                                            style={{
+                                                backgroundColor: proc.status === 'oc_formalizada' ? '#ECFDF5' : '#FEF3C7',
+                                                color: proc.status === 'oc_formalizada' ? '#065F46' : '#92400E',
+                                                border: proc.status === 'oc_formalizada' ? '1.2px solid #34D399' : '1.2px solid #F59E0B',
+                                                borderRadius: '5px',
+                                                padding: '1px 6px',
+                                                fontSize: '0.66rem',
+                                                fontWeight: '900',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px',
+                                                boxShadow: proc.status === 'oc_formalizada' ? '0 1px 2px rgba(6, 95, 70, 0.12)' : '0 1px 2px rgba(217, 119, 6, 0.12)'
+                                            }}
+                                        >
+                                            <FileText size={10} strokeWidth={2.8} />
+                                            <span>{proc.status === 'oc_formalizada' ? `OC: ${proc.purchaseOrderNumber}` : `SOLPED: ${proc.solpedNumber}`}</span>
                                         </span>
                                     );
                                 })()}

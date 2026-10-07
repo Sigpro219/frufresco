@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruction } from '@/lib/orderUtils';
+import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruction, getOrderProcurementReferences } from '@/lib/orderUtils';
 import { Printer, ShieldAlert, ArrowLeft, Download, Truck } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
@@ -1111,6 +1111,21 @@ export default function ContingencyPrintPage() {
                                             <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>FECHA DESPACHO:</strong> {order.delivery_date}</div>
                                             <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>FRANJA HORARIA:</strong> {resolveDeliverySlotInfo(order).slot}</div>
                                             <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>LÍNEAS DE PEDIDO:</strong> {itemsCount} productos solicitados</div>
+                                            {(() => {
+                                                const proc = getOrderProcurementReferences(order);
+                                                if (proc.status === 'none') return null;
+                                                return (
+                                                    <div style={{ lineHeight: 1.3, color: '#065F46' }}>
+                                                        <strong style={{ color: '#0F172A' }}>{proc.status === 'oc_formalizada' ? 'ORDEN DE COMPRA (OC):' : 'SOLPED (PROVISIONAL):'}</strong>{' '}
+                                                        <span style={{ fontWeight: 'bold' }}>{proc.purchaseOrderNumber || proc.solpedNumber}</span>
+                                                        {proc.status === 'oc_formalizada' && proc.solpedNumber && (
+                                                            <span style={{ fontSize: '6.2pt', color: '#64748B', marginLeft: '4px' }}>
+                                                                (SOLPED: {proc.solpedNumber})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                             {order.special_notes && <div style={{ lineHeight: 1.3, color: '#0369A1' }}><strong style={{ color: '#0F172A' }}>OBSERVACIÓN:</strong> {order.special_notes}</div>}
                                         </div>
                                     </div>
