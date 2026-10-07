@@ -9277,6 +9277,17 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
 
 ---
 
+#### Escenario 204: Resolución Canónica de Tarifas B2B, Fallback a General Institucional y Poka-Yoke Anti-Tarifa Cero en Pedidos (SDD v1.9.168)
+- **Given** una ejecutiva comercial o analista de pedidos radicando una orden para un cliente institucional (ej. Hotel Wyndham) en `/admin/orders/create`.
+- **When** busca un producto en el menú desplegable y lo agrega al pedido:
+- **Then**:
+  1. Si el SKU figura en el Acuerdo Comercial vigente del cliente (`quote_items`), el desplegable proyecta el badge azul índigo `[Convenio]` y la tarifa unitaria pactada exactamente congelada (ej. Granada a \$38.000 COP), erradicando cualquier valor residual del catálogo base (`products.base_price`).
+  2. Si el SKU no forma parte del acuerdo pero el cliente está autorizado para adquirir catálogo abierto, el sistema asigna el badge gris `[Fuera de Convenio (Institucional)]` y liquida automáticamente la tarifa oficial de **General Institucional** (`pricing_model_prices` con modelo `d90a91e5-827c-473d-9d4f-3e28c7c91e15`).
+  3. Queda terminantemente bloqueada la incorporación de productos con precio \$0 COP para ventas regulares; si el insumo carece de costo y tarifa en modelos, el buscador despliega el badge rojo `[SIN PRECIO ($0)]` y el validador `handleSubmit` veta el guardado del pedido para evitar facturación a ciegas y contingencias tributarias ante la DIAN.
+  4. La única excepción admitida para \$0 COP es una reposición por garantía amparada por PQR y Pedido Padre (`orderNature === 'replacement'`).
+
+---
+
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
 
 > **Referencia:** Documento maestro [`TECHNICAL_DEBT.md`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/TECHNICAL_DEBT.md) en la raíz del repositorio.  
