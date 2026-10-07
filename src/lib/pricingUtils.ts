@@ -180,16 +180,15 @@ export async function recalculateAndSyncProductPrices(
                 marginPct = Number(m.base_margin_percent) || 0;
             }
 
-            // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen Comercial sobre Venta: Costo Efectivo / (1 - Margen)
-            const marginFraction = Math.min(Math.max((marginPct || 0) / 100, -0.9), 0.99);
-            const priceBeforeTax = effectiveCost / (1 - marginFraction);
+            // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen/Utilidad sobre Costo Efectivo (Markup Multiplicador)
+            const priceBeforeTax = effectiveCost * (1 + (marginPct || 0) / 100);
             // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
             const roundedPriceBeforeTax = Math.ceil(priceBeforeTax / 50) * 50;
 
             let finalPrice = roundedPriceBeforeTax;
             if (m.id === CLIENTES_HOGAR_ID) {
                 // Para consumidor final B2C, la regulación exige precio de góndola con IVA incluido
-                const priceWithTax = roundedPriceBeforeTax * (1 + ivaRate);
+                const priceWithTax = priceBeforeTax * (1 + ivaRate);
                 finalPrice = Math.ceil(priceWithTax / 50) * 50;
                 hogarFinalPrice = finalPrice;
             }
@@ -351,15 +350,14 @@ export async function batchRecalculateAndSyncPrices(
                     marginPct = Number(m.base_margin_percent) || 0;
                 }
 
-                // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen Comercial sobre Venta: Costo Efectivo / (1 - Margen)
-                const marginFraction = Math.min(Math.max((marginPct || 0) / 100, -0.9), 0.99);
-                const priceBeforeTax = effectiveCost / (1 - marginFraction);
+                // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen/Utilidad sobre Costo Efectivo (Markup Multiplicador)
+                const priceBeforeTax = effectiveCost * (1 + (marginPct || 0) / 100);
                 // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
                 const roundedPriceBeforeTax = Math.ceil(priceBeforeTax / 50) * 50;
 
                 let finalPrice = roundedPriceBeforeTax;
                 if (m.id === CLIENTES_HOGAR_ID) {
-                    const priceWithTax = roundedPriceBeforeTax * (1 + ivaRate);
+                    const priceWithTax = priceBeforeTax * (1 + ivaRate);
                     finalPrice = Math.ceil(priceWithTax / 50) * 50;
                     hogarPrice = finalPrice;
                 }

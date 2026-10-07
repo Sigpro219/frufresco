@@ -1182,12 +1182,61 @@ function CreateOrderContent() {
                 if (!candidateAgreement && parentId) {
                     const { data: matrixAgreement } = await supabase
                         .from('quotes')
-                        .select('id, quote_number, start_date, valid_until')
+                        .select('id, quote_number, start_date, valid_until, model_snapshot_name')
                         .eq('client_id', parentId)
                         .eq('status', 'agreement')
                         .maybeSingle();
                     if (matrixAgreement) {
                         candidateAgreement = matrixAgreement;
+                    }
+                }
+
+                // Nivel 3: Fallback de Cascada - Acuerdo Maestro Compartido (Lista Maestra Viva Multi-Cliente)
+                if (!candidateAgreement) {
+                    const masterId = currentProfile?.logistics_data?.active_master_agreement_id 
+                                  || parentProfile?.logistics_data?.active_master_agreement_id;
+                    
+                    if (masterId) {
+                        const { data: sharedMaster } = await supabase
+                            .from('quotes')
+                            .select('id, quote_number, start_date, valid_until, model_snapshot_name')
+                            .eq('id', masterId)
+                            .eq('status', 'agreement')
+                            .maybeSingle();
+                        if (sharedMaster) {
+                            candidateAgreement = sharedMaster;
+                        }
+                    }
+
+                    // Fallback complementario: buscar pertenencia en app_settings
+                    if (!candidateAgreement && (branchId || parentId)) {
+                        const { data: sharedSettings } = await supabase
+                            .from('app_settings')
+                            .select('key, value')
+                            .ilike('key', 'agreement_clients:%');
+                        
+                        if (sharedSettings) {
+                            for (const item of sharedSettings) {
+                                try {
+                                    const linkedIds: string[] = JSON.parse(item.value || '[]');
+                                    if (linkedIds.includes(branchId) || (parentId && linkedIds.includes(parentId))) {
+                                        const quoteId = item.key.replace('agreement_clients:', '');
+                                        const { data: sharedMaster } = await supabase
+                                            .from('quotes')
+                                            .select('id, quote_number, start_date, valid_until, model_snapshot_name')
+                                            .eq('id', quoteId)
+                                            .eq('status', 'agreement')
+                                            .maybeSingle();
+                                        if (sharedMaster) {
+                                            candidateAgreement = sharedMaster;
+                                            break;
+                                        }
+                                    }
+                                } catch (e) {
+                                    // ignore parse error
+                                }
+                            }
+                        }
                     }
                 }
                 
@@ -1203,7 +1252,7 @@ function CreateOrderContent() {
             if (activeAgreement) {
                 resolvedModel = {
                     id: activeAgreement.id,
-                    name: `Acuerdo ${activeAgreement.quote_number}`,
+                    name: activeAgreement.model_snapshot_name || `Acuerdo ${activeAgreement.quote_number}`,
                     is_agreement: true
                 };
             } else {

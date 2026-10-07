@@ -39,7 +39,7 @@ import PqrTaxonomyModal from './components/PqrTaxonomyModal';
 import PqrNoveltyReviewModal from './components/PqrNoveltyReviewModal';
 import PqrLeanDashboard from './components/PqrLeanDashboard';
 
-export default function CustomerServicePage() {
+export default function CustomerServicePage({ initialTab }: { initialTab?: 'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties' } = {}) {
     // Data State
     const [pqrs, setPqrs] = useState<PQR[]>([]);
     const [novelties, setNovelties] = useState<any[]>([]);
@@ -56,8 +56,24 @@ export default function CustomerServicePage() {
     // Navigation & Filtering
     const [mainView, setMainView] = useState<'cases' | 'lean_dashboard'>('cases');
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties'>('pending');
+    const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties'>(initialTab || 'pending');
     const [showKpis, setShowKpis] = useState(true);
+
+    useEffect(() => {
+        if (initialTab) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const tab = params.get('tab');
+            if (tab && ['all', 'pending', 'in_progress', 'resolved', 'rejected', 'novelties'].includes(tab)) {
+                setActiveTab(tab as any);
+            }
+        }
+    }, []);
 
     // Sticky Magnetic Stacking Measurement (Zero Gap Protocol)
     const toolbarRef = useRef<HTMLDivElement>(null);

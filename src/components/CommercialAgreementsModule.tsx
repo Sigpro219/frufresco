@@ -309,6 +309,14 @@ export default function CommercialAgreementsModule() {
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [modelFilter, setModelFilter] = useState<string>('all');
     
+    // Master Shared Agreements State (1 to N Cascade Architecture)
+    const [sharedLinks, setSharedLinks] = useState<Record<string, string[]>>({});
+    const [managingSharedAgreement, setManagingSharedAgreement] = useState<Agreement | null>(null);
+    const [isLinkedClientsModalOpen, setIsLinkedClientsModalOpen] = useState(false);
+    const [linkedClientsSearch, setLinkedClientsSearch] = useState('');
+    const [savingLinkedClients, setSavingLinkedClients] = useState(false);
+    const [editableLinkedClientIds, setEditableLinkedClientIds] = useState<string[]>([]);
+    
     // Details Drawer State
     const [selectedAgreement, setSelectedAgreement] = useState<Agreement | null>(null);
     const [agreementItems, setAgreementItems] = useState<AgreementItem[]>([]);
@@ -538,12 +546,92 @@ export default function CommercialAgreementsModule() {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
+
+            // Also load shared agreement links from app_settings
+            const { data: linkSettings } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .ilike('key', 'agreement_clients:%');
+
+            const linksMap: Record<string, string[]> = {};
+            if (linkSettings) {
+                linkSettings.forEach(s => {
+                    const quoteId = s.key.replace('agreement_clients:', '');
+                    try {
+                        linksMap[quoteId] = JSON.parse(s.value || '[]');
+                    } catch (e) {
+                        linksMap[quoteId] = [];
+                    }
+                });
+            }
+            setSharedLinks(linksMap);
             setAgreements(data || []);
         } catch (err: any) {
             console.error('Error fetching agreements:', err);
             showToast('Error al cargar acuerdos: ' + err.message, 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleOpenManageLinkedClients = (agreement: Agreement) => {
+        setManagingSharedAgreement(agreement);
+        setEditableLinkedClientIds(sharedLinks[agreement.id] || []);
+        setLinkedClientsSearch('');
+        setIsLinkedClientsModalOpen(true);
+    };
+
+    const handleSaveLinkedClients = async () => {
+        if (!managingSharedAgreement) return;
+        setSavingLinkedClients(true);
+        try {
+            const quoteId = managingSharedAgreement.id;
+            const newIds = editableLinkedClientIds;
+            
+            // 1. Update app_settings
+            await supabase
+                .from('app_settings')
+                .upsert({
+                    key: `agreement_clients:${quoteId}`,
+                    value: JSON.stringify(newIds),
+                    description: `Clientes vinculados a la lista maestra ${managingSharedAgreement.model_snapshot_name || managingSharedAgreement.client_name}`
+                });
+
+            // 2. Update local state
+            setSharedLinks(prev => ({
+                ...prev,
+                [quoteId]: newIds
+            }));
+
+            // 3. Update profiles active_master_agreement_id in background
+            for (const cId of newIds) {
+                const client = b2bClients.find(c => c.id === cId);
+                const logData = (client as any)?.logistics_data || {};
+                await supabase
+                    .from('profiles')
+                    .update({
+                        logistics_data: {
+                            ...logData,
+                            active_master_agreement_id: quoteId
+                        }
+                    })
+                    .eq('id', cId);
+            }
+
+            // 4. Audit log
+            await supabase.from('audit_logs').insert({
+                user_id: user?.id || null,
+                action: 'UPDATE_shared_agreement_clients',
+                details: `Actualizadas vinculaciones de la lista maestra "${managingSharedAgreement.model_snapshot_name || managingSharedAgreement.client_name}": ${newIds.length} clientes/sucursales asociados.`
+            });
+
+            showToast(`Vinculaciones guardadas con éxito (${newIds.length} clientes/sucursales asociados en cascada)`, 'success');
+            setIsLinkedClientsModalOpen(false);
+        } catch (err: any) {
+            console.error('Error saving linked clients:', err);
+            showToast('Error al guardar vinculaciones: ' + err.message, 'error');
+        } finally {
+            setSavingLinkedClients(false);
         }
     };
 
@@ -919,7 +1007,11 @@ export default function CommercialAgreementsModule() {
         const parts = dStr.split('-');
         const dateTag = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0].slice(-2)}` : dStr;
         if (isMulti) {
-            return `Acuerdo Multicliente - ${dateTag}`;
+            const monthNames = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+            const mIdx = parts.length === 3 ? parseInt(parts[1], 10) - 1 : new Date().getMonth();
+            const yStr = parts.length === 3 ? parts[0] : String(new Date().getFullYear());
+            const monthName = monthNames[mIdx] || 'OCTUBRE';
+            return `MENSUAL GENERAL - ${monthName} ${yStr}`;
         }
         if (clientObj?.company_name) {
             return `${clientObj.company_name} - ${dateTag}`;
@@ -2505,41 +2597,17 @@ export default function CommercialAgreementsModule() {
             const [y, m, d] = startDate.split('-');
             const dateSuffix = `${d || '01'}-${m || '01'}-${(y || '26').slice(-2)}`;
 
-            // Iterate over every selected client to create their agreement
-            for (const client of targetClients) {
-                // Expire any existing active agreement for this client to preserve history
-                const { data: existing, error: existErr } = await supabase
-                    .from('quotes')
-                    .select('id')
-                    .eq('client_id', client.id)
-                    .eq('status', 'agreement');
-                    
-                if (existErr) throw existErr;
-                
-                if (existing && existing.length > 0) {
-                    const quoteIds = existing.map(q => q.id);
-                    const yesterday = new Date();
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    await supabase.from('quotes')
-                        .update({ 
-                            status: 'expired', 
-                            valid_until: yesterday.toISOString().split('T')[0] 
-                        })
-                        .in('id', quoteIds);
-                }
-
-                // Compute client-specific agreement name
-                const clientAgreementName = isMultiClientMode 
-                    ? (isNameManuallyEdited && agreementName.trim() ? `${agreementName.trim()} (${client.company_name})` : `${client.company_name} - ${dateSuffix}`)
-                    : (agreementName.trim() || `${client.company_name || client.contact_name} - ${dateSuffix}`);
+            if (isMultiClientMode) {
+                // SINGLE MASTER SHARED AGREEMENT (1 to N Cascade Architecture)
+                const masterName = agreementName.trim() || computeDefaultAgreementName(undefined, true, startDate);
 
                 const { data: newQuote, error: insertQErr } = await supabase
                     .from('quotes')
                     .insert({
-                        client_id: client.id,
-                        client_name: client.company_name || client.contact_name,
+                        client_id: null, // Shared Master List
+                        client_name: masterName,
                         model_id: 'd90a91e5-827c-473d-9d4f-3e28c7c91e15', // General Institucional
-                        model_snapshot_name: clientAgreementName,
+                        model_snapshot_name: masterName,
                         status: 'agreement',
                         start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
                         valid_until: calculatedValidUntil,
@@ -2550,9 +2618,9 @@ export default function CommercialAgreementsModule() {
                     })
                     .select()
                     .single();
-                     
+
                 if (insertQErr) throw insertQErr;
-                
+
                 if (itemsTemplate.length > 0) {
                     const finalItemsToInsert = itemsTemplate.map(item => ({
                         ...item,
@@ -2567,9 +2635,103 @@ export default function CommercialAgreementsModule() {
                         if (insertItemsErr) throw insertItemsErr;
                     }
                 }
+
+                // Persist linked client IDs into app_settings
+                await supabase
+                    .from('app_settings')
+                    .upsert({
+                        key: `agreement_clients:${newQuote.id}`,
+                        value: JSON.stringify(selectedClientIds),
+                        description: `Clientes vinculados a la lista maestra ${masterName}`
+                    });
+
+                // Update profiles active_master_agreement_id in background
+                for (const cId of selectedClientIds) {
+                    const client = b2bClients.find(c => c.id === cId);
+                    const logData = (client as any)?.logistics_data || {};
+                    await supabase
+                        .from('profiles')
+                        .update({
+                            logistics_data: {
+                                ...logData,
+                                active_master_agreement_id: newQuote.id
+                            }
+                        })
+                        .eq('id', cId);
+                }
+
+                await supabase.from('audit_logs').insert({
+                    user_id: user?.id || null,
+                    action: 'CREATE_shared_master_agreement',
+                    details: `Lista Maestra "${masterName}" creada con ${itemsTemplate.length} productos y ${selectedClientIds.length} clientes vinculados en cascada.`
+                });
+
+                showToast(`Lista Maestra "${masterName}" activada exitosamente con efecto cascada para ${selectedClientIds.length} clientes (${itemsTemplate.length} SKUs)!`, 'success');
+            } else {
+                // Modo Individual (1 cliente)
+                for (const client of targetClients) {
+                    // Expire any existing active agreement for this client to preserve history
+                    const { data: existing, error: existErr } = await supabase
+                        .from('quotes')
+                        .select('id')
+                        .eq('client_id', client.id)
+                        .eq('status', 'agreement');
+                        
+                    if (existErr) throw existErr;
+                    
+                    if (existing && existing.length > 0) {
+                        const quoteIds = existing.map(q => q.id);
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        await supabase.from('quotes')
+                            .update({ 
+                                status: 'expired', 
+                                valid_until: yesterday.toISOString().split('T')[0] 
+                            })
+                            .in('id', quoteIds);
+                    }
+
+                    const clientAgreementName = isNameManuallyEdited && agreementName.trim()
+                        ? `${agreementName.trim()} (${client.company_name})`
+                        : (agreementName.trim() || `${client.company_name || client.contact_name} - ${dateSuffix}`);
+
+                    const { data: newQuote, error: insertQErr } = await supabase
+                        .from('quotes')
+                        .insert({
+                            client_id: client.id,
+                            client_name: client.company_name || client.contact_name,
+                            model_id: 'd90a91e5-827c-473d-9d4f-3e28c7c91e15', // General Institucional
+                            model_snapshot_name: clientAgreementName,
+                            status: 'agreement',
+                            start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+                            valid_until: calculatedValidUntil,
+                            version: 1,
+                            subtotal_amount: subtotal,
+                            total_tax_amount: totalTax,
+                            total_amount: total
+                        })
+                        .select()
+                        .single();
+                         
+                    if (insertQErr) throw insertQErr;
+                    
+                    if (itemsTemplate.length > 0) {
+                        const finalItemsToInsert = itemsTemplate.map(item => ({
+                            ...item,
+                            quote_id: newQuote.id
+                        }));
+                        const batchSize = 100;
+                        for (let i = 0; i < finalItemsToInsert.length; i += batchSize) {
+                            const batch = finalItemsToInsert.slice(i, i + batchSize);
+                            const { error: insertItemsErr } = await supabase
+                                .from('quote_items')
+                                .insert(batch);
+                            if (insertItemsErr) throw insertItemsErr;
+                        }
+                    }
+                }
+                showToast(`Acuerdo comercial activado con éxito para ${targetClients[0]?.company_name || 'el cliente'} (${itemsTemplate.length} productos asociados)!`, 'success');
             }
-            
-            showToast(`Acuerdo comercial activado con éxito para ${targetClients.length} ${targetClients.length === 1 ? 'cliente' : 'clientes'} (${itemsTemplate.length} productos asociados)!`, 'success');
             setIsCreateModalOpen(false);
             
             // Reset modal states
@@ -3003,6 +3165,7 @@ export default function CommercialAgreementsModule() {
         .filter(agreement => {
             const matchSearch = searchIncludes(agreement.client_name, searchTerm) || 
                                 searchIncludes(agreement.profiles?.company_name, searchTerm) ||
+                                searchIncludes(agreement.model_snapshot_name, searchTerm) ||
                                 searchIncludes(agreement.quote_number, searchTerm);
             
             if (!matchSearch) return false;
@@ -3573,79 +3736,141 @@ export default function CommercialAgreementsModule() {
                                             </span>
                                         </td>
                                         <td style={{ padding: '0.75rem 1.25rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                                <Building2 size={16} color="#94A3B8" style={{ marginTop: '2px', flexShrink: 0 }} />
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                        <span style={{ fontWeight: 'bold', color: THEME.colors.textMain }}>
-                                                            {agreement.profiles?.company_name || agreement.client_name}
-                                                        </span>
-                                                        {(() => {
-                                                            const badgeName = agreement.model_snapshot_name || `${agreement.profiles?.company_name || agreement.client_name || 'Acuerdo'} - ${agreement.created_at ? new Date(agreement.created_at).toLocaleDateString('es-CO') : ''}`;
-                                                            return (
-                                                                <span style={{ 
-                                                                    fontSize: '0.68rem', 
-                                                                    backgroundColor: '#ECFDF5', 
-                                                                    color: '#047857', 
-                                                                    border: '1px solid #A7F3D0', 
-                                                                    padding: '1px 6px', 
-                                                                    borderRadius: '4px', 
-                                                                    fontWeight: '600' 
-                                                                }}>
-                                                                    {badgeName}
+                                            {(() => {
+                                                const isSharedMaster = !agreement.client_id || (sharedLinks[agreement.id] && sharedLinks[agreement.id].length > 0);
+                                                const linkedClientIds = sharedLinks[agreement.id] || [];
+                                                
+                                                if (isSharedMaster) {
+                                                    return (
+                                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                            <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57', flexShrink: 0, marginTop: '2px' }}>
+                                                                <Zap size={16} />
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                    <span style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.92rem' }}>
+                                                                        {agreement.model_snapshot_name || agreement.client_name || 'Lista Maestra Institucional'}
+                                                                    </span>
+                                                                    <span style={{ 
+                                                                        fontSize: '0.68rem', 
+                                                                        backgroundColor: '#ECFDF5', 
+                                                                        color: '#047857', 
+                                                                        border: '1px solid #A7F3D0', 
+                                                                        padding: '1px 8px', 
+                                                                        borderRadius: '4px', 
+                                                                        fontWeight: '800' 
+                                                                    }}>
+                                                                        ⚡ Lista Maestra Compartida
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenManageLinkedClients(agreement)}
+                                                                        style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '5px',
+                                                                            padding: '2px 10px',
+                                                                            borderRadius: '12px',
+                                                                            backgroundColor: '#E0F2FE',
+                                                                            color: '#0369A1',
+                                                                            border: '1px solid #BAE6FD',
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: 'bold',
+                                                                            cursor: 'pointer',
+                                                                            transition: 'all 0.15s'
+                                                                        }}
+                                                                        title="Ver y gestionar clientes/sucursales vinculados"
+                                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#BAE6FD'}
+                                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#E0F2FE'}
+                                                                    >
+                                                                        <Users size={12} />
+                                                                        <span>{linkedClientIds.length} {linkedClientIds.length === 1 ? 'Sede' : 'Sedes'} Vinculadas</span>
+                                                                    </button>
+                                                                </div>
+                                                                <div style={{ fontSize: '0.7rem', color: '#0D7A57', marginTop: '2px', fontWeight: '500' }}>
+                                                                    Efecto cascada activo: cualquier cambio en esta lista impacta a los clientes vinculados en tiempo real.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                        <Building2 size={16} color="#94A3B8" style={{ marginTop: '2px', flexShrink: 0 }} />
+                                                        <div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                <span style={{ fontWeight: 'bold', color: THEME.colors.textMain }}>
+                                                                    {agreement.profiles?.company_name || agreement.client_name}
                                                                 </span>
-                                                            );
-                                                        })()}
-                                                        {(agreement.model_snapshot_name?.includes('[CONSUMO ABIERTO]') || agreement.subtotal_amount === 0) && (
-                                                            <span style={{ 
-                                                                fontSize: '0.66rem', 
-                                                                backgroundColor: '#F5F3FF', 
-                                                                color: '#6D28D9', 
-                                                                border: '1px solid #C4B5FD', 
-                                                                padding: '1px 6px', 
-                                                                borderRadius: '4px', 
-                                                                fontWeight: '800' 
-                                                            }}>
-                                                                Consumo Abierto ($0)
-                                                            </span>
-                                                        )}
-                                                        {agreement.profiles?.parent_id ? (
-                                                            <span style={{ 
-                                                                fontSize: '0.66rem', 
-                                                                backgroundColor: '#EFF6FF', 
-                                                                color: '#0284C7', 
-                                                                border: '1px solid #BAE6FD', 
-                                                                padding: '1px 6px', 
-                                                                borderRadius: '4px', 
-                                                                fontWeight: '700' 
-                                                            }}>
-                                                                <MapPin size={11} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Sucursal
-                                                            </span>
-                                                        ) : (
-                                                            <span style={{ 
-                                                                fontSize: '0.66rem', 
-                                                                backgroundColor: '#F5F3FF', 
-                                                                color: '#6D28D9', 
-                                                                border: '1px solid #DDD6FE', 
-                                                                padding: '1px 6px', 
-                                                                borderRadius: '4px', 
-                                                                fontWeight: '700' 
-                                                            }}>
-                                                                <Building2 size={11} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Matriz
-                                                            </span>
-                                                        )}
+                                                                {(() => {
+                                                                    const badgeName = agreement.model_snapshot_name || `${agreement.profiles?.company_name || agreement.client_name || 'Acuerdo'} - ${agreement.created_at ? new Date(agreement.created_at).toLocaleDateString('es-CO') : ''}`;
+                                                                    return (
+                                                                        <span style={{ 
+                                                                            fontSize: '0.68rem', 
+                                                                            backgroundColor: '#ECFDF5', 
+                                                                            color: '#047857', 
+                                                                            border: '1px solid #A7F3D0', 
+                                                                            padding: '1px 6px', 
+                                                                            borderRadius: '4px', 
+                                                                            fontWeight: '600' 
+                                                                        }}>
+                                                                            {badgeName}
+                                                                        </span>
+                                                                    );
+                                                                })()}
+                                                                {(agreement.model_snapshot_name?.includes('[CONSUMO ABIERTO]') || agreement.subtotal_amount === 0) && (
+                                                                    <span style={{ 
+                                                                        fontSize: '0.66rem', 
+                                                                        backgroundColor: '#F5F3FF', 
+                                                                        color: '#6D28D9', 
+                                                                        border: '1px solid #C4B5FD', 
+                                                                        padding: '1px 6px', 
+                                                                        borderRadius: '4px', 
+                                                                        fontWeight: '800' 
+                                                                    }}>
+                                                                        Consumo Abierto ($0)
+                                                                    </span>
+                                                                )}
+                                                                {agreement.profiles?.parent_id ? (
+                                                                    <span style={{ 
+                                                                        fontSize: '0.66rem', 
+                                                                        backgroundColor: '#EFF6FF', 
+                                                                        color: '#0284C7', 
+                                                                        border: '1px solid #BAE6FD', 
+                                                                        padding: '1px 6px', 
+                                                                        borderRadius: '4px', 
+                                                                        fontWeight: '700' 
+                                                                    }}>
+                                                                        <MapPin size={11} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Sucursal
+                                                                    </span>
+                                                                ) : (
+                                                                    <span style={{ 
+                                                                        fontSize: '0.66rem', 
+                                                                        backgroundColor: '#F5F3FF', 
+                                                                        color: '#6D28D9', 
+                                                                        border: '1px solid #DDD6FE', 
+                                                                        padding: '1px 6px', 
+                                                                        borderRadius: '4px', 
+                                                                        fontWeight: '700' 
+                                                                    }}>
+                                                                        <Building2 size={11} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Matriz
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {agreement.profiles?.parent_id ? (
+                                                                <div style={{ fontSize: '0.7rem', color: '#0369A1', marginTop: '2px', fontWeight: '500' }}>
+                                                                    Sucursal de: <strong>{b2bClients.find(c => c.id === agreement.profiles?.parent_id)?.company_name || 'Casa Matriz'}</strong> {agreement.profiles?.nit ? `• NIT: ${agreement.profiles.nit}` : ''}
+                                                                </div>
+                                                            ) : agreement.profiles?.nit ? (
+                                                                <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
+                                                                    NIT: {agreement.profiles.nit}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
                                                     </div>
-                                                    {agreement.profiles?.parent_id ? (
-                                                        <div style={{ fontSize: '0.7rem', color: '#0369A1', marginTop: '2px', fontWeight: '500' }}>
-                                                            Sucursal de: <strong>{b2bClients.find(c => c.id === agreement.profiles?.parent_id)?.company_name || 'Casa Matriz'}</strong> {agreement.profiles?.nit ? `• NIT: ${agreement.profiles.nit}` : ''}
-                                                        </div>
-                                                    ) : agreement.profiles?.nit ? (
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
-                                                            NIT: {agreement.profiles.nit}
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                            </div>
+                                                );
+                                            })()}
                                         </td>
                                         <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -5926,16 +6151,31 @@ export default function CommercialAgreementsModule() {
                                                 transition: 'all 0.15s'
                                             }}
                                         >
-                                            <Users size={16} /> Institucional General (Múltiples Clientes)
+                                            <Users size={16} /> Lista Maestra Compartida (Efecto Cascada)
                                         </button>
                                     </div>
 
                                     {/* --- MODO MASIVO: CHECKBOXES --- */}
                                     {isMultiClientMode ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            <div style={{ 
+                                                backgroundColor: '#F0FDF4', 
+                                                border: '1.5px solid #86EFAC', 
+                                                borderRadius: '10px', 
+                                                padding: '0.85rem 1rem', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '10px' 
+                                            }}>
+                                                <Sparkles size={20} color="#16A34A" style={{ flexShrink: 0 }} />
+                                                <div style={{ fontSize: '0.8rem', color: '#166534', lineHeight: '1.4' }}>
+                                                    <strong>Modelo de Fuente Única (Efecto Cascada):</strong> Se creará <strong>1 sola lista maestra</strong> central. Cualquier actualización posterior de precios se reflejará instantáneamente en todas las Casas Matrices y sucursales vinculadas, eliminando reprocesos e inconsistencias.
+                                                </div>
+                                            </div>
+
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
-                                                    Casas Matrices que recibirán el Acuerdo Institucional General:
+                                                    Casas Matrices y Clientes Vinculados a esta Lista Maestra:
                                                 </label>
                                                 <div style={{ display: 'flex', gap: '8px' }}>
                                                     <button
@@ -6508,7 +6748,7 @@ export default function CommercialAgreementsModule() {
                                     {/* NOMENCLATURA AUTOMÁTICA Y EDITABLE */}
                                     <div style={{ marginTop: '2px' }}>
                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>
-                                            Nombre del Acuerdo Comercial (Identificador Oficial):
+                                            {isMultiClientMode ? 'Nombre Maestro de la Lista / Convenio:' : 'Nombre del Acuerdo Comercial (Identificador Oficial):'}
                                         </label>
                                         <div style={{ position: 'relative' }}>
                                             <input 
@@ -6536,7 +6776,7 @@ export default function CommercialAgreementsModule() {
                                         </div>
                                         <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#64748B' }}>
                                             {isMultiClientMode 
-                                                ? 'Este nombre servirá de identificador base. Cada Casa Matriz tendrá además su razón social vinculada automáticamente.' 
+                                                ? 'Identificador único central (Ej. MENSUAL GENERAL - OCTUBRE 2026). Todos los clientes y sucursales seleccionados compartirán esta lista en tiempo real.' 
                                                 : 'Nomenclatura sugerida: [Nombre Comercial del Cliente] - DD-MM-AA. Visible en el tablero principal, órdenes y documentos.'}
                                         </p>
                                     </div>
@@ -9763,6 +10003,297 @@ export default function CommercialAgreementsModule() {
                                     <><Loader2 size={14} className="animate-spin" /> Creando...</>
                                 ) : (
                                     <><Check size={14} strokeWidth={2.5} /> Crear y Asignar a Fila</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL GESTIÓN DE CLIENTES / SEDES VINCULADAS EN CALIENTE A LISTA MAESTRA */}
+            {isLinkedClientsModalOpen && managingSharedAgreement && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 2500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1.5rem'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '750px',
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        overflow: 'hidden',
+                        border: '1px solid #E2E8F0',
+                        animation: 'slideUp 0.25s ease'
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '1.25rem 1.75rem',
+                            borderBottom: '1px solid #E2E8F0',
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ 
+                                        backgroundColor: '#DCFCE7', 
+                                        color: '#15803D', 
+                                        padding: '3px 8px', 
+                                        borderRadius: '6px', 
+                                        fontSize: '0.72rem', 
+                                        fontWeight: '800',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}>
+                                        <Sparkles size={12} /> LISTA MAESTRA COMPARTIDA
+                                    </span>
+                                    <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0F172A', fontWeight: '800' }}>
+                                        Gestionar Clientes y Sedes Vinculadas
+                                    </h3>
+                                </div>
+                                <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748B' }}>
+                                    Acuerdo central: <strong style={{ color: '#0D7A57' }}>{managingSharedAgreement.model_snapshot_name || managingSharedAgreement.client_name || 'Lista Maestra'}</strong>
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsLinkedClientsModalOpen(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', padding: '6px' }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div style={{ padding: '1.25rem 1.75rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1 }}>
+                            {/* Explanatory Banner */}
+                            <div style={{
+                                backgroundColor: '#F0FDF4',
+                                border: '1.5px solid #86EFAC',
+                                borderRadius: '10px',
+                                padding: '0.85rem 1rem',
+                                display: 'flex',
+                                gap: '10px',
+                                alignItems: 'center'
+                            }}>
+                                <Info size={20} color="#16A34A" style={{ flexShrink: 0 }} />
+                                <div style={{ fontSize: '0.8rem', color: '#166534', lineHeight: '1.4' }}>
+                                    <strong>Efecto Cascada en Vivo:</strong> Cualquier cambio de precio en esta lista maestra impactará automáticamente a todas las sedes marcadas abajo al cotizar y facturar.
+                                </div>
+                            </div>
+
+                            {/* Controls: Search and Select All */}
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ position: 'relative', flex: 1 }}>
+                                    <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                    <input 
+                                        type="text"
+                                        placeholder="Filtrar clientes o sucursales por nombre o NIT..."
+                                        value={linkedClientsSearch}
+                                        onChange={(e) => setLinkedClientsSearch(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px 8px 36px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #CBD5E1',
+                                            fontSize: '0.82rem',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const allIds = b2bClients.map(c => c.id);
+                                            setEditableLinkedClientIds(allIds);
+                                        }}
+                                        style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 10px', fontSize: '0.72rem', fontWeight: 'bold', color: THEME.colors.primary, cursor: 'pointer' }}
+                                    >
+                                        Marcar Todos
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditableLinkedClientIds([])}
+                                        style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 10px', fontSize: '0.72rem', fontWeight: 'bold', color: '#64748B', cursor: 'pointer' }}
+                                    >
+                                        Desmarcar
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Client List */}
+                            <div style={{
+                                maxHeight: '340px',
+                                overflowY: 'auto',
+                                border: '1.5px solid #E2E8F0',
+                                borderRadius: '10px',
+                                backgroundColor: '#FFFFFF',
+                                display: 'flex',
+                                flexDirection: 'column'
+                            }}>
+                                {(() => {
+                                    const filtered = b2bClients.filter(c => {
+                                        if (!linkedClientsSearch.trim()) return true;
+                                        const q = linkedClientsSearch.toLowerCase();
+                                        return (c.company_name?.toLowerCase().includes(q)) ||
+                                               (c.nit?.toLowerCase().includes(q)) ||
+                                               (c.contact_name?.toLowerCase().includes(q)) ||
+                                               (c.parentName?.toLowerCase().includes(q));
+                                    });
+
+                                    if (filtered.length === 0) {
+                                        return (
+                                            <div style={{ padding: '2rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
+                                                No se encontraron clientes ni sucursales con "{linkedClientsSearch}"
+                                            </div>
+                                        );
+                                    }
+
+                                    return filtered.map(c => {
+                                        const isChecked = editableLinkedClientIds.includes(c.id);
+                                        const isSucursal = Boolean(c.parent_id);
+
+                                        return (
+                                            <div
+                                                key={c.id}
+                                                onClick={() => {
+                                                    setEditableLinkedClientIds(prev =>
+                                                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                                                    );
+                                                }}
+                                                style={{
+                                                    padding: '10px 14px',
+                                                    borderBottom: '1px solid #F1F5F9',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    backgroundColor: isChecked ? '#F0FDF4' : 'transparent',
+                                                    transition: 'background 0.15s'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    {isChecked ? (
+                                                        <CheckSquare size={18} color="#0D7A57" strokeWidth={2.5} />
+                                                    ) : (
+                                                        <Square size={18} color="#94A3B8" />
+                                                    )}
+                                                    <div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B' }}>
+                                                                {c.company_name}
+                                                            </span>
+                                                            {isSucursal ? (
+                                                                <span style={{ fontSize: '0.65rem', backgroundColor: '#E0F2FE', color: '#0284C7', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                    Sucursal
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.65rem', backgroundColor: '#F5F3FF', color: '#6D28D9', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                    Casa Matriz
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                                                            {c.nit && <span>NIT: {c.nit}</span>}
+                                                            {isSucursal && c.parentName && <span>• Dependiente de: <strong>{c.parentName}</strong></span>}
+                                                            {!isSucursal && c.branchCount > 0 && <span>• {c.branchCount} {c.branchCount === 1 ? 'sucursal' : 'sucursales'}</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {isChecked && (
+                                                    <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: 'bold' }}>
+                                                        Vinculado
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+
+                            {/* Summary Badge */}
+                            <div style={{
+                                padding: '8px 14px',
+                                borderRadius: '8px',
+                                backgroundColor: editableLinkedClientIds.length > 0 ? '#F0FDF4' : '#FFFBEB',
+                                border: `1px solid ${editableLinkedClientIds.length > 0 ? '#BBF7D0' : '#FDE68A'}`,
+                                fontSize: '0.78rem',
+                                fontWeight: '600',
+                                color: editableLinkedClientIds.length > 0 ? '#15803D' : '#92400E',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
+                                <span>
+                                    {editableLinkedClientIds.length > 0
+                                        ? `✓ ${editableLinkedClientIds.length} clientes/sucursales recibirán los precios de este acuerdo central`
+                                        : 'Sin clientes vinculados. Marca al menos uno para activar el efecto cascada.'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div style={{
+                            padding: '1rem 1.75rem',
+                            borderTop: '1px solid #E2E8F0',
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '10px'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsLinkedClientsModalOpen(false)}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: 'white',
+                                    color: '#64748B',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.82rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveLinkedClients}
+                                disabled={savingLinkedClients}
+                                style={{
+                                    padding: '8px 20px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: savingLinkedClients ? '#CBD5E1' : '#0D7A57',
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.82rem',
+                                    cursor: savingLinkedClients ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
+                                }}
+                            >
+                                {savingLinkedClients ? (
+                                    <><Loader2 size={14} className="animate-spin" /> Guardando Vinculaciones...</>
+                                ) : (
+                                    <><Check size={14} strokeWidth={2.5} /> Guardar Vinculaciones en Cascada</>
                                 )}
                             </button>
                         </div>

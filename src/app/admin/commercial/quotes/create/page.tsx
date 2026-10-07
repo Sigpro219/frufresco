@@ -462,8 +462,8 @@ function CreateQuotePageContent() {
 
     const calculateFinalPrice = (cost: number, marginPercent: number) => {
         if (cost <= 0) return 0;
-        const marginFraction = Math.min(Math.max((marginPercent || 0) / 100, -0.9), 0.99);
-        const rawPrice = cost / (1 - marginFraction);
+        // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen/Utilidad sobre Costo Efectivo (Markup Multiplicador)
+        const rawPrice = cost * (1 + (marginPercent || 0) / 100);
         // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
         return Math.ceil(rawPrice / 50) * 50;
     };
@@ -654,8 +654,8 @@ function CreateQuotePageContent() {
             const validPrice = isNaN(numPrice) ? 0 : Math.max(0, numPrice);
             newItems[index].price = validPrice;
             if (validPrice > 0 && newItems[index].cost > 0) {
-                // Margen Bruto sobre Ventas: (Precio - Costo) / Precio * 100
-                newItems[index].margin = Math.round(((validPrice - newItems[index].cost) / validPrice) * 1000) / 10;
+                // Utilidad sobre Costo: (Precio - Costo) / Costo * 100
+                newItems[index].margin = Math.round(((validPrice - newItems[index].cost) / newItems[index].cost) * 1000) / 10;
             } else if (validPrice > 0 && newItems[index].cost <= 0) {
                 newItems[index].margin = 100;
             } else {

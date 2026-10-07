@@ -53,6 +53,7 @@ export default function OrderDetailPage() {
         longitude?: number;
         admin_notes: string;
         total_weight_kg: number;
+        document_url?: string;
         profile?: {
             company_name: string;
             contact_name: string;
@@ -574,6 +575,57 @@ export default function OrderDetailPage() {
                                 }
                                 return null;
                             })()}
+
+                            {order.document_url && !isEditing && (
+                                <a
+                                    href={order.document_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        backgroundColor: '#EFF6FF',
+                                        color: '#2563EB',
+                                        border: '1px solid #BFDBFE',
+                                        borderRadius: '8px',
+                                        padding: '0.5rem 1rem',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.9rem',
+                                        textDecoration: 'none',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                    }}
+                                    title="Abrir anexo o soporte original de la orden en pestaña nueva"
+                                >
+                                    <FileText size={15} strokeWidth={1.8} /> Ver Anexo <ExternalLink size={11} />
+                                </a>
+                            )}
+
+                            {!isEditing && (
+                                <Link
+                                    href={`/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}`}
+                                    target="_blank"
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        backgroundColor: '#FFFFFF',
+                                        color: '#334155',
+                                        border: '1px solid #CBD5E1',
+                                        borderRadius: '8px',
+                                        padding: '0.5rem 1rem',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.9rem',
+                                        textDecoration: 'none',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                    }}
+                                    title="Imprimir remisión de entrega oficial para este pedido"
+                                >
+                                    <Printer size={15} strokeWidth={1.8} /> Remisión <ExternalLink size={11} />
+                                </Link>
+                            )}
 
                             {isEditable ? (
                                 <button

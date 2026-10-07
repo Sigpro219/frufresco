@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.99 (Estandarización Omnicanal: Visualización de Precios Unitarios y Subtotales en Mesa de Trabajo de Pedidos Manuales)
-> **Fecha:** 06 de Octubre, 2026  
+> **Versión:** 1.9.109 (Arquitectura Canónica de Listas de Precios & Acuerdos Maestros Compartidos: Efecto Cascada 1 a N / Single Source of Truth)
+> **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
+> **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
 
 ---
 
@@ -350,11 +350,20 @@ Cuando el sistema consulta el precio de un producto para un cliente o sucursal, 
 
 ### 7.3 Contratos Matemáticos Canónicos (Reglas Inmutables)
 
-#### A. Fórmula Oficial de Margen de Venta (Gross Margin)
-Queda prohibido el markup multiplicador sobre costo en precios de venta institucionales. La fórmula oficial y vinculante es el **Margen Comercial sobre Venta**:
-$$\text{Precio Unitario Antes de IVA} = \frac{\text{Costo Neto Efectivo}}{1 - \left(\frac{\text{Margen\%}}{100}\right)}$$
-*Ejemplo:* Con Costo Neto Efectivo \$1.000 y Margen del 20%:
-$$\text{Precio} = \frac{1000}{1 - 0.20} = \$1.250 \quad (\text{Margen real en P&L: } 20.0\%)$$
+#### A. Mecanismo Canónico de Tarificación & Margen Comercial
+La tarificación de FruFresco opera de forma unificada bajo la **Fórmula Canónica de Margen/Utilidad sobre Costo Efectivo (Markup Multiplicador)** en todas sus pantallas (Modelos de Precios, Matriz de Costos, Cotizaciones y Sincronización Automática):
+
+$$\text{Precio Unitario Antes de IVA} = \text{Costo Neto Efectivo} \times \left(1 + \frac{\text{Margen o Utilidad\%}}{100}\right)$$
+
+1. **Unificación Sistémica:**  
+   Esta fórmula rige idénticamente en `/admin/commercial/settings`, `/admin/commercial/cost-matrix`, `pricingUtils.ts` y `/admin/commercial/quotes/create`. Queda erradicada cualquier división por $(1 - \text{Margen})$ que pudiera causar saturaciones o valores anómalos en productos con utilidades $\ge 100\%$.
+2. **Absorción Logística en SKUs de Bajo Costo:**  
+   En productos agrícolas de bajo costo unitario (ej. atados de hierbas, acelgas, cilantro, espinacas con costo inferior a \$3.000 COP), se **valida y protege el uso de márgenes/utilidades superiores al 100% (ej. 110%)**:  
+   *Ejemplo real:* Acelga con Costo \$1.050 y Utilidad 110%:  
+   $$\text{Precio Antes de IVA} = \$1.050 \times (1 + 1.10) = \$2.205 \longrightarrow \mathbf{\$2.250\text{ COP}}$$  
+   *Justificación Operativa:* Alistar, seleccionar, lavar, embolsar y transportar un atado de \$1.050 COP tiene un costo fijo de servicio logístico idéntico al de un producto de alto valor. Un porcentaje superior al 100% absorbe el costo fijo de empaque y flete sin generar pérdidas por drop.
+3. **Absorción de Volatilidad por Canasta Cruzada en Acuerdos Fijos:**  
+   Los clientes institucionales (hoteles, casinos, restaurantes) exigen precios congelados a 15 o 30 días para su planeación de costos de menú. La volatilidad diaria de Corabastos no se traslada al cliente spot a spot, sino que se amortigua estructuralmente mediante la **rentabilidad combinada de la canasta comercial**, manteniendo el promedio global de la cuenta institucional en el rango objetivo del **32% al 34%**.
 
 #### A.1 Factor de Merma Teórica en Costo Efectivo (GAP-02)
 Para evitar pérdidas ocultas de entre 5% y 25% de margen bruto en perecederos de alto desecho (lechugas, fresas, hierbas, frutas delicadas), el costo base de adquisición se infla obligatoriamente por la merma teórica del SKU antes de aplicar el margen comercial:
@@ -489,6 +498,92 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
    - **Ingesta por Email (`/api/orders/email-ingest`) y Re-extracción (`/api/orders/reparse-draft`):** Todo archivo tabular es procesado con `XLSX.read(buffer, { type: 'buffer' | 'array' })` para transformar todas sus hojas en representaciones CSV puras (`sheet_to_csv`), permitiendo a Gemini multimodal digitalizar productos, cantidades, fechas y números de orden de compra sin pérdidas ni fallbacks a arrays vacíos.
    - **Visor Interactivo (`EmailDraftsModule.tsx` y `ExcelTableViewer.tsx`):** Renderiza las pestañas de hojas de cálculo, identificador de filas con pedidos (`countWithQty`), filtros rápidos y visor en nueva pestaña para cualquier documento tabular soportado, erradicando el fallback obsoleto de botón genérico *"Descargar Documento"*.
 
+#### 7.5.4 Pipeline de Negociación Estructurada (Gemba Comercial), Formalización Obligatoria de Cliente y Estandarización Universal de Impresión (Letterhead)
+1. **El Gemba Real de la Mesa Comercial (Etapas de la Conversación Estructurada — Secuencia Lógica, No Tiempos Rígidos):**
+   - El asesor comercial opera desde su escritorio en la oficina gestionando prospectos vía WhatsApp, teléfono o correo. La cotización es una **conversación estructurada viva e iterativa** (donde los "Días 1, 2, 3, 4" son un arquetipo pedagógico de las fases de negociación, las cuales pueden surtirse en 10 minutos, varias horas, días o semanas según el ritmo del cliente, sin ninguna restricción temporal fija en el software):
+     * **Fase 1 / Apertura (Versión 1 - Ejemplo "Día 1"):** El comercial emite la propuesta inicial v1 para el prospecto/lead. En esta fase preliminar **NO se exige documentación legal ni datos de muelle** para evitar fricción que ahuyente la oportunidad comercial.
+     * **Fase 2 / Contraoferta y Modulación (Versión 2 - Ejemplo "Día 2"):** Ante objeciones de competitividad o presupuesto, el comercial modula la agresividad de margen/markup general generando una nueva versión vinculada (`?duplicate_from=[id]`).
+     * **Fase 3 / Sintonía Fina SKU a SKU (Versión 3 - Ejemplo "Día 3"):** Negociación puntual sobre productos sensibles (ej. el cliente acepta la canasta pero pide bajar el precio del *Aguacate Hass*); el comercial ajusta quirúrgicamente ese ítem preservando el margen del resto de la propuesta.
+     * **Fase 4 / Cierre, Onboarding & Carga del Acuerdo (Ejemplo "Día 4"):** El cliente confirma su aceptación formal de este modelo de precios por un periodo pactado (ej. **6 meses**).
+2. **Protocolo de Cierre: Solicitud de Vinculación y Alta de Cliente Institucional:**
+   - En el instante en que el cliente acepta formalmente (Fase de Cierre, sin importar cuánto tiempo haya tomado la negociación previa), el comercial solicita desde su oficina el **Kit de Vinculación Oficial**:
+     * **Copia del RUT:** De la cual se extraen Razón Social Formal (`razon_social`), Nombre Comercial (`company_name`), NIT con Dígito de Verificación (`nit`), régimen tributario y correo oficial de facturación electrónica (`email`).
+     * **Datos de Despacho y Entrega:** Dirección física de entrega (`address`), municipio/localidad (`municipality`) y coordenadas satelitales (`latitude`, `longitude`, `geocoding_status`) para situar la parada en el optimizador de rutas.
+     * **Restricciones Operativas y Franja Horaria de Recibo:** Horario de recibo en muelle/cocina (ej. 06:30 - 09:30 AM), días hábiles habilitados (Lun-Sáb) e instrucciones de acceso (sótanos, muelles, autorizaciones), procesadas algorítmicamente vía `parseLogisticsText` (`logistics_data`).
+   - El comercial diligencia la pantalla de formalización: el sistema crea el nuevo cliente institucional en `profiles`, actualiza el lead a `converted` y, de forma inmediata y automática, **le carga y activa la cotización final como un Acuerdo Comercial vinculante** (`status = 'agreement'`) con la vigencia acordada (**6 meses**, 1 mes, 3 meses, 1 año o fecha personalizada).
+   - **Caso Cliente Preexistente:** Si el cliente ya existía, se asocia directamente del directorio B2B, sincronizando el plazo de pago acordado y actualizando cualquier dato logístico que estuviera pendiente.
+3. **Conexión Directa al Pipeline de Acuerdos Institucionales:**
+   - Al aprobar la cotización formalizada:
+     * Se promueve el registro a `status = 'agreement'`.
+     * Se congela la vigencia comercial pactada en `valid_until` (presets de 30, 90, 180 días / 6 meses, 365 días o personalizado).
+     * Se estampa la nomenclatura canónica en `model_snapshot_name`: `[Cliente] - Acuerdo [DD-MM-AA]`.
+     * Se asienta la traza forense inmutable en `audit_logs` con la acción `ACTIVATE_commercial_agreement`.
+     * **Redirección Inmediata:** La plataforma transiciona al operador comercial directamente a la mesa de control de Acuerdos Institucionales (`/admin/commercial?tab=clients&clientTab=agreements`), donde el nuevo acuerdo entra en vigor de forma inmediata.
+4. **Estandarización Universal del Formato de Impresión Golden Print (`Letterhead`):**
+   - Se erradican los formatos visuales heterogéneos previos en cotizaciones.
+   - Las propuestas comerciales para impresión interna (`/admin/commercial/quotes/[id]/print`) y los enlaces públicos compartidos (`/quotes/[id]/print`) adoptan el estándar unificado institucional del componente `Letterhead` (`UniversalLetterhead`), compartiendo la misma tipografía, membrete legal (Investments Cortés S.A.S. - NIT 901.393.217), micro-grid de datos del cliente, tabla con acento de color por categorías agrícolas, resumen de liquidación tributaria, Sello de Garantía Operativa FruFresco B2B y bloque solemne de firmas de aceptación que utilizan las **Remisiones de Despacho y Facturas de Venta**.
+
+#### 7.5.5 Submódulo Canónico de Acuerdos Comerciales & Contratos Vigentes (`/admin/commercial/agreements` y `CommercialAgreementsModule.tsx`)
+1. **Doble Acceso y Enrutamiento Canónico:**
+   - **Ruta Dedicada de Primer Nivel (`/admin/commercial/agreements`):** Vista de primer orden con breadcrumb corporativo, retorno ágil a la consola y navegación directa sin dependencias de parámetros URL.
+   - **Consola Embebida (`/admin/commercial?tab=clients&clientTab=agreements`):** Integración nativa dentro del CRM de clientes y accesible de forma reactiva desde el embudo del Dashboard Comercial (BI).
+2. **Jerarquía Contractual & Prevalencia de Precios en Toma de Pedidos:**
+   - En la liquidación automática de pedidos manuales (`/admin/orders/create`) y en la ingesta asistida de correo (`/api/orders/email-ingest`), el motor aplica la cascada estricta:
+     $$\text{Precio Facturado} = \begin{cases} \text{Acuerdo Sucursal} & \text{si existe cotización activa para la sede} \\ \text{Acuerdo Casa Matriz} & \text{si la sede no tiene acuerdo propio pero su matriz sí} \\ \text{General Institucional} & \text{fallback estándar por modelo de precios} \end{cases}$$
+   - **Distinción Visual Inconfundible:** Las filas de la tabla identifican el rol del cliente:
+     - `[🏢 CASA MATRIZ]` con ícono `<Building2 />` y conteo de sucursales subordinadas.
+     - `[📍 SUCURSAL ESPECÍFICA]` con ícono `<Building />` y enlace explícito a su Casa Matriz dependiente.
+3. **Semáforo Telemático de Vigencias (SLA & Traffic Light):**
+   - **Vigente (Verde Esmeralda `#0D7A57` / `#ECFDF5`):** Fecha de vencimiento superior a 5 días respecto a la fecha actual. Precios firmes en catálogo institucional.
+   - **Próximo a Vencer (Ámbar Andon `#D97706` / `#FFFBEB`):** Vence en 5 días o menos. Alerta al asesor comercial para iniciar la renegociación periódica de cosecha.
+   - **Vencido (Rojo Alerta `#DC2626` / `#FEF2F2`):** Fecha de vigencia superada. Los precios congelados quedan inactivos y el cliente entra en fallback automático a su tarifa base institucional.
+4. **Poka-Yoke Multicapa de SKUs Inactivos (Capítulo 17):**
+   - Si un acuerdo contiene productos marcados como inactivos en el catálogo maestro (`products.is_active = false`), el sistema despliega una píldora compacta en el Drawer de precios y un botón de auto-reactivación en 1 clic que ejecuta `UPDATE products SET is_active = true WHERE id IN (...)`, impidiendo que los productos pactados desaparezcan en el alistamiento de pedidos.
+5. **Drawer Lateral con Edición In-Situ y Trazabilidad Forense:**
+   - Interfaz con thead sticky a `top: 50px` (`borderCollapse: 'separate'`) para escaneo rápido de cientos de referencias.
+   - Permite ajustar precios unitarios en caliente, recalculando en tiempo real el margen bruto por SKU, el IVA y los subtotales/totales del acuerdo.
+   - Exige o sugiere justificaciones de mercado/cosecha preconfiguradas (`SUPPLY_JUSTIFICATION_PRESETS`) y registra cada modificación en `audit_logs` (`UPDATE_quote_item_price`).
+6. **Formato Golden Print y Exportación Excel:**
+   - Generación de propuestas impresas en papel Carta u Oficio mediante `Letterhead` institucional, con agrupación alfabética por categorías agrícolas (A-Z) y sin artefactos visuales del ERP vía `printViaNewWindow`.
+   - Exportación limpia en hojas de cálculo `.xlsx` para entrega a directores de compras y gerencias de restaurantes.
+
+#### 7.5.6 Arquitectura Canónica de Listas de Precios & Acuerdos Maestros Compartidos (Efecto Cascada 1 a N / Single Source of Truth)
+
+1. **Principio Rector: Erradicación del Modelo de Fotocopias (Clonación Ciega):**
+   - **Regla de Oro:** Queda formalmente prohibida la clonación o duplicación masiva de registros independientes de cotizaciones (`quotes`) al crear acuerdos para múltiples clientes. Dicha práctica generaba dispersión de datos y forzaba al equipo comercial a realizar $N$ actualizaciones idénticas ante un solo cambio de precio en Corabastos.
+   - **Doctrina Single Source of Truth (1 a N):** Se establece la entidad **Acuerdo Maestro Compartido / Lista Centralizada de Precios** como la única fuente canónica viva. Un solo registro de acuerdo (`quotes` catalogado como lista maestra compartida) alberga los precios negociados de los productos (`quote_items`). Los múltiples clientes o sucursales asociadas no poseen réplicas locales, sino un **puntero o enlace relacional activo** hacia esta lista viva.
+
+2. **Efecto Cascada Automático en Tiempo Real:**
+   - Toda modificación realizada sobre un producto o tarifa en el Acuerdo Maestro Compartido (vía Drawer lateral de edición de precios, actualización en línea o re-ingesta de archivo Excel/ODS) impacta **en tiempo real y con efecto cascada inmediato** a todas las Casas Matrices y Sucursales vinculadas a dicha lista.
+   - Al momento de montar pedidos en `/admin/orders/create` o procesar órdenes de compra desestructuradas vía correo en `EmailDraftsModule`, el motor de precios resuelve la tarifa directamente desde la lista compartida activa, erradicando discrepancias de facturación o desfases entre sedes del mismo grupo o clientes con tarifa unificada.
+
+3. **Re-ingeniería del Pipeline UX en el Asistente de Creación y Edición (`CommercialAgreementsModule.tsx`):**
+   - **Paso 1: Selección de Alcance (Individual vs Lista Compartida):**
+     - Pestañas semánticas claras: `[Acuerdo Exclusivo Individual]` vs `[Lista Maestra Compartida (Efecto Cascada)]`.
+     - Lenguaje Poka-Yoke: Erradicación del texto ambiguo *"Casas matrices que recibirán el acuerdo"*. En su lugar, el encabezado formaliza: **`Vincular Clientes a esta Lista Maestra Viva (Efecto Cascada)`**.
+     - Banner explicativo de alto contraste:
+       > *«Todos los clientes y sucursales seleccionados compartirán esta misma lista central viva. Si modificas un precio aquí en el futuro, impactará automáticamente a todos los clientes asociados en tiempo real sin requerir ajustes individuales.»*
+     - Contador de impacto en vivo: Telemetría reactiva que informa la cantidad de Casas Matrices y Sucursales que quedarán gobernadas por la lista (ej: `[👥 18 Clientes / 34 Sedes Vinculadas]`).
+   - **Paso 2: Vigencia & Nomenclatura Institucional de la Lista:**
+     - En acuerdos compartidos, el nombre del acuerdo no se ancla a un cliente particular; exige o sugiere un **Nombre Institucional Maestro** (ej: `"MENSUAL GENERAL - OCTUBRE 2026"`, `"CONVENIO HORECA Y CLUBES"`).
+     - Vigencia unificada (`start_date`, `valid_until`) sincronizada para todo el conjunto de clientes vinculados.
+   - **Paso 3: Carga de Precios, Mapeo y Poka-Yoke de SKUs Inactivos:**
+     - Digestor Excel/ODS con cruce predictivo de catálogo, verificación de márgenes sobre costo efectivo y diálogo de auto-activación en 1 clic de SKUs inactivos en inventario maestro.
+
+4. **Experiencia de Usuario en la Mesa de Control de Acuerdos (Tabla Principal):**
+   - **Consolidación en 1 Sola Fila:** Un Acuerdo Maestro Compartido se renderiza en la tabla como **una única fila consolidada**, portando su Nombre Maestro, fechas de vigencia y número de SKUs pactados, evitando saturar la vista con decenas de filas redundantes.
+   - **Píldora Interactiva de Sedes Vinculadas (Estándar Visual Suizo):** En la columna de clientes, se renderiza una insignia interactiva destacada (ej: badge azul índigo `[👥 18 Sedes Vinculadas]`).
+   - **Modal / Drawer de Gestión Dinámica de Vinculaciones:** Al presionar la píldora de sedes, se despliega una consola modal con la nómina completa de Casas Matrices y Sucursales asociadas (con columnas `Cliente Matriz`, `Sucursal`, `Dirección` y checkbox de activación). El asesor comercial puede agregar nuevos clientes a la lista o desvincularlos en caliente con 1 solo clic sin tener que recrear el acuerdo.
+
+5. **Jerarquía Contractual & Cascada Canónica de Precios:**
+   - La resolución de tarifas para pedidos B2B obedece al siguiente orden de prevalencia matemática estricta:
+     $$\text{Precio Facturado} = \begin{cases} 
+     \text{Acuerdo Exclusivo Sucursal} & \text{si la sede posee un acuerdo propio específico a la medida} \\ 
+     \text{Acuerdo Exclusivo Matriz} & \text{si la matriz posee un acuerdo exclusivo propio no compartido} \\ 
+     \text{Lista Maestra Compartida (Cascada)} & \text{si la sucursal o matriz está vinculada a un acuerdo maestro activo} \\ 
+     \text{General Institucional} & \text{fallback por modelo de precios asignado en el perfil} 
+     \end{cases}$$
+
 ### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
 - [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a $50 COP antes de impuestos.
 - [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de $50 COP en el precio unitario antes de IVA y en variantes.
@@ -525,6 +620,8 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 - [x] **Tarea COM-33 (Pedidos / Campos Explícitos de Captura para Orden de Compra OC y SOLPED):** Incorporar campos de entrada independientes y dedicados para `[# Orden de Compra (OC / PO)]` y `[# Solicitud / SOLPED (Opcional)]` en la cabecera y barra lateral de `/admin/orders/create`. Sincronizar bidireccionalmente con el digestor multimodal (Gemini) en la Mesa de Trabajo, asegurando que tanto la ingesta por archivo/WhatsApp como la creación manual telefónica persistan de forma indexada en `orders.admin_notes` (`OC: [Número] | SOLPED: [Número] | [Observaciones]`) habilitando el rastreo instantáneo en el Superbuscador Omnibox de Torre de Control.
 - [x] **Tarea COM-34 (Pedidos / Paridad Transversal del Modal de Personalización, Teclado, Calculadora y Resumen Estructurado en EmailDraftsModule):** Sincronizar el modal de personalización de ítems en `EmailDraftsModule.tsx` para replicar con estricta fidelidad el comportamiento de `/admin/orders/create`: (1) Evaluación de expresiones matemáticas en vivo en el campo Cantidad (`evaluateMathExpression` soportando `+`, `-`, `*`, `/`, `x`); (2) Navegación fluida por teclado (`Enter`, `Tab`, `Shift + Tab` con foco y selección de texto automática); (3) Poka-Yoke de Gramaje Dinámico Condicional (ocultamiento de Gramaje ante unidades discretas y cálculo reactivo `~Y und de Z gr`); (4) Sincronización bidireccional entre `modal-unit-select` y `Presentación`; (5) Tabla de 5 columnas estructuradas (`Producto`, `Presentación & Atributos`, `Cant. Facturada`, `Precio Unitario`, `Subtotal`) en el modal de Previsualización y Confirmación de Pedido (`showConfirmModal`).
 - [x] **Tarea COM-35 (Ingesta & Visor / Soporte Universal de Hojas de Cálculo y Formato LibreOffice ODS):** Erradicar la dependencia restrictiva exclusiva de extensiones `.xlsx` / `.xls` en todo el pipeline de digitalización y visualización. Centralizar la detección en `src/lib/spreadsheets.ts` (`isSpreadsheetFile`, `resolveSpreadsheetMimeType`), soportando nativamente `.ods` (OpenDocument Spreadsheet emitido por LibreOffice/Linux/Google Docs), `.csv`, `.tsv`, `.xlsm`, `.xlsb` y nombres de archivo alterados por clientes de correo o descargas sucesivas (ej. `FORMATO SUMINISTROS UNICO.xls_1 (1) (4) (3).ods`). Garantiza que en la ingesta automática (`email-ingest`), re-extracción (`reparse-draft`), Mesa de Trabajo (`extract-order`, `/admin/orders/create`) y visor de borradores (`EmailDraftsModule` y `CommercialInboxModule`) estos documentos se conviertan a CSV con SheetJS para extracción multimodal con Gemini y se rendericen en tablas interactivas con resaltado de cantidades sin caer en enlaces de descarga genéricos.
+- [ ] **Tarea COM-36 (Campañas / Maduración Comercial GAP-CAMP):** Deuda técnica formalizada para fase de pulido: (1) Modal de edición in-situ y extensión de fechas de vigencia sin destrucción de entidad; (2) Conmutador de suspensión temporal / pausa operativa (`status: 'paused'`) ante quiebres imprevistos de stock en bodega; (3) Telemetría de impacto comercial cruzando pedidos reales facturados contra `campaign_items` para reportar volumen vendido (kg) y margen bruto cedido; (4) Acción de duplicación ágil (`duplicateCampaign`) para relanzar campañas estacionales de cosecha con 1 clic.
+- [ ] **Tarea COM-37 (Acuerdos Comerciales / Listas de Precios Compartidas 1 a N con Efecto Cascada):** (1) En base de datos, soportar vinculación múltiple de clientes a un acuerdo maestro (`quotes.is_master_shared = true`, tabla de vinculación `agreement_clients` o sincronización relacional de `client_id`); (2) En `CommercialAgreementsModule.tsx`, actualizar el Wizard Paso 1 a "Lista Maestra Compartida (Efecto Cascada)" con banner explicativo Poka-Yoke y telemetría de sedes asociadas; (3) En Paso 2, requerir Nombre Institucional Maestro; (4) En la tabla principal de acuerdos, consolidar el acuerdo maestro en una sola fila con píldora interactiva `[👥 N Sedes]`; (5) Implementar modal de gestión de sedes vinculadas para agregar/remover clientes en caliente con 1 clic; (6) En la edición de precios del acuerdo maestro (drawer o Excel), asegurar que los cambios se propaguen en tiempo real en cascada a todos los clientes asociados al cotizar o montar pedidos en `/admin/orders/create` y `EmailDraftsModule`.
 
 ### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
 
@@ -836,19 +933,33 @@ El submódulo de campañas (`/admin/commercial` pestaña Operaciones $\to$ Campa
 - Las campañas aplican en el **Nivel 3** de prevalencia tarifaria.
 - **Regla Inviolable de Inmunidad Contractual:** Si un cliente cuenta con un Acuerdo Comercial formal activo (`status = 'agreement'`), **la campaña jamás modifica ni perfora los precios de los SKUs pactados en dicho acuerdo**. La campaña solo modula productos de catálogo libre no cobijados por el contrato.
 
+#### D. Deuda Técnica Formalizada & Hoja de Ruta de Maduración (Fase de Pulido Táctico)
+Se formaliza contractualmente que la implementación actual de `/admin/commercial/campaigns` cumple con la arquitectura mínima viable (creación atómica, consulta relacional, filtros temporales e inmunidad frente a acuerdos), pero mantiene **cuatro brechas de maduración operativa** que se programan para la fase de pulido comercial:
+1. **Edición In-Situ y Extensión de Vigencia (`handleEditCampaign`):** Actualmente el sistema solo provee eliminación destructiva (`Trash2`). Debe incorporarse un modal de edición que permita extender fechas (`end_date`), añadir o retirar clientes objetivo (`campaign_targets`) y recalibrar descuentos por SKU sin tener que recrear la estrategia.
+2. **Pausa y Reanudación Operativa (`status: 'paused'`):** Conmutador táctico en 1 clic para suspender temporalmente una campaña si se produce un quiebre imprevisto de inventario o merma climática en bodega, sin perder la configuración ni obligar a borrar el registro.
+3. **Telemetría de Impacto Comercial & ROI en Pedidos:** Contador dinámico que cruce en tiempo real los pedidos confirmados contra `campaign_items`, visualizando:
+   - Número de órdenes beneficiadas.
+   - Volumen físico vendido en promoción ($\text{kg}$ / $\text{und}$).
+   - Margen bruto cedido vs. ingreso marginal en venta cruzada.
+4. **Duplicación Ágil de Estrategias (`duplicateCampaign`):** Acción para clonar promociones exitosas previas adaptando únicamente el nuevo rango de fechas.
+
 ---
 
 ### 7.11 Submódulo de Modelos de Precios & Preformas de Cotización (`pricing_models`, `quote_templates`)
 
 #### A. Modelos Semilla Intocables & Estructura de Márgenes
-El sistema gobierna la fijación de tarifas institucionales mediante modelos de margen bruto (`/admin/commercial` pestaña Operaciones $\to$ Modelos de Precios):
-1. **Modelos Semilla Canónicos:**
-   - **General Institucional** (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`): Modelo base para el 100% de clientes B2B sin acuerdo especial (Margen promedio: ~20%).
-   - **Clientes Hogar / B2C** (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`): Tarifa minorista base mapeada en `products.base_price`.
+El sistema gobierna la fijación de tarifas institucionales mediante modelos de margen bruto (`/admin/commercial/settings` $\to$ Modelos de Precios):
+1. **Modelos Canónicos Afinados en Producción:**
+   - **General Institucional** (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`): Línea base maestra para el 100% de clientes B2B. Los demás modelos se derivan de aquí (Margen promedio real: **34,5%**).
+   - **Clientes Hogar / B2C** (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`): Modelo B2C minorista. Ajuste `+10%` sobre línea base, filtrado estrictamente por productos activos con `show_on_web: true` (Margen promedio real: **33,2%**).
+   - **Grande:** Cliente institucional corporativo de alto volumen. Ajuste `-3%` sobre la línea base general (Margen promedio real: **31,2%**).
+   - **Mediano:** Cliente institucional mediano. Ajuste `-2%` sobre la línea base general (Margen promedio real: **32,1%**).
+   - **Pequeño:** Cliente institucional pequeño. Ajuste `-1%` sobre la línea base general (Margen promedio real: **33,2%**).
 2. **Matriz de Sobrescritura por Producto (`pricing_rules`):**
-   - Permite ajustar el margen específico de un SKU dentro de un modelo (`margin_adjustment`) para productos ancla o de alta sensibilidad comercial.
-3. **Materialización & Sincronización Masiva (`pricing_model_prices`):**
-   - La función `batchRecalculateAndSyncPrices` regenera los precios proyectados aplicando Gross Margin $\frac{\text{Costo}}{1 - M}$, merma teórica y redondeo a $50 COP.
+   - Permite ajustar el margen o markup específico de un SKU dentro de un modelo (`margin_adjustment`), con guardado reactivo in-situ y soporte de utilidades superiores al 100% en productos de bajo costo para absorción de fletes y empaques.
+3. **Materialización & Sincronización Desatendida:**
+   - Programador de recálculo nocturno a medianoche con conmutador de días hábiles (`D L M M J V S`) para absorber variaciones de compras físicas en Corabastos y actualizar matrices sin interrumpir la operación diurna.
+   - La función `batchRecalculateAndSyncPrices` regenera los precios proyectados aplicando merma teórica y redondeo obligatorio a $50 COP.
 
 #### B. Preformas & Plantillas de Cotización Rápida (`quote_templates`, `quote_template_items`)
 Para acelerar la emisión de propuestas a prospectos institucionales:
@@ -958,8 +1069,43 @@ Toda cuenta institucional cuenta con su expediente estructurado:
 - **Copias de Remisión (`remission_copies`):** Número de tantos impresos requeridos en entrega física.
 - **Tipo de Documento (`document_requirement`):** `'remision_post_entrega'` (90% clientes) vs `'factura_pre_despacho'`.
 
-#### D. Pipeline de Prospectos / Leads (`leads`)
-- Registro ágil de prospectos comerciales con origen de contacto, estado de negociación y conversión determinista a perfil B2B activo (`profiles`) sin pérdida de trazabilidad.
+#### D. Especificación Canónica del Pipeline CRM & Embudo de Prospectos (`/admin/commercial/pipeline` y `leads`)
+1. **Doble Acceso y Enrutamiento Canónico:**
+   - **Ruta Dedicada de Primer Nivel (`/admin/commercial/pipeline`):** Consola dedicada de gestión de oportunidades con retorno al dashboard comercial y breadcrumb corporativo de Dominio 7.
+   - **Consola Embebida (`/admin/commercial?tab=clients&clientTab=leads`):** Pestaña nativa dentro del CRM de clientes (`ClientsModule.tsx`).
+2. **Ciclo de Vida del Prospecto en el Embudo (Funnel Stages):**
+   - `new` (**Nuevo**): Oportunidad recién capturada (formulario web, chatbot `LeadGenBot`, WhatsApp o creación manual telefónica).
+   - `contacted` (**Contactado / En Conversación**): El asesor comercial ha entablado diálogo y emitido propuestas preliminares (enlace relacional `quotes.lead_id`).
+   - `converted` (**Convertido a Cliente B2B**): El prospecto aceptó los términos comerciales, se formalizó su ficha legal en `profiles` con `role: 'b2b_client'` y se activó su primer acuerdo comercial o modelo tarifario.
+   - `rejected` (**Descartado**): Oportunidad no viable por cobertura logística, condiciones de pago o decisión del cliente.
+3. **Regla Gemba de Cero Fricción Documental Preliminar:**
+   - En la fase de captura y seguimiento de leads, el sistema **prohíbe exigir RUT, coordenadas GPS satelitales o franjas horarias de muelle**. La captura solo demanda datos de contacto primarios (Empresa, Contacto, Teléfono/WhatsApp, Correo, Ciudad). Los requisitos logísticos y tributarios se trasladan estrictamente al protocolo de cierre y alta definitiva (§7.5.4).
+4. **Telemetría Táctica de Seguimiento & CRM:**
+   - Registro cronológico de último contacto (`last_contact_date`), próximo contacto programado (`next_contact_date`) y contador reactivo de interacciones (`contact_count`).
+   - Visualización ergonómica dual: **Modo Cuadrícula** (cards comerciales con llamada/WhatsApp en 1 clic) y **Modo Tabla Densa** (thead sticky a 148px para barrido rápido de prospección).
+   - Filtros multidimensionales en tiempo real por ubicación geográfica (`municipality` / `department`) y estado del embudo.
+
+#### E. Especificación Canónica del Directorio Maestro B2B & Sucursales (`/admin/commercial/clients`)
+1. **Doble Acceso y Enrutamiento Canónico:**
+   - **Ruta Dedicada de Primer Nivel (`/admin/commercial/clients`):** Página independiente que encapsula `<ClientsModule initialTab="b2b" />` con cabecera corporativa de Dominio 7, badge distintivo `Directorio Maestro B2B` y botón de retroceso a la consola comercial.
+   - **Consola Embebida (`/admin/commercial?tab=clients&clientTab=b2b`):** Pestaña nativa en el hub comercial unificado.
+2. **Gobernanza Financiera, Cupos de Crédito y Cobranza:**
+   - Asignación de cupo de crédito (`credit_limit`) y términos de pago en días (`payment_days` / `payment_terms`: 8, 15, 30, 45 días).
+   - Datos del responsable de tesorería y cartera (`collection_responsible_name`, `email`, `phone`) y correos de radicación electrónica de factura (`additional_billing_emails`).
+   - Trazabilidad y respaldo documental mediante referencias comerciales (`comm_ref_1_*`, `comm_ref_2_*`) y pagaré en blanco firmado.
+3. **Matriz de Emisión Documental & Despacho en Muelle:**
+   - **Tipo de Documento (`document_type`):** Diferenciación entre `remision_post_entrega` (operación habitual de fruver donde se concilia el peso descargado antes de facturar) vs `factura_pre_despacho`.
+   - **Valorización de Remisiones (`remission_with_prices`):** Define si la remisión física detalla precios unitarios y totales o si se emite como remisión de entrega a ciegas.
+   - **Factura Física (`print_invoice`):** Especifica clientes que exigen obligatoriamente factura impresa adjunta al camión.
+   - **Tantos de Remisión (`remission_copies`):** Cantidad de copias impresas exigidas por el departamento de recepción del cliente (1 a 4 copias).
+4. **Ficha Logística Satelital & Geocodificación para Fleet Engine:**
+   - Georreferenciación satelital precisa (`latitude`, `longitude`) con estado de verificación tricolor (`geocoding_status`: `'verified'`, `'pending'`, `'failed'`).
+   - Botón interactivo de captura GPS en tiempo real en terreno (`navigator.geolocation`) y enlace de verificación cartográfica en Google Maps.
+   - Autodiagnóstico por IA de restricciones de recepción mediante `@/lib/logistics-parser` (`parseLogisticsText`): extracción automática de franja horaria matutina/vespertina, requerimiento de canastillas plásticas (`needs_crates`) y autorización de despachos en domingos (`allowSundayDeliveries`) y festivos (`allowHolidayDeliveries`).
+5. **Control de Escasez y Bloqueo Poka-Yoke de SKUs en Plaza (`scarcityLockedMap`):**
+   - Panel de bloqueo temporal de productos en desabastecimiento generalizado con mensaje explicativo institucional para cotizaciones y pedidos abiertos, evitando sobreventas de inventario inexistente.
+6. **Saneamiento Preventivo en Importación / Exportación Masiva Excel (Regla 32K):**
+   - El exportador e importador `.xlsx` analiza y sanea campos complejos de auditoría e historial para prevenir el desbordamiento de 32.767 caracteres por celda del estándar OpenXML/BIFF8.
 
 ---
 
@@ -1088,6 +1234,85 @@ El submódulo de Acuerdos Comerciales gobierna la formalización jurídica y fin
    - **Acción Individual:** Botón **`[⚡ Liquidar]`** en la columna de acciones por fila.
    - **Acción Masiva:** Botón **`[⚡ Liquidar Costo Vigente (N)]`** en la barra superior de pedidos pendientes.
    - **Mecanismo de Liquidación:** Consulta la matriz de costos vigentes (`commercial_cost_matrix` o `pricing_model_prices` / `products.base_price`) a la fecha del corte de facturación, actualizando `unit_price`, `subtotal`, `tax_amount`, `total` y las notas de auditoría antes de cortar la Factura Electrónica y exportar a World Office.
+
+---
+
+### 7.16 Submódulo de Reportes de Margen, Ventas & Consumo Institucional (`/admin/commercial/reports`)
+
+> **Ruta Canónica:** `/admin/commercial/reports` ([page.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/commercial/reports/page.tsx))  
+> **Tablas Nucleares:** `orders`, `order_items`, `profiles`, `products`, `commercial_cost_matrix`, `purchases`.
+
+#### A. Misión Operativa del Módulo de Reportes
+El módulo de Reportes Comerciales y de Margen provee a la Dirección Comercial y Gerencia General una consola unificada de inteligencia operativa, rentabilidad por SKU/cliente y detección temprana de compresión de márgenes por volatilidad en Corabastos.
+
+#### B. Métricas Nucleares & Ecuaciones Financieras
+1. **Margen Bruto Monetario:**
+   $$\text{Margen Bruto (COP)} = \text{Venta Total Facturada} - \text{Costo Total Ponderado}$$
+2. **Margen Bruto Porcentual Ponderado:**
+   $$\text{Margen Ponderado (\%)} = \frac{\sum (\text{Venta} - \text{Costo})}{\sum \text{Venta}} \times 100$$
+3. **Doble Camino Canónico de Costeo:**
+   - **Camino A:** Costo autorizado en `commercial_cost_matrix.manual_cost`.
+   - **Camino B (Fallback):** Último costo real de compra registrado en Corabastos vía `purchases.unit_price`.
+4. **Clasificación ABC de Productos (Pareto):**
+   - **Tipo A:** SKUs que acumulan el primer 80% de la facturación en el período auditado.
+   - **Tipo B:** SKUs del siguiente 15% de facturación acumulada (80% a 95%).
+   - **Tipo C:** SKUs del 5% final de facturación (larga cola / insumos esporádicos).
+
+#### C. Tres Informes Dinámicos Especializados
+1. **Rentabilidad y Consumo por Cliente:**
+   - Consolidado por razón social y NIT: N° de pedidos, volumen en Kg/Ton, facturación total ($), utilidad bruta ($), margen (%) y ticket promedio.
+   - Indicador de salud de cuenta: 🟢 Sano ($\ge 22\%$), 🟡 En Observación ($15-21\%$), 🔴 Riesgo Crítico ($< 15\%$).
+2. **Ventas & Rotación por SKU / Categoría:**
+   - Auditoría de volumen vendido, precio promedio de venta, costo promedio de adquisición, facturación total y clasificación Pareto A/B/C.
+3. **Auditoría de Compresión de Margen (Cost Gap):**
+   - Identifica insumos donde el precio de compra en plaza superó el costo previsto en matriz o donde el margen contra el catálogo base se comprimió por debajo del 12%.
+
+#### D. Motor de Exportación Excel (Regla 32K)
+- Exportador masivo multi-hoja a `.xlsx` (`Rentabilidad_Clientes`, `Ventas_Productos_Pareto`, `Compresion_Margen`) que aplica saneamiento preventivo de texto (`slice(0, 3000)`) para asegurar compatibilidad estricta con el límite físico de 32.767 caracteres por celda de Excel.
+
+---
+
+### 7.17 Submódulo de Catálogo Oficial Impreso & Ficha Técnica Comercial (`/admin/commercial/print-catalog`)
+
+> **Ruta Canónica:** `/admin/commercial/print-catalog` ([page.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/commercial/print-catalog/page.tsx))  
+> **Componente Golden Print:** `Letterhead.tsx`  
+> **Tablas Nucleares:** `products`, `pricing_models`, `commercial_cost_matrix`.
+
+#### A. Misión y Caso de Uso en Campo
+El módulo de Catálogo Impreso permite al equipo comercial y consultores de venta emitir de forma inmediata fichas de portafolio y listas oficiales de precios en formato PDF/impreso de alta densidad (Golden Print Industrial) para presentación formal ante chefs ejecutivos, gerentes de compras, administradores de casinos o visitas presenciales.
+
+#### B. Gobernanza de Tarifas & Modelos Dinámicos
+1. **Selector de Modelo de Precios:**
+   - Permite recalcular instantáneamente las tarifas impresas según el segmento del cliente objetivo (`General Institucional` 34,5%, `Clientes Hogar` 33,2%, `Grande` 31,2%, `Mediano` 32,1%, `Pequeño` 33,2%).
+2. **Jerarquía Canónica de Categorías:**
+   - Agrupación estructurada según `CATEGORY_PRIORITY` (Verduras & Hortalizas, Frutas Seleccionadas, Hortalizas de Hoja, Tubérculos & Plátanos, Hierbas Aromáticas, Despensa & Abarrotes, Lácteos, Congelados, Procesados).
+3. **Ergonomía de Impresión (Swiss Precision Layout):**
+   - **Modo 2 Columnas (Densa):** Optimizado para concentrar hasta 60 productos por página tamaño Carta/Oficio, reduciendo el consumo de papel y facilitando la consulta en mesas de trabajo.
+   - **Modo 1 Columna (Detallada):** Presentación espaciada para clientes que requieren mayor legibilidad.
+   - **Términos Comerciales Estandarizados:** Incluye pie de página formal con políticas de corte (pedidos hasta las 8:00 PM), pedido mínimo ($150.000 COP) y garantía de calidad de 12 horas.
+
+---
+
+### 7.18 Consola Unificada de Dirección Comercial & Hub Ejecutivo (`/admin/commercial`)
+
+> **Ruta Canónica:** `/admin/commercial` ([page.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/commercial/page.tsx))  
+> **Componente Core:** `CommercialUnifiedDashboard.tsx`  
+> **Tablas Nucleares:** `orders`, `order_items`, `profiles`, `products`, `quotes`, `leads`, `commercial_cost_matrix`, `commercial_campaigns`, `app_settings`.
+
+#### A. Arquitectura del Hub Central
+El hub comercial unifica la dirección estratégica y operativa del área comercial en cuatro grandes vistas sincronizadas por parámetros de URL (`tab`, `subtab`, `clientTab`):
+1. **Dashboard Comercial (BI) (`tab=dashboard`):**
+   - Panel de Business Intelligence en tiempo real con KPIs ejecutivos (Ventas Totales B2B/B2C, Margen Ponderado, Volumen en Toneladas, Tasa de Cumplimiento del 98,4%).
+   - Embudo de Conversión Comercial (Leads $\to$ Cotizaciones $\to$ Acuerdos $\to$ Compradores Recurrentes).
+   - Mapa Satelital de Clientes por Densidad Geográfica (Google Maps) con georreferenciación en Bogotá y municipios de la Sabana (Chía, Cota, Funza, Mosquera).
+   - Alertas comerciales Andon (vencimiento de acuerdos, cotizaciones desatendidas, insumos con costos desactualizados).
+   - Boletín Semanal de Mercado HITL (`WeeklyMarketBulletinModal`) con despacho por correo a clientes clave.
+2. **Operaciones & Gestión (`tab=operations`):**
+   - Subpestañas integradas: Matriz de Costos (`subtab=cost-matrix`), Cotizaciones (`subtab=quotes`), Modelos de Precios (`subtab=settings`), Campañas Temporales (`subtab=campaigns`).
+3. **Gestión de Clientes CRM (`tab=clients`):**
+   - Subpestañas unificadas: Directorio B2B (`clientTab=b2b`), Pipeline CRM (`clientTab=leads`), Acuerdos Comerciales (`clientTab=agreements`), Clientes Hogar (`clientTab=b2c`).
+4. **Bandeja Comercial (`tab=inbox`):**
+   - Conexión con `CommercialInboxModule` para gestión de mensajes y comunicaciones transaccionales.
 
 ---
 
@@ -6306,6 +6531,54 @@ La Consola Central de Compras 360 es el punto neurálgico de gobernanza donde co
 
 ---
 
+### 31.11 Especificación Canónica de Control de Caja Móvil del Jefe de Compras y Arqueo de Cuadrilla Gemba (`/ops/control-caja`)
+
+#### A. Misión Operativa del Gemba en Muelle (El Smartphone del Jefe de Compras)
+A las 05:00 AM, el Jefe de Compras supervisa el muelle de recibo de FruFresco con un teléfono móvil en mano. Su objetivo financiero crítico es monitorear el comportamiento de efectivo de toda su cuadrilla de compradores de plaza, cruzar lo entregado contra lo comprado y recibir las vueltas exactas sin margen de pérdida.
+
+#### B. Reglas de Negocio Innegociables
+1. **Exclusión de Coteros en Efectivo de Compradores:**
+   - Queda formalmente establecido que los compradores de plaza **NO pagan coteros ni descargues con su efectivo asignado**.
+   - Las cuadrillas de descargue y coteros pertenecen a la nómina fija de FruFresco y operan vinculadas a los camiones de recolección (`/ops/recogida`).
+   - El efectivo entregado al comprador se destina **exclusivamente a compras de producto agrícola (materia prima)**.
+2. **Ecuación Inmutable de Arqueo y Vueltas:**
+   $$\text{Vueltas a Devolver al Jefe} = \text{Efectivo Asignado al Comprador} - \sum \text{Compras en Efectivo (con recibo a mano)}$$
+3. **Auditoría con Evidencia Fotográfica Obligatoria:**
+   - Toda compra registrada por el comprador en `/ops/compras` exige fotografía de la orden o recibo físico hecho a mano (`voucher_image_url`).
+   - La pantalla del Jefe de Compras permite abrir la galería de fotos de recibos de cada comprador con un solo toque táctil para auditoría inmediata en muelle.
+4. **Diseño Ergonómico Responsive "Mobile-First Tablet/Grid":**
+   - **En Teléfono Móvil (< 768px):** Para evitar desbordes horizontales o tipografía microscópica, cada comprador se renderiza en una **Fila Densa Multi-Línea estructurada**:
+     - *Línea 1:* Nombre del comprador (badge de estado) $\to$ **Vueltas a Devolver en verde esmeralda prominente**.
+     - *Línea 2:* Asignado | Compras Efectivo | Contador de Recibos con ícono 📷 | Botón de acción táctil `[ Recibir Vueltas ]`.
+   - **En Tablet o Escritorio ($\ge 768px$):** Renderiza la tabla completa de 7 columnas con cabecera y footer consolidado de sumatorias.
+5. **Trazabilidad Inmutable por UUID (`buyer_id`):**
+   - Las compras persisten en `purchases.notes` la estructura JSON `{ buyer_id, buyer_name }` impidiendo colisiones por homónimos o variaciones de nombres de contacto.
+6. **Detección Andon de Compras Huérfanas / Anticipadas:**
+   - Si un comprador efectúa compras antes de que el supervisor registre el fondo en `cash_budgets`, el sistema activa una Alerta Andon ámbar en cabecera y renderiza automáticamente la fila del comprador con asignación base $0 y saldo en déficit, habilitando el botón de asignación inmediata para que ningún peso quede en el limbo.
+
+#### C. Pipeline de Datos y Ciclo de Vida del Turno
+1. **Asignación en Vivo (`cash_budgets`):**
+   - El Jefe de Compras asigna fondos directamente desde la cabecera seleccionando al colaborador y el monto entregado.
+2. **Consumo Reactivo en Plaza (`purchases`):**
+   - Las compras con `payment_method = 'cash'` ejecutadas por el comprador en `/ops/compras` se acumulan en tiempo real bajo su perfil (por `buyer_id` o `budget_id`).
+3. **Conciliación y Recepción Física:**
+   - Al pulsar `[ Recibir Vueltas ]`, el jefe confirma la recepción de los billetes físicos en muelle, congelando el turno del comprador en estado `closed` y enviando la conciliación definitiva a Tesorería (`/admin/procurement/cash`).
+
+---
+
+#### Escenario 141: Asignación de Efectivo, Monitoreo de Cuadrilla y Conciliación de Vueltas de Compras en Muelle de Bodega (SDD v1.9.100)
+- **Given** las 05:30 AM en el muelle de planta con el Jefe de Compras inspeccionando camiones desde su teléfono móvil en `/ops/control-caja`.
+- **When** Carlos Rodríguez (comprador de hortalizas) arriba al muelle habiendo recibido $3.000.000 COP y ejecutado $2.100.000 COP en 8 compras de contado con recibo hecho a mano:
+- **Then**:
+  1. La fila compacta de Carlos en el móvil muestra con claridad: Asignado $3.000.000, Compras $2.100.000, 8 Recibos con foto, y **Vueltas a Devolver: $900.000 COP**.
+  2. El jefe toca el botón `[ 📷 8 Recibos ]` y visualiza al instante las fotos de los recibos físicos para validar cualquier precio unitario dudoso.
+  3. Carlos le entrega físicamente el fajo de $900.000 en billetes; el jefe cuenta y pulsa `[ Recibir $900.000 ]`.
+  4. El estado de Carlos pasa de `EN TURNO` a `CONCILIADO / VUELTAS RECIBIDAS`.
+  5. La barra de totales al pie de la tabla actualiza el progreso global de la cuadrilla (ej: "2 de 3 compradores conciliados").
+
+---
+
+
 ## 32. Especificación Canónica del Motor Universal de Hojas de Cálculo Polimórficas & Resiliencia en Ingesta ODS/Excel (§32)
 
 ### 32.1 Misión & Taxonomía de Formatos Tabulares Admitidos
@@ -6538,7 +6811,515 @@ En la columna `CANT. / PRECIO` de la tabla de staging (`stagedItems`):
   3. Al posicionar el cursor sobre la píldora, el tooltip informa `Precio unitario: $11.990 | Subtotal: $239.800`.
   4. En el pie de la Mesa de Trabajo, el resumen de control muestra `Items / Total Estimado: X productos • $Total Estimado`.
 
+---
 
+#### Escenario 142: Directorio Maestro B2B, Relación Matriz-Sucursal y Ficha Logística Satelital (SDD v1.9.101)
+- **Given** un operador comercial o coordinador de cartera autenticado con permisos de visualización o edición en `/admin/commercial/clients` o `/admin/commercial?tab=clients&clientTab=b2b`.
+- **When** accede a la vista de Clientes Institucionales y selecciona una cuenta o crea una nueva sede de entrega:
+- **Then**:
+  1. La ruta responde con código `200 OK` tanto en acceso directo standalone como dentro del panel comercial conmutado.
+  2. En la lista principal, el thead sticky a 148px permite filtrar instantáneamente por Estructura (`Matriz`, `Sucursal`, `Individual`), Ubicación canónica normalizada y Estado (`Activo` / `Inactivo`).
+  3. Las cuentas con rol Matriz (`is_corporate_parent = true`) exhiben el badge distintivo `<Building2 />`, mientras que sus sedes asociadas (`parent_id = matriz.id`) muestran `<Building />` con enlace a su grupo corporativo.
+  4. La ficha técnica valida y resguarda los cupos de crédito (`credit_limit`), términos de pago (`payment_days`), tipo documental de despacho (`remision_post_entrega` vs `factura_pre_despacho`) y número de copias impresas requeridas.
+  5. La captura o edición de datos logísticos procesa automáticamente el texto libre con `@/lib/logistics-parser`, extrayendo la franja horaria de descarga y actualizando las coordenadas GPS satelitales con estado verificado para la optimización de rutas en Fleet Engine.
 
+---
 
+#### Escenario 143: Auditoría Ejecutiva de Márgenes, Ventas y Clasificación Pareto de SKUs (SDD v1.9.102)
+- **Given** el Director Comercial o Gerente General autenticado en `/admin/commercial/reports`.
+- **When** selecciona un período de análisis (ej. `30 días`) y activa el filtro de segmento `Solo B2B`:
+- **Then**:
+  1. La ruta responde con código `200 OK` y calcula en tiempo real las ventas totales, costo ponderado de mercancía, volumen en toneladas y margen bruto porcentual.
+  2. La pestaña "Rentabilidad por Cliente" clasifica a cada comprador institucional mostrando su facturación neta, utilidad bruta generada, ticket promedio y un badge de semáforo de riesgo (verde $\ge 22\%$, ámbar $15-21\%$, rojo $< 15\%$).
+  3. La pestaña "Ventas & Rotación SKU" ordena el catálogo por volumen de facturación y asigna determinísticamente la clase Pareto (`Tipo A` para el 80% de ingresos, `Tipo B` para el 15%, y `Tipo C` para la cola larga).
+  4. La pestaña "Compresión de Margen" detecta automáticamente los productos cuya compra en Corabastos ha encarecido el costo unitario por encima del precio acordado en matriz comercial o catálogo base.
+  5. Al pulsar "Exportar Excel (XLSX)", el sistema genera un libro estructurado multi-hoja (`Rentabilidad_Clientes`, `Ventas_Productos_Pareto`, `Compresion_Margen`) asegurando que ningún texto descriptivo exceda la cota de 32.767 caracteres de Excel (Regla 32K).
 
+---
+
+#### Escenario 144: Emisión y Parametrización del Catálogo Impreso Oficial B2B (SDD v1.9.103)
+- **Given** un asesor comercial preparándose para una visita presencial con un cliente institucional en `/admin/commercial/print-catalog`.
+- **When** selecciona el modelo de precios "General Institucional" y conmuta a la vista "2 Col (Densa)":
+- **Then**:
+  1. La ruta responde con código `200 OK` y agrupa automáticamente el portafolio activo por categorías agrícolas según la jerarquía canónica de `CATEGORY_PRIORITY`.
+  2. Las tarifas unitarias se resuelven en tiempo real aplicando el markup del modelo seleccionado sobre los costos vigentes de la matriz comercial.
+  3. La previsualización integra el membrete corporativo oficial `Letterhead` de Investments Cortés S.A.S. (NIT 901.393.217) y el pie de página con políticas de corte (8:00 PM) y garantías.
+  4. La barra superior flotante de herramientas se oculta automáticamente ante el comando de impresión del navegador (`@media print`), generando un documento limpio tamaño Carta/Oficio con cortes de página ordenados (`break-inside: avoid`).
+
+---
+
+#### Escenario 145: Operación Integral del Hub Comercial y Navegación Transversal (SDD v1.9.104)
+- **Given** el Director Comercial autenticado en la consola unificada `/admin/commercial`.
+- **When** navega entre las pestañas "Dashboard Comercial", "Operaciones & Gestión", "Gestión de Clientes" y "Bandeja Comercial":
+- **Then**:
+  1. El hub responde con código `200 OK` y sincroniza en tiempo real los parámetros `tab`, `subtab` y `clientTab` en la URL del navegador sin forzar recargas destructivas de estado.
+  2. La vista de Dashboard presenta el mapa satelital interactivo de densidad de clientes con pines tricolor según su localidad en Bogotá y municipios de la Sabana.
+  3. Desde los enlaces cruzados del dashboard (ej. "Ir a Matriz de Costos" o "Ver Acuerdos"), el sistema transiciona fluidamente a los módulos correspondientes preservando los filtros de contexto.
+  4. Los componentes de alto peso se cargan bajo demanda (`dynamic()` con `SubtabSkeleton`), garantizando un tiempo de respuesta inferior a 300 ms en conmutación de pestañas.
+
+---
+
+## 35. Dominio 9: Calidad Operativa, Servicio al Cliente (SAC), Análisis Causa Raíz (RCA) & Actas RNC
+
+### 35.1 Misión del Dominio de Calidad & Principios Lean Six Sigma
+El subsistema de Calidad y Servicio al Cliente de FruFresco opera bajo la filosofía Lean de **Cero Defectos, Transparencia Radical y Causa Raíz (RCA)**. No se limita a registrar quejas; constituye el cortafuegos financiero que dictamina devoluciones en puerta, imputa nominalmente las pérdidas operativas y genera las actas legales institucionales de No Conformidad (RNC).
+
+### 35.2 Las 4 Pantallas Canónicas del Dominio
+1. **9.1 `/admin/customer-service` (Consola Central de Calidad & PQRS):**
+   - Sábana maestra de alta densidad a 1600px con protocolo sticky magnético multi-línea (Línea 0 navbar 85px + Línea 1 toolbar omnibox `top: 85px` + Línea 2 thead `top: 85 + toolbarHeight px` con `ResizeObserver`).
+   - Wizard Stepper Modal Poka-Yoke en 3 pasos: (1) Contexto & Evidencias con integración de consola WhatsApp SAC humanizada; (2) Diagnóstico RCA L1/L2 & Matriz de Imputabilidad Nominal (% Split); (3) Resolución Comercial (Rechazar, Nota Crédito, Ajuste Factura, Reposición D+1 $0 COP) y Plan de Acción (CAPA).
+2. **9.2 `/admin/customer-service/rca` (Análisis Causa Raíz & Pareto 80/20):**
+   - Cockpit Lean con indicadores de First Time Right (FTR %), Cost of Quality (CoQ en COP), Tasa de Error en Montaje Comercial, Tasa de Ping-Pong (Corte de Bucle en reposiciones), y MTTR (Lead time de solución).
+   - Diagrama de Pareto 80/20 interactivo por macrocausas biológicas/logísticas y Matriz de Responsabilidad por Área.
+3. **9.3 `/admin/customer-service/rnc/[id]/print` (Acta Legal RNC Golden Print):**
+   - Documento legal imprimible/PDF oficial de *INVESTMENTS CORTES SAS* con diagnóstico técnico, soporte fotográfico pericial, cuadro de imputación nominal de culpa (% y monto en COP a deducir) y firmas solemnes de Calidad y el Imputado.
+4. **9.4 `/admin/customer-service/novedades` (Mesa de Novedades de Línea & Devoluciones por SKU):**
+   - Consola dedicada de auditoría de ítems devueltos o faltantes reportados en muelle (`billing_returns`), con cálculo del impacto monetario y enlace al ajuste de facturación antes del corte AM/PM.
+
+---
+
+#### Escenario 146: Auditoría de PQRS con Imputabilidad Nominal y Prorrateo de Culpa (SDD v1.9.105)
+- **Given** un inspector de calidad autenticado en la consola `/admin/customer-service`.
+- **When** audita un reclamo por daño mecánico en aguacate Hass recibido de un restaurante corporativo:
+- **Then**:
+  1. La ruta responde con código `200 OK` y despliega la sábana maestra con filtros por estado (`Pendientes`, `En Auditoría`, `Resueltos`, `Rechazados`).
+  2. En el Wizard Modal Paso 2, selecciona la macrocausa `dano_mecanico` y el subtipo `aplastamiento_sobreestiba`.
+  3. En la matriz de imputación, asigna al canal `Transporte`, seleccionando al conductor titular (70% de culpa) y al auxiliar de ruta (30% de culpa).
+  4. El sistema calcula en caliente los montos exactos en pesos colombianos para deducción en nómina/fletes y persiste el JSON inmutable `[RCA_METADATA: ...]` en base de datos.
+
+---
+
+#### Escenario 147: Diagnóstico RCA, Pareto 80/20 y Corte de Bucle de Re-rechazos (SDD v1.9.106)
+- **Given** el Gerente de Operaciones y Calidad consultando `/admin/customer-service/rca`.
+- **When** filtra el análisis a los últimos 30 días:
+- **Then**:
+  1. La ruta responde con código `200 OK` y calcula en tiempo real el FTR %, el Costo de Calidad acumulado y el MTTR promedio.
+  2. El gráfico de Pareto ordena las fallas de mayor a menor frecuencia, delimitando la línea acumulada del 80% para focalizar planes CAPA en compras o selección.
+  3. Si un caso corresponde a una reposición que volvió a ser rechazada en destino, el sistema activa la bandera `isReplacementRejection`, alertando el indicador Ping-Pong y bloqueando un tercer despacho físico para forzar Nota Crédito.
+
+---
+
+#### Escenario 148: Generación del Acta Legal RNC con Respaldo Fotográfico (SDD v1.9.107)
+- **Given** una PQR dictaminada con responsabilidad imputada en `/admin/customer-service`.
+- **When** el auditor pulsa "Ver Acta RNC" navegando a `/admin/customer-service/rnc/[id]/print`:
+- **Then**:
+  1. La ruta responde con código `200 OK` y precarga el membrete institucional de Investments Cortés S.A.S.
+  2. El documento detalla el diagnóstico técnico L1/L2, la justificación de calidad, el desglose de productos devueltos y las fotos periciales en cuadrícula nítida.
+  3. Se genera la tabla legal de deducción salarial o débito a proveedor con cédula/NIT, cargo, porcentaje y monto total en COP, lista para firma física o exportación a PDF.
+
+---
+
+#### Escenario 149: Gestión de Novedades de Línea y Sustracción Neta en Remisiones (SDD v1.9.108)
+- **Given** el coordinador de despacho o facturación en `/admin/customer-service/novedades`.
+- **When** revisa las devoluciones de producto por rechazo parcial en muelle:
+- **Then**:
+  1. La ruta responde con código `200 OK` y precarga la pestaña `novelties` con todos los ítems de `billing_returns`.
+  2. Permite validar si la novedad procede para sustracción directa en la remisión (`order_items.quantity = picked - returned`), asegurando que la factura nazca neta sin generar notas crédito innecesarias ante la DIAN.
+
+---
+
+#### Escenario 150: Creación, Vinculación y Efecto Cascada en Lista Maestra Compartida (SDD v1.9.109)
+- **Given** el Director Comercial en la consola de acuerdos comerciales `/admin/commercial/agreements`.
+- **When** crea una nueva "Lista Maestra Compartida" titulada "MENSUAL GENERAL - OCTUBRE 2026", seleccionando 18 casas matrices institucionales y cargando un Excel con 120 SKUs donde el "Aguacate Hass" tiene un precio pactado de $8.000 COP:
+- **Then**:
+  1. El sistema persiste un único registro de acuerdo maestro con sus 120 ítems en base de datos y asocia a los 18 clientes seleccionados a dicha lista viva sin clonar 18 copias redundantes.
+  2. La tabla de Acuerdos Comerciales muestra una única fila consolidada con el nombre "MENSUAL GENERAL - OCTUBRE 2026" y una píldora interactiva indicando `[👥 18 Sucursales]`.
+  3. Al montar un pedido en `/admin/orders/create` o procesar un correo en `EmailDraftsModule` para cualquiera de las 18 sucursales vinculadas, el sistema liquida automáticamente el Aguacate Hass a $8.000 COP.
+  4. Al editar posteriormente el precio del Aguacate Hass en la lista maestra a $8.500 COP, cualquier nuevo pedido para cualquiera de las 18 sucursales liquida de inmediato a $8.500 COP en cascada y sin requerir ediciones cliente por cliente.
+
+---
+
+## 36. Dominio 3: Gestión de Pedidos, Alistamiento y Despacho
+
+### 36.1 Arquitectura Transaccional de Pedidos & Compuertas de Ingesta
+El subsistema de Pedidos y Despacho de FruFresco gobierna la ingesta multicanal (correo corporativo, WhatsApp, carga manual de documentos y teléfono), la traducción canónica de lenguaje natural hacia opciones estructuradas (§19.0), la validación de convenios comerciales y el lanzamiento a muelle de cargue.
+
+### 36.2 Certificación de Pantallas del Dominio
+
+#### 1. 3.1 `/admin/orders` (Compuerta Maestra de Pedidos & Gateway Transparente):
+- **Rol Arquitectónico:** Punto de entrada primario y alias canónico del ecosistema de pedidos.
+- **Mecanismo:** Redirección client-side determinista e inmediata (`router.replace('/admin/orders/loading')`) hacia la Torre de Control de Carga, garantizando que el operador aterrice directamente en la interfaz de gestión operativa sin desvíos ni duplicación de estado.
+- **Invarianza:** Componente ultraligero sin dependencias pesadas, compilación estricta con cero errores TypeScript.
+
+#### 2. 3.2 `/admin/orders/create` (Mesa de Trabajo Manual & Digestor IA de Pedidos):
+- **Rol Arquitectónico:** Estación central de ingesta, conversión documental y creación asistida de pedidos para clientes B2B y B2C.
+- **Pipeline de Ingesta:** Motor IA Gemini 3.8 Flash con centinela de obsolescencia y cascada de contingencia; visor integrado polimórfico en pantalla dividida (`PdfCanvasViewer` y `ExcelTableViewer`).
+- **Gobernanza Comercial & Precios (§34):** Columna `CANT. / PRECIO` con píldora verde de precio unitario resuelto, tooltip de subtotal, badge de advertencia rojo `SIN PRECIO` y telemetría totalizadora en footer.
+- **Poka-Yoke de Convenios:** Restricción estricta de catálogo (`allow_off_agreement_purchases = false`) que impide ofrecer SKUs no pactados a clientes con acuerdo cerrado.
+- **Control de Cartera:** Interbloqueo por cupo de crédito y días de mora (GAP-01) con excepción auditada (`CREDIT_LIMIT_EXCEPTION_AUTHORIZED`).
+- **Ergonomía:** Ordenamiento alfabético A→Z no destructivo (`sortStagedAlpha`), adición rápida de filas manuales (`handleAddStagedRow`) y aprobación directa en 1 clic (`handleDirectConfirmOrder`) con persistencia en `orders.document_url`.
+
+#### 3. 3.3 `/admin/orders/loading` (Torre de Control de Carga, Pesaje & Asignación de 150 Bahías):
+- **Rol Arquitectónico:** Compuerta de Despacho (Gatekeeper) entre Comercial y Operaciones (§16.1), auditoría de tanda y lanzamiento a piso.
+- **Telemetría HUD:** 5 tarjetas de KPI ejecutivos en tiempo real: *Total Pedidos*, *Valor Carga ($ COP)*, *Peso Total (TON)*, *Efectividad (% aprobación)* y *Alertas*.
+- **Superbuscador Omnibox:** Indexación en caliente por Razón Social, Sucursal, ID Amistoso (`#DDMM_XXXX`), Orden de Compra (`OC`), `SOLPED` y dirección de entrega.
+- **Segmentación Omnicanal de 3 Pestañas:** `orders` (Torre de control y tabla de cargue), `emails` (`EmailDraftsModule` asistido por IA), y `outbox` (`EmailOutboxModule` con buffer de 120 segundos).
+- **Protocolo Sticky Dock Magnético:** Dock fijo a `top: 85px` (`zIndex: 45`) y thead de tabla acoplado a `top: ${85 + dockHeight - 1}px` (`zIndex: 35`), garantizando navegación sin saltos ni transparencias.
+- **Asistente de Lanzamiento Poka-Yoke (`ManualDispatchWizardModal.tsx`):** Embudo guiado de 4 pasos para asignación geográfica de 150 bahías, emisión física de la batería de documentos de contingencia, e inhibición mecánica del botón de sello (`step4Confirmed = true`), transicionando los pedidos atómicamente a `para_compra` en modo solo-lectura.
+
+---
+
+#### 4. 3.4 `/admin/orders/[id]` (Expediente Individual de Pedido & Trazabilidad de Estados):
+- **Rol Arquitectónico:** Expediente digital unificado de auditoría individual y trazabilidad 360° del pedido.
+- **Auditoría Documental:** Integración del botón interactivo `[📄 Ver Anexo]` apuntando a `order.document_url` para consulta visual inmediata del soporte original del cliente (PDF o Excel) en pestaña nueva.
+- **Despacho & Contingencia:** Integración del botón `[🖨️ Remisión]` enlazado a `/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}` para reimpresión unitaria de la remisión oficial duplex, y botón `[Etiquetas]` si contiene ítems procesados.
+- **Gobernanza de Edición:** Cierre automático de edición tras la ventana de corte de las 20:00 (`ADMIN_EDIT_CUTOFF_HOUR`), desplegando el badge `[Edición Cerrada]` con candado.
+- **Alerta de Colisión:** Banner prominente de detección de pedidos hermanos duplicados (`duplicateSiblings`) con advertencia en rojo si coinciden cliente, fecha de entrega y sede normalizada.
+- **Sincronización Backend:** Persistencia atómica de modificaciones vía `/api/orders/update` con auditoría de cambios y diff visual rectificativo al cliente.
+
+#### 5. 3.5 `/admin/orders/alistamiento-print` (Sábana de Alistamiento Oficio por Células de Patio):
+- **Rol Arquitectónico:** Instrumento físico de alta velocidad para alistadores de patio en Corabastos y bodega (§19.4 - §19.5).
+- **Formato Físico:** Formato Oficio Paisaje (*Legal Landscape* 355.6mm × 215.9mm) con soporte Golden Print sin encabezados ni pies de página del navegador.
+- **Partición Balanceada Anti-Huérfanas:** Selector de densidad (8, 10, 12 columnas); distribución equitativa de productos entre hojas para erradicar páginas residuales de 1 columna.
+- **Filtro Poka-Yoke Anti-Filas Vacías:** Exclusión estricta de clientes que tengan demanda cero en el bloque de productos de la hoja, reduciendo hasta un 50% de papel.
+- **Ordenamiento por Familias Gemba:** Agrupación contigua de estibas mediante `compareFamilyProducts` (`familyKey` via `parent_id`), situando el producto base primero seguido de sus variantes hijas.
+- **Prevalencia de Unidad Maestra 'KG':** Fila 1 siempre calcula la magnitud en `KG` con espacio tipográfico obligatorio (`24 KG`), suprimiendo ruido en Fila 2 si la especificación es redundante con el nombre del SKU (`isRedundantAttribute`).
+
+#### 6. 3.6 `/admin/orders/contingency-print` (Kit de Contingencia: Remisiones Duplicadas, Manifiesto de Flota & Planilla de Compras):
+- **Rol Arquitectónico:** Instrumento físico maestro de contingencia de piso e isomorfismo digital-papel (§30.2 Piezas 5 y 6).
+- **Formatos y Modos Operativos:** Selector dinámico de modos: `remissions` (Remisiones duplicadas Carta), `dispatch` (Manifiesto de flota Oficio), `purchases` (Planilla de compras Corabastos), y `all` (Kit integral de contingencia en 1 clic).
+- **Regla de Duplicado Consecutivo:** Cada pedido genera automáticamente dos juegos en folio Carta: `ORIGINAL - CLIENTE` (badge oscuro) y `COPIA - TRANSPORTADOR / CONTABILIDAD` (badge claro), con paginación inteligente de 18 a 24 ítems sin desbordes.
+- **Normalización de Matriz y Sucursales:** Extracción canónica (`extractParentAndBranch` y `extractBranchOnly`) para suprimir duplicaciones corporativas (ej. "AMA TU MASCOTA SAS - AMA TU MASCOTA") y formatear claramente sedes de cadenas institucionales (Colsubsidio, Puerto Peñalisa).
+- **Georreferenciación y Localidades:** Deducción de la localidad de Bogotá (Usaquén, Suba, Kennedy, Chapinero, etc.) o municipio aledaño mediante cruce de coordenadas GPS (LAT/LON) con polígonos distritales.
+- **Control Físico de Canastillas en Comodato:** Despliegue de saldo vivo de canastillas en poder del cliente (`crate_balance`) y casillas manuscritas de control estricto: `Entregadas: [ _____ ]` y `Recogidas / Devueltas: [ _____ ]`.
+- **Poka-Yoke de Reposición y Garantía QR:** Detección de notas de reposición con banner preventivo y liquidación de precios a $0, junto con código QR vectorial canónico (`QRCodeSVG`) enlazado a `/pqrs?order_id=${order.id}` para radicación inmediata de novedades en sitio.
+
+#### 7. 3.7 `/admin/orders/contingency-reconciliation` (Mesa de Conciliación de Entregas & Retorno de Remisiones):
+- **Rol Arquitectónico:** Mesa operativa post-despacho para el cierre de bucle físico-digital tras el retorno de flota (§30.3).
+- **Diseño Ergonómico de Doble Columna:** Panel lateral izquierdo con lista de pedidos filtrable por fecha de ruta (`date`), buscador omnibox (cliente, secuencia o bahía) y filtro tri-estado (`ALL`, `PENDING`, `RECONCILED`); consola central derecha para digitación acelerada de la orden activa.
+- **Auditoría Financiera en Tiempo Real (Financial Pulse):** Comparativa dinámica entre *Despachado Original* (\$ COP), *Recibido en Firme* (\$ COP) y *Ajuste / Nota Crédito* (-\$ COP o \$0 Exacto).
+- **Control de Canastillas Plásticas Retornables:** Mini-panel interactivo para registrar canastillas *Entregadas* vs *Devueltas* con cálculo en vivo del balance resultante (`cratesReturned - cratesDelivered`).
+- **Tabla de Cotejo Ítem por Ítem:** Foco automático en el primer campo numérico `KG-UN RECIBE`, cálculo reactivo de diferencias (`difference_qty = quantity - received_quantity`) resaltadas en rojo si existen faltantes, y tipificación obligatoria de motivos de ajuste (`difference_reason`: Faltante en entrega, Rechazo por merma, Avería transporte, Error pesaje).
+- **Persistencia Transaccional y Cierre de Bucle:**
+  1. Si hay diferencias: inserta automáticamente registros de novedad aprobados en `billing_returns` vinculados a la orden y al SKU, con valor monetario en notas.
+  2. Actualiza la orden en `orders` con `status: 'delivered'` y añade trazabilidad en `admin_notes` (`[CONCILIADO_MANUAL timestamp] Canastillas: X entregadas / Y devueltas`).
+  3. Soporta aprobación 1-Clic sin novedades (`Aprobar 100% Exacto`) y avance automático inmediato al siguiente pedido pendiente para digitación continua a alta velocidad.
+  4. Enlace directo hacia la facturación oficial masiva (`/admin/commercial/billing`).
+
+#### 8. 3.8 `/admin/orders/print-labels` (Rótulos Térmicos Masivos de Canastilla & Procesados 100x50mm):
+- **Rol Arquitectónico:** Centro de impresión térmica masiva para identificación física en planta de canastillas logísticas y productos bromatológicos procesados (§19.3).
+- **Calibración Industrial 100mm × 50mm:** Regla de oro contra saltos de página en blanco (`height: 49.5mm !important`), erradicando el bug de redondeo subpixel en navegadores para impresoras Zebra y Xprinter en rollo continuo.
+- **Modo Canastilla / Despacho (`crate`):**
+  - Generación de rótulos con código QR estructurado para lectores láser y app de conductores: `FRUFRESCO:{orderId}:{sequenceId}:{crateIndex}/{totalCrates}:{deliveryDate}`.
+  - Cálculo inteligente de canastillas en tres modalidades: automático (`auto`, ~12.5 kg/canastilla), unitario (`single`, 1 por pedido) y fijo (`custom`, multiplicador manual).
+  - Despliegue de alta visibilidad para bodegas oscuras: Razón Social y Sede, Dirección, Bahía de muelle (`#BAHÍA`), peso en kg y casilla `CANASTILLA: [ X / Y ]`.
+- **Modo Bromatológico de Producto (`product`):**
+  - Filtrado selectivo (`requires_label` vs `all`) para rotulado de productos frescos procesados o empacados.
+  - Campos técnicos obligatorios: Nombre de SKU, LOTE (DD-MM-YY), Cantidad/Peso, Fecha de Vencimiento (+7 días), Cliente, advertencias de refrigeración (0°C a 4°C), datos de fabricante (*Investments Cortés S.A.S.*), ID contable y número de pedido.
+- **Barra de Control No Imprimible:** Selector sticky persistente (`PrintDocumentSwitcher`) sincronizado por fecha de despacho y órdenes seleccionadas.
+
+#### 9. 3.9 `/admin/orders/[id]/print-labels` (Rótulos Térmicos Unitarios por Pedido):
+- **Rol Arquitectónico:** Consola de reimpresión unitaria bajo demanda para contingencia, reposición rápida o empaque de un pedido individual.
+- **Filtrado por Categoría Procesados (`PR`):** Identificación automática de ítems de la categoría 'PR', dividiendo cantidades en etiquetas de 1 kg completas y fracción residual.
+- **Layout Bromatológico Individual:** Formato 100mm × 50mm con logosímbolo oficial de FruFresco, SKU contable, LOTE, fecha de vencimiento y leyendas sanitarias de conservación.
+- **Control Poka-Yoke de Flujo:** Validación preventiva ante pedidos sin SKUs procesados, desplegando aviso informativo con retorno asistido sin emitir impresiones erradas.
+
+---
+
+#### Escenario 150: Redirección Canónica e Inmunidad Transaccional en Gateway de Pedidos (SDD v1.9.109)
+- **Given** un usuario autenticado accediendo a la URL raíz del módulo de pedidos `/admin/orders`.
+- **When** se monta el componente en el navegador:
+- **Then**:
+  1. La ruta responde con código `200 OK` sin arrojar errores de renderizado.
+  2. Ejecuta inmediatamente `router.replace('/admin/orders/loading')` reemplazando la entrada en el historial de navegación.
+  3. Muestra temporalmente el feedback sobrio de carga *"Redirigiendo a cargue de pedidos..."* sin flashes de contenido no estilizado.
+
+---
+
+#### Escenario 151: Mesa de Trabajo Manual, Digestor IA Multimodal y Blindaje de Convenios B2B (SDD v1.9.110)
+- **Given** un operador comercial en `/admin/orders/create` cargando una orden de compra institucional de un cliente con convenio cerrado (`allow_off_agreement_purchases = false`).
+- **When** el digestor IA procesa el documento o el usuario busca productos manualmente en la Mesa de Trabajo:
+- **Then**:
+  1. La ruta responde con código `200 OK` y renderiza el visor interactivo (PDF o Excel) en la mitad superior/lateral.
+  2. La búsqueda de productos restringe el catálogo exclusivamente a los SKUs pactados en el acuerdo vigente, impidiendo la selección de productos no autorizados.
+  3. En la tabla de staging, la columna `CANT. / PRECIO` muestra la cantidad junto con la píldora verde del precio unitario contractual y el tooltip dinámico del subtotal.
+  4. Al pulsar `⚡ Confirmar y Crear Pedido Inmediato`, el sistema sube el soporte a `order-attachments`, guarda la orden con `origin_source: 'document_upload'`, enlaza `orders.document_url`, inserta los ítems con transaccionalidad atómica y redirige a `/admin/orders/loading`.
+
+---
+
+#### Escenario 152: Torre de Control de Carga, Asignación de 150 Bahías y Lanzamiento a Operación (SDD v1.9.111)
+- **Given** el coordinador logístico operando la Torre de Control en `/admin/orders/loading` dentro de la ventana de corte horario.
+- **When** selecciona la fecha de despacho (`Mañana`), audita la telemetría HUD y abre el asistente de lanzamiento (`ManualDispatchWizardModal`):
+- **Then**:
+  1. La ruta responde con código `200 OK` y presenta los pedidos organizados con su bahía asignada, peso acumulado en toneladas y estatus operativo.
+  2. En el Paso 1 del asistente, el algoritmo geográfico resuelve las 150 bahías por ventana LIFO, permitiendo desplegar bajo demanda la cuadrícula visual de la nave.
+  3. En el Paso 2 y 3, emite o descarga en 1 clic la Sábana de Alistamiento Oficio, las planillas de compras de Corabastos y los juegos de remisiones duplex.
+  4. En el Paso 4, el botón `FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO` permanece deshabilitado hasta que el usuario activa conscientemente el checkbox `step4Confirmed`.
+  5. Al pulsar finalizar, el estado de todos los pedidos seleccionados se actualiza atómicamente a `para_compra` en base de datos, bloqueando cualquier alteración posterior no autorizada.
+
+---
+
+#### Escenario 153: Expediente Individual de Pedido, Anexo Documental y Control de Remisiones (SDD v1.9.112)
+- **Given** un analista de operaciones o servicio al cliente consultando `/admin/orders/[id]`.
+- **When** carga el detalle de un pedido originado por carga de documento o correo electrónico:
+- **Then**:
+  1. La ruta responde con código `200 OK` y presenta el expediente completo: cabecera con ID amistoso (`#DDMM_XXXX`), estatus cromático, georreferenciación (LAT/LON) y tabla de productos con especificación física canónica (`formatStructuredSpecification`).
+  2. Si el pedido posee soporte documental en `document_url`, renderiza el botón interactivo `[📄 Ver Anexo]` abriendo el PDF/Excel original en pestaña nueva.
+  3. Despliega el botón `[🖨️ Remisión]` permitiendo imprimir directamente el juego oficial de remisión duplicada para el furgón.
+  4. Si el pedido comparte fecha, cliente y sede con otra orden activa, despliega el banner de advertencia de colisión con enlaces directos para auditar los pedidos hermanos duplicados.
+
+---
+
+#### Escenario 154: Emisión de Sábana de Alistamiento Oficio con Partición Balanceada y Familias Contiguas (SDD v1.9.113)
+- **Given** una célula de alistamiento de patio con 13 productos demandados en la tanda de despacho.
+- **When** el operario genera la sábana de alistamiento en `/admin/orders/alistamiento-print` con densidad estándar de 10 columnas:
+- **Then**:
+  1. La ruta responde con código `200 OK` y particiona los 13 productos de forma balanceada en 2 hojas (7 y 6 columnas), eliminando páginas residuales huérfanas de 1 o 2 columnas.
+  2. Cada hoja incluye únicamente a los clientes que tengan pedidos de los productos presentes en dicha hoja, suprimiendo filas vacías.
+  3. Los productos pertenecientes a una misma familia botánica (ej. Apio base, Apio sin hoja y Apio en tallo) se imprimen contiguos en la cuadrícula gracias a `compareFamilyProducts`.
+  4. La Fila 1 de cada celda exhibe la masa neta en `KG` con espaciado tipográfico (`24 KG`), y la Fila 2 suprime el badge de maduración si el SKU ya lo contiene en su nombre (ej. *Plátano maduro*), manteniendo la celda limpia y legible.
+
+---
+
+#### Escenario 155: Kit de Contingencia de Piso, Remisiones Duplicadas Consecutivas y Control de Canastillas (SDD v1.9.114)
+- **Given** una tanda de despacho confirmada en la Torre de Control con pedidos institucionales y clientes con canastillas en comodato.
+- **When** el jefe de despacho ingresa a `/admin/orders/contingency-print?mode=remissions` para la jornada operativa:
+- **Then**:
+  1. La ruta responde con código `200 OK` y procesa los pedidos emitiendo para cada orden dos folios consecutivos en tamaño Carta: `ORIGINAL - CLIENTE` y `COPIA - TRANSPORTADOR / CONTABILIDAD`.
+  2. Si una orden supera los 18 ítems, `paginateRemissionItems` distribuye el contenido de forma balanceada con encabezados `Letterhead` independientes y numeración de página `PÁG. X DE Y`.
+  3. La cabecera discrimina la Casa Matriz de la Sucursal Operativa sin redundancias de razón social, asociando la localidad de entrega deducida por coordenadas GPS y la franja horaria autorizada.
+  4. En el bloque inferior, visualiza el saldo de canastillas activas del cliente y provee los casilleros de entrega y recolección para firma y sello de recibo a satisfacción.
+  5. Cada remisión incluye un código QR dinámico apuntando al módulo de PQRS/Garantías del pedido (`/pqrs?order_id=${id}`), facilitando la radicación digital de devoluciones o novedades físicas.
+  6. Al alternar al modo `dispatch`, emite el Manifiesto de Flota en formato Oficio con el peso total, canastillas estimadas a 12.5 kg/canastilla y alertas destacadas para franjas horarias con entrega manual excepcional.
+
+---
+
+#### Escenario 156: Conciliación de Remisiones Físicas, Registro de Novedades y Cuadre de Canastillas (SDD v1.9.115)
+- **Given** un operador logístico en `/admin/orders/contingency-reconciliation` procesando el retorno físico de las remisiones firmadas de la jornada.
+- **When** selecciona un pedido pendiente con 30 kg despachados de Tomate Chonto a $4.000/kg y la remisión física indica 25 kg recibidos (5 kg de merma/rechazo en muelle):
+- **Then**:
+  1. La ruta responde con código `200 OK` y carga los productos del pedido en la tabla de conciliación.
+  2. Al modificar el campo `KG-UN RECIBE` a `25`, la fila se resalta en rojo suave, calcula una diferencia de `-5 KG` y proyecta un ajuste de `-$20.000 COP` en la caja de pulso financiero.
+  3. El operador selecciona el motivo *"Rechazo por no conformidad / merma"*, ingresa el conteo de canastillas (ej. 2 entregadas, 2 devueltas) y pulsa `Guardar y Generar Ajuste`.
+  4. El sistema inserta el registro en `billing_returns` con estatus `approved` e impacto financiero auditado, actualiza la orden a `status = 'delivered'` con la marca `[CONCILIADO_MANUAL]`, y avanza automáticamente al siguiente pedido pendiente en la lista sin recargas de página.
+
+---
+
+#### Escenario 157: Impresión Térmica Masiva de Rótulos de Canastilla y Alimentos Procesados (SDD v1.9.116)
+- **Given** una tanda de despacho con 15 pedidos en `/admin/orders/print-labels` para la fecha operativa seleccionada.
+- **When** el jefe de bodega selecciona el modo `Canastilla / Despacho` con cálculo automático a ~12.5 kg/canastilla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y genera las etiquetas térmicas en formato exacto de 100mm × 49.5mm sin generar páginas intermedias en blanco.
+  2. Cada rótulo de canastilla exhibe el nombre de la empresa y sede en alto contraste, la bahía de muelle, el peso en kilogramos, el contador secuencial de canastilla `[ X / Y ]` y el código QR estructurado.
+  3. Al conmutar al modo `Etiquetas Producto` con filtro `Solo "Requiere Etiqueta"`, el sistema filtra automáticamente los SKUs con `requires_label = true`, emitiendo los rótulos bromatológicos individuales con fecha de vencimiento calculada a 7 días y lote del día.
+  4. Al pulsar `Imprimir`, el diálogo nativo envía el flujo continuo calibrado sin márgenes del navegador.
+
+---
+
+#### Escenario 158: Reimpresión Unitaria de Rótulos Térmicos de Procesados por Pedido (SDD v1.9.117)
+- **Given** un pedido individual en `/admin/orders/[id]/print-labels` que contiene 3.5 kg de *Cebolla Cabezona Picada* (categoría 'PR').
+- **When** el operario de empaque ingresa a la ruta de impresión unitaria:
+- **Then**:
+  1. La ruta responde con código `200 OK` y desglosa la cantidad en 4 rótulos térmicos: 3 de `1 kg` y 1 de `0,5 kg`.
+  2. Cada rótulo despliega el nombre en mayúsculas, el SKU, el lote del día, la fecha de vencimiento (D+7), las instrucciones de conservación refrigerada (0°C a 4°C) y el logosímbolo de FruFresco.
+  3. Si el pedido no contiene ningún producto de la categoría procesados, despliega el mensaje informativo *"No se encontraron productos de la categoría Procesados en este pedido"* y el botón *"Volver"*, evitando desperdicio de papel térmico.
+
+---
+
+## 37. Dominio 5: Operaciones de Bodega Gemba y Cuadrillas de Muelle (`/ops/*`) (SDD v1.9.118)
+
+### 37.1 Arquitectura Operativa Gemba y PWA Móvil
+El portal de operaciones de piso (`/ops/*`) constituye la columna vertebral de ejecución física en la central de abastos Corabastos, bodegas de acondicionamiento y muelles de carga. Opera bajo una filosofía de interfaz industrial de alto rendimiento, optimizada para dispositivos móviles rugerizados, pantallas táctiles y condiciones lumínicas extremas (operación nocturna en plaza).
+
+#### 1. 5.1 `/ops/compras` (Recepción, Consolidación y Cotejo de Plaza Corabastos):
+- **Rol Arquitectónico:** Consola PWA móvil para compradores de plaza en Corabastos; gestión en caliente de la demanda consolidada y ejecución de compras físicas (§31.1).
+- **Ventana de Corte Nocturna (18:00 Cutoff):** Al superar las 18:00 (6:00 PM), conmuta automáticamente la meta operativa hacia el día siguiente (`D+1`), permitiendo a los compradores gestionar los requerimientos de la madrugada con persistencia de fecha (`availableDates`).
+- **Motor de Neteo Dinámico (Modelos A & B):**
+  - Agrupación jerárquica por producto base (`parent_id` o `product_id`).
+  - Asignación secuencial de stock disponible de bodega (`inventory_stocks`) a la línea base y luego a las variantes hijas.
+  - Fórmula de compra por tarea:
+    $$\text{Meta Neta} = \max(0, \text{Pedido} - \text{Stock Aplicado} + \text{Stock de Seguridad})$$
+- **Semáforo Andon y Jerarquía de Alertas:**
+  - Prioridad cromática reactiva: 🔴 Devolución / Rechazo en muelle (`hasRejection`, `pulse-red`) > 🟠 Faltante de compra (`hasDeficit`, `pulse-orange`) > 🟡 Alerta Calidad (`hasWarning`, `pulse-yellow`) > En Proceso > Pendiente > Listo (Completado).
+- **Gobernanza de Escasez ("No lo Hay" / Columna K de Inventario):**
+  - Declaración inmediata de producto escaso en plaza: inserta movimiento en `inventory_movements` (`type: 'exit'`, `reference_type: 'order_shortage'`) alimentando la Columna K en la sábana de inventario.
+  - Disparo proactivo de PQRS urgente en `customer_service_pqrs` hacia Servicio al Cliente para contactar al restaurante/hotel y acordar sustitución antes de que el pedido salga a reparto.
+- **Registro de Compras HITL con Evidencia Fotográfica:**
+  - Formulario con cantidad, precio unitario, selección o creación de proveedor (`isQuickProvider`), bodega/puesto en Corabastos, método de pago (`cash` / `credit`) y ventana de recogida para el flete/chofer (`pickupTimeMinutes`).
+  - Subida obligatoria de fotografía del vale físico a Supabase Storage (`vouchers` bucket) con diagnóstico preventivo de errores.
+  - Registro en `purchases` con estatus `pending_pickup` y actualización del acumulado en `procurement_tasks`.
+  - Conversión automática de unidades de compra a unidad estándar de catálogo vía `product_conversions`.
+
+---
+
+#### Escenario 159: Consolidación Automática de Compras, Neteo de Inventario y Notificación Proactiva de Escasez en Plaza (SDD v1.9.118)
+- **Given** un comprador de Corabastos iniciando turno a las 18:30 en `/ops/compras`.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y sincroniza automáticamente las órdenes en estado `para_compra`, `approved` y `picking` para el día siguiente (`D+1`).
+  2. El motor de neteo cruza la demanda bruta con las existencias en `inventory_stocks`, deduciendo el stock disponible y agregando el stock de seguridad (`min_inventory_level`) al primer ítem del grupo base.
+  3. Al registrar una compra física, el sistema exige la captura fotográfica del vale de plaza, sube el archivo a `vouchers`, almacena el registro en `purchases` con estado `pending_pickup` e incrementa `total_purchased` en la tarea correspondiente.
+  4. Si el comprador declara el producto como escaso (*"No lo hay"*):
+     - Registra la salida en `inventory_movements` con referencia `order_shortage` (Columna K).
+     - Genera automáticamente una PQRS urgente en `customer_service_pqrs` alertando a Servicio al Cliente con el motivo y la cantidad afectada para acordar sustitución inmediata con el cliente.
+     - Actualiza la tarea a `completed` o `partial` según la cobertura y recalcula el avance del comprador en la barra de progreso.
+
+---
+
+### 37.2 Control de Caja Gemba & Arqueo de Cuadrilla de Compradores (`/ops/control-caja`)
+
+#### A. Misión Crítica y Contexto Físico en Muelle
+El módulo `/ops/control-caja` constituye la consola táctica del Jefe de Compras para el control, arqueo y liquidación en tiempo real del dinero en efectivo entregado a los compradores de plaza durante la jornada nocturna y matutina de Corabastos. Erradica la informalidad y la pérdida de comprobantes mediante la vinculación estricta entre presupuestos autorizados (`cash_budgets`), compras ejecutadas (`purchases`) y evidencias fotográficas de los vales físicos (`vouchers`).
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`cash_budgets` (Presupuestos de Caja Asignados):**
+   - `id`: UUID único del anticipo entregado.
+   - `target_date`: Fecha operativa del arqueo (`YYYY-MM-DD`).
+   - `amount`: Monto total en efectivo entregado al comprador (en COP).
+   - `status`: Estado del anticipo (`authorized` $\rightarrow$ `closed`).
+   - `authorized_by`: UUID del usuario supervisor/administrador que desembolsó los fondos.
+   - `notes`: JSON estructurado que encapsula metadatos operacionales:
+     ```json
+     {
+       "buyer_id": "UUID del colaborador",
+       "buyer_name": "Nombre completo del comprador",
+       "zone": "Sector o bodega de asignación en Corabastos",
+       "reconciled_at": "ISO timestamp de recepción física de vueltas",
+       "reconciled_by": "Firma del supervisor receptor",
+       "expected_return": 450000,
+       "actual_return": 450000
+     }
+     ```
+2. **`purchases` (Egresos y Comprobantes de Plaza):**
+   - Vinculadas al presupuesto vía `budget_id` o por matching heurístico/nominal (`buyer_id` / `buyer_name` en payload `notes`).
+   - `payment_method`: Discriminación estricta entre `'cash'` (efectivo que resta del anticipo) y `'credit'` (crédito de proveedor que se totaliza para control contable pero no altera el arqueo de billetes físicos).
+   - `voucher_image_url`: Enlace en Storage al comprobante firmado por el proveedor de Corabastos.
+3. **`profiles` (Colaboradores Internos):**
+   - Catálogo de colaboradores elegibles para asignación de fondos, filtrando estrictamente para excluir clientes (`role !== 'b2b_client' && role !== 'b2c_client'`).
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Detección Automática de Compras Huérfanas (`orphanPurchases`):**
+   - Si un comprador realiza adquisiciones en efectivo antes de que el supervisor registre el anticipo en el sistema, el motor las agrupa bajo un ID sintético `orphan-${buyerId}` con monto asignado `$0 COP`.
+   - **Alerta Andon Ámbar:** El sistema despliega un banner de advertencia Andon que contabiliza los compradores con déficit no presupuestado y habilita un botón de asignación rápida (`handleQuickAssignOrphan`) para regularizar el fondo sin alterar el historial.
+2. **Ecuación Canónica de Liquidación de Vueltas:**
+   $$\mathbf{Total\ Asignado} = \sum \text{cash\_budgets.amount}$$
+   $$\mathbf{Gasto\ Efectivo} = \sum \text{purchases.total\_cost} \quad (\text{donde } \text{payment\_method} \in \{\text{'cash'}, \text{null}\})$$
+   $$\mathbf{Vueltas\ a\ Devolver} = \mathbf{Total\ Asignado} - \mathbf{Gasto\ Efectivo}$$
+3. **Auditoría Visual de Comprobantes (Voucher Inspector):**
+   - Modal interactivo con desglose de cada compra individual: producto, proveedor, costo total y miniatura del vale.
+   - Visor de imagen ampliada a pantalla completa (`zoomedImage`) con cierre reactivo al clic para verificación minuciosa de cifras manuscritas en bodegas con baja iluminación.
+4. **Cierre de Caja con Protocolo de Doble Confirmación:**
+   - La liquidación física requiere confirmación explícita mediante diálogo de sistema que estampa el valor exacto en pesos a recibir en efectivo.
+   - Transiciona el estatus del presupuesto a `'closed'` y bloquea modificaciones posteriores.
+5. **Diseño Híbrido Responsive Ultra-Densa (Mobile / Desktop):**
+   - Conmutación automática mediante media queries CSS: tabla analítica de 6 columnas en pantallas mayores a 768px y tarjeta multi-línea con tipografía sobredimensionada para lectura en dispositivos móviles sobre el terreno.
+
+---
+
+#### Escenario 160: Asignación de Anticipo, Auditoría de Vales y Conciliación de Vueltas de Plaza (SDD v1.9.119)
+- **Given** un Jefe de Compras supervisando el muelle a las 05:00 en `/ops/control-caja`.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y carga en tiempo real los presupuestos del día (`cash_budgets`) y las compras realizadas (`purchases`).
+  2. Si existen compras registradas sin presupuesto previo, se dispara la **Alerta Andon Ámbar** indicando el déficit financiero y permitiendo la formalización inmediata del fondo.
+  3. Al registrar una nueva asignación de efectivo, el formulario valida que el monto sea estrictamente mayor a $0 COP, asociando el colaborador interno y su sector de compra en Corabastos.
+  4. Al pulsar sobre el contador de recibos de un comprador, se abre el modal de auditoría con la lista de adquisiciones y la previsualización ampliada de cada vale fotográfico.
+  5. Al pulsar `[Recibir $XXX.XXX]`, el sistema solicita confirmación del importe exacto en efectivo, transiciona el presupuesto a estado `closed` y sella la conciliación con la estampilla de tiempo y el usuario supervisor responsable.
+
+---
+
+### 37.3 Sábana de Inventario Físico, Conteo a Ciegas por Célula y Retornos (`/ops/inventory`)
+
+#### A. Misión Crítica y Contexto Físico en Bodega
+El módulo `/ops/inventory` constituye la herramienta central de piso para el cuadre físico de existencias al cierre de turno, la gobernanza operativa segregada por células de trabajo y la liquidación expedita de retornos de ruta y envases plásticos en patio. Erradica la falsificación y el conteo perezoso mediante un riguroso **Protocolo a Ciegas (Blind Count)** que oculta los stocks teóricos del sistema durante la digitación y sella los registros con candado irreversible de una sola escritura (*Single-Write Poka-Yoke*).
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`products` & `inventory_stocks` (Catálogo y Existencias Teóricas):**
+   - Lectura de productos activos (`is_active = true`), códigos contables (`accounting_id`), unidad de medida (`unit_of_measure`), familia padre (`parent_id`) y grupo de inventario (`inventory_group`).
+   - El saldo teórico del sistema se almacena en memoria pero permanece estrictamente oculto al operario en el formulario de conteo a ciegas.
+2. **`inventory_movements` (Kardex Físico y Cruces al Cierre de Turno):**
+   - **Cruce a Ciegas:** Inserta filas con `type: 'adjustment'`, `reference_type: 'blind_count_shift_close'`, `status_to: 'available'`, y `notes` con trazabilidad completa: célula de trabajo, líder, operador, stock teórico anterior, valor contado físico y delta calculado ($\text{diff} = \text{contado} - \text{anterior}$).
+   - **Triaje de Devoluciones:** Registra resoluciones de mercancía regresada por ruta:
+     - `waste_damage`: Baja física por descomposición o magulladura severa.
+     - `food_bank`: Salida oficial por donación a obra social / banco de alimentos.
+     - `available`: Reincorporación a inventario apto para la venta.
+3. **`profiles` & `asset_movements` (Kardex de Canastillas en Patio):**
+   - `profiles.crate_balance`: Saldo vivo de canastillas en comodato por cliente.
+   - `asset_movements`: Descargo inmediato con `type: 'pickup'`, `movement_type: 'yard_direct_return'` y `balance_after`.
+   - `app_settings`: Actualización atómica de `warehouse_crate_stock` sumando las canastillas vacías ingresadas a patio.
+4. **`app_settings` (`work_cells_governance`):**
+   - Configuración centralizada de las 6 células operativas: Abarrotes, Fresas/Moras, Frutas y Otros, Verduras, Hortalizas, y Papas/Plátanos/Tomates/Aguacates; cada una con líder asignado, colores distintivos y taxonomía de categorías asociadas.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Protocolo a Ciegas Incondicional (Blind Count Standard):**
+   - La interfaz no muestra la cantidad existente en el ERP durante la digitación física. El operario debe pesar o contar las canastillas reales en patio e ingresar la cifra sin saber si generará faltante o sobrante.
+2. **Agrupamiento Jerárquico de Familias (`ProductFamily`):**
+   - Los productos con variantes botánicas se renderizan bajo la tarjeta del padre, calculando en tiempo real la sumatoria física de todos sus hijos sin fragmentar la célula de trabajo.
+3. **Mecanismo Single-Write Poka-Yoke & Bloqueo en Piso:**
+   - Al registrar un ítem (vía tecla `Enter` individual o botón masivo inferior), el sistema guarda el movimiento, desactiva el campo de texto, aplica un marco verde de seguridad y fija el badge de estado bloqueado (`Lock`).
+   - El operario de piso no puede modificar el valor ingresado una vez sellado.
+4. **Compuerta Jerárquica de Desbloqueo (`canSupervise`):**
+   - Solo la supervisora de inventario (Yina Cortés), usuarios con roles `admin`, `sys_admin`, `inventory_manager` o permisos explícitos de inventario pueden autorizar un re-conteo (`handleUnlockItem`), requiriendo confirmación consciente para desbloquear el campo.
+5. **Modo Dual de Visualización (Existencias Teóricas vs Catálogo Completo):**
+   - Por defecto (`with_stock`), la sábana muestra solo los ítems con existencia en sistema, los buscados o los ya contados, agilizando el flujo diario.
+   - Si un producto llega sin stock en el ERP, el buscador universal permite localizarlo por nombre o ID Contable e ingresarlo inmediatamente sin bloqueos.
+6. **Triaje Inmediato de Retornos de Camión:**
+   - La pestaña `returns` permite dictaminar con 1 clic el destino de cada producto devuelto (`Bodega`, `Desperdicio`, `Donación`), manteniendo el balance de masa cerrado.
+7. **Recepción Directa de Canastillas en Patio:**
+   - Modal express en muelle que permite recibir canastillas vacías de clientes independientes, rebajar su deuda en el perfil y aumentar el stock disponible de empaque en patio en una única transacción.
+
+---
+
+#### Escenario 161: Conteo Físico a Ciegas por Célula, Bloqueo Single-Write y Recepción de Canastillas en Patio (SDD v1.9.120)
+- **Given** un líder de célula de verduras iniciando el arqueo físico al final de la jornada en `/ops/inventory`.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y precarga los productos agrupados por células de trabajo (`work_cells_governance`).
+  2. Los campos de conteo se muestran en blanco con valor de stock teórico oculto (Protocolo a Ciegas).
+  3. Al ingresar `24.50 kg` de Lechuga Batavia y presionar `Enter`:
+     - El sistema calcula el delta respecto al stock previo e inserta el ajuste en `inventory_movements` con referencia `blind_count_shift_close`.
+     - El producto queda bloqueado con candado verde (`Lock`), deshabilitando el input para el operario de piso.
+     - Si un operario intenta alterar el valor, el sistema le notifica que se requiere la autorización de la supervisora de inventario (Yina Cortés).
+  4. Al ingresar a la pestaña `returns` y abrir el modal `Recepción Directa de Canastillas en Patio`:
+     - Al seleccionar el cliente y registrar 15 canastillas físicas recibidas, el sistema descuenta 15 unidades de `profiles.crate_balance`, incrementa `warehouse_crate_stock` en `app_settings` y crea el registro de auditoría en `asset_movements`.
+
+---
+
+### 37.4 Hoja de Ruta Móvil de Recogida de Compras en Corabastos (`/ops/recogida`)
+
+#### A. Misión Crítica y Contexto Físico en Plaza
+El módulo `/ops/recogida` opera como la consola móvil en tiempo real para el conductor o flete interno encargado de recorrer los pabellones, bodegas y puestos de Corabastos durante la noche y madrugada. Conecta las adquisiciones realizadas por los compradores con el muelle de carga, supervisando las cantidades físicas recogidas, inspeccionando la calidad organoléptica mediante semáforo estandarizado y gestionando rechazos con evidencia fotográfica obligatoria.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`purchases` (Órdenes de Compra y Acarreo de Plaza):**
+   - Lectura de compras con estados activos (`pending_pickup`, `partial_pickup`) y completadas/rechazadas en el turno actual (iniciado a las 17:00 hora Bogotá / 22:00 UTC).
+   - `pickup_location`: Ubicación física con etiquetas estructuradas `[BODEGA]` y `[PUESTO]`.
+   - `estimated_pickup_time`: Marca temporal programada para el despacho.
+   - `picked_up_quantity`: Cantidad acumulada recogida en furgón.
+   - `quality_status`: Dictamen de recepción (`green`, `yellow`, `red`).
+   - `rejection_reason`: Causa declarada ante rechazo total o parcial.
+   - `voucher_image_url`: Fotografía del vale o de la evidencia de rechazo.
+2. **`procurement_tasks` (Reapertura Reactiva de Tareas de Compra):**
+   - Si la compra sufre un déficit o rechazo, el sistema deduce la cantidad faltante de `total_purchased` (empleando factores de conversión de `product_conversions`), regresando la tarea a estado `partial` o `pending` para que el comprador adquiera el saldo pendiente con otro proveedor.
+3. **`provider_novelties` (Kardex de Novedades y Calificación de Proveedores):**
+   - Registra auditorías automáticas (`rejection`, `deficit`, `warning`) con cantidad afectada, motivo, notas descriptivas y URL de la evidencia fotográfica en el bucket `vouchers`.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Doble Modo de Agrupación Gemba (`groupMode`):**
+   - Permite conmutar al instante entre **Por Proveedor** y **Por Bodega** (`getBodegaName`), adaptándose a la topología física de Corabastos para minimizar los desplazamientos del vehículo.
+2. **Cálculo Dinámico de Carga en Kilogramos (`getGroupWeightStats`):**
+   - Normaliza automáticamente las unidades de compra heterogéneas a peso real en kilos ($\text{Arroba} \times 12.5$, $\text{Bulto} \times 50$, $\text{Libra} \times 0.5$, $\text{Caja} \times 20$, $\text{Kg} \times 1$), permitiendo al transportista monitorear la capacidad máxima y balance de masa del camión.
+3. **Semáforo Obligatorio de Calidad en Carga:**
+   - 🟢 **Verde (Conforme):** Mercancía en óptimas condiciones comerciales.
+   - 🟡 **Amarillo (Para Revisión):** Exige obligatoriamente una nota descriptiva de la anomalía (`quality_notes`).
+   - 🔴 **Rojo (No Conforme):** Dispara el protocolo de rechazo.
+4. **Poka-Yoke de Rechazo con Foto de Evidencia Innegociable:**
+   - La aplicación bloquea los botones de motivo de rechazo (*Proveedor Sin Stock*, *Mala Calidad*, *Otro Motivo*) hasta que el conductor capture o suba la fotografía de respaldo (`rejectionFile`), impidiendo rechazos no fundamentados.
+5. **Reapertura Automática y Enlace Continuo con `/ops/compras`:**
+   - Si el conductor rechaza una compra o registra un faltante parcial, el sistema reabre automáticamente la tarea del comprador, garantizando que el restaurante o cliente institucional no sufra desabastecimiento en el despacho matutino.
+6. **Tutor Interactivo Gemba para Choferes (Onboarding Guide):**
+   - Carrusel educativo integrado con animaciones SVG en 4 pasos (*Bienvenida*, *Agrupación*, *Calidad*, *Evidencia Obligatoria*) para asegurar que cualquier nuevo operario domine el protocolo en menos de 2 minutos.
+
+---
+
+#### Escenario 162: Recogida de Compra en Corabastos, Bloqueo de Rechazo sin Foto y Reapertura de Tarea (SDD v1.9.121)
+- **Given** un conductor de plaza iniciando recorrido a las 02:00 en `/ops/recogida`.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y clasifica las compras activas por proveedor o por bodega física con cálculo automático de peso en kilogramos.
+  2. Al seleccionar una compra de 20 bultos de Papa Pastusa en Bodega 4:
+     - El formulario exige indicar la cantidad recogida y la calificación del semáforo.
+     - Si el transportista califica la mercancía en Amarillo, el sistema exige observaciones de calidad antes de habilitar el botón de confirmación.
+  3. Si el transportista intenta rechazar la carga por mala calidad:
+     - Los botones de motivo se muestran inhabilitados hasta que el usuario adjunta la fotografía de evidencia del producto en mal estado.
+     - Al subir la imagen y presionar `[Mala Calidad / Feo]`, la compra transiciona a `rejected`, la foto se almacena en el bucket `vouchers`, se registra la novedad en `provider_novelties` y la tarea de compra en `procurement_tasks` se reabre automáticamente a `pending` para que el comprador consiga el producto de reemplazo.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { supabase } from '@/lib/supabase';
 import { useAuth } from "../../../lib/authContext";
 import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
@@ -23,7 +24,8 @@ import {
   User,
   Clock,
   HelpCircle,
-  Pencil
+  Pencil,
+  Coins
 } from 'lucide-react';
 
 interface ProcurementTask {
@@ -177,6 +179,7 @@ export default function ProcurementPage() {
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
   const [voucherPreview, setVoucherPreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit'>('cash');
 
   // Quick Provider states
   const [isQuickProvider, setIsQuickProvider] = useState(false);
@@ -805,6 +808,7 @@ export default function ProcurementPage() {
     setNewProviderEmail("");
     setPurchaseUnit("Kg");
     setPickupTimeMinutes(0); // Default to 'YA' for convenience
+    setPaymentMethod("cash");
     setFormError(null);
     setPurchaseSuccess(false);
   };
@@ -1088,6 +1092,10 @@ export default function ProcurementPage() {
       }
 
       // 1. Guardar la compra
+      const buyerId = profile?.id || user?.id || '';
+      const buyerName = (profile as any)?.contact_name || (profile as any)?.company_name || user?.email || 'Comprador';
+      const notesPayload = JSON.stringify({ buyer_id: buyerId, buyer_name: buyerName });
+
       const { error: pErr } = await supabase.from("purchases").insert({
         task_id: selectedTask.id,
         product_id: selectedTask.product_id,
@@ -1104,6 +1112,8 @@ export default function ProcurementPage() {
           newProviderLoc ||
           providers.find((p) => p.id === providerId)?.location,
         status: "pending_pickup", // Mark as pending pickup so logistics team sees it
+        payment_method: paymentMethod,
+        notes: notesPayload
       });
 
       if (pErr) throw pErr;
@@ -1438,7 +1448,26 @@ export default function ProcurementPage() {
               </div>
             </h1>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <Link
+              href="/ops/control-caja"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "8px",
+                backgroundColor: "rgba(16, 185, 129, 0.15)",
+                border: "1px solid #10B981",
+                color: "#10B981",
+                fontSize: "0.75rem",
+                fontWeight: "900",
+                textDecoration: "none",
+                whiteSpace: "nowrap"
+              }}
+            >
+              <Coins size={14} /> Control Caja
+            </Link>
             <button
               onClick={handleConsolidate}
               disabled={isConsolidating}
@@ -3351,6 +3380,62 @@ export default function ProcurementPage() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                <div style={{ marginBottom: "1rem" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: "bold",
+                      marginBottom: "0.5rem",
+                      color: "var(--ops-primary)",
+                    }}
+                  >
+                    MÉTODO DE PAGO *
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('cash')}
+                      style={{
+                        padding: "0.65rem 0.5rem",
+                        borderRadius: "10px",
+                        border: paymentMethod === 'cash' ? "2px solid #10B981" : "1px solid var(--ops-border)",
+                        backgroundColor: paymentMethod === 'cash' ? "rgba(16, 185, 129, 0.15)" : "var(--ops-bg)",
+                        color: paymentMethod === 'cash' ? "#10B981" : "var(--ops-text)",
+                        fontWeight: "800",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px"
+                      }}
+                    >
+                      💵 En Efectivo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('credit')}
+                      style={{
+                        padding: "0.65rem 0.5rem",
+                        borderRadius: "10px",
+                        border: paymentMethod === 'credit' ? "2px solid #38BDF8" : "1px solid var(--ops-border)",
+                        backgroundColor: paymentMethod === 'credit' ? "rgba(56, 189, 248, 0.15)" : "var(--ops-bg)",
+                        color: paymentMethod === 'credit' ? "#38BDF8" : "var(--ops-text)",
+                        fontWeight: "800",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px"
+                      }}
+                    >
+                      📑 A Crédito
+                    </button>
+                  </div>
                 </div>
 
                 <div>

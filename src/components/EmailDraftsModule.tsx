@@ -3313,6 +3313,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const [allModelPrices, setAllModelPrices] = useState<Record<string, Record<string, number>>>({});
   const [agreements, setAgreements] = useState<any[]>([]);
   const [agreementPrices, setAgreementPrices] = useState<Record<string, Record<string, number>>>({});
+  const [sharedAgreementLinks, setSharedAgreementLinks] = useState<Record<string, string[]>>({});
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [campaignTargets, setCampaignTargets] = useState<any[]>([]);
   const [campaignItems, setCampaignItems] = useState<any[]>([]);
@@ -3323,6 +3324,35 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const paddedSeq = String(seq).padStart(4, '0');
     return `ACI ${day}${month} ${paddedSeq}`;
+  };
+
+  // Helper Canónico de Resolución de Acuerdos (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra Compartida)
+  const resolveActiveAgreementForClient = (
+    branchId: string | null | undefined, 
+    parentId: string | null | undefined,
+    profileObj?: any
+  ) => {
+    if (branchId) {
+      const bAgr = agreements.find(q => q.client_id === branchId);
+      if (bAgr) return bAgr;
+    }
+    if (parentId) {
+      const mAgr = agreements.find(q => q.client_id === parentId);
+      if (mAgr) return mAgr;
+    }
+    const masterId = profileObj?.logistics_data?.active_master_agreement_id;
+    if (masterId) {
+      const sAgr = agreements.find(q => q.id === masterId);
+      if (sAgr) return sAgr;
+    }
+    const targetIds = [branchId, parentId].filter(Boolean) as string[];
+    for (const [quoteId, clientIds] of Object.entries(sharedAgreementLinks)) {
+      if (targetIds.some(id => clientIds.includes(id))) {
+        const sAgr = agreements.find(q => q.id === quoteId);
+        if (sAgr) return sAgr;
+      }
+    }
+    return null;
   };
 
   const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
@@ -3367,14 +3397,13 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
       const agrProdIds = new Set<string>();
 
-      // SPEC.md Secc. 7.2: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz)
-      const activeAgreement = (branchId ? agreements.find(q => q.client_id === branchId) : null)
-        || (parentId ? agreements.find(q => q.client_id === parentId) : null);
+      // SPEC.md Secc. 7.5.6: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra Compartida)
+      const activeAgreement = resolveActiveAgreementForClient(branchId, parentId, currentProfileForContract);
 
       if (activeAgreement) {
         resolvedModel = {
           id: activeAgreement.id,
-          name: `Acuerdo ${activeAgreement.quote_number}`,
+          name: activeAgreement.model_snapshot_name || `Acuerdo ${activeAgreement.quote_number}`,
           is_agreement: true
         };
 
@@ -3821,7 +3850,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       // Fetch all active agreement quotes
       const { data: quotesData } = await supabase
         .from('quotes')
-        .select('id, client_id, quote_number, start_date, valid_until')
+        .select('id, client_id, quote_number, start_date, valid_until, model_snapshot_name')
         .eq('status', 'agreement');
 
       if (quotesData && quotesData.length > 0) {
@@ -3856,6 +3885,25 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         setAgreements([]);
         setAgreementPrices({});
       }
+
+      // Fetch shared master agreement links from app_settings
+      const { data: linkSettings } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .ilike('key', 'agreement_clients:%');
+
+      const linksMap: Record<string, string[]> = {};
+      if (linkSettings) {
+        linkSettings.forEach(s => {
+          const qId = s.key.replace('agreement_clients:', '');
+          try {
+            linksMap[qId] = JSON.parse(s.value || '[]');
+          } catch (e) {
+            linksMap[qId] = [];
+          }
+        });
+      }
+      setSharedAgreementLinks(linksMap);
 
       // Fetch commercial campaigns
       const { data: campaignData } = await supabase
@@ -3898,9 +3946,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     let foundBase = false;
     let isFromAgreement = false;
 
-    // SPEC.md Secc. 7.2: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz)
-    const activeAgreement = (branchId ? agreements.find(q => q.client_id === branchId) : null)
-      || (parentId ? agreements.find(q => q.client_id === parentId) : null);
+    // SPEC.md Secc. 7.5.6: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra Compartida)
+    const activeAgreement = resolveActiveAgreementForClient(branchId, parentId, profile);
 
     if (activeAgreement) {
       let expired = false;
@@ -4581,12 +4628,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         if (meta.priceList) {
           setPriceList(meta.priceList);
         } else if (matchedProfile) {
-          const effectiveClientId = matchedProfile.parent_id || matchedProfile.id;
-          const activeAgreement = effectiveClientId 
-            ? agreements.find(q => q.client_id === effectiveClientId)
-            : null;
+          const activeAgreement = resolveActiveAgreementForClient(matchedProfile.id, matchedProfile.parent_id, matchedProfile);
           if (activeAgreement) {
-            setPriceList(formatAgreementNumber(activeAgreement.quote_number, activeAgreement.start_date));
+            setPriceList(activeAgreement.model_snapshot_name || formatAgreementNumber(activeAgreement.quote_number, activeAgreement.start_date));
           } else {
             const parentProfile = matchedProfile.parent_id ? profiles.find(p => p.id === matchedProfile.parent_id) : null;
             const resolvedModelId = matchedProfile.pricing_model_id || parentProfile?.pricing_model_id || null;
