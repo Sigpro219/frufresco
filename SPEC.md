@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.153 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.4 Confirmación y Tracking)
+> **Versión:** 1.9.154 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.5 Sandbox de Pagos)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8731,6 +8731,38 @@ La pantalla de resultado y confirmación transaccional (`src/app/checkout/result
   2. Si proviene de Contra Entrega (`status=cod_success`), presenta de inmediato el badge verde de pedido guardado y el recordatorio financiero para pago al domiciliario en efectivo o transferencia.
   3. El usuario puede copiar el número de pedido con 1 clic para seguimiento en WhatsApp.
   4. La tarjeta informativa confirma que sus datos de entrega han sido recordados para recompras ágiles en 1 clic sin volver a llenar formularios.
+
+---
+
+### 40.6 Sandbox Transaccional de Pasarela de Pagos Wompi/PSE (`/payments/simulator` - `src/app/payments/simulator/page.tsx`) (SDD v1.9.154)
+
+#### A. Misión y Alcance del Entorno de Simulación
+El simulador transaccional (`src/app/payments/simulator/page.tsx`) proporciona un banco de pruebas controlado para emular con fidelidad quirúrgica el comportamiento de la pasarela bancaria oficial (Wompi Colombia / Grupo Bancolombia). Permite a los desarrolladores, auditores QA y usuarios en pruebas de aceptación verificar el ciclo completo de pago sin comprometer dinero real ni cuentas bancarias.
+
+#### B. Arquitectura de Simulación & Disparo de Webhook Idempotente
+1. **Emulación de Eventos de Pasarela:**
+   - La pantalla recibe la referencia del pedido (`reference`), el monto en centavos (`amount-in-cents`), la divisa (`currency = 'COP'`) y el idioma opcional (`lang`).
+   - Expone tres detonadores de prueba:
+     - `APPROVED`: Simula pago exitoso con débito bancario o tarjeta de crédito aprobada.
+     - `DECLINED`: Simula fondos insuficientes o rechazo por políticas de seguridad del banco emisor.
+     - `ERROR`: Simula interrupción técnica en la pasarela o timeout en el switch bancario.
+2. **Inyección de Webhook Idempotente (`/api/payments/wompi/webhook`):**
+   - Al pulsar cualquiera de los tres resultados, genera un identificador de transacción único (`sim-${random}`) y despacha un payload HTTP POST estructurado con el evento canónico `transaction.updated` hacia el endpoint de webhook interno.
+   - Tras recibir la confirmación exitosa del webhook, redirige automáticamente a `/checkout/result?id=${reference}`, cerrando el circuito transaccional.
+3. **Erradicación Militar de Diálogos Bloqueantes:**
+   - Erradicación del `alert()` nativo en el bloque de excepciones, sustituido por el banner reactivo in-UI `simulationError` con icono Lucide `<AlertCircle />` y sincronización con el sistema global `showToast`.
+
+---
+
+#### Escenario 190: Simulación de Eventos de Pasarela y Webhook Idempotente (SDD v1.9.154)
+- **Given** un usuario o probador QA que culmina el formulario de checkout seleccionando pago en línea con Wompi y es redirigido a `/payments/simulator`.
+- **When** visualiza el monto de su compra (ej. $125.000 COP) y presiona `[✅ Simular Pago Aprobado]`:
+- **Then**:
+  1. El sistema transiciona a estado `processing` con spinner animado e inhabilita los botones de simulación para prevenir dobles disparos.
+  2. Genera el ID transaccional (ej. `sim-x8k2j1m`) y despacha la notificación `transaction.updated` a `/api/payments/wompi/webhook`.
+  3. El webhook actualiza la orden en base de datos a estado `approved` o `paid`.
+  4. La pantalla redirige fluidamente a `/checkout/result?id=${reference}` donde se proyecta la confirmación verde y el número de pedido oficial.
+
 
 
 

@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { translations, Locale } from '../../../lib/translations';
+import { AlertCircle } from 'lucide-react';
 
 function SimulatorContent() {
     const searchParams = useSearchParams();
@@ -18,12 +19,14 @@ function SimulatorContent() {
 
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState<'idle' | 'processing'>('idle');
+    const [simulationError, setSimulationError] = useState<string | null>(null);
 
     const amount = amountInCents ? parseInt(amountInCents) / 100 : 0;
 
     const handlePayment = async (finalStatus: 'APPROVED' | 'DECLINED' | 'ERROR') => {
         setLoading(true);
         setStatus('processing');
+        setSimulationError(null);
 
         try {
             // 1. Generar ID de transacción consistente
@@ -55,7 +58,11 @@ function SimulatorContent() {
 
         } catch (error) {
             console.error('Simulation Error:', error);
-            alert(locale === 'es' ? 'Error en la simulación del pago' : 'Error in payment simulation');
+            const errText = locale === 'es' ? 'Error en la simulación del pago. Por favor intenta de nuevo.' : 'Error in payment simulation. Please try again.';
+            setSimulationError(errText);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(errText, 'error');
+            }
         } finally {
             setLoading(false);
         }
@@ -110,6 +117,25 @@ function SimulatorContent() {
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {simulationError && (
+                            <div style={{
+                                padding: '0.85rem 1rem',
+                                borderRadius: '12px',
+                                marginBottom: '0.5rem',
+                                backgroundColor: '#FEF2F2',
+                                border: '1.5px solid #FCA5A5',
+                                color: '#991B1B',
+                                fontSize: '0.84rem',
+                                fontWeight: '700',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}>
+                                <AlertCircle size={18} style={{ flexShrink: 0, color: '#DC2626' }} />
+                                <span style={{ flex: 1 }}>{simulationError}</span>
+                            </div>
+                        )}
+
                         <p style={{ fontSize: '0.9rem', color: '#4B5563', textAlign: 'center', marginBottom: '0.5rem' }}>
                             {locale === 'es' ? 'Selecciona el resultado que deseas simular para este pedido:' : 'Select the result you want to simulate for this order:'}
                         </p>
