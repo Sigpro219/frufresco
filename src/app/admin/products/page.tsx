@@ -2550,7 +2550,7 @@ export default function AdminProductsPage() {
                                                 {(productPrices[product.id] || 0) > 0 ? (
                                                     formatMoney(productPrices[product.id])
                                                 ) : (
-                                                    <span style={{ color: THEME.colors.textMuted, fontSize: '0.85rem' }}>$0</span>
+                                                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>$0</span>
                                                 )}
                                             </div>
                                         </td>
