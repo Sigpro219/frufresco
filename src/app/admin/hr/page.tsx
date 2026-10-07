@@ -126,6 +126,17 @@ export default function HRManagement() {
     const [saving, setSaving] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const [printingUser, setPrintingUser] = useState<Profile | null>(null);
+    const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [confirmRegenQR, setConfirmRegenQR] = useState(false);
+    const [reactivateCandidate, setReactivateCandidate] = useState<{ existing: Profile; newData: Partial<Profile> } | null>(null);
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToast({ type, message });
+        setTimeout(() => {
+            setToast(prev => prev?.message === message ? null : prev);
+        }, 4000);
+    };
 
     // ========================================================
     // SUBMÓDULO DEDUCCIONES DE NÓMINA (COL N INVENTARIO)
@@ -345,10 +356,10 @@ export default function HRManagement() {
             setPayrollSales(prev => prev.map(s => s.id === rowId ? { ...s, notes: newNotes } : s));
             setPayrollAssigningRowId(null);
             setPayrollAssignQuery('');
-            alert(`Colaborador "${collaboratorName.trim()}" asignado con éxito.`);
+            showToast(`Colaborador "${collaboratorName.trim()}" asignado con éxito.`, 'success');
         } catch (err: any) {
             console.error('Error asignando colaborador en HR:', err);
-            alert('Error al asignar colaborador: ' + (err.message || 'Error en BD'));
+            showToast('Error al asignar colaborador: ' + (err.message || 'Error en BD'), 'error');
         } finally {
             setIsSavingPayrollAssign(false);
         }
@@ -405,9 +416,10 @@ export default function HRManagement() {
             XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle_Compras_Bodega');
 
             XLSX.writeFile(wb, `Consolidado_Nomina_FruFresco_${payrollStartDate}_al_${payrollEndDate}.xlsx`);
+            showToast('Reporte de nómina exportado exitosamente a Excel.', 'success');
         } catch (err: any) {
             console.error('Error exportando Excel nómina en HR:', err);
-            alert('Error al exportar reporte: ' + err.message);
+            showToast('Error al exportar reporte: ' + (err?.message || 'Error en BD'), 'error');
         }
     };
 
@@ -491,16 +503,15 @@ export default function HRManagement() {
             if (error) throw error;
             setEditingUser(null);
             await fetchData();
-            alert('Perfil actualizado con éxito');
+            showToast('Perfil actualizado con éxito.', 'success');
         } catch (err: any) {
-            alert(`Error al actualizar: ${err.message}`);
+            showToast(`Error al actualizar: ${err.message}`, 'error');
         } finally {
             setSaving(false);
         }
     };
 
     const handleRegenerateQrToken = async (user: Profile) => {
-        if (!confirm(`¿Estás seguro de que deseas regenerar el código QR de ${user.contact_name}? El código anterior quedará desactivado de inmediato.`)) return;
         try {
             setSaving(true);
             const newToken = crypto.randomUUID();
@@ -519,19 +530,64 @@ export default function HRManagement() {
             }]);
 
             setPrintingUser({ ...user, qr_token: newToken });
+            setConfirmRegenQR(false);
             await fetchData();
-            alert('Código QR regenerado con éxito');
+            showToast('Código QR regenerado con éxito.', 'success');
         } catch (err: any) {
-            alert(`Error al regenerar QR: ${err.message}`);
+            showToast(`Error al regenerar QR: ${err.message}`, 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleConfirmReactivation = async () => {
+        if (!reactivateCandidate) return;
+        try {
+            setSaving(true);
+            const { existing, newData } = reactivateCandidate;
+            const { error: updateError } = await supabase
+                .from('collaborators')
+                .update({
+                    contact_name: newData.contact_name,
+                    email: newData.email,
+                    phone: newData.phone,
+                    role: newData.role,
+                    specialty: newData.specialty,
+                    is_temporary: newData.is_temporary || false,
+                    login_requested: newData.login_requested || false,
+                    is_active: true
+                })
+                .eq('id', existing.id);
+
+            if (updateError) throw updateError;
+
+            setReactivateCandidate(null);
+            setShowAdd(false);
+            setFormError(null);
+            setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true, is_temporary: false, login_requested: false });
+            await fetchData();
+            showToast('Colaborador reactivado y actualizado con éxito.', 'success');
+        } catch (err: any) {
+            showToast(`Error al reactivar: ${err.message}`, 'error');
         } finally {
             setSaving(false);
         }
     };
 
     const registerUser = async () => {
-        if (!newUser.contact_name) return alert('El nombre es obligatorio');
-        if (!newUser.role) return alert('Debes seleccionar un cargo');
-        if (!newUser.specialty) return alert('Debes seleccionar una ubicación/sede');
+        setFormError(null);
+        if (!newUser.contact_name?.trim()) {
+            setFormError('El nombre del colaborador es obligatorio.');
+            return;
+        }
+        if (!newUser.role) {
+            setFormError('Debes seleccionar un cargo para el colaborador.');
+            return;
+        }
+        if (!newUser.specialty) {
+            setFormError('Debes seleccionar una ubicación o sede.');
+            return;
+        }
         try {
             setSaving(true);
 
@@ -547,38 +603,11 @@ export default function HRManagement() {
 
                 if (existing) {
                     if (existing.is_active) {
-                        alert(`Ya existe un colaborador ACTIVO llamado "${existing.contact_name}" con este documento de identidad.`);
+                        setFormError(`Ya existe un colaborador ACTIVO llamado "${existing.contact_name}" con este documento de identidad.`);
                         setSaving(false);
                         return;
                     } else {
-                        const confirmReactivate = confirm(
-                            `Ya existe un colaborador llamado "${existing.contact_name}" con este documento de identidad, pero actualmente está INACTIVO/ARCHIVADO.\n\n¿Deseas reactivar su perfil y actualizarlo con los datos ingresados?`
-                        );
-                        if (!confirmReactivate) {
-                            setSaving(false);
-                            return;
-                        }
-
-                        const { error: updateError } = await supabase
-                            .from('collaborators')
-                            .update({
-                                contact_name: newUser.contact_name,
-                                email: newUser.email,
-                                phone: newUser.phone,
-                                role: newUser.role,
-                                specialty: newUser.specialty,
-                                is_temporary: newUser.is_temporary || false,
-                                login_requested: newUser.login_requested || false,
-                                is_active: true
-                            })
-                            .eq('id', existing.id);
-
-                        if (updateError) throw updateError;
-
-                        setShowAdd(false);
-                        setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true, is_temporary: false, login_requested: false });
-                        await fetchData();
-                        alert('Colaborador reactivado y actualizado con éxito.');
+                        setReactivateCandidate({ existing, newData: newUser });
                         setSaving(false);
                         return;
                     }
@@ -595,10 +624,12 @@ export default function HRManagement() {
 
             if (error) throw error;
             setShowAdd(false);
+            setFormError(null);
             setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true, is_temporary: false, login_requested: false });
             await fetchData();
+            showToast('Colaborador registrado con éxito.', 'success');
         } catch (err: any) {
-            alert(`Error al registrar: ${err.message}`);
+            showToast(`Error al registrar: ${err.message}`, 'error');
         } finally {
             setSaving(false);
         }
@@ -612,9 +643,10 @@ export default function HRManagement() {
                 .eq('id', userId);
             if (error) throw error;
             await fetchData();
+            showToast(`Colaborador ${!currentStatus ? 'activado' : 'desactivado'} con éxito.`, 'success');
         } catch (err: any) {
             console.error(err.message);
-            alert('Error al cambiar estado.');
+            showToast('Error al cambiar estado: ' + (err?.message || 'Error en BD'), 'error');
         }
     };
 
@@ -700,6 +732,46 @@ export default function HRManagement() {
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAF9', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <div style={{ maxWidth: '100%', padding: '0.85rem 1.75rem', margin: '0 auto' }}>
                 
+                {/* Banner de Notificación Toast In-UI */}
+                {toast && (
+                    <div
+                        style={{
+                            marginBottom: '0.85rem',
+                            padding: '0.65rem 1.15rem',
+                            borderRadius: '10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            backgroundColor: toast.type === 'error' ? '#FEE2E2' : toast.type === 'success' ? '#ECFDF5' : '#EFF6FF',
+                            border: `1px solid ${toast.type === 'error' ? '#FCA5A5' : toast.type === 'success' ? '#6EE7B7' : '#93C5FD'}`,
+                            color: toast.type === 'error' ? '#991B1B' : toast.type === 'success' ? '#065F46' : '#1E40AF',
+                            fontSize: '0.85rem',
+                            fontWeight: '600',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {toast.type === 'error' ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}
+                            <span>{toast.message}</span>
+                        </div>
+                        <button
+                            onClick={() => setToast(null)}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'inherit',
+                                padding: '2px',
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}
+                        >
+                            <X size={15} />
+                        </button>
+                    </div>
+                )}
+
                 {/* ========================================================
                     CABECERA EJECUTIVA INDUSTRIAL COMPACTA
                 ======================================================== */}
@@ -731,7 +803,11 @@ export default function HRManagement() {
                     </div>
                     <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
                         <button 
-                            onClick={() => setShowAdd(true)}
+                            onClick={() => {
+                                setFormError(null);
+                                setReactivateCandidate(null);
+                                setShowAdd(true);
+                            }}
                             style={{ 
                                 padding: '0.55rem 1.15rem', 
                                 borderRadius: '10px', 
@@ -2225,6 +2301,43 @@ export default function HRManagement() {
                         </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Banner de Validación In-UI */}
+                            {formError && (
+                                <div style={{ padding: '0.65rem 0.85rem', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#991B1B', fontSize: '0.78rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+                                    <span>{formError}</span>
+                                </div>
+                            )}
+
+                            {/* Diálogo Poka-Yoke de Reactivación de Colaborador Inactivo */}
+                            {reactivateCandidate && (
+                                <div style={{ padding: '0.85rem', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.4rem', color: '#92400E', fontWeight: '800', fontSize: '0.82rem' }}>
+                                        <AlertTriangle size={15} />
+                                        Colaborador Inactivo Encontrado
+                                    </div>
+                                    <p style={{ margin: '0 0 0.65rem 0', fontSize: '0.78rem', color: '#78350F', lineHeight: '1.4' }}>
+                                        Ya existe un registro para <strong>{reactivateCandidate.existing.contact_name}</strong> (Cédula: {reactivateCandidate.existing.document_id}), pero actualmente está archivado/inactivo. ¿Deseas reactivar su perfil con los nuevos datos?
+                                    </p>
+                                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setReactivateCandidate(null)}
+                                            style={{ padding: '0.35rem 0.7rem', borderRadius: '6px', border: '1px solid #D1D5DB', backgroundColor: '#FFFFFF', color: '#374151', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleConfirmReactivation}
+                                            style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: 'none', backgroundColor: '#0D7A57', color: '#FFFFFF', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
+                                        >
+                                            Reactivar y Actualizar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nombre Completo</label>
                                 <input 
@@ -2355,7 +2468,10 @@ export default function HRManagement() {
                             <button 
                                 onClick={() => {
                                     const printWin = window.open('', '_blank', 'width=700,height=700,scrollbars=yes');
-                                    if (!printWin) return alert('Por favor, permite las ventanas emergentes (popups) para poder imprimir la etiqueta.');
+                                    if (!printWin) {
+                                        showToast('Por favor, permite las ventanas emergentes (popups) para poder imprimir la etiqueta.', 'error');
+                                        return;
+                                    }
                                     
                                     const roleLabel = ROLES.find(r => r.value === printingUser.role)?.label || printingUser.role;
                                     const qrSvgHtml = document.querySelector('#print-label-area svg')?.outerHTML || '';
@@ -2494,17 +2610,34 @@ export default function HRManagement() {
                             >
                                 <Printer size={16} /> Imprimir Etiqueta
                             </button>
-                            <button 
-                                onClick={() => handleRegenerateQrToken(printingUser)}
-                                style={{ 
-                                    padding: '0.8rem', borderRadius: '12px', border: `1px solid #FCA5A5`, 
-                                    backgroundColor: 'transparent', color: '#EF4444', fontWeight: '800', 
-                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' 
-                                }}
-                                title="Reportar extravío y generar nuevo QR"
-                            >
-                                <RefreshCw size={16} />
-                            </button>
+                            {confirmRegenQR ? (
+                                <button 
+                                    onClick={() => handleRegenerateQrToken(printingUser)}
+                                    style={{ 
+                                        padding: '0.8rem 1rem', borderRadius: '12px', border: 'none', 
+                                        backgroundColor: '#DC2626', color: '#FFFFFF', fontWeight: '800', 
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem' 
+                                    }}
+                                    title="Confirmar regeneración de nuevo QR"
+                                >
+                                    <AlertTriangle size={15} /> ¿CONFIRMAR NUEVO QR?
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={() => {
+                                        setConfirmRegenQR(true);
+                                        setTimeout(() => setConfirmRegenQR(false), 4000);
+                                    }}
+                                    style={{ 
+                                        padding: '0.8rem', borderRadius: '12px', border: `1px solid #FCA5A5`, 
+                                        backgroundColor: 'transparent', color: '#EF4444', fontWeight: '800', 
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' 
+                                    }}
+                                    title="Reportar extravío y generar nuevo QR"
+                                >
+                                    <RefreshCw size={16} />
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

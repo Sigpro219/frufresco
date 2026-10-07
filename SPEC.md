@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.163 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.3 Consola de Auditoría Forense y Trazabilidad de Eventos)
+> **Versión:** 1.9.164 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.4 Directorio de Colaboradores, Turnos y Gestión Humana)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -9100,6 +9100,38 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   2. Al pulsar sobre cualquier fila, se despliega el modal de detalle forense desglosando los valores previos y posteriores de cada campo alterado, junto con la consulta asíncrona de ítems si el evento corresponde a una orden de compra.
   3. Al presionar "Descargar Reporte (XLSX)", el sistema realiza la paginación secuencial en streaming y descarga el archivo Excel debidamente formateado, notificando el éxito mediante un Toast in-UI no bloqueante sin invocar `window.alert()`.
   4. La ruta responde con código HTTP 200 OK y TypeScript compila con 0 errores (`exit 0`).
+
+---
+
+### §42.4 Pantalla 10.4: Directorio de Colaboradores, Turnos y Gestión Humana (`/admin/hr`)
+
+1. **Propósito Operativo & Arquitectura:**
+   - La pantalla `/admin/hr` (`src/app/admin/hr/page.tsx`) constituye la consola central de talento humano, credenciales digitales, deducciones de nómina y gobernanza operativa del personal en planta, bodega y sedes administrativas.
+   - Gestiona dos ejes operativos fundamentales mediante pestañas docked:
+     - **Colaboradores (`tab=staff`):** Directorio de colaboradores (`collaborators`), emisión y regeneración de códigos QR únicos (`qr_token`), credenciales de fichaje móvil, cargos estandarizados (`OPERARIO DE BODEGA`, `PICKER / ALISTADOR`, `CONDUCTOR`, `TESORERO`, `ENFERMERO`, `RR-HH`), sedes operativas y solicitud de acceso digital.
+     - **Deducciones de Nómina (`tab=payroll_deductions`):** Trazabilidad de compras de inventario realizadas por colaboradores en bodega (`reference_type = 'employee_sale'` en `inventory_movements`), extracción algorítmica de valor de descuento y consolidado mensual exportable a Excel (`XLSX`).
+2. **Pipeline de Datos, Consolidación y Paginación:**
+   - Consulta paralela sobre `collaborators` y `profiles` para unificar el personal activo y las cuentas de usuario de la plataforma.
+   - Cálculo reactivo del consolidado de nómina con filtro cronológico (fecha inicial y final), normalización omnibox de búsqueda (`/` como atajo de teclado para enfocar el buscador) y soporte de segmentos lógicos combinados (tokens `AND` y `OR`).
+   - Exportador masivo a Excel con dos hojas: `Consolidado_Nomina` (resumen por colaborador con cédula, cargo, total de compras y deducción en COP) y `Detalle_Compras_Bodega` (renglón a renglón con SKU, producto, unidad de medida y precio base).
+3. **Erradicación Militar de Diálogos Nativos (Zero-Alert & Zero-Confirm Dogma):**
+   - Supresión integral de los 17 llamados nativos a `window.alert()` y `window.confirm()`.
+   - **Sistema Toast Reactivo In-UI:** Implementación de `toast` no bloqueante con auto-cierre a 4s y descarte manual para retroalimentar asignaciones de nómina, exportaciones Excel, actualizaciones de perfil, cambios de estado y regeneración de credenciales QR.
+   - **Validación Sintáctica sin Bloqueo:** En el modal de registro de nuevo colaborador, los errores de campos obligatorios (nombre, cargo, sede o documento duplicado activo) se despliegan en un banner de advertencia contextual (`formError`) dentro del propio formulario.
+   - **Flujo Poka-Yoke de Reactivación de Inactivos:** Si se ingresa una cédula perteneciente a un colaborador archivado/inactivo, el sistema suspende la alerta nativa y despliega una tarjeta interactiva de confirmación en dos pasos (`reactivateCandidate`), permitiendo reactivar la cuenta y actualizar los datos sin colisión.
+   - **Regeneración de QR Poka-Yoke:** Sustitución de `confirm()` por un botón de doble clic temporizado a 4 segundos (`confirmRegenQR`) que conmuta visualmente a `¿CONFIRMAR NUEVO QR?` en color carmesí antes de disparar la mutación criptográfica.
+   - **Manejo Amigable de Bloqueo de Popups:** En el visor de impresión de etiquetas QR, si el navegador bloquea la ventana emergente, se notifica limpiamente mediante Toast sin invocar `alert()`.
+
+---
+
+#### Escenario 200: Registro de Colaborador, Control Poka-Yoke de QR y Deducciones de Nómina (SDD v1.9.164)
+- **Given** el Director de Talento Humano o Administrador autenticado en `/admin/hr`.
+- **When** gestiona el directorio de personal y las deducciones de bodega:
+- **Then**:
+  1. Al presionar "Nuevo Colaborador" e intentar registrar un colaborador sin seleccionar cargo o sede, el formulario resalta los campos faltantes en el banner de error in-UI sin bloquear el hilo del navegador.
+  2. Si el colaborador ingresado ya existía en estado archivado, la interfaz despliega la tarjeta de reactivación contextual; al confirmar, el perfil se actualiza a `is_active: true` y notifica mediante Toast verde.
+  3. En el visor de etiqueta QR, al presionar el botón de regeneración, este muta a `¿CONFIRMAR NUEVO QR?`; al confirmar, genera un nuevo UUID criptográfico, registra el evento en `audit_logs` y refresca la vista sin cuadros modales nativos.
+  4. En la pestaña de Deducciones de Nómina, el sistema exporta el libro Excel consolidado con HTTP 200 OK y TypeScript compila con 0 errores (`exit 0`).
 
 
 
