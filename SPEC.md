@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.152 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.3 Pasarela y Checkout)
+> **Versión:** 1.9.153 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.4 Confirmación y Tracking)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8699,6 +8699,39 @@ La pasarela y formulario de checkout (`src/app/checkout/page.tsx`) centraliza la
   3. Mantiene seleccionado el método Wompi e inhabilita el avance en contra entrega.
   4. Tras verificar que las coordenadas GPS caen dentro de la geocerca activa y que la fecha de entrega respeta el corte de las 17:00, el cliente pulsa `[Confirmar y Pagar Online]`.
   5. El sistema genera la orden en base de datos, calcula el hash criptográfico SHA-256 para Wompi y redirige fluidamente a la pasarela de pagos.
+
+---
+
+### 40.5 Confirmación de Pedido y Tracking Transaccional (`/checkout/result` - `src/app/checkout/result/page.tsx`) (SDD v1.9.153)
+
+#### A. Misión y Alcance de la Pantalla de Confirmación
+La pantalla de resultado y confirmación transaccional (`src/app/checkout/result/page.tsx`) opera como el comprobante digital inmediato para el comprador tras la pasarela de pagos o el registro en modalidad Contra Entrega. Proyecta el estado en tiempo real de la orden, el consecutivo amigable `#PED-XXXX` con botón de copiado en 1 clic, las instrucciones operativas de pago en puerta y el resguardo de datos para futuras recompras en 1 clic.
+
+#### B. Arquitectura Transaccional Bimodal
+1. **Modalidad Pago Electrónico Wompi (`transactionId`):**
+   - Consume en cliente el parámetro `id` retornado por el redirect de Wompi o el simulador.
+   - Consulta el endpoint `/api/payments/status?id=${transactionId}`, resolviendo en tiempo real el estado de la transacción:
+     - `APPROVED`: Éxito transaccional con ícono verde esmeralda (`CheckCircle2`) y confirmación de preparación inmediata.
+     - `PENDING`: Estado en proceso / verificación bancaria PSE con ícono ámbar (`Clock`).
+     - `DECLINED` / Error: Notificación roja (`XCircle`) con botón directo `[Reintentar]` para volver al checkout.
+2. **Modalidad Pago Contra Entrega (`codStatus === 'cod_success'`):**
+   - Resuelve directamente los parámetros `reference`, `sequence` y `created_at` inyectados desde el checkout local.
+   - Proyecta la tarjeta destacada con recordatorio explícito de liquidación: *"Al momento de la entrega en tu domicilio, recuerda cancelar el valor exacto de tu pedido en efectivo o transferencia (Nequi / Daviplata / PSE) al domiciliario"*.
+3. **Identificador Amigable y Trazabilidad Operativa:**
+   - Construcción determinista del número de pedido mediante `getFriendlyOrderId({ id, sequence_id, created_at })`, homologando el identificador que visualiza el cliente con el manifiesto que procesa el módulo de Operaciones (`/ops/*`) y Facturación (`/admin/commercial/billing`).
+   - Botón interactivo de copiado con feedback visual (`Check` verde de 2 segundos) para compartir el radicado con la línea de atención al cliente.
+
+---
+
+#### Escenario 189: Confirmación de Pago Electrónico Wompi vs Registro Contra Entrega (SDD v1.9.153)
+- **Given** un cliente que acaba de finalizar su proceso de pago en la pasarela o de radicar su orden contra entrega.
+- **When** aterriza en `/checkout/result`:
+- **Then**:
+  1. Si proviene de Wompi, el sistema consulta `/api/payments/status` y despliega el ID de transacción junto al número amigable del pedido (ej. `#PED-0482`).
+  2. Si proviene de Contra Entrega (`status=cod_success`), presenta de inmediato el badge verde de pedido guardado y el recordatorio financiero para pago al domiciliario en efectivo o transferencia.
+  3. El usuario puede copiar el número de pedido con 1 clic para seguimiento en WhatsApp.
+  4. La tarjeta informativa confirma que sus datos de entrega han sido recordados para recompras ágiles en 1 clic sin volver a llenar formularios.
+
 
 
 
