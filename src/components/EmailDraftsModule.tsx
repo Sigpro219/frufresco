@@ -9141,7 +9141,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                     const isClientHabitual = Boolean(exc || freq);
                                     const isFocused = idx === focusedDropdownItemIndex;
                                     const isScarcityLocked = Boolean(scarcityLockedMap[p.id]);
-                                    const itemPrice = contractPrices[p.id] !== undefined && contractPrices[p.id] !== null ? contractPrices[p.id] : (p.base_price || 0);
+                                    const itemPrice = contractPrices[p.id] !== undefined && contractPrices[p.id] !== null ? contractPrices[p.id] : 0;
 
                                     return (
                                       <div
@@ -9379,7 +9379,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
                               {/* Unit & Unit Price Display */}
                               {(() => {
-                                const resolvedUnitPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
+                                const resolvedUnitPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : 0) : 0;
                                 const qtyNum = Number(item.quantity) || 0;
                                 const lineSubtotal = resolvedUnitPrice * qtyNum;
 
@@ -11027,7 +11027,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       const prod = products.find(p => p.id === item.matched_product_id);
                       const qty = parseFloat(item.quantity?.toString() || '0');
                       const baseUnit = item.unit || prod?.unit_of_measure || 'Kg';
-                      const unitPrice = prod ? (contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0)) : 0;
+                      const unitPrice = prod ? (contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : 0) : 0;
                       const lineTotal = unitPrice * qty;
                       const opts = item.selected_options || {};
 
@@ -11404,7 +11404,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   const prod = products.find(p => p.id === itm.matched_product_id);
                   if (!prod) return false;
                   const isContractPriceDefined = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null;
-                  const resolvedPrice = isContractPriceDefined ? Number(contractPrices[prod.id]) : (Number(prod.base_price) || 0);
+                  const resolvedPrice = isContractPriceDefined ? Number(contractPrices[prod.id]) : 0;
                   const isExplicitContractZero = isContractPriceDefined && resolvedPrice === 0;
                   return resolvedPrice === 0 && !isExplicitContractZero;
                 });

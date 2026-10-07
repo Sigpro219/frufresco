@@ -359,7 +359,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
 
                 let query = supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, category, unit_of_measure, base_price')
+                    .select('id, name, sku, accounting_id, category, unit_of_measure')
                     .eq('is_active', true);
 
                 if (isNum) {
@@ -751,9 +751,18 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
 
     const downloadConversionTemplate = async () => {
         try {
+            const { data: costMatrixData } = await supabase
+                .from('commercial_cost_matrix')
+                .select('product_id, manual_cost')
+                .eq('is_active', true);
+            const costMap: Record<string, number> = {};
+            (costMatrixData || []).forEach((c: any) => {
+                if (c.manual_cost) costMap[c.product_id] = Number(c.manual_cost);
+            });
+
             const { data: products, error } = await supabase
                 .from('products')
-                .select('accounting_id, name, base_price, unit_of_measure')
+                .select('id, accounting_id, name, unit_of_measure')
                 .eq('is_active', true)
                 .order('name');
             
@@ -767,7 +776,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                 'ID Producto (Cod. Contable)': p.accounting_id,
                 'Nombre del Producto': p.name,
                 'U.M.': p.unit_of_measure || 'Unidad',
-                'Costo Base (Referencia)': p.base_price || 0,
+                'Costo Base (Referencia)': costMap[p.id] || 0,
                 'Precio Acordado': ''
             }));
             
@@ -856,9 +865,18 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                 }
                 const calculatedValidUntil = expiry.toISOString();
                 
+                const { data: costMatrixData } = await supabase
+                    .from('commercial_cost_matrix')
+                    .select('product_id, manual_cost')
+                    .eq('is_active', true);
+                const costMap: Record<string, number> = {};
+                (costMatrixData || []).forEach((c: any) => {
+                    if (c.manual_cost) costMap[c.product_id] = Number(c.manual_cost);
+                });
+
                 const { data: dbProducts, error: dbProdErr } = await supabase
                     .from('products')
-                    .select('id, name, base_price, accounting_id');
+                    .select('id, name, accounting_id');
                     
                 if (dbProdErr) throw dbProdErr;
                 
@@ -896,16 +914,16 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                 conversionItems.forEach(item => {
                     const dbProduct = productMap[String(item.accounting_id)];
                     if (dbProduct) {
-                        const basePrice = dbProduct.base_price || 0;
+                        const costBasis = costMap[dbProduct.id] || 0;
                         const negotiatedPrice = item.unit_price;
-                        const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
+                        const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - costBasis) / negotiatedPrice) * 10000) / 100 : 0;
                         
                         itemsToInsert.push({
                             quote_id: newQuote.id,
                             product_id: dbProduct.id,
                             product_name: dbProduct.name,
                             quantity: 1,
-                            cost_basis: basePrice,
+                            cost_basis: costBasis,
                             margin_percent: marginPercent,
                             unit_price: negotiatedPrice,
                             iva_rate: 0,

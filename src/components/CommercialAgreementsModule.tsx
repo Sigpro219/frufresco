@@ -722,7 +722,7 @@ export default function CommercialAgreementsModule() {
             const to = from + pageSize - 1;
             const { data, error } = await supabase
                 .from('products')
-                .select('id, name, base_price, accounting_id, iva_rate, unit_of_measure, sku, is_active')
+                .select('id, name, accounting_id, iva_rate, unit_of_measure, sku, is_active')
                 .range(from, to);
 
             if (error) {
@@ -735,7 +735,6 @@ export default function CommercialAgreementsModule() {
                     // Use official Costo Base FruFresco from commercial_cost_matrix or purchases fallback
                     const officialCost = costMatrixMap[p.id] || purchaseFallbackMap[p.id] || 0;
                     p.cost_basis = officialCost;
-                    p.base_price = officialCost;
                     productMap[p.id] = p;
                     if (p.accounting_id) {
                         const accId = String(p.accounting_id).trim();
@@ -974,7 +973,7 @@ export default function CommercialAgreementsModule() {
                 const to = from + pageSize - 1;
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, accounting_id, sku, unit_of_measure, is_active, base_price, iva_rate')
+                    .select('id, name, accounting_id, sku, unit_of_measure, is_active, iva_rate')
                     .range(from, to)
                     .order('name');
 
@@ -1099,7 +1098,7 @@ export default function CommercialAgreementsModule() {
             setParsing(true);
             const { data: allProds, error } = await supabase
                 .from('products')
-                .select('id, name, accounting_id, sku, unit_of_measure, is_active, base_price, iva_rate')
+                .select('id, name, accounting_id, sku, unit_of_measure, is_active, iva_rate')
                 .order('name');
 
             if (error || !allProds || allProds.length === 0) {
@@ -1120,7 +1119,7 @@ export default function CommercialAgreementsModule() {
                 unit: p.unit_of_measure || 'Kg',
                 unit_price: 0,
                 matched_product: p,
-                cost_basis: (productMap[p.id]?.cost_basis !== undefined ? Number(productMap[p.id].cost_basis) : 0),
+                cost_basis: ((p as any).base_price !== undefined ? Number((p as any).base_price) : 0),
                 margin_percent: 0,
                 iva_rate: Number(p.iva_rate) || 0,
                 confidence: 'high' as const,
@@ -1952,7 +1951,7 @@ export default function CommercialAgreementsModule() {
 
             let dbQuery = supabase
                 .from('products')
-                .select('id, name, sku, accounting_id, unit_of_measure, base_price, iva_rate, is_active')
+                .select('id, name, sku, accounting_id, unit_of_measure, iva_rate, is_active')
                 .limit(25);
 
             if (isNumeric) {

@@ -17,7 +17,6 @@ interface OrderItem {
         name_en?: string;
         unit_of_measure?: string;
         sku?: string;
-        base_price?: number;
     };
 }
 
@@ -72,7 +71,7 @@ export default function InvoiceDocumentModal({
 
     const calculatedSubtotal = items.reduce((acc, item) => {
         const qty = Number(item.quantity || 0);
-        const price = Number(item.unit_price || item.products?.base_price || 0);
+        const price = Number(item.unit_price || 0);
         return acc + (qty * price);
     }, 0);
 
@@ -290,7 +289,7 @@ export default function InvoiceDocumentModal({
                                 const sku = item.products?.sku || 'N/A';
                                 const qty = Number(item.quantity || 0);
                                 const unit = item.unit || item.products?.unit_of_measure || 'Kg';
-                                const price = Number(item.unit_price || item.products?.base_price || 0);
+                                const price = Number(item.unit_price || 0);
                                 const itemSubtotal = qty * price;
 
                                 return (

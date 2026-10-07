@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato Canónico de Negocio (SDD)
 ## Supply Chain Operating System (SCOS) — Contrato Integral de 10 Dominios Operativos & 76 Pantallas Físicas Certificadas
 
-> **Versión:** 1.9.169 (Blindaje Canónico Dominio 6 - TMS: Baliza GPS Móvil PWA, Resiliencia para Flota Alquilada/Tercerizada, Auto-Aprovisionamiento y Cola Offline — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.170 (Blindaje Canónico Dominio 6 - TMS: Benchmark FinOps de Telemetría Satelital, Latido Urbano 60s vs Intermunicipal 120s y Consumo Cero en Google Maps — 76/76 Pantallas Certificadas)  
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -8552,6 +8552,12 @@ En días de pico de demanda (martes, sábados o temporadas festivas), la capacid
 
 4. **Auto-Aprovisionamiento en Torre de Control:**
    - Si la placa del camión alquilado (ej. `ALQ-777`) no había sido precargada en el catálogo maestro, el endpoint de telemetría la auto-registra en `fleet_vehicles` bajo `vehicle_type = 'Alquilado'` y `tracking_source = 'mobile_app'`, permitiendo que aparezca al instante en el mapa general de transporte (`/admin/transport`) con su distintivo `[📱 Tracker Móvil (60s)]`.
+
+5. **Evaluación FinOps y Benchmark de Frecuencia de Latido (60s Urbano vs 120s Intermunicipal):**
+   - **Cero Costo en Google Maps Platform:** Las emisiones periódicas del latido (60s o 120s) se transmiten por HTTP POST directo entre la PWA y Supabase PostgreSQL vía `/api/transport/telemetry`. **No consumen ninguna cuota de Google Maps API** ni incurren en cobros por sesión o milla recorrida de Google Fleet Engine. El mapa vectorial interactivo de Google solo se renderiza en la pantalla del despachador en oficina mediante `<Map>` y `<AdvancedMarker>` leyendo las coordenadas desde memoria o Supabase.
+   - **Consumo de Ancho de Banda Celular Insignificante:** Un paquete telemático pesa $\sim 200$ bytes. A 60 segundos durante una jornada de 8 horas (480 pings/día), el camión transfiere menos de 96 KB al día ($\sim 2.8$ MB al mes). Un solo mensaje con foto o sticker en WhatsApp consume más datos que una semana completa de telemetría de ruta.
+   - **Resolución Cinemática Urbana (Bogotá/Sabana):** A una velocidad promedio urbana de 40 km/h, un intervalo de 60 segundos ofrece una resolución de desplazamiento de $\sim 660$ metros (4 a 5 cuadras), permitiendo a la mesa de control detectar maniobras de parqueo, arribos y demoras en tiempo real. Extender a 120 segundos amplía la brecha a $1.33$ km (10 a 15 cuadras), generando distorsión visual donde el cliente ya recibió el pedido mientras la pantalla aún proyecta el furgón a más de un kilómetro de distancia.
+   - **Parametrización para Rutas Intermunicipales:** Para traslados troncales de larga distancia (> 50 km sin entregas intermedias), el hook admite opcionalmente `intervalMs: 120000` (2 minutos) o `180000` (3 minutos) mediante prop sin alterar la lógica nuclear.
 
 ---
 

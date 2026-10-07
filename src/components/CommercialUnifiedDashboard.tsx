@@ -573,7 +573,7 @@ export default function CommercialUnifiedDashboard({
             const [productsRes, matrixRes, appSettingsRes, purchasesRes, leadsRes, quotesRes, bulletinAuditRes, unpricedOrdersRes] = await Promise.all([
                 supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, category, unit_of_measure, is_active, base_price')
+                    .select('id, name, sku, accounting_id, category, unit_of_measure, is_active')
                     .eq('is_active', true),
                 supabase
                     .from('commercial_cost_matrix')

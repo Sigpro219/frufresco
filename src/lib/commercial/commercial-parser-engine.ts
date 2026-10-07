@@ -372,7 +372,7 @@ export async function enrichCommercialProposal(
     const matchedProd = match.product;
 
     const accountingId = item.accounting_id || (matchedProd ? (matchedProd.accounting_id ? String(matchedProd.accounting_id) : matchedProd.sku) : '');
-    const costBasis = matchedProd ? (costMatrixMap[matchedProd.id] || matchedProd.base_price || 0) : 0;
+    const costBasis = matchedProd ? (costMatrixMap[matchedProd.id] || 0) : 0;
     let genPrice = 0;
     if (matchedProd) {
       if (generalPricesMap[matchedProd.id]) {
@@ -382,7 +382,7 @@ export async function enrichCommercialProposal(
         const rawGen = costBasis / (1 - 0.20);
         genPrice = Math.ceil(rawGen / 50) * 50;
       } else {
-        genPrice = matchedProd.base_price || 0;
+        genPrice = 0;
       }
     }
     const lastApplied = matchedProd ? lastAppliedMap[matchedProd.id] : undefined;
