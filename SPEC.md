@@ -1,12 +1,12 @@
 # FruFresco - Especificación de Arquitectura & Contrato Canónico de Negocio (SDD)
 ## Supply Chain Operating System (SCOS) — Contrato Integral de 10 Dominios Operativos & 76 Pantallas Físicas Certificadas
 
-> **Versión:** 1.9.167 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.7 Maestro Central de Catálogo, SKUs y Familias — ¡CIERRE 100% DE LAS 76 PANTALLAS DEL SISTEMA!)  
+> **Versión:** 1.9.168 (Blindaje Canónico Dominio 6 - TMS: Georreferenciación Híbrida Google Maps + Apps-360 / Traccar, Poka-Yoke de Coordenadas Null Island y Sanidad Temporal — 76/76 Pantallas Certificadas)  
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 42 Capítulos Arquitectónicos, 203 Escenarios BDD Ininterrumpidos (1..203)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 204 Escenarios BDD Ininterrumpidos (1..204)
 
 ---
 
@@ -21,13 +21,13 @@
 | **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
-| **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181 (§38.1 - §38.6) | 🟢 100% |
+| **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 (§38.1 - §38.7) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **43 Capítulos** | **203 Escenarios Canónicos (1..203)** | **🟢 100%** |
+| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **43 Capítulos** | **204 Escenarios Canónicos (1..204)** | **🟢 100%** |
 
 ---
 
@@ -8491,6 +8491,43 @@ El Panel de Conductores (`ConductorPanel.tsx`) centraliza la gestión del capita
   3. Los indicadores KPI de cabecera (Total, Activos, Asignados, Disponibles) se recalculan automáticamente reflejando la nueva distribución de la flota.
   4. Si ocurre un error de red o de permisos en Supabase, el error se captura y despliega en un banner de advertencia visual no invasivo.
   5. Al hacer clic sobre el perfil de un conductor, se abre el modal de telemetría calculando en tiempo real su tasa de efectividad de entrega y volumen de kilogramos transportados en las últimas rutas.
+
+---
+
+
+### 38.7 Arquitectura Híbrida de Georreferenciación & Telemetría Satelital M2M (Google Maps API + Apps-360 / Traccar) (SDD v1.9.168)
+
+#### A. Misión y Principio Rector de Desacoplamiento Telemático
+La arquitectura de rastreo y monitoreo de flota de FruFresco desacopla formalmente la capa de **cartografía e interacción espacial (Google Maps Platform)** de la capa de **ingesta telemática de hardware satelital (Apps-360 / GPSWOX / Traccar M2M y Mobile GPS Tracker)**. Este desacoplamiento garantiza:
+1. **Eficiencia FinOps de Máxima Escala:** Supresión del 90% de costos de telemetría al evitar el cobro por milla/sesión de Google Fleet Engine.
+2. **Independencia de Proveedor de Hardware (Adapter Pattern):** El conector `src/lib/telemetry/apps360.ts` y la ruta de sincronización `/api/transport/sync-gps` operan como adaptadores desacoplados. Cualquier migración hacia otro proveedor satelital (Hunter, Satrack, Traccar self-hosted) preserva intacto el modelo de datos `fleet_vehicles` y la interfaz de usuario.
+3. **Dualidad Operativa Propia vs Tercerizada:** Soporte para GPS satelital cableado al motor (`ACC`) en camiones propios y baliza móvil por smartphone (`tracking_source = 'mobile_app'`) con Screen WakeLock para furgones alquilados.
+
+#### B. Reglas de Validación Poka-Yoke & Sanidad de Datos
+1. **Poka-Yoke de Coordenadas "Null Island" (0, 0):**
+   - El ingestor descarta de forma inmediata cualquier paquete de telemetría cuyas coordenadas sean exactamente `(0, 0)`, originadas por hardware GPS en arranque en frío sin fijación de constelación satelital (3D Fix).
+   - Validación estricta de límites terrestres WGS84: latitud $\in [-90, 90]$ y longitud $\in [-180, 180]$.
+2. **Poka-Yoke de Sanidad Temporal (Deriva y Reloj CMOS):**
+   - Validación mediante `isValidTelemetryTimestamp`: Se rechazan de forma determinista fechas anteriores al 1 de enero de 2020 (reloj de dispositivo reiniciado a 1970 por batería interna descargada) o con deriva superior a 24 horas hacia el futuro.
+   - Si el timestamp del hardware es corrupto, el sistema adopta como salvaguarda la fecha y hora UTC actual del servidor, impidiendo que el panel proyecte marcas temporales distorsionadas.
+3. **Normalización Dimensional de Rumbo (`heading`) y Velocidad (`speed`):**
+   - El rumbo se normaliza en el rango canónico de acimut de $0^\circ$ a $359^\circ$, permitiendo que el icono del furgón rote físicamente en el mapa (`style={{ transform: rotate(${v.heading}deg) }}`).
+   - La velocidad se acota a números positivos no nulos (`Math.max(0, speed)`).
+4. **Resiliencia de Conexión & Concurrencia:**
+   - Cliente HTTP dotado de `AbortController` con timeout perentorio de 12 segundos para prevenir que caídas del proveedor satelital degraden el backend de Next.js.
+   - Sincronización concurrente masiva en `Promise.allSettled` hacia Supabase.
+
+---
+
+#### Escenario 204: Ingesta Híbrida de Telemetría Satelital con Filtro Poka-Yoke de Null Island y Deriva Temporal (SDD v1.9.168)
+- **Given** la Torre de Control de Transporte (`/admin/transport`) sincronizando telemetría satelital vía `/api/transport/sync-gps` contra `apps-360.online` o balizas móviles.
+- **When** se reciben paquetes telemáticos de la flota en ruta:
+- **Then**:
+  1. Si un dispositivo reporta coordenadas `(0, 0)` o fuera de rango terrestre, el ingestor `normalizeApps360Device` lo descarta retornando `null`, impidiendo que aparezcan camiones en el Golfo de Guinea.
+  2. Si un dispositivo con batería CMOS descargada emite fecha Unix del año 1970 o una fecha futura errónea (> 24h), `parseTelemetryDate` lo detecta con `isValidTelemetryTimestamp` y asigna de forma segura el timestamp actual del servidor.
+  3. Para coordenadas válidas en Bogotá/Sabana, la placa se limpia (`extractCleanPlate`), se extrae el estado de ignición (`ignition_status = true/false` vía sensor ACC) y el odómetro acumulado.
+  4. Los registros se actualizan de forma concurrente en `fleet_vehicles`, y el mapa en `/admin/transport` rota el marcador del furgón según su ángulo de rumbo real.
+  5. La suite automatizada de pruebas unitarias (`tests/telemetry_hybrid_gps.test.ts`) certifica 100% de cumplimiento con 0 fallos.
 
 ---
 

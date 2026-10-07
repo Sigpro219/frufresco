@@ -84,12 +84,27 @@ async function fetchWithTimeout(url: string, options: RequestInit & { timeoutMs?
 }
 
 /**
+ * Validador de sanidad temporal para telemetría satelital
+ * Descarta fechas anteriores al año 2020 (ej. año 1970 por batería CMOS agotada)
+ * y fechas con deriva superior a 24 horas a futuro.
+ */
+export function isValidTelemetryTimestamp(date: Date): boolean {
+    const time = date.getTime();
+    if (isNaN(time)) return false;
+    const now = Date.now();
+    const minValidTime = new Date('2020-01-01T00:00:00Z').getTime();
+    const maxValidTime = now + 24 * 60 * 60 * 1000;
+    return time >= minValidTime && time <= maxValidTime;
+}
+
+/**
  * Parsea fechas de telemetría provenientes de GPSWOX/Traccar a ISO UTC
- * Soporta DD-MM-YYYY HH:mm:ss, ISO strings y timestamps Unix
+ * Soporta DD-MM-YYYY HH:mm:ss, ISO strings y timestamps Unix con descarte de fechas muertas
  */
 export function parseTelemetryDate(raw: any, fallbackTimestamp?: number): string {
     if (typeof raw === 'number' && !isNaN(raw)) {
-        return new Date(raw * 1000).toISOString();
+        const d = new Date(raw * 1000);
+        if (isValidTelemetryTimestamp(d)) return d.toISOString();
     }
     if (typeof raw === 'string' && raw.trim()) {
         const str = raw.trim();
@@ -99,14 +114,15 @@ export function parseTelemetryDate(raw: any, fallbackTimestamp?: number): string
             const [_, day, month, year, hours, minutes, seconds] = ddmmyyyyMatch;
             const isoStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-05:00`;
             const parsed = new Date(isoStr);
-            if (!isNaN(parsed.getTime())) return parsed.toISOString();
+            if (isValidTelemetryTimestamp(parsed)) return parsed.toISOString();
         }
         // Formato estándar ISO o "YYYY-MM-DD HH:mm:ss"
         const standardDate = new Date(str.includes('T') ? str : str.replace(' ', 'T') + 'Z');
-        if (!isNaN(standardDate.getTime())) return standardDate.toISOString();
+        if (isValidTelemetryTimestamp(standardDate)) return standardDate.toISOString();
     }
     if (fallbackTimestamp && typeof fallbackTimestamp === 'number') {
-        return new Date(fallbackTimestamp * 1000).toISOString();
+        const fallbackDate = new Date(fallbackTimestamp * 1000);
+        if (isValidTelemetryTimestamp(fallbackDate)) return fallbackDate.toISOString();
     }
     return new Date().toISOString();
 }
@@ -133,6 +149,16 @@ export function normalizeApps360Device(obj: Apps360RawDevice): NormalizedTelemet
     const rawLng = typeof obj.lng === 'string' ? parseFloat(obj.lng) : obj.lng;
 
     if (rawLat === undefined || rawLng === undefined || isNaN(rawLat) || isNaN(rawLng)) {
+        return null;
+    }
+
+    // Poka-Yoke: Descartar "Null Island" (0,0) - Típico fallo de inicio de hardware GPS sin 3D Fix
+    if (rawLat === 0 && rawLng === 0) {
+        return null;
+    }
+
+    // Poka-Yoke: Coordenadas terrestres válidas WGS84
+    if (rawLat < -90 || rawLat > 90 || rawLng < -180 || rawLng > 180) {
         return null;
     }
 
