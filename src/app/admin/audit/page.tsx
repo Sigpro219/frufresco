@@ -528,6 +528,14 @@ export default function AuditLogPage() {
     const [auditOrderItems, setAuditOrderItems] = useState<any[]>([]);
     const [systemRoles, setSystemRoles] = useState<any[]>([]);
     const [copiedJson, setCopiedJson] = useState(false);
+    const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToast({ type, message });
+        setTimeout(() => {
+            setToast((prev) => (prev?.message === message ? null : prev));
+        }, 4000);
+    };
 
     useEffect(() => {
         if (selectedLog && selectedLog.module === 'ORDERS' && selectedLog.details?.id) {
@@ -772,9 +780,10 @@ export default function AuditLogPage() {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Logs de Auditoría");
             XLSX.writeFile(wb, `Reporte_Auditoria_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showToast('Reporte XLSX generado y descargado exitosamente.', 'success');
         } catch (err: any) {
             console.error('Error exporting data:', err);
-            alert('Error al exportar reporte: ' + err.message);
+            showToast('Error al exportar reporte: ' + (err?.message || 'Error desconocido'), 'error');
         } finally {
             setExporting(false);
         }
@@ -817,6 +826,46 @@ export default function AuditLogPage() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
             <div style={{ width: '98%', maxWidth: '100%', margin: '0 auto', padding: '2rem 2.5rem' }}>
+                {/* Banner de Notificación / Toast In-UI */}
+                {toast && (
+                    <div
+                        style={{
+                            marginBottom: '1.25rem',
+                            padding: '0.75rem 1.25rem',
+                            borderRadius: '10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            backgroundColor: toast.type === 'error' ? '#FEE2E2' : toast.type === 'success' ? '#ECFDF5' : '#EFF6FF',
+                            border: `1px solid ${toast.type === 'error' ? '#FCA5A5' : toast.type === 'success' ? '#6EE7B7' : '#93C5FD'}`,
+                            color: toast.type === 'error' ? '#991B1B' : toast.type === 'success' ? '#065F46' : '#1E40AF',
+                            fontSize: '0.85rem',
+                            fontWeight: '600',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {toast.type === 'error' ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+                            <span>{toast.message}</span>
+                        </div>
+                        <button
+                            onClick={() => setToast(null)}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'inherit',
+                                padding: '2px',
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+                )}
+
                 {/* Header Principal de Auditoría */}
                 <header style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>

@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.162 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.2 Command Center, Gobernanza Técnica y Control de Flota SaaS)
+> **Versión:** 1.9.163 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.3 Consola de Auditoría Forense y Trazabilidad de Eventos)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -9069,6 +9069,37 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   2. Al pulsar el botón de eliminar sobre un rol no protegido, el botón muta a `¿CONFIRMAR?` en fondo carmesí durante 4 segundos; al hacer clic nuevamente se concreta la eliminación y se notifica vía Toast verde.
   3. En la pestaña de Aprobaciones, al revocar una cuenta digital, el sistema despliega el modal interactivo de confirmación exigiendo la palabra `ELIMINAR` antes de ejecutar la llamada a `/api/provider/users`, suprimiendo cualquier diálogo nativo `window.confirm`.
   4. En la pestaña de Auditoría, el superbuscador filtra en milisegundos las operaciones del módulo `SECURITY` y genera el reporte XLSX descargable con HTTP 200 OK.
+
+---
+
+### §42.3 Pantalla 10.3: Consola de Auditoría Forense y Trazabilidad de Eventos (`/admin/audit`)
+
+1. **Propósito Operativo & Arquitectura:**
+   - La pantalla `/admin/audit` (`src/app/admin/audit/page.tsx`) constituye la bitácora inalterable de auditoría forense y cumplimiento normativo de FruFresco.
+   - Centraliza el registro cronológico descendente de mutaciones sobre la base de datos (`audit_logs`), capturando: fecha y hora exacta, colaborador ejecutor, identificador único, acción realizada (`INSERT`, `UPDATE`, `DELETE`, `LOGIN`, `LOGOUT`), módulo de impacto (`PRODUCTS`, `SECURITY`, `ORDERS`, `SETTINGS`, `HR_ADMIN`), tabla afectada y payload estructurado JSON con diffs de campos previos vs nuevos (`changes: { old, new }`).
+2. **Control de Acceso RBAC Estricto:**
+   - Protegida mediante `checkUserPermission(profile, 'admin.dashboard.audit')`. Si el usuario no cuenta con la credencial autorizada, el sistema deniega el acceso desplegando el banner heráldico de bloqueo con enlace de retorno seguro a `/admin/dashboard`.
+3. **Pipeline de Datos, Rendimiento & Ventana Deslizante (90 Días):**
+   - **Optimización de Consulta en Vivo:** Aplica automáticamente una ventana de visualización en tiempo real de los últimos 3 meses (`>= 90 días`) para garantizar respuestas sub-segundo, eliminando latencias en bases de datos con cientos de miles de registros históricos.
+   - **Paginación Dinámica & Lazy Loading:** Ingesta registros en bloques de 30 elementos por página (`PAGE_SIZE = 30`), con botón de recarga interactiva (`RefreshCw`) y detección de fin de flujo (`hasMore`).
+   - **Exportación Masiva XLSX (Streaming Batch):** Motor de descarga en hojas de cálculo (`xlsx`) que itera en bloques de 500 registros (`batchSize = 500`) hasta un tope de seguridad de 5,000 registros históricos sin truncamiento indebido, sanitizando strings y formateando celdas técnicas legibles para auditores contables.
+4. **Inspección Profunda de Gobernanza & Pedidos:**
+   - **Analizador de Células de Trabajo (`analyzeGovernanceChanges`):** Desglosa cambios estructurales en `work_cells_governance`, identificando células creadas, células eliminadas y reasignaciones de líderes de célula con indicación visual de cambio (`oldL → newL`).
+   - **Trazabilidad de Ítems de Pedido (`order_items`):** Al inspeccionar un log del módulo `ORDERS`, consulta en segundo plano los ítems asociados con desglose de producto, cantidad, unidad de medida, precio unitario y subtotal.
+   - **Visor Técnico JSON con Copiado Seguro:** Acordeón con formato preformateado (`monospace`) y botón de copiado al portapapeles con confirmación visual reactiva (`copiedJson`), sin alertas nativas.
+5. **Dogma Poka-Yoke & Erradicación de Diálogos Nativos:**
+   - Sustitución de `window.alert()` en el flujo de exportación de reportes por un componente Toast banner in-UI (`toast`) con tipología semántica (`success`, `error`, `info`), auto-cierre temporizado a 4 segundos y botón de descarte manual.
+
+---
+
+#### Escenario 199: Auditoría Forense en Tiempo Real, Inspección de Mutaciones y Exportación Segura (SDD v1.9.163)
+- **Given** el Auditor Interno o Administrador con permiso `admin.dashboard.audit` autenticado en `/admin/audit`.
+- **When** inspecciona la actividad reciente y exporta la bitácora:
+- **Then**:
+  1. La interfaz renderiza la tabla con diseño industrial suizo de alta densidad, aplicando chips de color según la criticidad de la acción (`INSERT` en verde esmeralda, `UPDATE` en ámbar cálido, `DELETE` en carmesí, `LOGIN` en índigo).
+  2. Al pulsar sobre cualquier fila, se despliega el modal de detalle forense desglosando los valores previos y posteriores de cada campo alterado, junto con la consulta asíncrona de ítems si el evento corresponde a una orden de compra.
+  3. Al presionar "Descargar Reporte (XLSX)", el sistema realiza la paginación secuencial en streaming y descarga el archivo Excel debidamente formateado, notificando el éxito mediante un Toast in-UI no bloqueante sin invocar `window.alert()`.
+  4. La ruta responde con código HTTP 200 OK y TypeScript compila con 0 errores (`exit 0`).
 
 
 
