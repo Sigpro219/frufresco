@@ -57,6 +57,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // Interactive Tooltip & Search States
     const [hoveredSlot, setHoveredSlot] = useState<any | null>(null);
@@ -249,6 +250,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
         if (readOnly) return;
         setSaving(true);
         setSaveSuccess(false);
+        setSaveError(null);
         try {
             // 1. Guardar parámetros si cambiaron
             await supabase.from('logistic_parameters').upsert([
@@ -267,9 +269,11 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             await Promise.all(updates);
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 4000);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error guardando asignación de muelle:', err);
-            alert('Error al guardar en base de datos');
+            const msg = err?.message || 'Error al guardar en base de datos';
+            setSaveError(msg);
+            setTimeout(() => setSaveError(null), 6000);
         } finally {
             setSaving(false);
         }
@@ -475,7 +479,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 onClick={handleSaveToDatabase}
                                 disabled={saving}
                                 style={{
-                                    backgroundColor: saveSuccess ? '#059669' : THEME.colors.primary,
+                                    backgroundColor: saveError ? '#DC2626' : saveSuccess ? '#059669' : THEME.colors.primary,
                                     color: '#FFFFFF',
                                     border: 'none',
                                     padding: '0.5rem 1.05rem',
@@ -486,15 +490,32 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '6px',
-                                    boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)',
+                                    boxShadow: saveError ? '0 2px 6px rgba(220, 38, 38, 0.25)' : '0 2px 6px rgba(13, 122, 87, 0.25)',
                                     transition: 'all 0.15s'
                                 }}
-                                onMouseEnter={e => { if (!saveSuccess) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
-                                onMouseLeave={e => { if (!saveSuccess) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
+                                onMouseEnter={e => { if (!saveSuccess && !saveError) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                                onMouseLeave={e => { if (!saveSuccess && !saveError) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                             >
-                                {saveSuccess ? <CheckCircle2 size={14} /> : <Save size={14} />}
-                                {saving ? 'Guardando...' : saveSuccess ? '¡Espacios Guardados!' : 'Guardar Asignación'}
+                                {saveError ? <AlertTriangle size={14} /> : saveSuccess ? <CheckCircle2 size={14} /> : <Save size={14} />}
+                                {saving ? 'Guardando...' : saveError ? 'Error al guardar' : saveSuccess ? '¡Espacios Guardados!' : 'Guardar Asignación'}
                             </button>
+                        )}
+
+                        {saveError && (
+                            <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                color: '#DC2626',
+                                backgroundColor: '#FEE2E2',
+                                border: '1px solid #FCA5A5',
+                                padding: '0.4rem 0.65rem',
+                                borderRadius: '6px'
+                            }}>
+                                <AlertTriangle size={12} /> {saveError}
+                            </span>
                         )}
 
                         <Link
@@ -664,9 +685,20 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                             <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 900, color: THEME.colors.textMain }}>
                                 Distribución Física en Planta (Bahías 1 a 150)
                             </h3>
-                            <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                🟢 Institucional &bull; 🔵 Hogar &bull; ⚪ Bahía libre &bull; Pasa el cursor para ver detalles
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>
+                                    <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#0D7A57' }} /> Institucional
+                                </span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>
+                                    <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#2563EB' }} /> Hogar
+                                </span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>
+                                    <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#CBD5E1', border: '1px solid #94A3B8' }} /> Bahía libre
+                                </span>
+                                <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, opacity: 0.8 }}>
+                                    &bull; Pasa el cursor para ver detalles
+                                </span>
+                            </div>
                         </div>
 
                         {/* Barra de Búsqueda Rápida y Controles de Vista */}
@@ -963,13 +995,17 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                                         <span style={{
                                                             fontSize: '0.58rem',
                                                             fontWeight: 800,
-                                                            padding: '1px 5px',
+                                                            padding: '2px 5px',
                                                             borderRadius: '3px',
                                                             backgroundColor: assigned.length > spaces ? '#FEF3C7' : '#FEE2E2',
                                                             color: assigned.length > spaces ? '#92400E' : '#991B1B',
-                                                            border: `1px solid ${assigned.length > spaces ? '#FCD34D' : '#FCA5A5'}`
+                                                            border: `1px solid ${assigned.length > spaces ? '#FCD34D' : '#FCA5A5'}`,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
                                                         }}>
-                                                            {assigned.length > spaces ? `⚠️ ${assigned.length} bahías (sobra ${assigned.length - spaces})` : `⚠️ ${assigned.length} bahía (requiere ${spaces})`}
+                                                            <AlertTriangle size={9} />
+                                                            {assigned.length > spaces ? `${assigned.length} bahías (sobra ${assigned.length - spaces})` : `${assigned.length} bahía (requiere ${spaces})`}
                                                         </span>
                                                         {!readOnly && (
                                                             <button
@@ -1095,9 +1131,12 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 borderRadius: '4px',
                                 backgroundColor: '#F1F5F9',
                                 color: '#64748B',
-                                border: '1px solid #E2E8F0'
+                                border: '1px solid #E2E8F0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
                             }}>
-                                ⚪ LIBRE
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#94A3B8' }} /> LIBRE
                             </span>
                         )}
                     </div>

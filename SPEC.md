@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.112 (Blindaje Contractual de Precios: Erradicación de Modificación Manual en Creación de Pedidos - COM-40)
+> **Versión:** 1.9.137 (Certificación Dominio 6.2: Bahías de Muelle 1-150, Cubicaje de Acopio & Asignación Geográfica - TMS-02)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8216,6 +8216,57 @@ Bajo el estándar `especialista-api`, ningún endpoint telemático opera como sc
   2. Cada respuesta exitosa o de error incluye el encabezado `x-request-id` y el bloque `meta: { timestamp, requestId, durationMs }`.
   3. Las peticiones externas hacia Apps-360 no pueden superar los 12.000 ms; ante una caída del proveedor, la API falla de inmediato con `504 Gateway Timeout`.
   4. La sincronización de múltiples vehículos en base de datos se procesa de forma concurrente con `Promise.allSettled`, reduciendo la latencia de actualización a menos de 200 ms por camión.
+
+---
+
+### 38.3 Gestión de Bahías de Muelle 1-150, Cubicaje de Acopio & Asignación Geográfica (`/admin/logistics/staging-spaces`) (SDD v1.9.137)
+
+#### A. Misión y Principio Rector de Bodega y Muelle
+El módulo de asignación de muelle (`/admin/logistics/staging-spaces`) digitaliza el piso físico de la bodega central de FruFresco, mapeando con precisión milimétrica los **150 espacios o bahías contiguas** donde se acopian los pedidos alistados antes de ser cargados a los camiones de reparto según la disciplina LIFO (Last-In, First-Out).
+
+#### B. Arquitectura de Cubicaje & Lógica Poka-Yoke
+1. **Parametrización Dinámica de Almacenamiento:**
+   - Gobernado por la tabla `logistic_parameters` en Supabase:
+     - `space_capacity`: Capacidad nominal por bahía (default: 36 canastillas plásticas estándar).
+     - `avg_kg_per_crate`: Peso promedio estimado por canastilla (default: 12.5 kg).
+   - Cálculo automático de canastillas requeridas por pedido:
+     $$\text{Canastillas} = \max\left(1, \operatorname{round}\left(\frac{\text{Peso Total Kg}}{\text{avg\_kg\_per\_crate}}\right)\right)$$
+   - Cálculo de bahías físicas requeridas:
+     $$\text{Bahías Requeridas} = \max\left(1, \operatorname{ceil}\left(\frac{\text{Canastillas}}{\text{space\_capacity}}\right)\right)$$
+
+2. **Detección Automática de Tipo de Cliente:**
+   - **Cliente Institucional (`institucional`):** Pedidos corporativos B2B (`profiles.role === 'b2b_client'`). Se identifican visualmente con insignias verdes (`#0D7A57` / `#ECFDF5`) e icono `Building2`.
+   - **Cliente Hogar (`hogar`):** Pedidos residenciales B2C (`profiles.role === 'b2c_client'`, `type === 'b2c'` o notas administrativas `CLIENTE HOGAR`). Se identifican visualmente con insignias azules (`#2563EB` / `#EFF6FF`) e icono `Home`.
+
+3. **Motor de Clúster Geográfico (`allocateStagingSpacesGeographically`):**
+   - Agrupa los pedidos en 7 corredores viales prioritarios de Bogotá y la Sabana:
+     - Corredor Foráneo (Chía, Cajicá, Zipaquirá, Cota, Sopó, La Calera, Funza, Mosquera, Madrid).
+     - Corredor Occidente (Fontibón, Engativá, Calle 26, Calle 80, Boyacá).
+     - Corredor Centro (Santa Fe, La Candelaria, Teusaquillo, Mártires).
+     - Corredor Chapinero (Chapinero Alto, Rosales, Chicó, Parque 93).
+     - Corredor Norte (Usaquén, Suba, Autonorte, Pepe Sierra, Cedritos).
+     - Corredor Sur (Kennedy, Bosa, Tunjuelito, Usme, Ciudad Bolívar).
+     - Metropolitana General (Pedidos sin georreferenciación estricta).
+   - Asigna bahías contiguas en el rango 1 a 150 garantizando que pedidos de la misma zona geográfica queden físicamente juntos en bodega para facilitar la consolidación de carga en camiones.
+
+4. **Persistencia Transaccional & Poka-Yoke:**
+   - La asignación se persiste en `orders.warehouse_spaces` (array de enteros `[1, 2, ...]`).
+   - Notificación reactiva in-UI: el botón de guardado refleja estados `Guardando...`, `¡Espacios Guardados!` (verde con auto-dismiss en 4s) o `Error al guardar` (rojo con mensaje descriptivo y auto-dismiss en 6s), sin recurrir a alertas modales bloqueantes de navegador.
+   - Enlace directo a la "Sábana Oficio" (`/admin/orders/alistamiento-print?orderIds=...`) para la emisión de planillas de picking impresas.
+
+---
+
+#### Escenario 178: Cubicaje Automatizado, Clúster Geográfico y Asignación de Bahías 1-150 en Muelle (SDD v1.9.137)
+- **Given** el Jefe de Bodega y Despacho en `/admin/logistics/staging-spaces` planificando las entregas de la fecha seleccionada.
+- **When** carga los pedidos del día y presiona "Auto-Clúster Geográfico":
+- **Then**:
+  1. El sistema evalúa el peso total en kilogramos de cada orden y calcula el número de canastillas necesarias con base en el parámetro `avg_kg_per_crate` (12.5 kg).
+  2. Determina el número de bahías que ocupará cada pedido según `space_capacity` (36 canastillas/bahía).
+  3. Agrupa los pedidos según su corredor geográfico de entrega y les asigna slots físicos contiguos dentro de la cuadrícula de 1 a 150 bahías.
+  4. Los pedidos institucionales se visualizan con distintivo verde e icono de empresa, mientras los pedidos hogar se diferencian en azul con icono de casa.
+  5. Si un pedido tiene asignadas más o menos bahías de las requeridas por cubicaje, la interfaz señala la discrepancia con una advertencia visual (`AlertTriangle`) indicando las bahías faltantes o sobrantes.
+  6. Al pulsar "Guardar Asignación", la matriz de bahías se persiste en la columna `warehouse_spaces` de la tabla `orders` y los parámetros en `logistic_parameters`, mostrando retroalimentación en pantalla sin interrupciones por diálogos nativos.
+
 
 
 
