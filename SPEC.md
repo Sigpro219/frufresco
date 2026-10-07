@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.138 (Doctrina Canónica de Inmutabilidad Tarifaria: Exclusividad del Módulo de Acuerdos Comerciales y Erradicación de Edición Manual en Pedidos - COM-40)
+> **Versión:** 1.9.138 (Certificación Dominio 6.3: Planeación Algorítmica de Rutas, Despachos & Manifiestos LIFO - TMS-03)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8279,6 +8279,44 @@ El módulo de asignación de muelle (`/admin/logistics/staging-spaces`) digitali
   4. Los pedidos institucionales se visualizan con distintivo verde e icono de empresa, mientras los pedidos hogar se diferencian en azul con icono de casa.
   5. Si un pedido tiene asignadas más o menos bahías de las requeridas por cubicaje, la interfaz señala la discrepancia con una advertencia visual (`AlertTriangle`) indicando las bahías faltantes o sobrantes.
   6. Al pulsar "Guardar Asignación", la matriz de bahías se persiste en la columna `warehouse_spaces` de la tabla `orders` y los parámetros en `logistic_parameters`, mostrando retroalimentación en pantalla sin interrupciones por diálogos nativos.
+
+---
+
+### 38.4 Planeación Algorítmica de Rutas, Consolidación de Despachos & Manifiestos LIFO (`/admin/transport?tab=planner`) (SDD v1.9.138)
+
+#### A. Misión y Principio Rector de Despacho y Enrutamiento
+La consola de planeación de rutas (`RoutePlanner`) constituye el motor cerebral de despacho del TMS. Resuelve el problema clásico de enrutamiento vehicular con ventanas de tiempo (VRPTW), balanceando la capacidad volumétrica (canastillas) y de masa (kg) del parque automotor contra los pedidos alistados para la jornada.
+
+#### B. Arquitectura de Optimización & Lógica Poka-Yoke
+1. **Doble Motor de Optimización (Google Maps OptimizeTours + Gemini AI):**
+   - Invocación a `/api/transport/optimize`:
+     - Parametrización en caliente desde `logistic_parameters`: `b2b_kg_min`, `b2c_kg_min`, `base_setup_time` (X minutos), `time_per_10_crates_unload` (Y minutos), `time_per_10_crates_delivery` (Z minutos), `fleet_start_time` (04:30), `fleet_end_time` (19:00), `optimization_strategy` (`balanced` / `minimize_vehicles` / `minimize_time`), `avg_kg_per_crate` (12.5 kg) y `driver_break_mins` (45 min).
+     - Generación del reporte explicativo de asignación mediante cascade Gemini (`executeWithObsolescenceGuard`) con justificación operativa por vehículo.
+2. **Asignación Manual & Drag/Click Reactivo:**
+   - Permite al despachador reasignar paradas manualmente entre camiones o devolver pedidos al pool sin asignar, con recálculo dinámico de peso total, canastillas estimadas y porcentaje de ocupación vehicular.
+   - Persistencia de borrador local (`frufresco_route_planner_draft`) para evitar pérdida de trabajo ante cierres accidentales de pestaña.
+3. **Compuerta de Confirmación Atómica (`/api/transport/confirm`):**
+   - Modal de Pre-Confirmación (`showPreConfirm`) con auditoría de órdenes, vehículos y horarios proyectados de salida.
+   - Creación de registros en `routes` y `route_stops` con orden LIFO inverso (secuencia 1 a N).
+   - Detección de colisiones e idempotencia: previene que un pedido sea asignado a más de una ruta activa para la misma fecha.
+4. **Manifiesto de Despacho & Formatos de Salida:**
+   - Emisión de Manifiesto en ventana limpia para impresión (`printManifestViaNewWindow`) con desglose de secuencia, cliente, peso, canastillas y bahías de bodega asignadas (`ESP X`).
+   - Copiado inteligente de manifiesto para WhatsApp (`navigator.clipboard.writeText`) con estado reactivo in-button (`¡Copiado para WhatsApp!`) y cero llamadas a diálogos nativos `alert()`.
+   - Manejo de bloqueo de popups (`popupBlockedWarning`) con banner informativo en pantalla.
+
+---
+
+#### Escenario 179: Optimización de Rutas, Confirmación Atómica de Manifiesto y Despacho WhatsApp (SDD v1.9.138)
+- **Given** el Coordinador de Transporte en `/admin/transport?tab=planner` con 3 vehículos disponibles y pedidos aprobados para reparto.
+- **When** presiona "Auto-Asignar" o distribuye pedidos entre las unidades de la flota:
+- **Then**:
+  1. El sistema calcula la ocupación en masa (kg) y volumen (canastillas) de cada furgón contra su capacidad nominal máxima.
+  2. Si la optimización falla por falta de conectividad o parámetros inválidos, el error se despliega en un banner rojo en la barra superior sin interrumpir al usuario con una alerta modal.
+  3. Al pulsar "Confirmar", se despliega el resumen pre-confirmación detallando paradas, horarios de cargue y salida.
+  4. Al pulsar "Confirmar y Lanzar", se invoca `/api/transport/confirm`, persistiendo atómicamente las rutas en `routes` y paradas en `route_stops`.
+  5. En el modal de Manifiesto Confirmado, el botón "Copiar WhatsApp" formatea el texto estructurado con placas, conductores y secuencias, copiándolo al portapapeles y mostrando retroalimentación visual inmediata (`¡Copiado para WhatsApp!`).
+  6. Si el navegador bloquea la apertura de la ventana de impresión, un aviso no intrusivo alerta sobre habilitar popups sin congelar la aplicación.
+
 
 
 

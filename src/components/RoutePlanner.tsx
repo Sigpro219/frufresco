@@ -71,6 +71,10 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
     const [optimizing, setOptimizing] = useState(false);
+    const [optimizationError, setOptimizationError] = useState<string | null>(null);
+    const [confirmationError, setConfirmationError] = useState<string | null>(null);
+    const [copiedWhatsApp, setCopiedWhatsApp] = useState<boolean>(false);
+    const [popupBlockedWarning, setPopupBlockedWarning] = useState<boolean>(false);
     const [showAiModal, setShowAiModal] = useState(false);
     const [aiReportText, setAiReportText] = useState('');
     const [debugInfo, setDebugInfo] = useState({ targetDate: '', count: 0, cutoff: false, driversFound: '' });
@@ -380,7 +384,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
         } catch (err: any) {
             console.error('Optimization failed:', err);
-            alert(`⚠️ Error de Optimización:\n\n${err.message || 'Ocurrió un error al procesar las rutas.'}`);
+            const msg = err?.message || 'Ocurrió un error al procesar las rutas.';
+            setOptimizationError(msg);
+            setTimeout(() => setOptimizationError(null), 8000);
         } finally {
             setOptimizing(false);
         }
@@ -490,7 +496,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
         } catch (err: any) {
             console.error('Error confirming routes:', err);
-            alert(`⚠️ Error al confirmar las rutas:\n${err.message}`);
+            const msg = err?.message || 'Error al confirmar las rutas';
+            setConfirmationError(msg);
+            setTimeout(() => setConfirmationError(null), 8000);
         } finally {
             setLoading(false);
         }
@@ -628,7 +636,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         if (!confirmedManifest) return;
 
         const printWindow = window.open('', '_blank');
-        if (!printWindow) return alert('Por favor habilite las ventanas emergentes (popups) para poder imprimir.');
+        if (!printWindow) {
+            setPopupBlockedWarning(true);
+            setTimeout(() => setPopupBlockedWarning(false), 6000);
+            return;
+        }
 
         const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -661,7 +673,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             <div class="page-break-inside-avoid" style="border: 1px solid #E2E8F0; border-radius: 16px; padding: 1.25rem; background-color: #F8FAFC; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 1rem;">
                 <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 1rem; align-items: center; border-bottom: ${route.stops && route.stops.length > 0 ? '1px solid #F1F5F9' : 'none'}; padding-bottom: ${route.stops && route.stops.length > 0 ? '0.75rem' : 0};">
                     <div>
-                        <div style="font-weight: 900; color: #0F172A; font-size: 0.95rem;">🚚 ${route.vehicle_plate}</div>
+                        <div style="font-weight: 900; color: #0F172A; font-size: 0.95rem;">${route.vehicle_plate}</div>
                         <div style="font-size: 0.75rem; color: #64748B; font-weight: 700; margin-top: 2px;">Conductor: ${route.driver_name}</div>
                     </div>
                     <div>
@@ -1133,6 +1145,37 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         </div>
                     )}
                 </div>
+
+                {/* Alertas de error en tiempo real sin modal bloqueante */}
+                {(optimizationError || confirmationError) && (
+                    <div style={{
+                        marginTop: '0.65rem',
+                        marginBottom: '0.5rem',
+                        backgroundColor: '#FEE2E2',
+                        border: '1px solid #FCA5A5',
+                        borderRadius: '8px',
+                        padding: '0.5rem 0.85rem',
+                        color: '#991B1B',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <AlertTriangle size={14} />
+                            <span>{optimizationError ? `Error de Optimización: ${optimizationError}` : `Error al Confirmar: ${confirmationError}`}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => { setOptimizationError(null); setConfirmationError(null); }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991B1B', padding: 0 }}
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                )}
 
                 {/* Settings Drawer */}
                 {showSettings && (
@@ -2144,16 +2187,21 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     text += `----------------------------------------\n\n_¡Listos para cargar! 🚀_`;
                                     
                                     navigator.clipboard.writeText(text);
-                                    alert('📋 Resumen copiado al portapapeles para WhatsApp.');
+                                    setCopiedWhatsApp(true);
+                                    setTimeout(() => setCopiedWhatsApp(false), 4000);
                                 }}
                                 style={{
-                                    flex: 1, padding: '1rem', borderRadius: '14px', border: '1px solid #CBD5E1',
-                                    backgroundColor: 'white', color: '#334155', fontWeight: '800', cursor: 'pointer',
+                                    flex: 1, padding: '1rem', borderRadius: '14px',
+                                    border: `1px solid ${copiedWhatsApp ? '#A7F3D0' : '#CBD5E1'}`,
+                                    backgroundColor: copiedWhatsApp ? '#ECFDF5' : 'white',
+                                    color: copiedWhatsApp ? '#065F46' : '#334155',
+                                    fontWeight: '800', cursor: 'pointer',
                                     fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                <MessageSquare size={16} strokeWidth={2} /> Copiar WhatsApp
+                                {copiedWhatsApp ? <CheckCircle2 size={16} strokeWidth={2} color="#059669" /> : <MessageSquare size={16} strokeWidth={2} />}
+                                {copiedWhatsApp ? '¡Copiado para WhatsApp!' : 'Copiar WhatsApp'}
                             </button>
                             <button
                                 onClick={printManifestViaNewWindow}
@@ -2178,6 +2226,24 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 Finalizar
                             </button>
                         </div>
+                        {popupBlockedWarning && (
+                            <div style={{
+                                marginTop: '0.5rem',
+                                padding: '0.45rem 0.75rem',
+                                borderRadius: '8px',
+                                backgroundColor: '#FEE2E2',
+                                border: '1px solid #FCA5A5',
+                                color: '#991B1B',
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}>
+                                <AlertTriangle size={14} />
+                                Por favor habilita las ventanas emergentes (popups) en tu navegador para imprimir.
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
