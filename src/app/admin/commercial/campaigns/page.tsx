@@ -1063,9 +1063,9 @@ export default function CampaignsPage({ embedded = false }: { embedded?: boolean
                                                                     <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>{p.name}</div>
                                                                     <div style={{ fontSize: '0.72rem', color: '#64748B' }}>SKU: {p.sku || 'N/A'} • {p.category || 'General'}</div>
                                                                 </div>
-                                                                {p.base_price && (
+                                                                {(p.reference_price || 0) > 0 && (
                                                                     <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#0D7A57' }}>
-                                                                        Ref: ${Math.round(p.base_price).toLocaleString()}
+                                                                        Ref: ${Math.round(p.reference_price).toLocaleString()}
                                                                     </div>
                                                                 )}
                                                             </div>
