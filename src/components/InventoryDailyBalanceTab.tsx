@@ -21,7 +21,6 @@ import {
     Layers, 
     ChevronRight, 
     ChevronDown,
-    ChevronLeft,
     ChevronsLeft,
     ChevronsRight,
     ChevronsUpDown,
@@ -32,6 +31,7 @@ import {
     ExternalLink,
     X,
     Eye,
+    EyeOff,
     PenTool,
     BarChart3,
     Apple,
@@ -54,7 +54,9 @@ import {
     Zap,
     Lock,
     Unlock,
-    ShieldCheck
+    ShieldCheck,
+    Pin,
+    PinOff
 } from 'lucide-react';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { WorkCell } from '@/types/workCells';
@@ -248,6 +250,28 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
     };
 
     const [sheetMode, setSheetMode] = useState<'view' | 'manual_edit'>('view');
+    // Estado persistido de visibilidad de indicadores (Por defecto colapsado para maximizar área de tabla)
+    const [showKpis, setShowKpis] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('frufresco_daily_balance_show_kpis');
+            if (saved !== null) {
+                setShowKpis(saved === 'true');
+            }
+        }
+    }, []);
+
+    const handleToggleKpis = useCallback(() => {
+        setShowKpis(prev => {
+            const next = !prev;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('frufresco_daily_balance_show_kpis', String(next));
+            }
+            return next;
+        });
+    }, []);
+
     const [selectedCell, setSelectedCell] = useState<string>('ALL');
 
     const cellOptions = useMemo(() => [
@@ -304,12 +328,36 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
     const [previousClosingMap, setPreviousClosingMap] = useState<Record<string, number>>({});
 
     const [editingCell, setEditingCell] = useState<{
+        rowKey: string;
         productId: string;
         colKey: string;
         initialValue: number;
         currentValue: string;
     } | null>(null);
     const [isSavingCell, setIsSavingCell] = useState(false);
+    const isNavigatingRef = useRef(false);
+
+    // Estado persistido de Inmovilizar / Movilizar Paneles (Filas y Columnas tipo Excel)
+    const [isPanesFrozen, setIsPanesFrozen] = useState<boolean>(true);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('frufresco_daily_balance_panes_frozen');
+            if (saved !== null) {
+                setIsPanesFrozen(saved === 'true');
+            }
+        }
+    }, []);
+
+    const togglePanesFrozen = useCallback(() => {
+        setIsPanesFrozen(prev => {
+            const next = !prev;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('frufresco_daily_balance_panes_frozen', String(next));
+            }
+            return next;
+        });
+    }, []);
 
     // Notificaciones corporativas tipo Toast accesibles (sin window.alert bloqueante)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
@@ -325,11 +373,29 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
     const handleSwitchMode = useCallback((newMode: 'view' | 'manual_edit') => {
         if (newMode === 'manual_edit' && !canEditSheet) {
-            notify('Acceso restringido: La Hoja Manual de Edición está reservada exclusivamente para la jefatura de inventarios o administradores.', 'warning');
+            notify('Acceso restringido: El Modo Edición está reservado exclusivamente para la jefatura de inventarios o administradores.', 'warning');
             return;
         }
         setSheetMode(newMode);
     }, [canEditSheet, notify]);
+
+    // Menú desplegable para registrar novedades (Mermas, Nómina, Extra) en Modo Edición
+    const [isNoveltyMenuOpen, setIsNoveltyMenuOpen] = useState(false);
+    const noveltyMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (noveltyMenuRef.current && !noveltyMenuRef.current.contains(e.target as Node)) {
+                setIsNoveltyMenuOpen(false);
+            }
+        };
+        if (isNoveltyMenuOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isNoveltyMenuOpen]);
 
     // Medición reactiva de la Toolbar Dock para sincronización con cabecera de tabla
     const dockRef = useRef<HTMLDivElement>(null);
@@ -460,12 +526,6 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
         }
     };
 
-    const scrollStepHorizontal = (direction: 'left' | 'right') => {
-        if (tableScrollRef.current) {
-            const step = 380;
-            tableScrollRef.current.scrollBy({ left: direction === 'left' ? -step : step, behavior: 'smooth' });
-        }
-    };
 
     // Carga de datos
     const loadDailyData = useCallback(async (silent = false) => {
@@ -1091,6 +1151,86 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
         });
     }, [allCollapsed, filteredFamilies]);
 
+    // Columnas editables en orden secuencial para navegación Excel (Enter / Tab)
+    const EDITABLE_COLUMNS = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'T', 'X'] as const;
+
+    const getRowColumnValue = (row: InventoryDailyRow, colKey: string): number | null => {
+        switch (colKey) {
+            case 'F': return row.colF_corrections;
+            case 'G': return row.colG_purchases;
+            case 'H': return row.colH_salesKg;
+            case 'I': return row.colI_salesUnits;
+            case 'J': return row.colJ_weightSalesUnits;
+            case 'K': return row.colK_shortage;
+            case 'L': return row.colL_unshipped;
+            case 'M': return row.colM_additionalSales;
+            case 'N': return row.colN_employeeSales;
+            case 'O': return row.colO_returns;
+            case 'P': return row.colP_weighingWaste;
+            case 'Q': return row.colQ_damageWaste;
+            case 'R': return row.colR_cleaningWaste;
+            case 'T': return row.colT_physicalCount;
+            case 'X': return row.colX_foodBank;
+            default: return 0;
+        }
+    };
+
+    const getColumnDecimals = (colKey: string): number => {
+        return colKey === 'I' ? 0 : 2;
+    };
+
+    interface FlatRowItem {
+        rowKey: string;
+        productId: string;
+        row: InventoryDailyRow;
+        isParent?: boolean;
+        isChild?: boolean;
+        isBaseChild?: boolean;
+    }
+
+    // Lista aplanada en tiempo real de filas visibles para navegación fluida con teclado
+    const flatVisibleRows = useMemo<FlatRowItem[]>(() => {
+        const list: FlatRowItem[] = [];
+        for (const family of displayedFamilies) {
+            const isCollapsed = collapsedFamilies[family.id] !== false; // default true
+            if (family.isParent) {
+                list.push({
+                    rowKey: `parent-${family.id}`,
+                    productId: family.consolidated.productId,
+                    row: family.consolidated,
+                    isParent: true
+                });
+                if (!isCollapsed) {
+                    list.push({
+                        rowKey: `child-base-${family.parent.productId}`,
+                        productId: family.parent.productId,
+                        row: family.parent,
+                        isChild: true,
+                        isBaseChild: true
+                    });
+                    for (const child of family.children) {
+                        list.push({
+                            rowKey: `child-${child.productId}`,
+                            productId: child.productId,
+                            row: child,
+                            isChild: true,
+                            isBaseChild: false
+                        });
+                    }
+                }
+            } else {
+                list.push({
+                    rowKey: `standalone-${family.id}`,
+                    productId: family.parent.productId,
+                    row: family.parent,
+                    isParent: false,
+                    isChild: false
+                });
+            }
+        }
+        return list;
+    }, [displayedFamilies, collapsedFamilies]);
+
     // KPIs Lean Agregados sobre todas las familias filtradas
     const kpis = useMemo(() => {
         let totalEntradas = 0;
@@ -1523,30 +1663,14 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
         );
     };
 
-    // Guardado de edición en celda estilo Excel (Idempotente y a prueba de acumulaciones erróneas)
-    const handleCommitCellEdit = async () => {
-        if (!editingCell || isSavingCell) return;
-        if (!canEditSheet) {
-            notify('Solo la jefatura de inventarios o administradores tienen autorización para modificar directamente los valores de esta sábana.', 'warning');
-            setEditingCell(null);
-            return;
-        }
-
-        const { productId, colKey, initialValue, currentValue } = editingCell;
-        const newVal = evaluateExcelExpression(currentValue);
-
-        if (isNaN(newVal) || Math.abs(newVal - initialValue) < 0.0001) {
-            setEditingCell(null);
-            return;
-        }
-
-        setIsSavingCell(true);
-
+    // Persistencia asíncrona de cambios en celdas estilo Excel con actualización optimista inmediata
+    const persistCellChange = async (
+        productId: string,
+        colKey: string,
+        newVal: number,
+        currentValue: string
+    ) => {
         try {
-            const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
-            const warehouseId = whData?.id;
-            const timestampIso = `${balanceDate}T12:00:00.000Z`;
-
             const supervisorSignature = profile?.contact_name || user?.email || 'Jefatura de Inventarios';
 
             let movType: 'entry' | 'exit' | 'adjustment' = 'adjustment';
@@ -1634,7 +1758,48 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Cruce a ciegas fin de turno | Contado: ${formatNumber(newVal, 2)}`;
             }
 
-            // Si el nuevo valor es 0, eliminar movimientos de esta columna para este producto y fecha
+            // Actualización optimista inmediata en memoria para recálculo instantáneo
+            const optimisticId = `opt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            if (Math.abs(newVal) < 0.0001) {
+                setMovements(prev => prev.filter(m => {
+                    const mDate = (m.created_at || '').split('T')[0];
+                    return !(m.product_id === productId && m.reference_type === refType && mDate === balanceDate);
+                }));
+            } else {
+                setMovements(prev => {
+                    const existingIdx = prev.findIndex(m => {
+                        const mDate = (m.created_at || '').split('T')[0];
+                        return m.product_id === productId && m.reference_type === refType && mDate === balanceDate;
+                    });
+                    if (existingIdx >= 0) {
+                        const updated = [...prev];
+                        updated[existingIdx] = {
+                            ...updated[existingIdx],
+                            quantity: qty,
+                            type: movType,
+                            notes: noteDesc
+                        };
+                        return updated;
+                    } else {
+                        const newOptMov: RawMovement = {
+                            id: optimisticId,
+                            product_id: productId,
+                            quantity: qty,
+                            type: movType,
+                            reference_type: refType,
+                            notes: noteDesc,
+                            created_at: `${balanceDate}T12:00:00.000Z`
+                        };
+                        return [newOptMov, ...prev];
+                    }
+                });
+            }
+
+            // Persistencia en Supabase
+            const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
+            const warehouseId = whData?.id;
+            const timestampIso = `${balanceDate}T12:00:00.000Z`;
+
             if (Math.abs(newVal) < 0.0001) {
                 const { error: delErr } = await supabase
                     .from('inventory_movements')
@@ -1645,16 +1810,8 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     .lte('created_at', `${balanceDate}T23:59:59.999Z`);
 
                 if (delErr) throw delErr;
-
-                // Actualizar estado local eliminando los movimientos
-                setMovements(prev => prev.filter(m => {
-                    const mDate = (m.created_at || '').split('T')[0];
-                    return !(m.product_id === productId && m.reference_type === refType && mDate === balanceDate);
-                }));
-
                 (window as any).showToast?.(`Columna ${colKey} restablecida a 0,00`, 'info');
             } else {
-                // Si el valor es > 0, buscar movimientos existentes para actualizar en lugar de acumular deltas
                 const { data: existingMovs } = await supabase
                     .from('inventory_movements')
                     .select('id')
@@ -1678,19 +1835,22 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
                     if (updErr) throw updErr;
 
-                    // Si existían duplicados anteriores, eliminarlos
                     if (existingMovs.length > 1) {
                         const extraIds = existingMovs.slice(1).map(x => x.id);
                         await supabase.from('inventory_movements').delete().in('id', extraIds);
                     }
 
-                    // Sincronizar estado local
+                    // Sincronizar estado local reemplazando el optimista con el registro oficial
                     setMovements(prev => {
-                        const filtered = prev.filter(m => !existingMovs.slice(1).some(ex => ex.id === m.id));
-                        return filtered.map(m => m.id === targetId ? (updatedMov as any) : m);
+                        const filtered = prev.filter(m => !existingMovs.slice(1).some(ex => ex.id === m.id) && m.id !== optimisticId);
+                        const hasTarget = filtered.some(m => m.id === targetId);
+                        if (hasTarget) {
+                            return filtered.map(m => m.id === targetId ? (updatedMov as any) : m);
+                        } else {
+                            return [updatedMov as any, ...filtered];
+                        }
                     });
                 } else {
-                    // Insertar nuevo registro limpio
                     const { data: insertedMov, error: insErr } = await supabase
                         .from('inventory_movements')
                         .insert([{
@@ -1708,7 +1868,10 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     if (insErr) throw insErr;
 
                     if (insertedMov) {
-                        setMovements(prev => [insertedMov as any, ...prev]);
+                        setMovements(prev => {
+                            const withoutOpt = prev.filter(m => m.id !== optimisticId);
+                            return [insertedMov as any, ...withoutOpt];
+                        });
                     }
                 }
 
@@ -1717,14 +1880,88 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
         } catch (err: any) {
             console.error('Error en edición de celda:', err);
             notify('Error al guardar cambio: ' + (err.message || 'Error desconocido'), 'error');
-        } finally {
-            setIsSavingCell(false);
-            setEditingCell(null);
         }
     };
 
-    // Renderizado de celda editable invisible estilo Excel
+    // Navegación fluida y guardado de edición estilo Excel (Enter: abajo, Shift+Enter: arriba, Tab: columna siguiente)
+    const handleCommitCellEditAndNavigate = (direction: 'down' | 'up' | 'next_col' | 'prev_col' | 'none' = 'none') => {
+        if (!editingCell) return;
+        if (!canEditSheet) {
+            notify('Solo la jefatura de inventarios o administradores tienen autorización para modificar directamente los valores de esta sábana.', 'warning');
+            setEditingCell(null);
+            return;
+        }
+
+        const currentCell = { ...editingCell };
+
+        // 1. Calcular de inmediato la celda destino para transición de 0ms
+        let nextTarget: { rowKey: string; productId: string; colKey: string } | null = null;
+        if (direction !== 'none') {
+            const currRowIdx = flatVisibleRows.findIndex(r => r.rowKey === currentCell.rowKey);
+            if (currRowIdx !== -1) {
+                if (direction === 'down') {
+                    if (currRowIdx + 1 < flatVisibleRows.length) {
+                        const targetRow = flatVisibleRows[currRowIdx + 1];
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: currentCell.colKey };
+                    }
+                } else if (direction === 'up') {
+                    if (currRowIdx - 1 >= 0) {
+                        const targetRow = flatVisibleRows[currRowIdx - 1];
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: currentCell.colKey };
+                    }
+                } else if (direction === 'next_col') {
+                    const colIdx = EDITABLE_COLUMNS.indexOf(currentCell.colKey as any);
+                    if (colIdx !== -1 && colIdx + 1 < EDITABLE_COLUMNS.length) {
+                        const targetRow = flatVisibleRows[currRowIdx];
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: EDITABLE_COLUMNS[colIdx + 1] };
+                    } else if (currRowIdx + 1 < flatVisibleRows.length) {
+                        // Envolvente tipo Excel a la siguiente fila, primera columna editable
+                        const targetRow = flatVisibleRows[currRowIdx + 1];
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: EDITABLE_COLUMNS[0] };
+                    }
+                } else if (direction === 'prev_col') {
+                    const colIdx = EDITABLE_COLUMNS.indexOf(currentCell.colKey as any);
+                    if (colIdx > 0) {
+                        const targetRow = flatVisibleRows[currRowIdx];
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: EDITABLE_COLUMNS[colIdx - 1] };
+                    } else if (currRowIdx - 1 >= 0) {
+                        // Envolvente hacia fila anterior, última columna editable
+                        const targetRow = flatVisibleRows[currRowIdx - 1];
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: EDITABLE_COLUMNS[EDITABLE_COLUMNS.length - 1] };
+                    }
+                }
+            }
+        }
+
+        // 2. Transición inmediata de celda activa
+        if (nextTarget) {
+            const nextRowItem = flatVisibleRows.find(r => r.rowKey === nextTarget!.rowKey);
+            const nextVal = nextRowItem ? getRowColumnValue(nextRowItem.row, nextTarget.colKey) : 0;
+            const decimals = getColumnDecimals(nextTarget.colKey);
+            setEditingCell({
+                rowKey: nextTarget.rowKey,
+                productId: nextTarget.productId,
+                colKey: nextTarget.colKey,
+                initialValue: nextVal || 0,
+                currentValue: (nextVal === null || nextVal === 0) ? '' : formatNumber(nextVal, decimals)
+            });
+        } else {
+            setEditingCell(null);
+        }
+
+        // 3. Evaluar si el valor numérico cambió para guardar en base de datos
+        const newVal = evaluateExcelExpression(currentCell.currentValue);
+        if (isNaN(newVal) || Math.abs(newVal - currentCell.initialValue) < 0.0001) {
+            return;
+        }
+
+        // 4. Persistir asíncronamente en segundo plano
+        persistCellChange(currentCell.productId, currentCell.colKey, newVal, currentCell.currentValue);
+    };
+
+    // Renderizado de celda editable estilo Excel con soporte de navegación fluida
     const renderEditableCell = (
+        rowKey: string,
         productId: string,
         colKey: string,
         val: number | null,
@@ -1733,27 +1970,52 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
         isReadonly: boolean = false,
         extraChildren?: React.ReactNode
     ) => {
-        const isEditing = !isReadonly && canEditSheet && sheetMode === 'manual_edit' && editingCell?.productId === productId && editingCell?.colKey === colKey;
+        const isEditing = !isReadonly && canEditSheet && sheetMode === 'manual_edit' && editingCell?.rowKey === rowKey && editingCell?.colKey === colKey;
 
         if (isEditing) {
             return (
                 <td style={{ ...style, padding: '2px 4px', textAlign: 'right' }}>
                     <input
+                        ref={el => {
+                            if (el) {
+                                el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                            }
+                        }}
                         type="text"
                         autoFocus
                         value={editingCell.currentValue}
-                        title="Permite operaciones tipo Excel (ej. =10+20 o +15-5). Presiona Enter para calcular y guardar."
+                        title="Navegación tipo Excel: Enter para ir abajo, Shift+Enter para ir arriba, Tab para ir al lado, Esc para cancelar. Soporta fórmulas (ej. =10+20 o +15-5)."
                         onFocus={e => e.target.select()}
                         onChange={e => setEditingCell(prev => prev ? { ...prev, currentValue: e.target.value } : null)}
                         onKeyDown={e => {
-                            if (e.key === 'Enter') handleCommitCellEdit();
-                            if (e.key === 'Escape') setEditingCell(null);
-                            if (e.key === 'Tab') {
+                            if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleCommitCellEdit();
+                                isNavigatingRef.current = true;
+                                handleCommitCellEditAndNavigate(e.shiftKey ? 'up' : 'down');
+                            } else if (e.key === 'Tab') {
+                                e.preventDefault();
+                                isNavigatingRef.current = true;
+                                handleCommitCellEditAndNavigate(e.shiftKey ? 'prev_col' : 'next_col');
+                            } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                isNavigatingRef.current = true;
+                                handleCommitCellEditAndNavigate('down');
+                            } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                isNavigatingRef.current = true;
+                                handleCommitCellEditAndNavigate('up');
+                            } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                setEditingCell(null);
                             }
                         }}
-                        onBlur={handleCommitCellEdit}
+                        onBlur={() => {
+                            if (isNavigatingRef.current) {
+                                isNavigatingRef.current = false;
+                                return;
+                            }
+                            handleCommitCellEditAndNavigate('none');
+                        }}
                         style={{
                             width: '100%',
                             minWidth: '65px',
@@ -1787,7 +2049,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     }
                     if (sheetMode === 'view') {
                         if (canEditSheet) {
-                            notify('Estás en la Sábana Oficial (Solo Vista). Para editar celdas o realizar ajustes, activa la "Hoja Manual" en la barra superior.', 'info');
+                            notify('Estás en la Sábana Oficial (Solo Vista). Para editar celdas o realizar ajustes, activa el "Modo Edición" en la barra superior.', 'info');
                         }
                         return;
                     }
@@ -1797,6 +2059,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     }
                     if (!effectiveReadonly) {
                         setEditingCell({
+                            rowKey,
                             productId,
                             colKey,
                             initialValue: val || 0,
@@ -1809,7 +2072,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     cursor: effectiveReadonly ? 'default' : 'pointer',
                     userSelect: 'none'
                 }}
-                title={sheetMode === 'view' ? 'Sábana Oficial (Solo Vista) • Conmuta a Hoja Manual para editar' : (effectiveReadonly ? 'Celda calculada de solo lectura' : 'Clic para editar este valor')}
+                title={sheetMode === 'view' ? 'Sábana Oficial (Solo Vista) • Conmuta a Modo Edición para editar' : (effectiveReadonly ? 'Celda calculada de solo lectura' : 'Clic para editar este valor')}
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
                     {val !== null ? renderNumericCell(val, decimals) : <span style={{ color: '#94A3B8', fontWeight: '600' }}>-</span>}
@@ -1861,13 +2124,13 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                         width: '240px',
                         minWidth: '240px',
                         maxWidth: '240px',
-                        position: 'sticky',
-                        left: 0,
-                        zIndex: 10,
+                        position: isPanesFrozen ? 'sticky' : 'static',
+                        left: isPanesFrozen ? 0 : undefined,
+                        zIndex: isPanesFrozen ? 10 : undefined,
                         backgroundColor: rowBg,
                         borderRight: '2px solid #CBD5E1',
                         borderBottom: cellBorderBottom,
-                        boxShadow: '4px 0 10px -2px rgba(0,0,0,0.06)'
+                        boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.06)' : undefined
                     }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden' }}>
                             {/* Fila 1: Producto + Expandir/Indent + Unidad/Familia */}
@@ -2051,9 +2314,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             color: isParent ? '#854D0E' : (isChild ? '#94A3B8' : '#64748B'), 
                             fontSize: '0.72rem',
                             fontWeight: isParent ? '800' : 'normal',
-                            position: 'sticky',
-                            left: 0,
-                            zIndex: 10,
+                            position: isPanesFrozen ? 'sticky' : 'static',
+                            left: isPanesFrozen ? 0 : undefined,
+                            zIndex: isPanesFrozen ? 10 : undefined,
                             backgroundColor: rowBg,
                             borderBottom: cellBorderBottom
                         }}>
@@ -2066,9 +2329,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             textAlign: 'center', 
                             fontWeight: '800', 
                             color: isParent ? '#854D0E' : '#1E293B',
-                            position: 'sticky',
-                            left: '85px',
-                            zIndex: 10,
+                            position: isPanesFrozen ? 'sticky' : 'static',
+                            left: isPanesFrozen ? '85px' : undefined,
+                            zIndex: isPanesFrozen ? 10 : undefined,
                             backgroundColor: rowBg,
                             borderBottom: cellBorderBottom
                         }}>
@@ -2077,7 +2340,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                 color: isParent ? '#854D0E' : (isChild ? '#64748B' : '#0F172A'),
                                 border: isParent ? '1px solid #FDE047' : undefined,
                                 padding: '2px 5px', 
-                                borderRadius: '4px',
+                                borderRadius: '4px', 
                                 fontSize: '0.7rem'
                             }}>
                                 #{row.colB_idProducto}
@@ -2090,9 +2353,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             style={{ 
                                 padding: isCellCollapsed ? '6px 4px' : '6px 8px', 
                                 textAlign: isCellCollapsed ? 'center' : 'left', 
-                                position: 'sticky', 
-                                left: '155px', 
-                                zIndex: 10, 
+                                position: isPanesFrozen ? 'sticky' : 'static', 
+                                left: isPanesFrozen ? '155px' : undefined, 
+                                zIndex: isPanesFrozen ? 10 : undefined, 
                                 backgroundColor: rowBg, 
                                 borderBottom: cellBorderBottom,
                                 width: isCellCollapsed ? '44px' : '130px', 
@@ -2149,11 +2412,11 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             color: isParent ? '#854D0E' : '#0F172A', 
                             borderRight: '2px solid #CBD5E1',
                             borderBottom: cellBorderBottom,
-                            position: 'sticky', 
-                            left: isCellCollapsed ? '199px' : '285px', 
-                            zIndex: 10, 
+                            position: isPanesFrozen ? 'sticky' : 'static', 
+                            left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, 
+                            zIndex: isPanesFrozen ? 10 : undefined, 
                             backgroundColor: rowBg, 
-                            boxShadow: '4px 0 10px -2px rgba(0,0,0,0.06)', 
+                            boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.06)' : undefined, 
                             transition: 'left 0.2s ease'
                         }}>
                             {isParent ? (
@@ -2292,7 +2555,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 </td>
 
                 {/* F: Corrección (±) */}
-                {renderEditableCell(row.productId, 'F', row.colF_corrections, {
+                {renderEditableCell(key, row.productId, 'F', row.colF_corrections, {
                     width: '95px', minWidth: '95px', maxWidth: '95px',
                     padding: '4px 6px',
                     textAlign: 'right',
@@ -2302,37 +2565,37 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 }, 2)}
 
                 {/* G: Compra del Día (+) */}
-                {renderEditableCell(row.productId, 'G', row.colG_purchases, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'G', row.colG_purchases, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
 
                 {/* H: Venta del Día KG (-) */}
-                {renderEditableCell(row.productId, 'H', row.colH_salesKg, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'H', row.colH_salesKg, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderBottom: cellBorderBottom }, 2)}
 
                 {/* I: Venta del Día UN (Informativo) */}
-                {renderEditableCell(row.productId, 'I', row.colI_salesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: '#64748B', fontWeight: isParent ? '700' : '400', borderBottom: cellBorderBottom }, 0)}
+                {renderEditableCell(key, row.productId, 'I', row.colI_salesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: '#64748B', fontWeight: isParent ? '700' : '400', borderBottom: cellBorderBottom }, 0)}
 
                 {/* J: Peso Venta UN (-) */}
-                {renderEditableCell(row.productId, 'J', row.colJ_weightSalesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
 
                 {/* K: Producto Escaso (-) */}
-                {renderEditableCell(row.productId, 'K', row.colK_shortage, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'K', row.colK_shortage, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* L: Producto Sin Enviar (+) */}
-                {renderEditableCell(row.productId, 'L', row.colL_unshipped, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2)}
 
                 {/* M: Venta Adicional Cliente (-) */}
-                {renderEditableCell(row.productId, 'M', row.colM_additionalSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* N: Venta Adicional Empleado (-) */}
-                {renderEditableCell(row.productId, 'N', row.colN_employeeSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
 
                 {/* O: Devoluciones (+) */}
-                {renderEditableCell(row.productId, 'O', row.colO_returns, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'O', row.colO_returns, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* P: Pesada (-) */}
-                {renderEditableCell(row.productId, 'P', row.colP_weighingWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* Q: Desperdicio (-) */}
-                {renderEditableCell(row.productId, 'Q', row.colQ_damageWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
+                {renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
                     row.evidencePhotosQ?.length > 0 ? (
                         <button
                             type="button"
@@ -2346,7 +2609,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 )}
 
                 {/* R: Basura (-) */}
-                {renderEditableCell(row.productId, 'R', row.colR_cleaningWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
+                {renderEditableCell(key, row.productId, 'R', row.colR_cleaningWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
                     row.evidencePhotosR?.length > 0 ? (
                         <button
                             type="button"
@@ -2379,7 +2642,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 </td>
 
                 {/* T: Conteo Físico Real */}
-                {renderEditableCell(row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* U: Inventario en bodega (devoluciones) */}
                 <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
@@ -2397,7 +2660,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 </td>
 
                 {/* X: Banco de Alimentos */}
-                {renderEditableCell(row.productId, 'X', row.colX_foodBank, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
+                {renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
                     row.evidencePhotosX?.length > 0 ? (
                         <button
                             type="button"
@@ -2418,6 +2681,17 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
             <style>{`
                 .daily-balance-table tr:hover td {
                     background-color: #F1F5F9 !important;
+                }
+                @keyframes subtlePulseAmber {
+                    0%, 100% {
+                        box-shadow: 0 1px 3px rgba(217, 119, 6, 0.3), 0 0 0 0 rgba(217, 119, 6, 0.45);
+                    }
+                    50% {
+                        box-shadow: 0 2px 8px rgba(217, 119, 6, 0.45), 0 0 0 3px rgba(217, 119, 6, 0.15);
+                    }
+                }
+                .modo-edicion-pulse {
+                    animation: subtlePulseAmber 2.2s infinite ease-in-out;
                 }
             `}</style>
 
@@ -2452,13 +2726,14 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 </div>
             )}
 
-            {/* 1. TARJETAS DE KPIS NANO-BENTO (ALTURA REDUCIDA ~64px) */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
-                gap: '0.55rem',
-                marginBottom: '0.15rem'
-            }}>
+            {/* 1. TARJETAS DE KPIS NANO-BENTO (COLAPSABLES BAJO DEMANDA) */}
+            {showKpis && (
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(5, 1fr)',
+                    gap: '0.55rem',
+                    marginBottom: '0.15rem'
+                }}>
                 {/* 1. Balance Masa */}
                 <div 
                     style={{
@@ -2604,6 +2879,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     </div>
                 </div>
             </div>
+            )}
 
             {/* 2. MASTER COMMAND CONSOLE: TOOLBAR ENTERPRISE UNIFICADA DE 2 NIVELES */}
             <div 
@@ -2732,12 +3008,13 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             <button
                                 type="button"
                                 onClick={() => handleSwitchMode('manual_edit')}
+                                className={sheetMode === 'manual_edit' ? 'modo-edicion-pulse' : ''}
                                 style={{
                                     padding: '0 0.65rem',
                                     height: '100%',
                                     borderRadius: '6px',
                                     border: 'none',
-                                    backgroundColor: sheetMode === 'manual_edit' ? '#0D7A57' : 'transparent',
+                                    backgroundColor: sheetMode === 'manual_edit' ? '#D97706' : 'transparent',
                                     color: sheetMode === 'manual_edit' ? '#FFFFFF' : '#64748B',
                                     fontSize: '0.73rem',
                                     fontWeight: '800',
@@ -2746,80 +3023,121 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                     alignItems: 'center',
                                     gap: '5px',
                                     transition: 'all 0.15s ease',
-                                    boxShadow: sheetMode === 'manual_edit' ? '0 1px 3px rgba(13, 122, 87, 0.3)' : 'none'
+                                    boxShadow: sheetMode === 'manual_edit' ? '0 1px 3px rgba(217, 119, 6, 0.35)' : 'none'
                                 }}
-                                title={canEditSheet ? "Hoja Manual: Modo de ajustes, contingencias y registros de inventario" : "Acceso restringido a Jefatura de Inventarios"}
+                                title={canEditSheet ? "Modo Edición: Ajuste de celdas, contingencias y registros de inventario" : "Acceso restringido a Jefatura de Inventarios"}
                             >
-                                <PenTool size={13} strokeWidth={2.2} />
-                                <span>Hoja Manual</span>
+                                <PenTool size={13} strokeWidth={2.4} color={sheetMode === 'manual_edit' ? '#FEF3C7' : 'currentColor'} />
+                                <span>Modo Edición</span>
+                                {sheetMode === 'manual_edit' && (
+                                    <span style={{
+                                        width: '6px',
+                                        height: '6px',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#FEF08A',
+                                        display: 'inline-block',
+                                        marginLeft: '1px',
+                                        boxShadow: '0 0 4px #FDE047'
+                                    }} />
+                                )}
                             </button>
                         </div>
                     </div>
 
-                    {/* CENTRO: Buscador Inteligente + Filtro Con Movimiento */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, maxWidth: '440px' }}>
-                        {/* Buscador */}
-                        <div style={{ position: 'relative', flex: 1 }}>
-                            <div style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', display: 'flex', alignItems: 'center' }}>
-                                <Search size={14} strokeWidth={1.8} />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Buscar nombre, #ID, @tag..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.35rem 1.8rem 0.35rem 2rem',
-                                    borderRadius: '8px',
-                                    border: '1px solid #CBD5E1',
-                                    fontSize: '0.78rem',
-                                    fontWeight: '500',
-                                    backgroundColor: '#F8FAF9',
-                                    color: '#0F172A',
-                                    outline: 'none',
-                                    height: '32px',
-                                    boxSizing: 'border-box',
-                                    transition: 'all 0.2s'
-                                }}
-                                onFocus={(e) => {
-                                    e.currentTarget.style.borderColor = '#0D7A57';
-                                    e.currentTarget.style.backgroundColor = '#FFFFFF';
-                                    e.currentTarget.style.boxShadow = '0 0 0 2px rgba(13, 122, 87, 0.15)';
-                                }}
-                                onBlur={(e) => {
-                                    e.currentTarget.style.borderColor = '#CBD5E1';
-                                    e.currentTarget.style.backgroundColor = '#F8FAF9';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                }}
-                            />
-                            {searchQuery && (
-                                <button
-                                    type="button"
-                                    onClick={() => setSearchQuery('')}
-                                    style={{
-                                        position: 'absolute',
-                                        right: '0.5rem',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: 'none',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        color: '#64748B',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '2px',
-                                        borderRadius: '50%',
-                                        backgroundColor: '#EAEFEA'
-                                    }}
-                                    title="Limpiar búsqueda"
-                                >
-                                    <X size={12} strokeWidth={2} />
-                                </button>
-                            )}
+                    {/* CENTRO: Buscador Omnibox Prominente (Protagonista de Navegación) */}
+                    <div style={{
+                        position: 'relative',
+                        flex: 1,
+                        minWidth: '260px',
+                        maxWidth: '680px'
+                    }}>
+                        <div style={{
+                            position: 'absolute',
+                            left: '0.75rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: '#0D7A57',
+                            display: 'flex',
+                            alignItems: 'center',
+                            pointerEvents: 'none'
+                        }}>
+                            <Search size={15} strokeWidth={2.2} />
                         </div>
+                        <input
+                            type="text"
+                            placeholder="Buscar producto por nombre, #código, @categoría o célula..."
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '0.35rem 3.8rem 0.35rem 2.25rem',
+                                borderRadius: '8px',
+                                border: '1px solid #CBD5E1',
+                                fontSize: '0.79rem',
+                                fontWeight: '500',
+                                backgroundColor: '#FFFFFF',
+                                color: '#0F172A',
+                                outline: 'none',
+                                height: '32px',
+                                boxSizing: 'border-box',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                                transition: 'all 0.2s'
+                            }}
+                            onFocus={(e) => {
+                                e.currentTarget.style.borderColor = '#0D7A57';
+                                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#CBD5E1';
+                                e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
+                            }}
+                        />
+                        {searchQuery ? (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                style={{
+                                    position: 'absolute',
+                                    right: '0.55rem',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: '#64748B',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '2px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#EAEFEA'
+                                }}
+                                title="Limpiar búsqueda"
+                            >
+                                <X size={12} strokeWidth={2.2} />
+                            </button>
+                        ) : (
+                            <span style={{
+                                position: 'absolute',
+                                right: '0.55rem',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                fontSize: '0.62rem',
+                                fontWeight: '700',
+                                color: '#94A3B8',
+                                backgroundColor: '#F1F5F9',
+                                padding: '2px 5px',
+                                borderRadius: '4px',
+                                pointerEvents: 'none',
+                                userSelect: 'none'
+                            }}>
+                                #ID @tag
+                            </span>
+                        )}
+                    </div>
 
+                    {/* DERECHA: Filtro Con Movimiento + Acciones dependientes del modo */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
                         {/* Segmented Control Con Movimiento / Todos */}
                         <div style={{
                             display: 'inline-flex',
@@ -2830,8 +3148,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             border: '1px solid #CBD5E1',
                             boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                             height: '32px',
-                            boxSizing: 'border-box',
-                            flexShrink: 0
+                            boxSizing: 'border-box'
                         }}>
                             <button
                                 type="button"
@@ -2902,114 +3219,160 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                 </span>
                             </button>
                         </div>
-                    </div>
 
-                    {/* DERECHA: ACCIONES DEPENDIENTES DEL MODO */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                        {/* Separador vertical sutil */}
+                        <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
                         {sheetMode === 'manual_edit' ? (
-                            /* MODO EDICIÓN: Herramientas de Registro y Ajuste Operacional (Merma, Nómina, Extra, Carga Excel) */
+                            /* MODO EDICIÓN: Menú Desplegable de Novedades + Compras Plaza + Cierre / Refresco */
                             <>
-                                <div style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    backgroundColor: '#FEF3C7',
-                                    border: '1px solid #FDE68A',
-                                    borderRadius: '8px',
-                                    padding: '2px',
-                                    height: '32px',
-                                    boxSizing: 'border-box'
-                                }}>
+                                {/* Dropdown Menú Unificado de Novedades */}
+                                <div ref={noveltyMenuRef} style={{ position: 'relative' }}>
                                     <button
                                         type="button"
                                         onClick={() => {
                                             if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios o administradores pueden registrar mermas.', 'warning');
+                                                notify('Solo la jefatura de inventarios o administradores pueden registrar novedades operativas.', 'warning');
                                                 return;
                                             }
-                                            setIsWasteModalOpen(true);
+                                            setIsNoveltyMenuOpen(!isNoveltyMenuOpen);
                                         }}
                                         style={{
-                                            padding: '0 0.55rem',
-                                            height: '100%',
-                                            borderRadius: '6px',
-                                            border: 'none',
-                                            backgroundColor: '#D97706',
-                                            color: '#FFFFFF',
+                                            padding: '0 0.65rem',
+                                            height: '32px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #F59E0B',
+                                            backgroundColor: '#FEF3C7',
+                                            color: '#B45309',
                                             fontSize: '0.73rem',
                                             fontWeight: '800',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '4px',
+                                            gap: '5px',
                                             cursor: 'pointer',
+                                            boxShadow: '0 1px 3px rgba(245, 158, 11, 0.2)',
                                             transition: 'all 0.15s ease'
                                         }}
-                                        title="Registrar Merma / Baja de Producto (Cols P, Q, R)"
+                                        title="Registrar Mermas, Descuento de Nómina o Venta Extra"
                                     >
-                                        <Plus size={12} strokeWidth={2.5} />
-                                        <span>+ Merma</span>
+                                        <Plus size={13} strokeWidth={2.5} />
+                                        <span>+ Registrar Novedad</span>
+                                        <ChevronDown size={11} strokeWidth={2.5} style={{ transform: isNoveltyMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
                                     </button>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios o administradores pueden registrar descuentos de nómina.', 'warning');
-                                                return;
-                                            }
-                                            setIsPayrollModalOpen(true);
-                                        }}
-                                        style={{
-                                            padding: '0 0.55rem',
-                                            height: '100%',
-                                            borderRadius: '6px',
-                                            border: 'none',
-                                            backgroundColor: 'transparent',
-                                            color: '#1E293B',
-                                            fontSize: '0.73rem',
-                                            fontWeight: '700',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        title="Descuento de Nómina a Empleados (Columna N)"
-                                    >
-                                        <User size={12} color="#2563EB" strokeWidth={2.2} />
-                                        <span>Nómina</span>
-                                    </button>
+                                    {/* Menú Desplegable Flotante */}
+                                    {isNoveltyMenuOpen && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 5px)',
+                                            right: 0,
+                                            zIndex: 9999,
+                                            backgroundColor: '#FFFFFF',
+                                            borderRadius: '10px',
+                                            border: '1px solid #CBD5E1',
+                                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 0 1px 1px rgba(0, 0, 0, 0.05)',
+                                            minWidth: '255px',
+                                            padding: '5px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '2px'
+                                        }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsNoveltyMenuOpen(false);
+                                                    setIsWasteModalOpen(true);
+                                                }}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'flex-start',
+                                                    gap: '8px',
+                                                    padding: '8px 10px',
+                                                    borderRadius: '6px',
+                                                    border: 'none',
+                                                    backgroundColor: 'transparent',
+                                                    color: '#0F172A',
+                                                    textAlign: 'left',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FEF3C7')}
+                                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                            >
+                                                <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#FDE68A', color: '#B45309', display: 'flex' }}>
+                                                    <Trash2 size={13} strokeWidth={2.2} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Merma / Baja de Producto</div>
+                                                    <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Pesada, daño o descapote (Cols P, Q, R)</div>
+                                                </div>
+                                            </button>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios o administradores pueden registrar ventas extra.', 'warning');
-                                                return;
-                                            }
-                                            setIsAdditionalSalesModalOpen(true);
-                                        }}
-                                        style={{
-                                            padding: '0 0.55rem',
-                                            height: '100%',
-                                            borderRadius: '6px',
-                                            border: 'none',
-                                            backgroundColor: 'transparent',
-                                            color: '#1E293B',
-                                            fontSize: '0.73rem',
-                                            fontWeight: '700',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        title="Venta Extra / Mostrador (Columna M)"
-                                    >
-                                        <ShoppingCart size={12} color="#7E22CE" strokeWidth={2.2} />
-                                        <span>Extra</span>
-                                    </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsNoveltyMenuOpen(false);
+                                                    setIsPayrollModalOpen(true);
+                                                }}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'flex-start',
+                                                    gap: '8px',
+                                                    padding: '8px 10px',
+                                                    borderRadius: '6px',
+                                                    border: 'none',
+                                                    backgroundColor: 'transparent',
+                                                    color: '#0F172A',
+                                                    textAlign: 'left',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#EFF6FF')}
+                                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                            >
+                                                <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#DBEAFE', color: '#1D4ED8', display: 'flex' }}>
+                                                    <User size={13} strokeWidth={2.2} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Descuento de Nómina</div>
+                                                    <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Venta autorizada a empleados (Col N)</div>
+                                                </div>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsNoveltyMenuOpen(false);
+                                                    setIsAdditionalSalesModalOpen(true);
+                                                }}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'flex-start',
+                                                    gap: '8px',
+                                                    padding: '8px 10px',
+                                                    borderRadius: '6px',
+                                                    border: 'none',
+                                                    backgroundColor: 'transparent',
+                                                    color: '#0F172A',
+                                                    textAlign: 'left',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FAF5FF')}
+                                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                            >
+                                                <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#F3E8FF', color: '#7E22CE', display: 'flex' }}>
+                                                    <ShoppingCart size={13} strokeWidth={2.2} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Venta Extra / Mostrador</div>
+                                                    <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Venta directa en bodega (Col M)</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
 
+                                {/* Botón Compras Plaza */}
                                 <button
                                     type="button"
                                     onClick={() => setIsFastPlazaModalOpen(true)}
@@ -3029,39 +3392,16 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)',
                                         transition: 'all 0.15s ease'
                                     }}
-                                    title="Carga Rápida de Compras Corabastos (Canal A - Teclado Primero)"
+                                    title="Compras Corabastos: Aplica solo para ingesta directa en modo manual de operación. En modo automático, las compras se consolidan y cargan automáticamente desde el módulo de pedidos y abastecimiento."
                                 >
                                     <Zap size={13} strokeWidth={2.5} />
                                     <span>Compras Plaza</span>
                                 </button>
 
-                                <button
-                                    type="button"
-                                    onClick={() => setIsExcelImportModalOpen(true)}
-                                    style={{
-                                        padding: '0 0.55rem',
-                                        height: '32px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #BFDBFE',
-                                        backgroundColor: '#EFF6FF',
-                                        color: '#1D4ED8',
-                                        fontSize: '0.73rem',
-                                        fontWeight: '800',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    title="Cargar / Simular Operación Diaria desde Excel (.xlsx)"
-                                >
-                                    <Upload size={12} strokeWidth={2.2} />
-                                    <span>Cargar Excel</span>
-                                </button>
-                            </>
-                        ) : (
-                            /* MODO VISTA: Cierre Oficial & Gobernanza */
-                            <>
+                                {/* Separador vertical sutil */}
+                                <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
+
+                                {/* Estado de Cierre y Botón de Cierre */}
                                 {closingRecord?.is_locked ? (
                                     <div style={{
                                         display: 'inline-flex',
@@ -3070,11 +3410,12 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         backgroundColor: '#DCFCE7',
                                         border: '1px solid #16A34A',
                                         color: '#15803D',
-                                        padding: '0 0.6rem',
+                                        padding: '0 0.65rem',
                                         height: '32px',
                                         borderRadius: '8px',
                                         fontSize: '0.73rem',
-                                        fontWeight: '800'
+                                        fontWeight: '800',
+                                        boxShadow: '0 1px 2px rgba(22, 163, 74, 0.15)'
                                     }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
                                         <Lock size={12} strokeWidth={2.5} />
                                         <span>Cerrado</span>
@@ -3098,104 +3439,114 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         )}
                                     </div>
                                 ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios o administradores pueden congelar el cierre oficial del día.', 'warning');
-                                                return;
-                                            }
-                                            setIsClosingModalOpen(true);
-                                        }}
-                                        style={{
-                                            padding: '0 0.6rem',
-                                            height: '32px',
-                                            borderRadius: '8px',
-                                            border: 'none',
-                                            backgroundColor: canEditSheet ? '#16A34A' : '#94A3B8',
-                                            color: '#FFFFFF',
-                                            fontSize: '0.73rem',
-                                            fontWeight: '800',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            cursor: canEditSheet ? 'pointer' : 'not-allowed',
-                                            boxShadow: canEditSheet ? '0 1px 3px rgba(22, 163, 74, 0.3)' : 'none',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        title={canEditSheet ? "Congelar y cerrar balance oficial del día" : "Solo supervisión autorizada puede cerrar jornada"}
-                                    >
-                                        <Lock size={12} strokeWidth={2.2} />
-                                        <span>Cerrar Día</span>
-                                    </button>
+                                    canEditSheet && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (!canEditSheet) {
+                                                    notify('Solo la jefatura de inventarios o administradores pueden congelar el cierre oficial del día.', 'warning');
+                                                    return;
+                                                }
+                                                setIsClosingModalOpen(true);
+                                            }}
+                                            style={{
+                                                padding: '0 0.65rem',
+                                                height: '32px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                backgroundColor: '#16A34A',
+                                                color: '#FFFFFF',
+                                                fontSize: '0.73rem',
+                                                fontWeight: '800',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            title="Cerrar Día: Abre el panel de conciliación para auditar saldos (Calculado vs Físico), congelar de forma inmutable la jornada contable, bloquear la edición de celdas y trasladar el Conteo Físico (Col T) como Saldo Inicial (Col E) del día siguiente."
+                                        >
+                                            <Lock size={12} strokeWidth={2.2} />
+                                            <span>Cerrar Día</span>
+                                        </button>
+                                    )
                                 )}
+
+                                {/* Botón de actualización */}
+                                <button
+                                    type="button"
+                                    onClick={() => loadDailyData(true)}
+                                    title="Actualizar datos"
+                                    style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        backgroundColor: '#FFFFFF',
+                                        color: '#64748B',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#0F172A'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.color = '#64748B'; }}
+                                >
+                                    <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
+                                </button>
+                            </>
+                        ) : (
+                            /* MODO VISTA: SÁBANA OFICIAL (SOLO CONSULTA / AUDITORÍA PURA - 100% LIMPIA) */
+                            <>
+                                {closingRecord?.is_locked && (
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        backgroundColor: '#DCFCE7',
+                                        border: '1px solid #16A34A',
+                                        color: '#15803D',
+                                        padding: '0 0.65rem',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.73rem',
+                                        fontWeight: '800',
+                                        boxShadow: '0 1px 2px rgba(22, 163, 74, 0.15)'
+                                    }} title={`Jornada cerrada oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}. Para reabrirla, active el Modo Edición.`}>
+                                        <Lock size={12} strokeWidth={2.5} />
+                                        <span>Cerrado</span>
+                                    </div>
+                                )}
+
+                                {/* Único botón sutil de actualización en Sábana Oficial */}
+                                <button
+                                    type="button"
+                                    onClick={() => loadDailyData(true)}
+                                    title="Actualizar datos oficiales"
+                                    style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        backgroundColor: '#FFFFFF',
+                                        color: '#64748B',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#0F172A'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.color = '#64748B'; }}
+                                >
+                                    <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
+                                </button>
                             </>
                         )}
-
-                        {/* Acciones comunes: Exportar Excel + Refrescar */}
-                        <div style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            backgroundColor: '#FFFFFF',
-                            borderRadius: '8px',
-                            border: '1px solid #CBD5E1',
-                            padding: '2px',
-                            gap: '2px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                            height: '32px',
-                            boxSizing: 'border-box'
-                        }}>
-                            <button
-                                type="button"
-                                onClick={handleExportOfficialExcel}
-                                style={{
-                                    padding: '0 0.55rem',
-                                    height: '100%',
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    backgroundColor: '#ECFDF5',
-                                    color: '#0D7A57',
-                                    fontSize: '0.73rem',
-                                    fontWeight: '800',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#D1FAE5')}
-                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ECFDF5')}
-                                title="Descargar Balance Oficial en Excel (24 Columnas)"
-                            >
-                                <FileSpreadsheet size={13} color="#0D7A57" strokeWidth={2} />
-                                <span>Excel</span>
-                            </button>
-
-                            <div style={{ width: '1px', height: '16px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
-
-                            <button
-                                type="button"
-                                onClick={() => loadDailyData(true)}
-                                title="Refrescar balance diario"
-                                style={{
-                                    width: '28px',
-                                    height: '28px',
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    color: '#64748B',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F1F5F9'; e.currentTarget.style.color = '#0F172A'; }}
-                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#64748B'; }}
-                            >
-                                <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
-                            </button>
-                        </div>
                     </div>
                 </div>
 
@@ -3217,6 +3568,19 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                         scrollbarWidth: 'none',
                         flex: 1
                     }}>
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.70rem',
+                            fontWeight: '700',
+                            color: '#64748B',
+                            marginRight: '3px',
+                            flexShrink: 0
+                        }}>
+                            <Layers size={12} color="#0D7A57" strokeWidth={2.2} />
+                            <span>Categorías:</span>
+                        </div>
                         {cellOptions.map(opt => {
                             const isSelected = selectedCell === opt.value;
                             const count = opt.value === 'ALL'
@@ -3262,8 +3626,102 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                         })}
                     </div>
 
-                    {/* DERECHA: Herramientas de Vista (Expandir/Colapsar, Cols A-D) + Dropdown Saltar a Bloque + Flechas paso a paso */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                    {/* DERECHA: Herramientas de Archivo Excel (Modo Edición), Telemetría & Vista */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                        {/* Botones de Operación Excel (Solo en Modo Edición) */}
+                        {sheetMode === 'manual_edit' && (
+                            <>
+                                <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: '6px',
+                                    border: '1px solid #CBD5E1',
+                                    padding: '2px',
+                                    gap: '2px',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                    height: '28px',
+                                    boxSizing: 'border-box'
+                                }}>
+                                    <button
+                                        type="button"
+                                        onClick={handleExportOfficialExcel}
+                                        style={{
+                                            padding: '0 0.55rem',
+                                            height: '100%',
+                                            borderRadius: '4px',
+                                            border: 'none',
+                                            backgroundColor: '#ECFDF5',
+                                            color: '#0D7A57',
+                                            fontSize: '0.70rem',
+                                            fontWeight: '800',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#D1FAE5')}
+                                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ECFDF5')}
+                                        title="Descargar Balance Oficial en Excel (24 Columnas)"
+                                    >
+                                        <FileSpreadsheet size={12} color="#0D7A57" strokeWidth={2.2} />
+                                        <span>Descargar Excel</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsExcelImportModalOpen(true)}
+                                        style={{
+                                            padding: '0 0.55rem',
+                                            height: '100%',
+                                            borderRadius: '4px',
+                                            border: 'none',
+                                            backgroundColor: '#EFF6FF',
+                                            color: '#1D4ED8',
+                                            fontSize: '0.70rem',
+                                            fontWeight: '800',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title="Cargar / Simular Operación Diaria desde Excel (.xlsx)"
+                                    >
+                                        <Upload size={12} color="#1D4ED8" strokeWidth={2.2} />
+                                        <span>Cargar Excel</span>
+                                    </button>
+                                </div>
+
+                                <div style={{ width: '1px', height: '16px', backgroundColor: '#CBD5E1', margin: '0 1px' }} />
+                            </>
+                        )}
+
+                        {/* Indicador de telemetría de SKUs y Familias */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '0 0.55rem',
+                            height: '28px',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '6px',
+                            fontSize: '0.70rem',
+                            color: '#64748B',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                        }}>
+                            <span>Mostrando:</span>
+                            <strong style={{ color: '#0F172A', fontWeight: '800' }}>{filteredFamilies.length}</strong>
+                            <span style={{ color: '#94A3B8' }}>familias</span>
+                            <span style={{ color: '#CBD5E1' }}>•</span>
+                            <strong style={{ color: '#0D7A57', fontWeight: '800' }}>{totalActiveSkusCount}</strong>
+                            <span style={{ color: '#94A3B8' }}>SKUs</span>
+                        </div>
+
+                        <div style={{ width: '1px', height: '16px', backgroundColor: '#CBD5E1', margin: '0 1px' }} />
+
                         {/* Toggle expandir / colapsar familias */}
                         <button
                             type="button"
@@ -3315,83 +3773,31 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             <span>{isCompactIdentification ? 'A-D Compacto' : 'Cols A-D'}</span>
                         </button>
 
-                        {/* Dropdown Compacto: Saltar a Bloque de 24 Columnas */}
-                        <div style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            backgroundColor: '#F8FAFC',
-                            border: '1px solid #CBD5E1',
-                            borderRadius: '6px',
-                            padding: '0 0.4rem',
-                            height: '28px',
-                            gap: '4px'
-                        }}>
-                            <Layers size={12} color="#0D7A57" strokeWidth={2.2} />
-                            <select
-                                value={activeBlock || ''}
-                                onChange={(e) => {
-                                    const val = e.target.value as ColumnBlockId;
-                                    if (val) scrollToColumnGroup(val);
-                                }}
-                                style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    fontSize: '0.71rem',
-                                    fontWeight: '700',
-                                    color: '#334155',
-                                    cursor: 'pointer',
-                                    outline: 'none',
-                                    paddingRight: '2px'
-                                }}
-                            >
-                                <option value="" disabled>⚓ Ir a Bloque...</option>
-                                <option value="identificacion">A-D: Identificación</option>
-                                <option value="entradas">E-G: Entradas & Compras</option>
-                                <option value="ventas">H-J: Ventas & Pedidos</option>
-                                <option value="excepciones">K-N: Novedades & Nómina</option>
-                                <option value="mermas">P-R: Mermas & Bajas</option>
-                                <option value="cierre">S-U: Saldo Teórico & Físico</option>
-                                <option value="conciliacion">V-X: Faltantes & Sobrantes</option>
-                            </select>
-                        </div>
-
-                        {/* Flechas de desplazamiento lateral paso a paso */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '2px' }}>
-                            <button
-                                type="button"
-                                onClick={() => scrollStepHorizontal('left')}
-                                title="Desplazar columnas a la izquierda"
-                                style={{
-                                    padding: '2px 4px',
-                                    borderRadius: '4px',
-                                    border: '1px solid #CBD5E1',
-                                    backgroundColor: '#FFFFFF',
-                                    color: '#475569',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center'
-                                }}
-                            >
-                                <ChevronLeft size={11} />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => scrollStepHorizontal('right')}
-                                title="Desplazar columnas a la derecha"
-                                style={{
-                                    padding: '2px 4px',
-                                    borderRadius: '4px',
-                                    border: '1px solid #CBD5E1',
-                                    backgroundColor: '#FFFFFF',
-                                    color: '#475569',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center'
-                                }}
-                            >
-                                <ChevronRight size={11} />
-                            </button>
-                        </div>
+                        {/* Toggle Inmovilizar / Movilizar Filas (Estilo Paneles de Excel) */}
+                        <button
+                            type="button"
+                            onClick={togglePanesFrozen}
+                            style={{
+                                padding: '0 0.55rem',
+                                height: '28px',
+                                borderRadius: '6px',
+                                border: isPanesFrozen ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
+                                backgroundColor: isPanesFrozen ? '#ECFDF5' : '#FFFFFF',
+                                color: isPanesFrozen ? '#0D7A57' : '#64748B',
+                                fontSize: '0.71rem',
+                                fontWeight: '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                transition: 'all 0.15s ease'
+                            }}
+                            title={isPanesFrozen ? "Paneles Inmovilizados: Encabezados y columnas fijos al desplazarte. Clic para 'Movilizar Filas' como en Excel." : "Paneles Movilizados: Desplazamiento libre continuo de todas las filas y encabezados. Clic para 'Inmovilizar Filas'."}
+                        >
+                            {isPanesFrozen ? <Pin size={12} color="#0D7A57" strokeWidth={2.2} /> : <PinOff size={12} color="#64748B" strokeWidth={2.2} />}
+                            <span>{isPanesFrozen ? 'Inmovilizado' : 'Movilizar Filas'}</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -3419,12 +3825,12 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     <table className="daily-balance-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
                         {/* Cabecera Nivel 1: Grupos Temáticos de Columnas */}
                         <thead style={{ 
-                            position: 'sticky', 
-                            top: 0, 
-                            zIndex: 40, 
+                            position: isPanesFrozen ? 'sticky' : 'static', 
+                            top: isPanesFrozen ? 0 : undefined, 
+                            zIndex: isPanesFrozen ? 40 : undefined, 
                             backgroundColor: '#0F172A', 
                             color: '#F8FAFC',
-                            boxShadow: '0 4px 10px -2px rgba(0, 0, 0, 0.25)'
+                            boxShadow: isPanesFrozen ? '0 4px 10px -2px rgba(0, 0, 0, 0.25)' : 'none'
                         }}>
                             <tr style={{ height: '32px' }}>
                                 <th 
@@ -3442,14 +3848,14 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #64748B',
                                         fontWeight: '800', 
-                                        position: 'sticky',
-                                        top: 0,
-                                        left: 0,
-                                        zIndex: 55,
+                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        top: isPanesFrozen ? 0 : undefined,
+                                        left: isPanesFrozen ? 0 : undefined,
+                                        zIndex: isPanesFrozen ? 55 : undefined,
                                         width: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
                                         minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
                                         maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
-                                        boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
+                                        boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease'
                                     }}
@@ -3480,9 +3886,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #10B981',
                                         fontWeight: '800', 
-                                        position: 'sticky',
-                                        top: 0,
-                                        zIndex: 40,
+                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        top: isPanesFrozen ? 0 : undefined,
+                                        zIndex: isPanesFrozen ? 40 : undefined,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3512,9 +3918,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #3B82F6',
                                         fontWeight: '800', 
-                                        position: 'sticky',
-                                        top: 0,
-                                        zIndex: 40,
+                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        top: isPanesFrozen ? 0 : undefined,
+                                        zIndex: isPanesFrozen ? 40 : undefined,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3544,9 +3950,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #A855F7',
                                         fontWeight: '800', 
-                                        position: 'sticky',
-                                        top: 0,
-                                        zIndex: 40,
+                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        top: isPanesFrozen ? 0 : undefined,
+                                        zIndex: isPanesFrozen ? 40 : undefined,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3576,9 +3982,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #F59E0B',
                                         fontWeight: '800', 
-                                        position: 'sticky',
-                                        top: 0,
-                                        zIndex: 40,
+                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        top: isPanesFrozen ? 0 : undefined,
+                                        zIndex: isPanesFrozen ? 40 : undefined,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3608,9 +4014,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #0D9488',
                                         fontWeight: '800', 
-                                        position: 'sticky',
-                                        top: 0,
-                                        zIndex: 40,
+                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        top: isPanesFrozen ? 0 : undefined,
+                                        zIndex: isPanesFrozen ? 40 : undefined,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3639,9 +4045,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         borderBottom: '1px solid #1E293B',
                                         borderTop: '3px solid #0D7A57',
                                         fontWeight: '800', 
-                                        position: 'sticky',
-                                        top: 0,
-                                        zIndex: 40,
+                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        top: isPanesFrozen ? 0 : undefined,
+                                        zIndex: isPanesFrozen ? 40 : undefined,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3673,12 +4079,12 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                             minWidth: '240px',
                                             maxWidth: '240px',
                                             borderRight: '2px solid #334155',
-                                            position: 'sticky',
-                                            top: '32px',
-                                            left: 0,
-                                            zIndex: 55,
+                                            position: isPanesFrozen ? 'sticky' : 'static',
+                                            top: isPanesFrozen ? '32px' : undefined,
+                                            left: isPanesFrozen ? 0 : undefined,
+                                            zIndex: isPanesFrozen ? 55 : undefined,
                                             backgroundColor: '#0F172A',
-                                            boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
+                                            boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
                                             fontSize: '0.7rem',
                                             color: '#E2E8F0'
                                         }}
@@ -3690,8 +4096,8 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                     </th>
                                 ) : (
                                     <>
-                                        <th style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: 'sticky', top: '32px', left: 0, zIndex: 55, backgroundColor: '#0F172A' }}>A: Fecha</th>
-                                        <th style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: 'sticky', top: '32px', left: '85px', zIndex: 55, backgroundColor: '#0F172A' }}>B: ID Prod</th>
+                                        <th style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>A: Fecha</th>
+                                        <th style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>B: ID Prod</th>
                                         <th 
                                             onClick={() => setCellColumnMode(prev => prev === 'collapsed' ? 'expanded' : 'collapsed')}
                                             title={isCellCollapsed ? "C: Célula colapsada (Clic para expandir nombre completo)" : "C: Célula (Clic para colapsar y maximizar espacio de datos)"}
@@ -3703,10 +4109,10 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                                 width: isCellCollapsed ? '44px' : '130px', 
                                                 minWidth: isCellCollapsed ? '44px' : '130px', 
                                                 maxWidth: isCellCollapsed ? '44px' : '130px', 
-                                                position: 'sticky', 
-                                                top: '32px',
-                                                left: '155px', 
-                                                zIndex: 55, 
+                                                position: isPanesFrozen ? 'sticky' : 'static', 
+                                                top: isPanesFrozen ? '32px' : undefined, 
+                                                left: isPanesFrozen ? '155px' : undefined, 
+                                                zIndex: isPanesFrozen ? 55 : undefined, 
                                                 backgroundColor: '#0F172A', 
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
@@ -3736,12 +4142,12 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                                 minWidth: '190px', 
                                                 maxWidth: '190px', 
                                                 borderRight: '2px solid #334155', 
-                                                position: 'sticky', 
-                                                top: '32px',
-                                                left: isCellCollapsed ? '199px' : '285px', 
-                                                zIndex: 55, 
+                                                position: isPanesFrozen ? 'sticky' : 'static', 
+                                                top: isPanesFrozen ? '32px' : undefined, 
+                                                left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, 
+                                                zIndex: isPanesFrozen ? 55 : undefined, 
                                                 backgroundColor: '#0F172A', 
-                                                boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
+                                                boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
                                                 transition: 'left 0.2s ease, width 0.2s ease'
                                             }}
                                         >
@@ -3751,34 +4157,34 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                 )}
 
                                 {/* Columnas E - G */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>E: Inicial (+)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>F: Correc. (±)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>G: Compra (+)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>E: Inicial (+)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>F: Correc. (±)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>G: Compra (+)</th>
 
                                 {/* Columnas H - J */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px' }}>H: Venta KG (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px' }}>I: Venta UN (Info)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>J: Peso UN (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px' }}>H: Venta KG (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px' }}>I: Venta UN (Info)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>J: Peso UN (-)</th>
 
                                 {/* Columnas K - N */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>K: Escaso (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>L: Sin Enviar (+)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px' }}>M: Vta Extra (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>N: Vta Nómina (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>K: Escaso (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>L: Sin Enviar (+)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px' }}>M: Vta Extra (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>N: Vta Nómina (-)</th>
 
                                 {/* Columnas O - R */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px' }}>O: Devol. (+)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#FBBF24', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px' }}>P: Pesada (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#F87171', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px' }}>Q: Desperd. (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>R: Basura (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px' }}>O: Devol. (+)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, padding: '6px 8px', textAlign: 'right', color: '#FBBF24', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px' }}>P: Pesada (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, padding: '6px 8px', textAlign: 'right', color: '#F87171', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px' }}>Q: Desperd. (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>R: Basura (-)</th>
 
                                 {/* Columnas S - U */}
                                 <th style={{ 
                                     height: '32px',
                                     boxSizing: 'border-box',
-                                    position: 'sticky',
-                                    top: '32px',
-                                    zIndex: 40,
+                                    position: isPanesFrozen ? 'sticky' : 'static',
+                                    top: isPanesFrozen ? '32px' : undefined,
+                                    zIndex: isPanesFrozen ? 40 : undefined,
                                     padding: '4px 8px', 
                                     textAlign: 'right', 
                                     color: '#5EEAD4', 
@@ -3796,13 +4202,13 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         <span style={{ lineHeight: 1.1 }}>S: Calc. Final</span>
                                     </div>
                                 </th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px' }}>T: Conteo Real</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 4px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px', fontSize: '0.60rem' }} title="Inventario en bodega (devoluciones) (U = T + O)">U: Inv. Bodega (Dev)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px' }}>T: Conteo Real</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, padding: '6px 4px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px', fontSize: '0.60rem' }} title="Inventario en bodega (devoluciones) (U = T + O)">U: Inv. Bodega (Dev)</th>
 
                                 {/* Columnas V - X */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>V: Faltantes</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>W: Sobrantes</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px' }}>X: Donación</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>V: Faltantes</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>W: Sobrantes</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px' }}>X: Donación</th>
                             </tr>
                         </thead>
 
@@ -3877,12 +4283,12 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
                         {/* Fila Fija de Totales Consolidada (∑ 24 Columnas Lean) */}
                         <tfoot style={{
-                            position: 'sticky',
-                            bottom: 0,
-                            zIndex: 30,
+                            position: isPanesFrozen ? 'sticky' : 'static',
+                            bottom: isPanesFrozen ? 0 : undefined,
+                            zIndex: isPanesFrozen ? 30 : undefined,
                             backgroundColor: '#0F172A',
                             color: '#F8FAFC',
-                            boxShadow: '0 -4px 10px -2px rgba(0, 0, 0, 0.25)'
+                            boxShadow: isPanesFrozen ? '0 -4px 10px -2px rgba(0, 0, 0, 0.25)' : undefined
                         }}>
                             <tr style={{ fontWeight: '900', fontSize: '0.78rem' }}>
                                 {/* Sticky Cols A-D */}
@@ -3895,11 +4301,11 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         color: '#F8FAFC',
                                         borderRight: '2px solid #334155',
                                         borderTop: '2px solid #334155',
-                                        position: 'sticky',
-                                        left: 0,
-                                        bottom: 0,
-                                        zIndex: 35,
-                                        boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
+                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        left: isPanesFrozen ? 0 : undefined,
+                                        bottom: isPanesFrozen ? 0 : undefined,
+                                        zIndex: isPanesFrozen ? 35 : undefined,
+                                        boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
                                         width: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
                                         minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
                                         maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
@@ -3916,70 +4322,70 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                 </td>
 
                                 {/* E: Inicial */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalE)}
                                 </td>
                                 {/* F: Corrección */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalF)}
                                 </td>
                                 {/* G: Compra */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalG)}
                                 </td>
 
                                 {/* H: Venta KG */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalH)}
                                 </td>
                                 {/* I: Venta UN */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalI, 0)}
                                 </td>
                                 {/* J: Peso UN */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalJ)}
                                 </td>
 
                                 {/* K: Escaso */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalK)}
                                 </td>
                                 {/* L: Sin Enviar */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalL)}
                                 </td>
                                 {/* M: Vta Extra */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalM)}
                                 </td>
                                 {/* N: Vta Nómina */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalN)}
                                 </td>
 
                                 {/* O: Devoluciones */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalO)}
                                 </td>
                                 {/* P: Pesada */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, padding: '6px 8px', textAlign: 'right', color: '#FBBF24', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalP)}
                                 </td>
                                 {/* Q: Desperdicio */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, padding: '6px 8px', textAlign: 'right', color: '#F87171', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalQ)}
                                 </td>
                                 {/* R: Basura */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalR)}
                                 </td>
 
                                 {/* S: Inventario Calculado (RESALTADO GLASSMORPHISM RESULTADO) */}
                                 <td style={{
-                                    position: 'sticky',
-                                    bottom: 0,
-                                    zIndex: 31,
+                                    position: isPanesFrozen ? 'sticky' : 'static',
+                                    bottom: isPanesFrozen ? 0 : undefined,
+                                    zIndex: isPanesFrozen ? 31 : undefined,
                                     padding: '6px 8px',
                                     textAlign: 'right',
                                     color: '#5EEAD4',
@@ -3992,30 +4398,30 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                     maxWidth: '95px',
                                     fontWeight: '900',
                                     fontSize: '0.84rem',
-                                    boxShadow: '0 0 10px rgba(13, 148, 136, 0.4)'
+                                    boxShadow: isPanesFrozen ? '0 0 10px rgba(13, 148, 136, 0.4)' : undefined
                                 }}>
                                     {renderNumericCell(columnTotals.totalS)}
                                 </td>
 
                                 {/* T: Conteo Real */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalT)}
                                 </td>
                                 {/* U: Inventario en bodega (devoluciones) */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, padding: '6px 4px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalU)}
                                 </td>
 
                                 {/* V: Faltantes */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalV)}
                                 </td>
                                 {/* W: Sobrantes */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalW)}
                                 </td>
                                 {/* X: Donación */}
-                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalX)}
                                 </td>
                             </tr>
@@ -4150,6 +4556,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 currentDate={balanceDate}
                 products={products}
                 currentPurchasesMap={currentPurchasesMap}
+                workCells={workCells}
             />
 
             {/* MODAL DE CIERRE DIARIO OFICIAL & CONGELACIÓN (SPEC.md v1.5.0 / ACUERDO 2 GRILL-ME) */}

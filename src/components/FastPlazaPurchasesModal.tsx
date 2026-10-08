@@ -16,6 +16,7 @@ import {
     ArrowRight
 } from 'lucide-react';
 import { formatNumber, formatMoney } from '@/lib/adminTheme';
+import { WorkCell } from '@/types/workCells';
 
 interface ProductItem {
     id: string;
@@ -24,6 +25,7 @@ interface ProductItem {
     accounting_id?: number | null;
     unit_of_measure: string;
     category?: string;
+    inventory_group?: string | null;
     purchase_sublist?: string;
     parent_id?: string | null;
 }
@@ -35,7 +37,18 @@ interface FastPlazaPurchasesModalProps {
     currentDate: string;
     products: ProductItem[];
     currentPurchasesMap?: Record<string, number>;
+    workCells?: WorkCell[];
 }
+
+// Orden canónico de sublistas de inventario de bodega en FruFresco
+const CANONICAL_INVENTORY_ORDER = [
+    'INVENTARIO DE HORTALIZAS',
+    'INVENTARIO DE VERDURAS',
+    'INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS',
+    'INVENTARIO DE FRUTAS Y OTROS',
+    'INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES',
+    'INVENTARIO DE FRESAS Y MORAS'
+];
 
 export default function FastPlazaPurchasesModal({
     isOpen,
@@ -43,7 +56,8 @@ export default function FastPlazaPurchasesModal({
     onSuccess,
     currentDate,
     products,
-    currentPurchasesMap = {}
+    currentPurchasesMap = {},
+    workCells = []
 }: FastPlazaPurchasesModalProps) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSublist, setSelectedSublist] = useState<string>('all');
@@ -53,6 +67,26 @@ export default function FastPlazaPurchasesModal({
     const [activeInputIndex, setActiveInputIndex] = useState<number>(0);
 
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+    // Obtener la clave de sublista de inventario del producto
+    const getSublistKey = (p: ProductItem): string => {
+        return (p.inventory_group || p.purchase_sublist || 'GENERAL').trim();
+    };
+
+    // Formatear etiqueta legible para la sublista (usando WorkCells o formato limpio)
+    const getSublistLabel = (groupKey: string): string => {
+        if (!groupKey || groupKey === 'GENERAL') return 'General';
+        if (workCells && workCells.length > 0) {
+            const found = workCells.find(c => 
+                c.inventory_group?.trim().toUpperCase() === groupKey.trim().toUpperCase() ||
+                c.name?.trim().toUpperCase() === groupKey.trim().toUpperCase()
+            );
+            if (found && found.short_name) return found.short_name;
+        }
+        // Fallback limpio: remover prefijo "INVENTARIO DE "
+        const clean = groupKey.replace(/^INVENTARIO DE\s+/i, '').trim();
+        return clean || groupKey;
+    };
 
     // Inicializar valores con los que ya existan en la Sábana para la fecha
     useEffect(() => {
@@ -68,31 +102,49 @@ export default function FastPlazaPurchasesModal({
         setSelectedSublist('all');
     }, [isOpen, currentPurchasesMap]);
 
-    // Ordenamiento idéntico a las planillas de Corabastos (Sublista -> Nombre)
+    // Conteo de SKUs por sublista de inventario
+    const sublistCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        products.forEach(p => {
+            const key = getSublistKey(p);
+            counts[key] = (counts[key] || 0) + 1;
+        });
+        return counts;
+    }, [products]);
+
+    // Sublistas únicas detectadas en el catálogo ordenadas canónicamente
+    const availableSublists = useMemo(() => {
+        const keys = Object.keys(sublistCounts);
+        return keys.sort((a, b) => {
+            const idxA = CANONICAL_INVENTORY_ORDER.indexOf(a.toUpperCase());
+            const idxB = CANONICAL_INVENTORY_ORDER.indexOf(b.toUpperCase());
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return a.localeCompare(b);
+        });
+    }, [sublistCounts]);
+
+    // Ordenamiento por sublista canónica de inventario -> luego Nombre
     const sortedProducts = useMemo(() => {
         const list = [...products];
         return list.sort((a, b) => {
-            const subA = (a.purchase_sublist || a.category || 'Generales').toUpperCase();
-            const subB = (b.purchase_sublist || b.category || 'Generales').toUpperCase();
+            const subA = getSublistKey(a).toUpperCase();
+            const subB = getSublistKey(b).toUpperCase();
+            const idxA = CANONICAL_INVENTORY_ORDER.indexOf(subA);
+            const idxB = CANONICAL_INVENTORY_ORDER.indexOf(subB);
+            if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
+            if (idxA !== -1 && idxB === -1) return -1;
+            if (idxA === -1 && idxB !== -1) return 1;
             if (subA !== subB) return subA.localeCompare(subB);
             return a.name.localeCompare(b.name);
         });
     }, [products]);
 
-    // Sublistas únicas detectadas en el catálogo
-    const availableSublists = useMemo(() => {
-        const set = new Set<string>();
-        products.forEach(p => {
-            const sub = p.purchase_sublist || p.category || 'Generales';
-            if (sub) set.add(sub);
-        });
-        return Array.from(set).sort();
-    }, [products]);
-
-    // Filtrado por buscador y sublista
+    // Filtrado por buscador y sublista de inventario
     const filteredProducts = useMemo(() => {
         return sortedProducts.filter(p => {
-            const sub = p.purchase_sublist || p.category || 'Generales';
+            const sub = getSublistKey(p);
             const matchesSublist = selectedSublist === 'all' || sub.toLowerCase() === selectedSublist.toLowerCase();
             const matchesSearch = !searchTerm.trim() || 
                 p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -301,14 +353,18 @@ export default function FastPlazaPurchasesModal({
                         <div>
                             <div style={{ fontSize: '1rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 Ingesta Rápida de Compras Corabastos
-                                <span style={{
-                                    fontSize: '0.66rem',
-                                    backgroundColor: '#DCFCE7',
-                                    color: '#166534',
-                                    padding: '2px 8px',
-                                    borderRadius: '6px',
-                                    fontWeight: '800'
-                                }}>
+                                <span 
+                                    style={{
+                                        fontSize: '0.66rem',
+                                        backgroundColor: '#DCFCE7',
+                                        color: '#166534',
+                                        padding: '2px 8px',
+                                        borderRadius: '6px',
+                                        fontWeight: '800',
+                                        cursor: 'help'
+                                    }}
+                                    title="Modo Manual / Contingencia: Ingesta rápida directa para compras de plaza en Corabastos. En modo automático, las compras se consolidan y cargan automáticamente desde el módulo de pedidos y abastecimiento."
+                                >
                                     Canal A &bull; Teclado-Primero
                                 </span>
                             </div>
@@ -335,11 +391,11 @@ export default function FastPlazaPurchasesModal({
 
                 {/* Toolbar de Filtros */}
                 <div style={{
-                    padding: '0.75rem 1.25rem',
+                    padding: '0.75rem 1.25rem 0.5rem 1.25rem',
                     borderBottom: '1px solid #E2E8F0',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '8px',
+                    gap: '7px',
                     backgroundColor: '#FFFFFF'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -397,10 +453,10 @@ export default function FastPlazaPurchasesModal({
                         </div>
                     </div>
 
-                    {/* Píldoras de Sublistas de Plaza */}
+                    {/* Píldoras de Sublistas de Inventario */}
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.70rem', fontWeight: '800', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Filter size={12} /> Sublista:
+                            <Layers size={13} color="#0D7A57" /> Sublista:
                         </span>
                         <button
                             type="button"
@@ -413,18 +469,21 @@ export default function FastPlazaPurchasesModal({
                                 border: selectedSublist === 'all' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
                                 backgroundColor: selectedSublist === 'all' ? '#0D7A57' : '#FFFFFF',
                                 color: selectedSublist === 'all' ? '#FFFFFF' : '#334155',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
                             }}
                         >
                             Todas ({products.length})
                         </button>
-                        {availableSublists.map(sub => {
-                            const isSelected = selectedSublist.toLowerCase() === sub.toLowerCase();
+                        {availableSublists.map(subKey => {
+                            const isSelected = selectedSublist.toLowerCase() === subKey.toLowerCase();
+                            const label = getSublistLabel(subKey);
+                            const count = sublistCounts[subKey] || 0;
                             return (
                                 <button
-                                    key={sub}
+                                    key={subKey}
                                     type="button"
-                                    onClick={() => setSelectedSublist(sub)}
+                                    onClick={() => setSelectedSublist(subKey)}
                                     style={{
                                         padding: '3px 10px',
                                         borderRadius: '6px',
@@ -433,36 +492,39 @@ export default function FastPlazaPurchasesModal({
                                         border: isSelected ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
                                         backgroundColor: isSelected ? '#0D7A57' : '#FFFFFF',
                                         color: isSelected ? '#FFFFFF' : '#334155',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
                                     }}
+                                    title={`Filtrar por ${label} (${count} SKUs)`}
                                 >
-                                    {sub}
+                                    {label} ({count})
                                 </button>
                             );
                         })}
                     </div>
                 </div>
 
-                {/* Tabla de Captura */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.25rem' }}>
+                {/* Tabla de Captura - Se erradica espacio muerto superior para adherencia sticky pura */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '0 1.25rem 0.5rem 1.25rem' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
-                        <thead>
-                            <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', textAlign: 'left', position: 'sticky', top: 0, zIndex: 2 }}>
-                                <th style={{ padding: '8px 10px', width: '38px', color: '#475569', fontWeight: '800' }}>#</th>
-                                <th style={{ padding: '8px 10px', width: '120px', color: '#475569', fontWeight: '800' }}>Sublista</th>
-                                <th style={{ padding: '8px 10px', color: '#475569', fontWeight: '800' }}>Producto / Presentación</th>
-                                <th style={{ padding: '8px 10px', width: '60px', textAlign: 'center', color: '#475569', fontWeight: '800' }}>UOM</th>
-                                <th style={{ padding: '8px 10px', width: '140px', textAlign: 'right', color: '#065F46', fontWeight: '900' }}>
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                            <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', textAlign: 'left' }}>
+                                <th style={{ padding: '8px 10px', width: '38px', color: '#475569', fontWeight: '800', backgroundColor: '#F1F5F9' }}>#</th>
+                                <th style={{ padding: '8px 10px', width: '145px', color: '#475569', fontWeight: '800', backgroundColor: '#F1F5F9' }}>Sublista</th>
+                                <th style={{ padding: '8px 10px', color: '#475569', fontWeight: '800', backgroundColor: '#F1F5F9' }}>Producto / Presentación</th>
+                                <th style={{ padding: '8px 10px', width: '60px', textAlign: 'center', color: '#475569', fontWeight: '800', backgroundColor: '#F1F5F9' }}>UOM</th>
+                                <th style={{ padding: '8px 10px', width: '140px', textAlign: 'right', color: '#065F46', fontWeight: '900', backgroundColor: '#F1F5F9' }}>
                                     Kilos Comprados (Col G)
                                 </th>
-                                <th style={{ padding: '8px 10px', width: '120px', textAlign: 'right', color: '#475569', fontWeight: '800' }}>
+                                <th style={{ padding: '8px 10px', width: '120px', textAlign: 'right', color: '#475569', fontWeight: '800', backgroundColor: '#F1F5F9' }}>
                                     Costo / Kg ($)
                                 </th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredProducts.map((p, idx) => {
-                                const sub = p.purchase_sublist || p.category || 'Generales';
+                                const subKey = getSublistKey(p);
+                                const subLabel = getSublistLabel(subKey);
                                 const rawVal = inputValues[p.id] || '';
                                 const numericVal = evaluateExpression(rawVal);
                                 const isFilled = numericVal > 0;
@@ -481,13 +543,16 @@ export default function FastPlazaPurchasesModal({
                                         <td style={{ padding: '6px 10px' }}>
                                             <span style={{
                                                 fontSize: '0.65rem',
-                                                padding: '2px 6px',
+                                                padding: '2px 7px',
                                                 borderRadius: '4px',
                                                 fontWeight: '800',
-                                                backgroundColor: '#E2E8F0',
-                                                color: '#334155'
+                                                backgroundColor: '#F1F5F9',
+                                                border: '1px solid #CBD5E1',
+                                                color: '#334155',
+                                                whiteSpace: 'nowrap',
+                                                display: 'inline-block'
                                             }}>
-                                                {sub}
+                                                {subLabel}
                                             </span>
                                         </td>
                                         <td style={{ padding: '6px 10px', fontWeight: '800', color: '#0F172A' }}>

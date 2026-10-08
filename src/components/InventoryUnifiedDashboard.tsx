@@ -35,7 +35,11 @@ import {
     Milk,
     Beef,
     Edit3,
-    ShieldCheck
+    ShieldCheck,
+    FileSpreadsheet,
+    Download,
+    ChevronDown,
+    ShoppingBag
 } from 'lucide-react';
 import { WorkCell, WorkCellHistoryEntry } from '@/types/workCells';
 
@@ -148,6 +152,12 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
     const [costMatrix, setCostMatrix] = useState<Record<string, number>>({});
     const [movements, setMovements] = useState<any[]>([]);
     const [tasks, setTasks] = useState<any[]>([]);
+    const [closings, setClosings] = useState<any[]>([]);
+    
+    // Centro de Informes & Exportaciones
+    const [isReportsMenuOpen, setIsReportsMenuOpen] = useState<boolean>(false);
+    const [exportingReport, setExportingReport] = useState<string | null>(null);
+    const reportsMenuRef = useRef<HTMLDivElement>(null);
 
     const getDateRange = (range: TimeRange) => {
         const now = new Date();
@@ -195,7 +205,8 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 matrixRes,
                 movementsRes,
                 tasksRes,
-                collabsRes
+                collabsRes,
+                closingsRes
             ] = await Promise.all([
                 supabase.from('app_settings').select('value').eq('key', 'work_cells_governance').maybeSingle(),
                 supabase.from('products').select('id, name, sku, category, inventory_group, buying_team, unit_of_measure, is_active, parent_id').eq('is_active', true),
@@ -211,7 +222,11 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 supabase.from('collaborators')
                     .select('id, contact_name, role, document_id, phone, is_active')
                     .eq('is_active', true)
-                    .order('contact_name', { ascending: true })
+                    .order('contact_name', { ascending: true }),
+                supabase.from('daily_inventory_closings')
+                    .select('id, closing_date, total_missing, total_surplus, total_calculated, total_physical, is_locked')
+                    .gte('closing_date', startIso.split('T')[0])
+                    .lte('closing_date', endIso.split('T')[0])
             ]);
 
             // Work Cells Governance
@@ -242,6 +257,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             setMovements(movementsRes.data || []);
             setTasks(tasksRes.data || []);
             setCollaborators(collabsRes.data || []);
+            setClosings(closingsRes.data || []);
 
         } catch (err) {
             console.error('Error fetching inventory dashboard data:', err);
@@ -255,17 +271,27 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
         fetchData();
     }, [fetchData]);
 
-    // Handle Escape key to close modals
+    // Handle Escape key & click outside to close modals and dropdowns
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 if (reassignModalCell) setReassignModalCell(null);
                 if (historyModalCell) setHistoryModalCell(null);
+                if (isReportsMenuOpen) setIsReportsMenuOpen(false);
+            }
+        };
+        const handleClickOutside = (e: MouseEvent) => {
+            if (reportsMenuRef.current && !reportsMenuRef.current.contains(e.target as Node)) {
+                setIsReportsMenuOpen(false);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [reassignModalCell, historyModalCell]);
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [reassignModalCell, historyModalCell, isReportsMenuOpen]);
 
     // Auto-focus first editable selector when Reassign modal opens
     useEffect(() => {
@@ -554,6 +580,126 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
         });
     }, [workCells, products, stocks, costMatrix, movements]);
 
+    // Conciliación de Piso No-Decorativa (Faltantes Col V, Sobrantes Col W, Ventas Nómina Col N)
+    const floorConciliation = useMemo(() => {
+        let missingKg = 0;
+        let surplusKg = 0;
+        closings.forEach(c => {
+            missingKg += Math.abs(Number(c.total_missing || 0));
+            surplusKg += Number(c.total_surplus || 0);
+        });
+
+        let payrollKg = 0;
+        let payrollCost = 0;
+        movements.forEach(m => {
+            if (m.reference_type === 'employee_sale') {
+                const q = Math.abs(Number(m.quantity || 0));
+                const cost = costMatrix[m.product_id] || 0;
+                payrollKg += q;
+                payrollCost += q * cost;
+            }
+        });
+
+        return {
+            missingKg,
+            surplusKg,
+            payrollKg,
+            payrollCost
+        };
+    }, [closings, movements, costMatrix]);
+
+    // Motor Exportador de Informes Ejecutivos (Centro de Descargas Centralizado)
+    const handleExportExecutiveReports = useCallback(async (type: 'kardex' | 'stock' | 'payroll' | 'daily_balance') => {
+        try {
+            setExportingReport(type);
+            const XLSX = await import('xlsx');
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            if (type === 'stock') {
+                const rows = products.map(p => {
+                    const st = stocks.find(s => s.product_id === p.id);
+                    const qty = Number(st?.quantity || 0);
+                    const cost = costMatrix[p.id] || 0;
+                    return {
+                        'ID / SKU': p.sku || p.id,
+                        'Producto': p.name,
+                        'Célula / Grupo': p.inventory_group || '-',
+                        'Categoría': p.category || '-',
+                        'Unidad': p.unit_of_measure,
+                        'Stock Físico (Kg/Un)': qty,
+                        'Costo Base (COP)': cost,
+                        'Valor en Libros (COP)': qty * cost,
+                        'Estado Alerta': qty <= (st?.min_stock_level || 0) ? 'Bajo Stock' : 'Normal'
+                    };
+                });
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(rows);
+                XLSX.utils.book_append_sheet(wb, ws, 'Stock_Valorizado');
+                XLSX.writeFile(wb, `FruFresco_Stock_Valorizado_${todayStr}.xlsx`);
+            } else if (type === 'kardex') {
+                const rows = movements.map(m => {
+                    const p = products.find(prod => prod.id === m.product_id);
+                    return {
+                        'Fecha Transacción': new Date(m.created_at).toLocaleString(),
+                        'Producto': p?.name || m.product_id,
+                        'SKU': p?.sku || '-',
+                        'Tipo Movimiento': m.type === 'entry' ? 'Entrada (+)' : (m.type === 'exit' ? 'Salida (-)' : 'Ajuste (+/-)'),
+                        'Cantidad (Kg/Un)': Number(m.quantity || 0),
+                        'Referencia': m.reference_type || '-',
+                        'Notas Auditoría': m.notes || '-'
+                    };
+                });
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(rows);
+                XLSX.utils.book_append_sheet(wb, ws, 'Kardex_Transacciones');
+                XLSX.writeFile(wb, `FruFresco_Kardex_${timeRange}_${todayStr}.xlsx`);
+            } else if (type === 'payroll') {
+                const payrollMovs = movements.filter(m => m.reference_type === 'employee_sale');
+                const rows = payrollMovs.map(m => {
+                    const p = products.find(prod => prod.id === m.product_id);
+                    const cost = costMatrix[m.product_id] || 0;
+                    const q = Math.abs(Number(m.quantity || 0));
+                    return {
+                        'Fecha': new Date(m.created_at).toLocaleDateString(),
+                        'Producto': p?.name || m.product_id,
+                        'Cantidad (Kg)': q,
+                        'Costo Base': cost,
+                        'Total Descuento COP': q * cost,
+                        'Detalle / Colaborador': m.notes || 'Venta a empleado'
+                    };
+                });
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Mensaje': 'No hay ventas a nómina en el período' }]);
+                XLSX.utils.book_append_sheet(wb, ws, 'Ventas_Nomina');
+                XLSX.writeFile(wb, `FruFresco_Descuentos_Nomina_${timeRange}_${todayStr}.xlsx`);
+            } else if (type === 'daily_balance') {
+                const rows = products.map(p => {
+                    const st = stocks.find(s => s.product_id === p.id);
+                    return {
+                        'ID': p.sku || p.id,
+                        'Producto': p.name,
+                        'Célula': p.inventory_group || '-',
+                        'Stock Actual': Number(st?.quantity || 0),
+                        'Unidad': p.unit_of_measure
+                    };
+                });
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(rows);
+                XLSX.utils.book_append_sheet(wb, ws, 'Balance_Resumen');
+                XLSX.writeFile(wb, `FruFresco_Balance_Consolidado_${todayStr}.xlsx`);
+            }
+            setToastMessage(`Reporte exportado exitosamente.`);
+            setTimeout(() => setToastMessage(null), 3000);
+        } catch (err: any) {
+            console.error('Error exportando reporte ejecutivo:', err);
+            setToastMessage('Error exportando reporte: ' + (err.message || 'Desconocido'));
+            setTimeout(() => setToastMessage(null), 4000);
+        } finally {
+            setExportingReport(null);
+            setIsReportsMenuOpen(false);
+        }
+    }, [products, stocks, costMatrix, movements, timeRange]);
+
     return (
         <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 2rem 3rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.75rem', fontFamily: THEME.typography.fontFamilySecondary }}>
             
@@ -661,6 +807,174 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     >
                         <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
                     </button>
+
+                    {/* CENTRO DE INFORMES & EXPORTACIONES EJECUTIVAS */}
+                    <div style={{ position: 'relative' }} ref={reportsMenuRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsReportsMenuOpen(prev => !prev)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '0.42rem 0.85rem',
+                                borderRadius: THEME.radius.md,
+                                backgroundColor: isReportsMenuOpen ? '#ECFDF5' : '#FFFFFF',
+                                border: `1px solid ${isReportsMenuOpen ? '#10B981' : THEME.colors.border}`,
+                                color: isReportsMenuOpen ? '#0D7A57' : THEME.colors.textMain,
+                                fontSize: '0.78rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                boxShadow: THEME.shadow.sm
+                            }}
+                            title="Centro de Extracción de Informes y Descargas Excel"
+                        >
+                            <Download size={14} color={isReportsMenuOpen ? '#0D7A57' : THEME.colors.textSecondary} />
+                            <span>Informes & Exportaciones</span>
+                            <ChevronDown size={13} style={{ transform: isReportsMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                        </button>
+
+                        {isReportsMenuOpen && (
+                            <div style={{
+                                position: 'absolute',
+                                right: 0,
+                                top: 'calc(100% + 6px)',
+                                width: '280px',
+                                backgroundColor: '#FFFFFF',
+                                borderRadius: THEME.radius.md,
+                                border: `1px solid ${THEME.colors.border}`,
+                                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                                zIndex: 100,
+                                padding: '6px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px'
+                            }}>
+                                <div style={{ padding: '6px 8px', borderBottom: '1px solid #F1F5F9' }}>
+                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                        Descargas Oficiales (.xlsx)
+                                    </span>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleExportExecutiveReports('daily_balance')}
+                                    disabled={exportingReport !== null}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '0.5rem 0.65rem',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        color: '#1E293B',
+                                        fontSize: '0.76rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        transition: 'background-color 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                    <FileSpreadsheet size={15} color="#0D7A57" />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ color: '#0F172A' }}>Balance Consolidado</div>
+                                        <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '500' }}>Stock general por células</div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleExportExecutiveReports('stock')}
+                                    disabled={exportingReport !== null}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '0.5rem 0.65rem',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        color: '#1E293B',
+                                        fontSize: '0.76rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        transition: 'background-color 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                    <Package size={15} color="#2563EB" />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ color: '#0F172A' }}>Stock Físico & Valorizado</div>
+                                        <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '500' }}>Existencias, costos y alertas</div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleExportExecutiveReports('kardex')}
+                                    disabled={exportingReport !== null}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '0.5rem 0.65rem',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        color: '#1E293B',
+                                        fontSize: '0.76rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        transition: 'background-color 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                    <History size={15} color="#4338CA" />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ color: '#0F172A' }}>Kardex de Transacciones</div>
+                                        <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '500' }}>Movimientos en {timeRange}</div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleExportExecutiveReports('payroll')}
+                                    disabled={exportingReport !== null}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '0.5rem 0.65rem',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        color: '#1E293B',
+                                        fontSize: '0.76rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        transition: 'background-color 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                    <User size={15} color="#D97706" />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ color: '#0F172A' }}>Descuentos de Nómina</div>
+                                        <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '500' }}>Ventas a empleados en {timeRange}</div>
+                                    </div>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -971,6 +1285,128 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                         </div>
                     </div>
 
+                </div>
+            </div>
+
+            {/* 2.5 CONCILIACIÓN FÍSICA & AUDITORÍA EN PISO (MÉTRICAS NO-DECORATIVAS DE NEGOCIO) */}
+            <div style={{
+                backgroundColor: THEME.colors.surface,
+                borderRadius: THEME.radius.lg,
+                border: `1px solid ${THEME.colors.border}`,
+                boxShadow: THEME.shadow.sm,
+                padding: '1.15rem 1.35rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.85rem'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '7px', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <ShieldCheck size={18} color={THEME.colors.primary} /> Conciliación Diaria & Auditoría de Piso (Cols N, V, W)
+                        </h3>
+                        <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.74rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                            Métricas físicas de la Sábana Oficial migradas para control directivo ({timeRange === 'today' ? 'Hoy' : timeRange}).
+                        </p>
+                    </div>
+                </div>
+
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                    gap: '1rem'
+                }}>
+                    {/* FALTANTES COL V */}
+                    <div style={{
+                        backgroundColor: '#FEF2F2',
+                        border: '1px solid #FECACA',
+                        borderRadius: THEME.radius.md,
+                        padding: '0.85rem 1rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#B91C1C', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain }}>
+                                Faltantes Físicos (Col V)
+                            </span>
+                            <div style={{ width: '24px', height: '24px', borderRadius: '6px', backgroundColor: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <AlertTriangle size={13} color="#B91C1C" />
+                            </div>
+                        </div>
+                        <div style={{ margin: '0.35rem 0' }}>
+                            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#991B1B', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
+                                -{formatNumber(floorConciliation.missingKg, 1)} <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#B91C1C' }}>Kg</span>
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: '#7F1D1D', marginTop: '2px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                Conteo Físico &lt; Inventario Calculado
+                            </div>
+                        </div>
+                        <div style={{ paddingTop: '0.4rem', borderTop: '1px solid #FCA5A5', fontSize: '0.68rem', color: '#991B1B', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
+                            {floorConciliation.missingKg === 0 ? '🟢 Balance en línea (Cero faltantes)' : '⚠️ Requiere auditoría de mermas'}
+                        </div>
+                    </div>
+
+                    {/* SOBRANTES COL W */}
+                    <div style={{
+                        backgroundColor: '#F0FDF4',
+                        border: '1px solid #BBF7D0',
+                        borderRadius: THEME.radius.md,
+                        padding: '0.85rem 1rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#15803D', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain }}>
+                                Sobrantes Físicos (Col W)
+                            </span>
+                            <div style={{ width: '24px', height: '24px', borderRadius: '6px', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <CheckCircle2 size={13} color="#15803D" />
+                            </div>
+                        </div>
+                        <div style={{ margin: '0.35rem 0' }}>
+                            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#166534', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
+                                +{formatNumber(floorConciliation.surplusKg, 1)} <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#15803D' }}>Kg</span>
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: '#14532D', marginTop: '2px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                Conteo Físico &gt; Inventario Calculado
+                            </div>
+                        </div>
+                        <div style={{ paddingTop: '0.4rem', borderTop: '1px solid #86EFAC', fontSize: '0.68rem', color: '#166534', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
+                            {floorConciliation.surplusKg === 0 ? '🟢 Sin excedentes no registrados' : 'ℹ️ Mercancía física adicional en piso'}
+                        </div>
+                    </div>
+
+                    {/* VENTAS NÓMINA COL N */}
+                    <div style={{
+                        backgroundColor: '#EFF6FF',
+                        border: '1px solid #BFDBFE',
+                        borderRadius: THEME.radius.md,
+                        padding: '0.85rem 1rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#1D4ED8', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain }}>
+                                Ventas a Nómina (Col N)
+                            </span>
+                            <div style={{ width: '24px', height: '24px', borderRadius: '6px', backgroundColor: '#DBEAFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <User size={13} color="#1D4ED8" />
+                            </div>
+                        </div>
+                        <div style={{ margin: '0.35rem 0' }}>
+                            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#1E40AF', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
+                                {formatCompactMoney(floorConciliation.payrollCost)}
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: '#1E3A8A', marginTop: '2px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                Volumen: <strong>{formatNumber(floorConciliation.payrollKg, 1)} Kg</strong> vendidos a colaboradores
+                            </div>
+                        </div>
+                        <div style={{ paddingTop: '0.4rem', borderTop: '1px solid #93C5FD', fontSize: '0.68rem', color: '#1E40AF', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
+                            Descuentos autorizados por nómina
+                        </div>
+                    </div>
                 </div>
             </div>
 

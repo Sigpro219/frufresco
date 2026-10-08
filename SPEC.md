@@ -1660,8 +1660,67 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
        - `Carga Masiva Excel`: Simulación o ingesta por archivo `.xlsx`.
      - **Edición Inline de Celdas:** Permite afinar números fila por fila con navegación por teclado (`Enter`, `Tab`, `Escape`) y auto-selección de texto.
 2. **Consolidación Ergonómica en 2 Líneas (Toolbar Enterprise):**
-   - **Línea 1 (Master Bar - 38px):** Fecha con botón "Hoy", Switch de Modo (`Sábana Oficial` vs `Hoja Manual`), Buscador (#ID, @tag, texto), Filtro "Con Mov. / Todos", y acciones contextuales por modo.
-   - **Línea 2 (Cell & Navigation Bar - 30px):** Filtros rápidos de células de trabajo (única fuente con conteos en tiempo real), toggle de densidad (`Expandir/Colapsar`, `A-D Compacto`), selector desplegable de navegación (`⚓ Ir a Bloque...`) y flechas de desplazamiento horizontal paso a paso.
+   - **Línea 1 (Master Bar - 34px):** Fecha con botón "Hoy", Switch de Modo (`Sábana Oficial` vs `Modo Edición`), Buscador Omnibox Prominente (#ID, @tag, texto), Filtro "Con Mov. / Todos", Menú desplegable unificado `[+ Registrar Novedad ▾]` (Mermas, Nómina, Extra), `[Compras Plaza]`, congelación/cierre y recarga.
+   - **Línea 2 (Cell & Navigation Bar - 30px):** Filtros rápidos de células de trabajo (única fuente con conteos en tiempo real), herramientas de archivo Excel (`[Descargar Excel]` y `[Cargar Excel]` en Modo Edición), cápsula de telemetría de SKUs y familias, y toggles de densidad visual (`Expandir/Colapsar`, `Cols A-D / A-D Compacto`). La navegación horizontal por grupos temáticos se realiza de forma natural e interactiva haciendo clic directo sobre los encabezados de la tabla (`IDENTIFICACIÓN`, `ENTRADAS (+)`, `VENTAS & PEDIDOS (-)`, etc.).
+
+#### 8.8.5 Resolutivo Gemba (Octubre 2026): Desacoplamiento de Auditoría, Operación y Centro de Informes & Indicadores
+A partir del hallazgo operativo en planta (Líder de Inventario reportando sobrecarga cognitiva y mezcla de responsabilidades en la sábana diaria), se formaliza el siguiente estándar:
+1. **Ocultamiento Total de KPIs en Toolbar (Cero Ruido Visual):**
+   - Las tarjetas de KPIs superiores (`Balance de Masa`, `% Merma Lean`, `Faltantes`, `Sobrantes`, `Ventas Nómina`) permanecen apagadas por defecto (`showKpis = false`) de forma 100% transparente para el operador.
+   - Se retiran todos los botones de conmutación de KPIs (`[Ver KPIs]`) de la barra de herramientas para erradicar el desorden visual y devolver la máxima altura útil a la tabla.
+2. **Especialización Estricta de Modos de Trabajo:**
+   - **🔒 Sábana Oficial (Solo Consulta & Auditoría de Fecha):**
+     - Oculta todos los botones de taller (`+ Registrar Novedad`, `Compras Plaza`, `Cargar Excel`, `Descargar Excel`).
+     - Oculta los botones de extracción y visualización de KPIs en la barra superior, dejando la interfaz 100% despejada y libre de fricción para auditoría de fecha.
+     - **Cero Botones de Mutación:** El botón interactivo [Cerrar Día] se retira por completo de la Sábana Oficial. Si la jornada está cerrada oficialmente, solo muestra un distintivo informativo pasivo de lectura [🔒 Cerrado].
+     - Protege las celdas contra cualquier mutación o foco accidental.
+     - Mantiene exclusivamente la navegación por fecha, buscador prominente, filtros por categoría de células, telemetría y botón sutil de recarga de datos.
+   - **📝 Modo Edición (Operación, Ajustes, Contingencia & Carga):**
+     - Al activarse, el botón se tiñe de un tono ámbar industrial enérgico (`#D97706`), incorpora un indicador luminoso en vivo (`#FEF08A`) y emite una animación de respiración / pulso sutil (`subtlePulseAmber` a 2.2s), alertando de forma inconfundible y periférica que la edición de datos está habilitada.
+     - Despliega el Menú Desplegable Unificado `[+ Registrar Novedad ▾]` agrupando Mermas/Bajas (Cols P, Q, R con foto de báscula), Descuentos de Nómina (Col N) y Ventas Extra (Col M) en un solo punto de entrada.
+      - Mantiene el botón de acceso rápido para [⚡ Compras Plaza] (Col G), con tooltip de gobernanza operativa: aplica exclusivamente para ingesta manual directa en contingencias de Corabastos; en modo automático, las compras se consolidan automáticamente desde el motor de abastecimiento y pedidos. El modal organiza la captura por las 6 Sublistas Canónicas de Inventario (Hortalizas, Verduras, Abarrotes, etc.) erradicando códigos crudos de categoría y cuenta con encabezado sticky sin espacios muertos.
+      - **Control Exclusivo de Cierre de Jornada ([🔒 Cerrar Día]):** Se aloja con exclusividad en este modo. Dispone de un tooltip descriptivo que instruye al usuario sobre el flujo de congelación: abre el panel de conciliación para auditar saldos (Calculado vs Físico), congela de forma inmutable la sábana contable, bloquea la edición de celdas y traslada el Conteo Físico (Col T) como Saldo Inicial (Col E) del día siguiente.
+     - Reubica los botones de gestión de archivos (`[Descargar Excel]` y `[Cargar Excel]`) en la Línea 2 para evitar saturar la barra principal.
+     - Habilita la edición reactiva de celdas con navegación por teclado y fórmulas aritméticas inline.
+3. **Elevación de Métricas no-decorativas y Centro de Informes a `Dashboard Directivo`:**
+   - Se migran al `Dashboard Directivo` (`InventoryUnifiedDashboard.tsx`) los indicadores críticos de conciliación:
+     - **Faltantes Físicos (Columna V):** Descuadre neto acumulado y del período en Kg y valor en libros COP ($T < S$).
+     - **Sobrantes Físicos (Columna W):** Excedentes en piso en Kg y COP ($T > S$).
+     - **Ventas a Nómina (Columna N):** Descuentos consolidados a empleados en $ y volumen en Kg.
+   - Se incorpora un menú maestro de **📥 Informes & Exportaciones** en el Cockpit Directivo para consolidar la extracción de reportes fiscales y operativos en un solo punto institucional.
+4. **Arquitectura Ergonómica de Doble Línea (Swiss UI & Omnibox Protagonista):**
+   - **Línea 1 (Contexto, Búsqueda & Acciones):**
+     - *Izquierda:* Selector de fecha y botón "Hoy" + Segmented Control de modo (`Sábana Oficial` vs `Modo Edición`).
+     - *Centro (Protagonista):* Gran buscador Omnibox expandido (`flex: 1`, hasta 680px), eliminando vacíos muertos con soporte de `#ID`, `@tag` y reset rápido con tecla `Esc` / botón `X`.
+     - *Derecha:* Filtro de densidad de filas (`Con Mov.` / `Todos`) separado limpiamente junto a las acciones globales (`[+ Registrar Novedad ▾]`, `[Compras Plaza]`, `Cerrar Día` y recarga).
+   - **Línea 2 (Categorización, Archivos & Dock de Vista):**
+     - *Izquierda:* Etiqueta de sección `Categorías:` con píldoras de filtrado por familia (`TODAS`, `FRUTAS`, `VERDURAS`, etc.).
+     - *Derecha (Dock de Archivos & Vista):* Grupo de operaciones Excel (`[Descargar Excel]` y `[Cargar Excel]` en Modo Edición), cápsula de telemetría en tiempo real (`Mostrando: X familias • Y SKUs`) acoplada armónicamente a los conmutadores de densidad (`[Expandir/Colapsar]` y `[Cols A-D]`). Se erradica la sensación de vacío desértico al estructurar la barra con propósito claro en ambos extremos.
+
+#### 8.8.6 Experiencia Operativa Nativa Excel (Solicitud 10 - Jefatura de Inventario Amaya Yina Mirelhtd): Navegación por Teclado (Enter / Tab) y Control de Paneles (Inmovilizar / Movilizar Filas)
+
+A partir del hallazgo operativo en planta y el perfil de la Jefatura de Inventario (nativa de Microsoft Excel de alta velocidad), se integra la experiencia de captura ergonómica sin fricción de ratón:
+
+1. **Navegación Celda a Celda por Teclado (`Enter`, `Shift+Enter`, `Tab`, `Shift+Tab`, `ArrowDown`, `ArrowUp`):**
+   - **Tecla `Enter` (Siguiente Fila Hacia Abajo):** Al ingresar o modificar un valor numérico o fórmula en cualquier celda editable (Cols F, G, H, I, J, K, L, M, N, O, P, Q, R, T, X) y presionar `Enter`, el dato se procesa inmediatamente y el foco de edición salta de forma instantánea a la celda de la misma columna en la **siguiente fila visible** (`down`), replicando con fidelidad 100% el comportamiento de Excel de escritorio.
+   - **Tecla `Shift+Enter` (Fila Anterior Hacia Arriba):** Guarda el dato y salta a la celda de la misma columna en la fila visible anterior (`up`).
+   - **Teclas `Tab` y `Shift+Tab` (Navegación Horizontal):** Guarda el dato y avanza a la siguiente columna editable de la misma fila (`next_col`) o retrocede a la columna editable anterior (`prev_col`).
+   - **Flechas `↓` (ArrowDown) y `↑` (ArrowUp):** Permiten desplazamiento vertical directo entre celdas editables sin necesidad de recurrir al mouse.
+   - **Tecla `Escape` (Cancelar Edición):** Restaura el valor previo y cierra el foco de la celda sin efectuar mutaciones.
+   - **Auto-Scroll Suave y Preciso (`scrollIntoView`):** Al descender o ascender con `Enter` hacia celdas situadas fuera del área visible del monitor, el contenedor se desplaza automáticamente (`block: 'nearest'`, `behavior: 'smooth'`), manteniendo la celda activa siempre centrada y visible en el campo de visión de la operadora.
+   - **Persistencia Reactiva a 0ms (Zero-Latency Optimistic Update):** La transición de foco se ejecuta en 0 milisegundos en memoria mediante el estado local `flatVisibleRows`, recalculando al instante las fórmulas de balance (Col S: Calculado Final, Col U: Bodega, Col V: Faltantes, Col W: Sobrantes y Totales de pie de página). La sincronización con Supabase (`inventory_movements` o metadata) se despacha de forma asíncrona no-bloqueante sin detener el ritmo de captura acelerada.
+   - **Motor de Fórmulas Matemáticas Inline Preservado:** Admite operaciones de suma y resta directa en la celda (ej. `=15+20`, `+50-10`, `30+5`) evaluándose antes del salto de cursor.
+
+2. **Conmutador Ergonómico de Paneles (`[📌 Inmovilizado / Movilizar Filas]`):**
+   - Se ubica en la Línea 2 de la Toolbar Enterprise, contiguo al selector `[Cols A-D]`.
+   - **Modo Inmovilizado (Freeze Panes - Predeterminado):**
+     - La cabecera de dos niveles (`<thead>` Nivel 1 de bloques operativos y Nivel 2 de columnas A a X) permanece anclada en el borde superior (`position: sticky`).
+     - El bloque de identificación del producto (Cols A-D) se congela a la izquierda (`position: sticky`), permitiendo desplazarse horizontalmente por las 24 columnas sin perder la visibilidad del nombre y código del SKU.
+     - La fila de totales consolidados (`<tfoot>`) permanece fijada al pie de la tabla (`position: sticky`).
+   - **Modo Movilizado (Unfreeze Panes - Desplazamiento Libre):**
+     - Al oprimir el botón, cambia a `[🔓 Movilizado / Inmovilizar Filas]`. La tabla descongela cabeceras, pie de página y columnas base (`position: static`), permitiendo un desplazamiento vertical y horizontal continuo y completamente libre por toda la sábana sin paneles fijos, tal como la función "Inmovilizar / Movilizar paneles" de Excel.
+   - **Persistencia en Almacenamiento Local (`localStorage`):**
+     - La selección del operador se almacena de forma persistente en `frufresco_daily_balance_panes_frozen`, respetando su preferencia visual en sesiones posteriores sin requerir reconfiguración manual.
 
 ---
 
