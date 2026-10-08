@@ -56,7 +56,11 @@ import {
     Unlock,
     ShieldCheck,
     Pin,
-    PinOff
+    PinOff,
+    Maximize2,
+    Minimize2,
+    RotateCcw,
+    GripVertical
 } from 'lucide-react';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { WorkCell } from '@/types/workCells';
@@ -193,7 +197,82 @@ interface InventoryDailyBalanceTabProps {
     workCells: WorkCell[];
     externalDate?: string;
     onDateChange?: (date: string) => void;
+    onExitFullscreen?: () => void;
+    initialFullscreen?: boolean;
 }
+
+export const DEFAULT_COLUMN_ORDER = [
+    'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X'
+];
+
+export const COLUMN_METADATA: Record<string, {
+    letter: string;
+    title: string;
+    shortName: string;
+    sign: string;
+    block: string;
+    formula?: string;
+    effect: string;
+    color: string;
+    bgColor?: string;
+    borderLeft?: string;
+    borderRight?: string;
+}> = {
+    E: { letter: 'E', title: 'Inicial', shortName: 'Inicial', sign: '(+)', block: 'ENTRADAS (+)', effect: 'Heredado del Conteo Físico Real (Col T) de la jornada anterior. Solo Lectura (+)', color: '#34D399' },
+    F: { letter: 'F', title: 'Corrección', shortName: 'Correc.', sign: '(±)', block: 'ENTRADAS (±)', effect: 'Ajuste manual operativo de descuadre o ingreso extemporáneo (±)', color: '#34D399' },
+    G: { letter: 'G', title: 'Compra', shortName: 'Compra', sign: '(+)', block: 'ENTRADAS (+)', effect: 'Compras plaza Corabastos o recepción de proveedores (+)', color: '#34D399', borderRight: '2px solid #334155' },
+    H: { letter: 'H', title: 'Venta KG', shortName: 'Venta KG', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Salidas facturadas a clientes en kilogramos (-)', color: '#60A5FA' },
+    I: { letter: 'I', title: 'Venta UN', shortName: 'Venta UN', sign: '(Info)', block: 'VENTAS & PEDIDOS (Info)', effect: 'Salidas facturadas a clientes en unidades (Informativo)', color: '#94A3B8' },
+    J: { letter: 'J', title: 'Peso UN', shortName: 'Peso UN', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Kilogramos equivalentes de productos vendidos por unidad (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
+    K: { letter: 'K', title: 'Escaso', shortName: 'Escaso', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Faltante de despacho en alistamiento (-)', color: '#F87171' },
+    L: { letter: 'L', title: 'Sin Enviar', shortName: 'Sin Enviar', sign: '(+)', block: 'EXCEPCIONES (+)', effect: 'Producto alistado que no salió en ruta (+)', color: '#34D399' },
+    M: { letter: 'M', title: 'Vta Extra', shortName: 'Vta Extra', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta adicional en mostrador de bodega (-)', color: '#C084FC' },
+    N: { letter: 'N', title: 'Vta Nómina', shortName: 'Vta Nómina', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta autorizada descontada a colaboradores (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
+    O: { letter: 'O', title: 'Devoluciones', shortName: 'Devol.', sign: '(+)', block: 'DEVOLUCIONES & MERMAS (+)', effect: 'Producto retornado por clientes al almacén (+)', color: '#FBBF24' },
+    P: { letter: 'P', title: 'Pesada', shortName: 'Pesada', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Merma por merma de peso, calibración o humedad (-)', color: '#FBBF24' },
+    Q: { letter: 'Q', title: 'Desperdicio', shortName: 'Desperd.', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Daño, maduración o pérdida en selección (-)', color: '#F87171' },
+    R: { letter: 'R', title: 'Basura', shortName: 'Basura', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Descarte total no aprovechable (-)', color: '#FBBF24', borderRight: '2px solid #334155' },
+    S: { letter: 'S', title: 'Calculado', shortName: 'Calc. Final', sign: '(=)', block: 'CIERRE & BODEGA', formula: 'S = E + F + G - H - J - K + L - M - N + O - P - Q - R', effect: 'Balance teórico calculado de masa al cierre de turno', color: '#5EEAD4', bgColor: '#042F2E', borderLeft: '2px solid #0D9488', borderRight: '2px solid #0D9488' },
+    T: { letter: 'T', title: 'Conteo Real', shortName: 'Conteo Real', sign: '(Físico)', block: 'CIERRE & BODEGA', effect: 'Inventario físico real contado en bodega al cierre de jornada', color: '#34D399', bgColor: '#1E293B' },
+    U: { letter: 'U', title: 'Bodega (Dev)', shortName: 'Inv. Bodega', sign: '(T + O)', block: 'CIERRE & BODEGA', formula: 'U = T + O', effect: 'Stock físico total en bodega incluyendo devoluciones (T + O)', color: '#F8FAFC', bgColor: '#1E293B', borderRight: '2px solid #334155' },
+    V: { letter: 'V', title: 'Faltantes', shortName: 'Faltantes', sign: '(-)', block: 'CONCILIACIÓN (-)', formula: 'V = Max(0, S - T)', effect: 'Descuadre en contra: Falta producto físico respecto al calculado (-)', color: '#F87171' },
+    W: { letter: 'W', title: 'Sobrantes', shortName: 'Sobrantes', sign: '(+)', block: 'CONCILIACIÓN (+)', formula: 'W = Max(0, T - S)', effect: 'Descuadre a favor: Sobra producto físico respecto al calculado (+)', color: '#34D399' },
+    X: { letter: 'X', title: 'Donación', shortName: 'Donación', sign: '(-)', block: 'CONCILIACIÓN', effect: 'Baja autorizada para donación o Banco de Alimentos', color: '#F472B6' }
+};
+
+export const matchNumericFilter = (val: number, filterStr: string): boolean => {
+    if (!filterStr || !filterStr.trim()) return true;
+    const raw = filterStr.trim();
+    if (raw.startsWith('!=')) {
+        const target = parseFloat(raw.substring(2).trim());
+        return !isNaN(target) ? Math.abs(val - target) > 0.001 : true;
+    }
+    if (raw.startsWith('>=')) {
+        const target = parseFloat(raw.substring(2).trim());
+        return !isNaN(target) ? val >= target : true;
+    }
+    if (raw.startsWith('<=')) {
+        const target = parseFloat(raw.substring(2).trim());
+        return !isNaN(target) ? val <= target : true;
+    }
+    if (raw.startsWith('>')) {
+        const target = parseFloat(raw.substring(1).trim());
+        return !isNaN(target) ? val > target : true;
+    }
+    if (raw.startsWith('<')) {
+        const target = parseFloat(raw.substring(1).trim());
+        return !isNaN(target) ? val < target : true;
+    }
+    if (raw.startsWith('=')) {
+        const target = parseFloat(raw.substring(1).trim());
+        return !isNaN(target) ? Math.abs(val - target) <= 0.001 : true;
+    }
+    const parsed = parseFloat(raw);
+    if (!isNaN(parsed)) {
+        return Math.abs(val - parsed) <= 0.001;
+    }
+    return true;
+};
 
 const getCompactCellLabel = (name: string, shortName?: string | null): string => {
     if (shortName && shortName.trim().length > 0 && shortName.trim().length <= 12) {
@@ -209,8 +288,103 @@ const getCompactCellLabel = (name: string, shortName?: string | null): string =>
     return name.split(/[,&/]/)[0].trim();
 };
 
-export default function InventoryDailyBalanceTab({ workCells, externalDate, onDateChange }: InventoryDailyBalanceTabProps) {
+export default function InventoryDailyBalanceTab({ 
+    workCells, 
+    externalDate, 
+    onDateChange,
+    onExitFullscreen,
+    initialFullscreen = true
+}: InventoryDailyBalanceTabProps) {
     const { user, profile } = useAuth();
+
+    // Modo Consola Focus Fullscreen (SPEC.md §8.8.7)
+    const [isFullscreen, setIsFullscreen] = useState<boolean>(initialFullscreen);
+
+    // Escucha de tecla Escape para desmaximizar
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isFullscreen) {
+                setIsFullscreen(false);
+                if (onExitFullscreen) onExitFullscreen();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isFullscreen, onExitFullscreen]);
+
+    const handleExitFullscreen = useCallback(() => {
+        setIsFullscreen(false);
+        if (onExitFullscreen) onExitFullscreen();
+    }, [onExitFullscreen]);
+
+    // Arrastre y Reorganización de Columnas (SPEC.md §8.8.10)
+    const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
+    const [draggedCol, setDraggedCol] = useState<string | null>(null);
+    const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+
+    const handleDragStart = (e: React.DragEvent, colKey: string) => {
+        e.dataTransfer.setData('text/plain', colKey);
+        setDraggedCol(colKey);
+    };
+
+    const handleDragOver = (e: React.DragEvent, colKey: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (dragOverCol !== colKey) {
+            setDragOverCol(colKey);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent, targetColKey: string) => {
+        e.preventDefault();
+        const sourceColKey = e.dataTransfer.getData('text/plain') || draggedCol;
+        setDraggedCol(null);
+        setDragOverCol(null);
+        if (!sourceColKey || sourceColKey === targetColKey) return;
+
+        setColumnOrder(prevOrder => {
+            const newOrder = [...prevOrder];
+            const sourceIdx = newOrder.indexOf(sourceColKey);
+            const targetIdx = newOrder.indexOf(targetColKey);
+            if (sourceIdx === -1 || targetIdx === -1) return prevOrder;
+            newOrder.splice(sourceIdx, 1);
+            newOrder.splice(targetIdx, 0, sourceColKey);
+            return newOrder;
+        });
+    };
+
+    const handleDragEnd = () => {
+        setDraggedCol(null);
+        setDragOverCol(null);
+    };
+
+    const resetColumnOrder = () => {
+        setColumnOrder(DEFAULT_COLUMN_ORDER);
+    };
+
+    const isColumnOrderCustom = useMemo(() => {
+        return columnOrder.some((col, idx) => col !== DEFAULT_COLUMN_ORDER[idx]);
+    }, [columnOrder]);
+
+    // Fila de Filtros Conmutables por Columna (SPEC.md §8.8.9)
+    const [isColumnFilterOpen, setIsColumnFilterOpen] = useState<boolean>(false);
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+
+    // Atajo de teclado estándar Excel Ctrl+Shift+L para alternar filtros
+    useEffect(() => {
+        const handleFilterShortcut = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+                e.preventDefault();
+                setIsColumnFilterOpen(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleFilterShortcut);
+        return () => window.removeEventListener('keydown', handleFilterShortcut);
+    }, []);
+
+    const activeFilterCount = useMemo(() => {
+        return Object.values(columnFilters).filter(v => v && v.trim().length > 0).length;
+    }, [columnFilters]);
 
     // Gobernanza SoD: Solo Yina Cortés (Jefatura de Inventario) o Superadmins tienen permiso de edición
     const canEditSheet = useMemo(() => {
@@ -244,6 +418,8 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
     const handleDateChange = (newDate: string) => {
         setBalanceDate(newDate);
+        setColumnOrder(DEFAULT_COLUMN_ORDER);
+        setColumnFilters({});
         if (onDateChange) {
             onDateChange(newDate);
         }
@@ -1115,8 +1291,54 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
         return filteredFamilies.reduce((acc, f) => acc + 1 + f.children.length, 0);
     }, [filteredFamilies]);
 
-    // Modo Lista Continua (100% de las familias y SKUs en una sola sábana continua sin fragmentación)
-    const displayedFamilies = filteredFamilies;
+    // Modo Lista Continua con Soporte de Filtros Conmutables en Cabecera (SPEC.md §8.8.9)
+    const displayedFamilies = useMemo(() => {
+        const activeFilters = Object.entries(columnFilters).filter(([_, v]) => v && v.trim().length > 0);
+        if (activeFilters.length === 0) return filteredFamilies;
+
+        return filteredFamilies.filter(family => {
+            const testRow = (row: InventoryDailyRow): boolean => {
+                return activeFilters.every(([colKey, filterStr]) => {
+                    switch (colKey) {
+                        case 'A':
+                        case 'date': return (row.colA_date || '').toLowerCase().includes(filterStr.toLowerCase());
+                        case 'B':
+                        case 'id': return String(row.colB_idProducto || '').includes(filterStr);
+                        case 'C':
+                        case 'cell': return (row.colC_inventoryGroup || '').toLowerCase().includes(filterStr.toLowerCase());
+                        case 'D':
+                        case 'product': return (row.colD_productName || '').toLowerCase().includes(filterStr.toLowerCase());
+                        case 'E': return matchNumericFilter(row.colE_initialStock, filterStr);
+                        case 'F': return matchNumericFilter(row.colF_corrections, filterStr);
+                        case 'G': return matchNumericFilter(row.colG_purchases, filterStr);
+                        case 'H': return matchNumericFilter(row.colH_salesKg, filterStr);
+                        case 'I': return matchNumericFilter(row.colI_salesUnits, filterStr);
+                        case 'J': return matchNumericFilter(row.colJ_weightSalesUnits, filterStr);
+                        case 'K': return matchNumericFilter(row.colK_shortage, filterStr);
+                        case 'L': return matchNumericFilter(row.colL_unshipped, filterStr);
+                        case 'M': return matchNumericFilter(row.colM_additionalSales, filterStr);
+                        case 'N': return matchNumericFilter(row.colN_employeeSales, filterStr);
+                        case 'O': return matchNumericFilter(row.colO_returns, filterStr);
+                        case 'P': return matchNumericFilter(row.colP_weighingWaste, filterStr);
+                        case 'Q': return matchNumericFilter(row.colQ_damageWaste, filterStr);
+                        case 'R': return matchNumericFilter(row.colR_cleaningWaste, filterStr);
+                        case 'S': return matchNumericFilter(row.colS_calculated, filterStr);
+                        case 'T': return matchNumericFilter(row.colT_physicalCount ?? 0, filterStr);
+                        case 'U': return matchNumericFilter(row.colU_bodegaPost10am ?? 0, filterStr);
+                        case 'V': return matchNumericFilter(row.colV_missing, filterStr);
+                        case 'W': return matchNumericFilter(row.colW_surplus, filterStr);
+                        case 'X': return matchNumericFilter(row.colX_foodBank, filterStr);
+                        default: return true;
+                    }
+                });
+            };
+
+            if (family.isParent) {
+                return testRow(family.consolidated) || testRow(family.parent) || family.children.some(testRow);
+            }
+            return testRow(family.parent);
+        });
+    }, [filteredFamilies, columnFilters]);
 
     // Estado colapsado de familias (por defecto colapsadas para vista ejecutiva compacta)
     const [collapsedFamilies, setCollapsedFamilies] = useState<Record<string, boolean>>({});
@@ -1289,9 +1511,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
         };
     }, [filteredFamilies]);
 
-    // Totales verticales para cada una de las 24 columnas (Consolidado sin duplicación Padre-Hijo)
+    // Totales verticales para cada una de las 24 columnas (Consolidado reactivo a filtros de columna)
     const columnTotals = useMemo(() => {
-        const list = filteredFamilies.map(f => f.isParent ? f.consolidated : f.parent);
+        const list = displayedFamilies.map(f => f.isParent ? f.consolidated : f.parent);
         return {
             totalE: list.reduce((acc, r) => acc + (r.colE_initialStock || 0), 0),
             totalF: list.reduce((acc, r) => acc + (r.colF_corrections || 0), 0),
@@ -1314,7 +1536,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
             totalW: list.reduce((acc, r) => acc + (r.colW_surplus || 0), 0),
             totalX: list.reduce((acc, r) => acc + (r.colX_foodBank || 0), 0),
         };
-    }, [filteredFamilies]);
+    }, [displayedFamilies]);
 
     // Realizar Cierre Diario Oficial y Congelación Contable (SPEC.md v1.5.0)
     const handleOfficialClosing = async () => {
@@ -1974,7 +2196,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
         if (isEditing) {
             return (
-                <td style={{ ...style, padding: '2px 4px', textAlign: 'right' }}>
+                <td key={`cell-${rowKey}-${colKey}`} style={{ ...style, padding: '2px 4px', textAlign: 'right' }}>
                     <input
                         ref={el => {
                             if (el) {
@@ -2042,6 +2264,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
         return (
             <td
+                key={`cell-${rowKey}-${colKey}`}
                 onClick={() => {
                     if (closingRecord?.is_locked) {
                         notify(`La jornada del ${balanceDate} está cerrada y congelada oficialmente. Para modificar registros debes reabrir la jornada contable.`, 'warning');
@@ -2119,7 +2342,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
             >
                 {/* IDENTIFICACIÓN: MODO COMPACTO (1 TD 240px) O TRADICIONAL (4 TDS 475px) */}
                 {isCompactIdentification ? (
-                    <td style={{ 
+                    <td 
+                        key={`cell-${key}-compact-id`}
+                        style={{ 
                         padding: '6px 8px', 
                         width: '240px',
                         minWidth: '240px',
@@ -2307,9 +2532,11 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                         </div>
                     </td>
                 ) : (
-                    <>
+                    <React.Fragment key={`cell-${key}-traditional-id`}>
                         {/* A: Fecha (Sticky) */}
-                        <td style={{ 
+                        <td 
+                            key={`cell-${key}-A`}
+                            style={{ 
                             padding: '6px 8px', 
                             color: isParent ? '#854D0E' : (isChild ? '#94A3B8' : '#64748B'), 
                             fontSize: '0.72rem',
@@ -2324,7 +2551,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                         </td>
 
                         {/* B: ID Prod (Sticky) */}
-                        <td style={{ 
+                        <td 
+                            key={`cell-${key}-B`}
+                            style={{ 
                             padding: '6px 8px', 
                             textAlign: 'center', 
                             fontWeight: '800', 
@@ -2349,6 +2578,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
                         {/* C: Célula / Lista (Sticky - Colapsable a Icono + Inicial) */}
                         <td 
+                            key={`cell-${key}-C`}
                             title={isCellCollapsed ? (cellInfo ? `Célula: ${cellInfo.name || cellInfo.short_name}` : `Célula: ${row.colC_inventoryGroup}`) : undefined}
                             style={{ 
                                 padding: isCellCollapsed ? '6px 4px' : '6px 8px', 
@@ -2406,7 +2636,9 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                         </td>
 
                         {/* D: Producto (Sticky) */}
-                        <td style={{ 
+                        <td 
+                            key={`cell-${key}-D`}
+                            style={{ 
                             padding: '6px 10px', 
                             fontWeight: isParent ? '800' : '700', 
                             color: isParent ? '#854D0E' : '#0F172A', 
@@ -2537,147 +2769,143 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                 </div>
                             )}
                         </td>
-                    </>
+                    </React.Fragment>
                 )}
 
-                {/* E: Inventario Inicial (+) - Estrictamente de Solo Lectura (Heredado de Cierre D-1) */}
-                <td style={{
-                    width: '95px', minWidth: '95px', maxWidth: '95px',
-                    padding: '4px 6px', textAlign: 'right',
-                    fontWeight: isParent ? '800' : '700',
-                    color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8',
-                    borderBottom: cellBorderBottom,
-                    backgroundColor: 'transparent'
-                }} title="Inventario Inicial oficial heredado (Solo Lectura. Para ajustes use Col F Corrección)">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                        {renderNumericCell(row.colE_initialStock, 2)}
-                    </div>
-                </td>
-
-                {/* F: Corrección (±) */}
-                {renderEditableCell(key, row.productId, 'F', row.colF_corrections, {
-                    width: '95px', minWidth: '95px', maxWidth: '95px',
-                    padding: '4px 6px',
-                    textAlign: 'right',
-                    fontWeight: isParent ? '800' : (row.colF_corrections !== 0 ? '700' : '400'),
-                    color: row.colF_corrections > 0 ? '#059669' : row.colF_corrections < 0 ? '#DC2626' : '#94A3B8',
-                    borderBottom: cellBorderBottom
-                }, 2)}
-
-                {/* G: Compra del Día (+) */}
-                {renderEditableCell(key, row.productId, 'G', row.colG_purchases, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
-
-                {/* H: Venta del Día KG (-) */}
-                {renderEditableCell(key, row.productId, 'H', row.colH_salesKg, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderBottom: cellBorderBottom }, 2)}
-
-                {/* I: Venta del Día UN (Informativo) */}
-                {renderEditableCell(key, row.productId, 'I', row.colI_salesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: '#64748B', fontWeight: isParent ? '700' : '400', borderBottom: cellBorderBottom }, 0)}
-
-                {/* J: Peso Venta UN (-) */}
-                {renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
-
-                {/* K: Producto Escaso (-) */}
-                {renderEditableCell(key, row.productId, 'K', row.colK_shortage, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
-
-                {/* L: Producto Sin Enviar (+) */}
-                {renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2)}
-
-                {/* M: Venta Adicional Cliente (-) */}
-                {renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
-
-                {/* N: Venta Adicional Empleado (-) */}
-                {renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
-
-                {/* O: Devoluciones (+) */}
-                {renderEditableCell(key, row.productId, 'O', row.colO_returns, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
-
-                {/* P: Pesada (-) */}
-                {renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
-
-                {/* Q: Desperdicio (-) */}
-                {renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
-                    row.evidencePhotosQ?.length > 0 ? (
-                        <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosQ[0]); }}
-                            title="Ver evidencia fotográfica"
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#DC2626' }}
-                        >
-                            <Camera size={12} />
-                        </button>
-                    ) : null
-                )}
-
-                {/* R: Basura (-) */}
-                {renderEditableCell(key, row.productId, 'R', row.colR_cleaningWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
-                    row.evidencePhotosR?.length > 0 ? (
-                        <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosR[0]); }}
-                            title="Ver evidencia de limpieza"
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#B45309' }}
-                        >
-                            <Camera size={12} />
-                        </button>
-                    ) : null
-                )}
-
-                {/* S: Inventario Calculado (RESALTADO GLASSMORPHISM RESULTADO) */}
-                <td style={{ 
-                    padding: '6px 8px', 
-                    textAlign: 'right', 
-                    fontWeight: '900', 
-                    width: '95px',
-                    minWidth: '95px',
-                    maxWidth: '95px',
-                    color: isParent ? '#064E3B' : '#0F172A', 
-                    backgroundColor: isParent ? '#FEF08A' : (isChild ? 'rgba(13, 148, 136, 0.05)' : 'rgba(13, 148, 136, 0.08)'),
-                    borderLeft: '2px solid #0D9488',
-                    borderRight: '2px solid #0D9488',
-                    borderBottom: cellBorderBottom,
-                    boxShadow: isParent ? 'inset 0 0 0 1px rgba(13, 148, 136, 0.3)' : undefined,
-                    fontFamily: 'monospace, sans-serif'
-                }}>
-                    {renderNumericCell(row.colS_calculated)}
-                </td>
-
-                {/* T: Conteo Físico Real */}
-                {renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2)}
-
-                {/* U: Inventario en bodega (devoluciones) */}
-                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
-                    {row.colU_bodegaPost10am !== null ? renderNumericCell(row.colU_bodegaPost10am) : <span style={{ color: '#CBD5E1' }}>-</span>}
-                </td>
-
-                {/* V: Faltantes */}
-                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }}>
-                    {row.colV_missing > 0 ? renderNumericCell(row.colV_missing) : <span style={{ color: '#CBD5E1' }}>-</span>}
-                </td>
-
-                {/* W: Sobrantes */}
-                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
-                    {row.colW_surplus > 0 ? renderNumericCell(row.colW_surplus) : <span style={{ color: '#CBD5E1' }}>-</span>}
-                </td>
-
-                {/* X: Banco de Alimentos */}
-                {renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
-                    row.evidencePhotosX?.length > 0 ? (
-                        <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosX[0]); }}
-                            title="Ver evidencia banco alimentos"
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#EC4899' }}
-                        >
-                            <Camera size={12} />
-                        </button>
-                    ) : null
-                )}
+                {/* Columnas Numéricas Dinámicas según columnOrder (SPEC.md §8.8.10) */}
+                {(() => {
+                    const numericalCellRenderers: Record<string, () => React.ReactNode> = {
+                        E: () => (
+                            <td key={`cell-${key}-E`} style={{
+                                width: '95px', minWidth: '95px', maxWidth: '95px',
+                                padding: '4px 6px', textAlign: 'right',
+                                fontWeight: isParent ? '800' : '700',
+                                color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8',
+                                borderBottom: cellBorderBottom,
+                                backgroundColor: 'transparent'
+                            }} title="Inventario Inicial oficial heredado (Solo Lectura. Para ajustes use Col F Corrección)">
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    {renderNumericCell(row.colE_initialStock, 2)}
+                                </div>
+                            </td>
+                        ),
+                        F: () => renderEditableCell(key, row.productId, 'F', row.colF_corrections, {
+                            width: '95px', minWidth: '95px', maxWidth: '95px',
+                            padding: '4px 6px',
+                            textAlign: 'right',
+                            fontWeight: isParent ? '800' : (row.colF_corrections !== 0 ? '700' : '400'),
+                            color: row.colF_corrections > 0 ? '#059669' : row.colF_corrections < 0 ? '#DC2626' : '#94A3B8',
+                            borderBottom: cellBorderBottom
+                        }, 2),
+                        G: () => renderEditableCell(key, row.productId, 'G', row.colG_purchases, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
+                        H: () => renderEditableCell(key, row.productId, 'H', row.colH_salesKg, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderBottom: cellBorderBottom }, 2),
+                        I: () => renderEditableCell(key, row.productId, 'I', row.colI_salesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: '#64748B', fontWeight: isParent ? '700' : '400', borderBottom: cellBorderBottom }, 0),
+                        J: () => renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
+                        K: () => renderEditableCell(key, row.productId, 'K', row.colK_shortage, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        L: () => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2),
+                        M: () => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        N: () => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
+                        O: () => renderEditableCell(key, row.productId, 'O', row.colO_returns, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        P: () => renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        Q: () => renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
+                            row.evidencePhotosQ?.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosQ[0]); }}
+                                    title="Ver evidencia fotográfica"
+                                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#DC2626' }}
+                                >
+                                    <Camera size={12} />
+                                </button>
+                            ) : null
+                        ),
+                        R: () => renderEditableCell(key, row.productId, 'R', row.colR_cleaningWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
+                            row.evidencePhotosR?.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosR[0]); }}
+                                    title="Ver evidencia de limpieza"
+                                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#B45309' }}
+                                >
+                                    <Camera size={12} />
+                                </button>
+                            ) : null
+                        ),
+                        S: () => (
+                            <td key={`cell-${key}-S`} style={{ 
+                                padding: '6px 8px', 
+                                textAlign: 'right', 
+                                fontWeight: '900', 
+                                width: '95px',
+                                minWidth: '95px',
+                                maxWidth: '95px',
+                                color: isParent ? '#064E3B' : '#0F172A', 
+                                backgroundColor: isParent ? '#FEF08A' : (isChild ? 'rgba(13, 148, 136, 0.05)' : 'rgba(13, 148, 136, 0.08)'),
+                                borderLeft: '2px solid #0D9488',
+                                borderRight: '2px solid #0D9488',
+                                borderBottom: cellBorderBottom,
+                                boxShadow: isParent ? 'inset 0 0 0 1px rgba(13, 148, 136, 0.3)' : undefined,
+                                fontFamily: 'monospace, sans-serif'
+                            }}>
+                                {renderNumericCell(row.colS_calculated)}
+                            </td>
+                        ),
+                        T: () => renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2),
+                        U: () => (
+                            <td key={`cell-${key}-U`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
+                                {row.colU_bodegaPost10am !== null ? renderNumericCell(row.colU_bodegaPost10am) : <span style={{ color: '#CBD5E1' }}>-</span>}
+                            </td>
+                        ),
+                        V: () => (
+                            <td key={`cell-${key}-V`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }}>
+                                {row.colV_missing > 0 ? renderNumericCell(row.colV_missing) : <span style={{ color: '#CBD5E1' }}>-</span>}
+                            </td>
+                        ),
+                        W: () => (
+                            <td key={`cell-${key}-W`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
+                                {row.colW_surplus > 0 ? renderNumericCell(row.colW_surplus) : <span style={{ color: '#CBD5E1' }}>-</span>}
+                            </td>
+                        ),
+                        X: () => renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
+                            row.evidencePhotosX?.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosX[0]); }}
+                                    title="Ver evidencia banco alimentos"
+                                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#EC4899' }}
+                                >
+                                    <Camera size={12} />
+                                </button>
+                            ) : null
+                        )
+                    };
+                    return columnOrder.map(colKey => numericalCellRenderers[colKey]?.() ?? null);
+                })()}
             </tr>
         );
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontFamily: 'var(--font-outfit), sans-serif' }}>
+        <div style={isFullscreen ? {
+            position: 'fixed',
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 9999,
+            backgroundColor: '#0F172A',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxSizing: 'border-box',
+            padding: '0.5rem 0.75rem',
+            gap: '0.4rem',
+            fontFamily: 'var(--font-outfit), sans-serif'
+        } : {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.65rem',
+            fontFamily: 'var(--font-outfit), sans-serif'
+        }}>
             <style>{`
                 .daily-balance-table tr:hover td {
                     background-color: #F1F5F9 !important;
@@ -2885,20 +3113,21 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
             <div 
                 ref={dockRef}
                 style={{
-                    position: 'sticky',
-                    top: '80px',
+                    position: isFullscreen ? 'relative' : 'sticky',
+                    top: isFullscreen ? 0 : '80px',
                     zIndex: 70,
                     backgroundColor: 'rgba(255, 255, 255, 0.98)',
                     backdropFilter: 'blur(16px)',
                     WebkitBackdropFilter: 'blur(16px)',
-                    borderRadius: '14px',
+                    borderRadius: isFullscreen ? '10px' : '14px',
                     border: '1px solid #E2E8F0',
-                    padding: '0.55rem 0.85rem',
+                    padding: '0.50rem 0.85rem',
                     boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.45rem',
                     marginBottom: '0.55rem',
+                    flexShrink: 0,
                     transition: 'all 0.2s ease-in-out'
                 }}
             >
@@ -3221,167 +3450,159 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                         </div>
 
                         {/* Separador vertical sutil */}
-                        <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
-                        {sheetMode === 'manual_edit' ? (
-                            /* MODO EDICIÓN: Menú Desplegable de Novedades + Compras Plaza + Cierre / Refresco */
-                            <>
-                                {/* Dropdown Menú Unificado de Novedades */}
-                                <div ref={noveltyMenuRef} style={{ position: 'relative' }}>
+                        <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 2px' }} />
+
+                        {/* Botón Conmutador de Filtros por Columna (SPEC.md §8.8.9) */}
+                        <button
+                            type="button"
+                            onClick={() => setIsColumnFilterOpen(prev => !prev)}
+                            style={{
+                                padding: '0 0.65rem',
+                                height: '32px',
+                                borderRadius: '8px',
+                                border: isColumnFilterOpen ? '1.5px solid #10B981' : '1px solid #CBD5E1',
+                                backgroundColor: isColumnFilterOpen ? '#ECFDF5' : '#FFFFFF',
+                                color: isColumnFilterOpen ? '#047857' : '#475569',
+                                fontSize: '0.73rem',
+                                fontWeight: '800',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                transition: 'all 0.15s ease'
+                            }}
+                            title="Alternar Fila de Filtros en Cabecera (Atajo: Ctrl+Shift+L)"
+                        >
+                            <Search size={13} strokeWidth={2.2} />
+                            <span>Filtros Columna</span>
+                            {activeFilterCount > 0 && (
+                                <span style={{
+                                    backgroundColor: '#10B981',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.62rem',
+                                    fontWeight: '900',
+                                    padding: '1px 5px',
+                                    borderRadius: '999px',
+                                    lineHeight: 1.2
+                                }}>
+                                    {activeFilterCount}
+                                </span>
+                            )}
+                        </button>
+
+                        {/* Botón Limpiar Filtros de Columna si hay activos */}
+                        {activeFilterCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setColumnFilters({})}
+                                style={{
+                                    padding: '0 0.5rem',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #FECACA',
+                                    backgroundColor: '#FEF2F2',
+                                    color: '#DC2626',
+                                    fontSize: '0.70rem',
+                                    fontWeight: '700',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                title="Limpiar todos los filtros por columna"
+                            >
+                                <X size={12} strokeWidth={2.5} />
+                                <span>Limpiar</span>
+                            </button>
+                        )}
+
+                        {/* Botón Restablecer Orden de Columnas si fue reorganizado (SPEC.md §8.8.10) */}
+                        {isColumnOrderCustom && (
+                            <button
+                                type="button"
+                                onClick={resetColumnOrder}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: '1.5px solid #F59E0B',
+                                    backgroundColor: '#FFFBEB',
+                                    color: '#B45309',
+                                    fontSize: '0.70rem',
+                                    fontWeight: '800',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 2px rgba(245, 158, 11, 0.15)',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                title="Restablecer columnas al orden canónico E - X"
+                            >
+                                <RotateCcw size={12} strokeWidth={2.5} />
+                                <span>Restablecer Orden</span>
+                            </button>
+                        )}
+
+                        {/* Separador vertical sutil */}
+                        <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 2px' }} />
+
+                        {/* Estado de Cierre y Botón de Cierre */}
+                        {closingRecord?.is_locked ? (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                backgroundColor: '#DCFCE7',
+                                border: '1px solid #16A34A',
+                                color: '#15803D',
+                                padding: '0 0.65rem',
+                                height: '32px',
+                                borderRadius: '8px',
+                                fontSize: '0.73rem',
+                                fontWeight: '800',
+                                boxShadow: '0 1px 2px rgba(22, 163, 74, 0.15)'
+                            }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
+                                <Lock size={12} strokeWidth={2.5} />
+                                <span>Cerrado</span>
+                                {canEditSheet && sheetMode === 'manual_edit' && (
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios o administradores pueden registrar novedades operativas.', 'warning');
-                                                return;
-                                            }
-                                            setIsNoveltyMenuOpen(!isNoveltyMenuOpen);
-                                        }}
+                                        onClick={handleReopenClosing}
                                         style={{
-                                            padding: '0 0.65rem',
-                                            height: '32px',
-                                            borderRadius: '8px',
-                                            border: '1.5px solid #F59E0B',
-                                            backgroundColor: '#FEF3C7',
-                                            color: '#B45309',
-                                            fontSize: '0.73rem',
-                                            fontWeight: '800',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '5px',
+                                            marginLeft: '3px',
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#15803D',
                                             cursor: 'pointer',
-                                            boxShadow: '0 1px 3px rgba(245, 158, 11, 0.2)',
-                                            transition: 'all 0.15s ease'
+                                            fontSize: '0.66rem',
+                                            textDecoration: 'underline',
+                                            padding: 0
                                         }}
-                                        title="Registrar Mermas, Descuento de Nómina o Venta Extra"
                                     >
-                                        <Plus size={13} strokeWidth={2.5} />
-                                        <span>+ Registrar Novedad</span>
-                                        <ChevronDown size={11} strokeWidth={2.5} style={{ transform: isNoveltyMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                                        (Reabrir)
                                     </button>
-
-                                    {/* Menú Desplegable Flotante */}
-                                    {isNoveltyMenuOpen && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: 'calc(100% + 5px)',
-                                            right: 0,
-                                            zIndex: 9999,
-                                            backgroundColor: '#FFFFFF',
-                                            borderRadius: '10px',
-                                            border: '1px solid #CBD5E1',
-                                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 0 1px 1px rgba(0, 0, 0, 0.05)',
-                                            minWidth: '255px',
-                                            padding: '5px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '2px'
-                                        }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setIsNoveltyMenuOpen(false);
-                                                    setIsWasteModalOpen(true);
-                                                }}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'flex-start',
-                                                    gap: '8px',
-                                                    padding: '8px 10px',
-                                                    borderRadius: '6px',
-                                                    border: 'none',
-                                                    backgroundColor: 'transparent',
-                                                    color: '#0F172A',
-                                                    textAlign: 'left',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FEF3C7')}
-                                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                            >
-                                                <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#FDE68A', color: '#B45309', display: 'flex' }}>
-                                                    <Trash2 size={13} strokeWidth={2.2} />
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Merma / Baja de Producto</div>
-                                                    <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Pesada, daño o descapote (Cols P, Q, R)</div>
-                                                </div>
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setIsNoveltyMenuOpen(false);
-                                                    setIsPayrollModalOpen(true);
-                                                }}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'flex-start',
-                                                    gap: '8px',
-                                                    padding: '8px 10px',
-                                                    borderRadius: '6px',
-                                                    border: 'none',
-                                                    backgroundColor: 'transparent',
-                                                    color: '#0F172A',
-                                                    textAlign: 'left',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#EFF6FF')}
-                                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                            >
-                                                <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#DBEAFE', color: '#1D4ED8', display: 'flex' }}>
-                                                    <User size={13} strokeWidth={2.2} />
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Descuento de Nómina</div>
-                                                    <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Venta autorizada a empleados (Col N)</div>
-                                                </div>
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setIsNoveltyMenuOpen(false);
-                                                    setIsAdditionalSalesModalOpen(true);
-                                                }}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'flex-start',
-                                                    gap: '8px',
-                                                    padding: '8px 10px',
-                                                    borderRadius: '6px',
-                                                    border: 'none',
-                                                    backgroundColor: 'transparent',
-                                                    color: '#0F172A',
-                                                    textAlign: 'left',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FAF5FF')}
-                                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                            >
-                                                <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#F3E8FF', color: '#7E22CE', display: 'flex' }}>
-                                                    <ShoppingCart size={13} strokeWidth={2.2} />
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Venta Extra / Mostrador</div>
-                                                    <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Venta directa en bodega (Col M)</div>
-                                                </div>
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Botón Compras Plaza */}
+                                )}
+                            </div>
+                        ) : (
+                            canEditSheet && sheetMode === 'manual_edit' && (
                                 <button
                                     type="button"
-                                    onClick={() => setIsFastPlazaModalOpen(true)}
+                                    onClick={() => {
+                                        if (!canEditSheet) {
+                                            notify('Solo la jefatura de inventarios o administradores pueden congelar el cierre oficial del día.', 'warning');
+                                            return;
+                                        }
+                                        setIsClosingModalOpen(true);
+                                    }}
                                     style={{
                                         padding: '0 0.65rem',
                                         height: '32px',
                                         borderRadius: '8px',
-                                        border: '1.5px solid #0D7A57',
-                                        backgroundColor: '#0D7A57',
+                                        border: 'none',
+                                        backgroundColor: '#16A34A',
                                         color: '#FFFFFF',
                                         fontSize: '0.73rem',
                                         fontWeight: '800',
@@ -3389,163 +3610,97 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         alignItems: 'center',
                                         gap: '5px',
                                         cursor: 'pointer',
-                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)',
+                                        boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
                                         transition: 'all 0.15s ease'
                                     }}
-                                    title="Compras Corabastos: Aplica solo para ingesta directa en modo manual de operación. En modo automático, las compras se consolidan y cargan automáticamente desde el módulo de pedidos y abastecimiento."
+                                    title="Cerrar Día: Conciliar saldos, congelar jornada contable y trasladar Conteo Físico a Saldo Inicial siguiente."
                                 >
-                                    <Zap size={13} strokeWidth={2.5} />
-                                    <span>Compras Plaza</span>
+                                    <Lock size={12} strokeWidth={2.2} />
+                                    <span>Cerrar Día</span>
                                 </button>
+                            )
+                        )}
 
-                                {/* Separador vertical sutil */}
-                                <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
+                        {/* Botón de actualización */}
+                        <button
+                            type="button"
+                            onClick={() => loadDailyData(true)}
+                            title="Actualizar datos oficiales"
+                            style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '8px',
+                                border: '1px solid #CBD5E1',
+                                backgroundColor: '#FFFFFF',
+                                color: '#64748B',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#0F172A'; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.color = '#64748B'; }}
+                        >
+                            <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
+                        </button>
 
-                                {/* Estado de Cierre y Botón de Cierre */}
-                                {closingRecord?.is_locked ? (
-                                    <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '5px',
-                                        backgroundColor: '#DCFCE7',
-                                        border: '1px solid #16A34A',
-                                        color: '#15803D',
-                                        padding: '0 0.65rem',
-                                        height: '32px',
-                                        borderRadius: '8px',
-                                        fontSize: '0.73rem',
-                                        fontWeight: '800',
-                                        boxShadow: '0 1px 2px rgba(22, 163, 74, 0.15)'
-                                    }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
-                                        <Lock size={12} strokeWidth={2.5} />
-                                        <span>Cerrado</span>
-                                        {canEditSheet && (
-                                            <button
-                                                type="button"
-                                                onClick={handleReopenClosing}
-                                                style={{
-                                                    marginLeft: '3px',
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    color: '#15803D',
-                                                    cursor: 'pointer',
-                                                    fontSize: '0.66rem',
-                                                    textDecoration: 'underline',
-                                                    padding: 0
-                                                }}
-                                            >
-                                                (Reabrir)
-                                            </button>
-                                        )}
-                                    </div>
-                                ) : (
-                                    canEditSheet && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (!canEditSheet) {
-                                                    notify('Solo la jefatura de inventarios o administradores pueden congelar el cierre oficial del día.', 'warning');
-                                                    return;
-                                                }
-                                                setIsClosingModalOpen(true);
-                                            }}
-                                            style={{
-                                                padding: '0 0.65rem',
-                                                height: '32px',
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                backgroundColor: '#16A34A',
-                                                color: '#FFFFFF',
-                                                fontSize: '0.73rem',
-                                                fontWeight: '800',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '5px',
-                                                cursor: 'pointer',
-                                                boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
-                                                transition: 'all 0.15s ease'
-                                            }}
-                                            title="Cerrar Día: Abre el panel de conciliación para auditar saldos (Calculado vs Físico), congelar de forma inmutable la jornada contable, bloquear la edición de celdas y trasladar el Conteo Físico (Col T) como Saldo Inicial (Col E) del día siguiente."
-                                        >
-                                            <Lock size={12} strokeWidth={2.2} />
-                                            <span>Cerrar Día</span>
-                                        </button>
-                                    )
-                                )}
+                        {/* Separador vertical sutil */}
+                        <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 2px' }} />
 
-                                {/* Botón de actualización */}
-                                <button
-                                    type="button"
-                                    onClick={() => loadDailyData(true)}
-                                    title="Actualizar datos"
-                                    style={{
-                                        width: '32px',
-                                        height: '32px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #CBD5E1',
-                                        backgroundColor: '#FFFFFF',
-                                        color: '#64748B',
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#0F172A'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.color = '#64748B'; }}
-                                >
-                                    <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
-                                </button>
-                            </>
+                        {/* Botón Modo Focus / Salir Focus (SPEC.md §8.8.7) */}
+                        {isFullscreen ? (
+                            <button
+                                type="button"
+                                onClick={handleExitFullscreen}
+                                title="Salir del Modo Focus y volver a la vista ejecutiva normal (Esc)"
+                                style={{
+                                    padding: '0 0.75rem',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: '1.5px solid #EF4444',
+                                    backgroundColor: '#FEF2F2',
+                                    color: '#DC2626',
+                                    fontSize: '0.73rem',
+                                    fontWeight: '800',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 3px rgba(239, 68, 68, 0.2)',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                <X size={14} strokeWidth={2.5} />
+                                <span>Salir Focus</span>
+                                <span style={{ fontSize: '0.60rem', opacity: 0.8, backgroundColor: '#FEE2E2', padding: '1px 5px', borderRadius: '3px' }}>Esc</span>
+                            </button>
                         ) : (
-                            /* MODO VISTA: SÁBANA OFICIAL (SOLO CONSULTA / AUDITORÍA PURA - 100% LIMPIA) */
-                            <>
-                                {closingRecord?.is_locked && (
-                                    <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '5px',
-                                        backgroundColor: '#DCFCE7',
-                                        border: '1px solid #16A34A',
-                                        color: '#15803D',
-                                        padding: '0 0.65rem',
-                                        height: '32px',
-                                        borderRadius: '8px',
-                                        fontSize: '0.73rem',
-                                        fontWeight: '800',
-                                        boxShadow: '0 1px 2px rgba(22, 163, 74, 0.15)'
-                                    }} title={`Jornada cerrada oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}. Para reabrirla, active el Modo Edición.`}>
-                                        <Lock size={12} strokeWidth={2.5} />
-                                        <span>Cerrado</span>
-                                    </div>
-                                )}
-
-                                {/* Único botón sutil de actualización en Sábana Oficial */}
-                                <button
-                                    type="button"
-                                    onClick={() => loadDailyData(true)}
-                                    title="Actualizar datos oficiales"
-                                    style={{
-                                        width: '32px',
-                                        height: '32px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #CBD5E1',
-                                        backgroundColor: '#FFFFFF',
-                                        color: '#64748B',
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#0F172A'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.color = '#64748B'; }}
-                                >
-                                    <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
-                                </button>
-                            </>
+                            <button
+                                type="button"
+                                onClick={() => setIsFullscreen(true)}
+                                title="Modo Consola Focus: Ocupa toda la pantalla (100vw × 100vh) para operar la matriz completa sin distracciones"
+                                style={{
+                                    padding: '0 0.65rem',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: '1.5px solid #0F172A',
+                                    backgroundColor: '#0F172A',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.73rem',
+                                    fontWeight: '800',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 4px rgba(15, 23, 42, 0.25)',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                <Maximize2 size={13} strokeWidth={2.2} />
+                                <span>Modo Focus</span>
+                            </button>
                         )}
                     </div>
                 </div>
@@ -3805,17 +3960,22 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
             {/* TABLA DE 24 COLUMNAS LEAN ENTERPRISE */}
             <div style={{
                 backgroundColor: '#FFFFFF',
-                borderRadius: '14px',
+                borderRadius: isFullscreen ? '10px' : '14px',
                 border: '1px solid #E2E8F0',
                 boxShadow: '0 4px 20px -4px rgba(0, 0, 0, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.04)',
                 overflow: 'hidden',
-                position: 'relative'
+                position: 'relative',
+                flex: isFullscreen ? 1 : undefined,
+                display: isFullscreen ? 'flex' : undefined,
+                flexDirection: isFullscreen ? 'column' : undefined,
+                minHeight: 0
             }}>
                 <div 
                     ref={tableScrollRef}
                     onScroll={handleTableScroll}
                     style={{ 
-                        maxHeight: 'calc(100vh - 210px)',
+                        maxHeight: isFullscreen ? 'none' : 'calc(100vh - 210px)',
+                        flex: isFullscreen ? 1 : undefined,
                         overflowX: 'auto', 
                         overflowY: 'auto',
                         position: 'relative',
@@ -3823,7 +3983,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     }}
                 >
                     <table className="daily-balance-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                        {/* Cabecera Nivel 1: Grupos Temáticos de Columnas */}
+                        {/* Cabecera Aplanada a 1 Solo Nivel (32px) + Fila Conmutable de Filtros (SPEC.md §8.8.8, §8.8.9, §8.8.10) */}
                         <thead style={{ 
                             position: isPanesFrozen ? 'sticky' : 'static', 
                             top: isPanesFrozen ? 0 : undefined, 
@@ -3832,243 +3992,12 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             color: '#F8FAFC',
                             boxShadow: isPanesFrozen ? '0 4px 10px -2px rgba(0, 0, 0, 0.25)' : 'none'
                         }}>
-                            <tr style={{ height: '32px' }}>
-                                <th 
-                                    data-block-id="identificacion"
-                                    colSpan={isCompactIdentification ? 1 : 4} 
-                                    onClick={() => scrollToColumnGroup('identificacion')}
-                                    title="Clic para enfocar Identificación"
-                                    style={{ 
-                                        height: '32px',
-                                        boxSizing: 'border-box',
-                                        padding: '5px 10px', 
-                                        textAlign: 'center', 
-                                        backgroundColor: '#0F172A', 
-                                        borderBottom: '1px solid #1E293B', 
-                                        borderRight: '2px solid #334155', 
-                                        borderTop: '3px solid #64748B',
-                                        fontWeight: '800', 
-                                        position: isPanesFrozen ? 'sticky' : 'static',
-                                        top: isPanesFrozen ? 0 : undefined,
-                                        left: isPanesFrozen ? 0 : undefined,
-                                        zIndex: isPanesFrozen ? 55 : undefined,
-                                        width: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
-                                        minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
-                                        maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
-                                        boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                >
-                                    <span style={{ 
-                                        backgroundColor: 'rgba(100, 116, 139, 0.25)', 
-                                        color: '#CBD5E1', 
-                                        padding: '2px 8px', 
-                                        borderRadius: '5px', 
-                                        fontSize: '0.66rem', 
-                                        letterSpacing: '0.05em' 
-                                    }}>
-                                        IDENTIFICACIÓN (Cols A - D)
-                                    </span>
-                                </th>
-                                <th 
-                                    data-block-id="entradas"
-                                    colSpan={3} 
-                                    onClick={() => scrollToColumnGroup('entradas')}
-                                    title="Clic para centrar Entradas (+)"
-                                    style={{ 
-                                        height: '32px',
-                                        boxSizing: 'border-box',
-                                        padding: '5px 10px', 
-                                        textAlign: 'center', 
-                                        backgroundColor: '#0F172A', 
-                                        borderBottom: '1px solid #1E293B',
-                                        borderRight: '2px solid #334155', 
-                                        borderTop: '3px solid #10B981',
-                                        fontWeight: '800', 
-                                        position: isPanesFrozen ? 'sticky' : 'static',
-                                        top: isPanesFrozen ? 0 : undefined,
-                                        zIndex: isPanesFrozen ? 40 : undefined,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <span style={{ 
-                                        backgroundColor: 'rgba(160, 185, 129, 0.18)', 
-                                        color: '#34D399', 
-                                        padding: '2px 8px', 
-                                        borderRadius: '5px', 
-                                        fontSize: '0.66rem', 
-                                        letterSpacing: '0.05em' 
-                                    }}>
-                                        ENTRADAS (+) (Cols E - G)
-                                    </span>
-                                </th>
-                                <th 
-                                    data-block-id="ventas"
-                                    colSpan={3} 
-                                    onClick={() => scrollToColumnGroup('ventas')}
-                                    title="Clic para centrar Ventas & Pedidos (-)"
-                                    style={{ 
-                                        height: '32px',
-                                        boxSizing: 'border-box',
-                                        padding: '5px 10px', 
-                                        textAlign: 'center', 
-                                        backgroundColor: '#0F172A', 
-                                        borderBottom: '1px solid #1E293B',
-                                        borderRight: '2px solid #334155', 
-                                        borderTop: '3px solid #3B82F6',
-                                        fontWeight: '800', 
-                                        position: isPanesFrozen ? 'sticky' : 'static',
-                                        top: isPanesFrozen ? 0 : undefined,
-                                        zIndex: isPanesFrozen ? 40 : undefined,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <span style={{ 
-                                        backgroundColor: 'rgba(59, 130, 246, 0.18)', 
-                                        color: '#60A5FA', 
-                                        padding: '2px 8px', 
-                                        borderRadius: '5px', 
-                                        fontSize: '0.66rem', 
-                                        letterSpacing: '0.05em' 
-                                    }}>
-                                        VENTAS & PEDIDOS (-) (Cols H - J)
-                                    </span>
-                                </th>
-                                <th 
-                                    data-block-id="excepciones"
-                                    colSpan={4} 
-                                    onClick={() => scrollToColumnGroup('excepciones')}
-                                    title="Clic para centrar Excepciones"
-                                    style={{ 
-                                        height: '32px',
-                                        boxSizing: 'border-box',
-                                        padding: '5px 10px', 
-                                        textAlign: 'center', 
-                                        backgroundColor: '#0F172A', 
-                                        borderBottom: '1px solid #1E293B',
-                                        borderRight: '2px solid #334155', 
-                                        borderTop: '3px solid #A855F7',
-                                        fontWeight: '800', 
-                                        position: isPanesFrozen ? 'sticky' : 'static',
-                                        top: isPanesFrozen ? 0 : undefined,
-                                        zIndex: isPanesFrozen ? 40 : undefined,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <span style={{ 
-                                        backgroundColor: 'rgba(168, 85, 247, 0.18)', 
-                                        color: '#C084FC', 
-                                        padding: '2px 8px', 
-                                        borderRadius: '5px', 
-                                        fontSize: '0.66rem', 
-                                        letterSpacing: '0.05em' 
-                                    }}>
-                                        EXCEPCIONES (Cols K - N)
-                                    </span>
-                                </th>
-                                <th 
-                                    data-block-id="mermas"
-                                    colSpan={4} 
-                                    onClick={() => scrollToColumnGroup('mermas')}
-                                    title="Clic para centrar Devoluciones & Mermas"
-                                    style={{ 
-                                        height: '32px',
-                                        boxSizing: 'border-box',
-                                        padding: '5px 10px', 
-                                        textAlign: 'center', 
-                                        backgroundColor: '#0F172A', 
-                                        borderBottom: '1px solid #1E293B',
-                                        borderRight: '2px solid #334155', 
-                                        borderTop: '3px solid #F59E0B',
-                                        fontWeight: '800', 
-                                        position: isPanesFrozen ? 'sticky' : 'static',
-                                        top: isPanesFrozen ? 0 : undefined,
-                                        zIndex: isPanesFrozen ? 40 : undefined,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <span style={{ 
-                                        backgroundColor: 'rgba(245, 158, 11, 0.18)', 
-                                        color: '#FBBF24', 
-                                        padding: '2px 8px', 
-                                        borderRadius: '5px', 
-                                        fontSize: '0.66rem', 
-                                        letterSpacing: '0.05em' 
-                                    }}>
-                                        DEVOLUCIONES & MERMAS (Cols O - R)
-                                    </span>
-                                </th>
-                                <th 
-                                    data-block-id="cierre"
-                                    colSpan={3} 
-                                    onClick={() => scrollToColumnGroup('cierre')}
-                                    title="Clic para centrar Cierre & Bodega"
-                                    style={{ 
-                                        height: '32px',
-                                        boxSizing: 'border-box',
-                                        padding: '5px 10px', 
-                                        textAlign: 'center', 
-                                        backgroundColor: '#0F172A', 
-                                        borderBottom: '1px solid #1E293B',
-                                        borderRight: '2px solid #334155', 
-                                        borderTop: '3px solid #0D9488',
-                                        fontWeight: '800', 
-                                        position: isPanesFrozen ? 'sticky' : 'static',
-                                        top: isPanesFrozen ? 0 : undefined,
-                                        zIndex: isPanesFrozen ? 40 : undefined,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <span style={{ 
-                                        backgroundColor: 'rgba(13, 148, 136, 0.18)', 
-                                        color: '#2DD4BF', 
-                                        padding: '2px 8px', 
-                                        borderRadius: '5px', 
-                                        fontSize: '0.66rem', 
-                                        letterSpacing: '0.05em' 
-                                    }}>
-                                        CIERRE & BODEGA (Cols S - U)
-                                    </span>
-                                </th>
-                                <th 
-                                    data-block-id="conciliacion"
-                                    colSpan={3} 
-                                    onClick={() => scrollToColumnGroup('conciliacion')}
-                                    title="Clic para centrar Conciliación"
-                                    style={{ 
-                                        height: '32px',
-                                        boxSizing: 'border-box',
-                                        padding: '5px 10px', 
-                                        textAlign: 'center', 
-                                        backgroundColor: '#0F172A', 
-                                        borderBottom: '1px solid #1E293B',
-                                        borderTop: '3px solid #0D7A57',
-                                        fontWeight: '800', 
-                                        position: isPanesFrozen ? 'sticky' : 'static',
-                                        top: isPanesFrozen ? 0 : undefined,
-                                        zIndex: isPanesFrozen ? 40 : undefined,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <span style={{ 
-                                        backgroundColor: 'rgba(13, 122, 87, 0.25)', 
-                                        color: '#6EE7B7', 
-                                        padding: '2px 8px', 
-                                        borderRadius: '5px', 
-                                        fontSize: '0.66rem', 
-                                        letterSpacing: '0.05em' 
-                                    }}>
-                                        CONCILIACIÓN (Cols V - X)
-                                    </span>
-                                </th>
-                            </tr>
-
-                            {/* Cabecera Nivel 2: Nombres exactos de las columnas */}
-                            <tr style={{ height: '32px', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.03em', borderBottom: '2px solid #334155' }}>
+                            {/* Fila Canónica de Nombres de Columnas (32px de altura) con Drag & Drop y Tooltips Informativos */}
+                            <tr style={{ height: '32px', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.03em', borderBottom: isColumnFilterOpen ? '1px solid #1E293B' : '2px solid #334155' }}>
                                 {/* Sticky A, B, C, D (Compacto o Tradicional) */}
                                 {isCompactIdentification ? (
                                     <th 
+                                        key="header-compact-id"
                                         data-sticky-last="true"
                                         style={{
                                             height: '32px',
@@ -4080,7 +4009,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                             maxWidth: '240px',
                                             borderRight: '2px solid #334155',
                                             position: isPanesFrozen ? 'sticky' : 'static',
-                                            top: isPanesFrozen ? '32px' : undefined,
+                                            top: isPanesFrozen ? 0 : undefined,
                                             left: isPanesFrozen ? 0 : undefined,
                                             zIndex: isPanesFrozen ? 55 : undefined,
                                             backgroundColor: '#0F172A',
@@ -4095,10 +4024,11 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         </div>
                                     </th>
                                 ) : (
-                                    <>
-                                        <th style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>A: Fecha</th>
-                                        <th style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>B: ID Prod</th>
+                                    <React.Fragment key="header-traditional-id">
+                                        <th key="header-A" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? 0 : undefined, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>A: Fecha</th>
+                                        <th key="header-B" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? 0 : undefined, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>B: ID Prod</th>
                                         <th 
+                                            key="header-C"
                                             onClick={() => setCellColumnMode(prev => prev === 'collapsed' ? 'expanded' : 'collapsed')}
                                             title={isCellCollapsed ? "C: Célula colapsada (Clic para expandir nombre completo)" : "C: Célula (Clic para colapsar y maximizar espacio de datos)"}
                                             style={{ 
@@ -4110,7 +4040,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                                 minWidth: isCellCollapsed ? '44px' : '130px', 
                                                 maxWidth: isCellCollapsed ? '44px' : '130px', 
                                                 position: isPanesFrozen ? 'sticky' : 'static', 
-                                                top: isPanesFrozen ? '32px' : undefined, 
+                                                top: isPanesFrozen ? 0 : undefined, 
                                                 left: isPanesFrozen ? '155px' : undefined, 
                                                 zIndex: isPanesFrozen ? 55 : undefined, 
                                                 backgroundColor: '#0F172A', 
@@ -4132,6 +4062,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                             )}
                                         </th>
                                         <th 
+                                            key="header-D"
                                             data-sticky-last="true"
                                             style={{ 
                                                 height: '32px',
@@ -4143,7 +4074,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                                 maxWidth: '190px', 
                                                 borderRight: '2px solid #334155', 
                                                 position: isPanesFrozen ? 'sticky' : 'static', 
-                                                top: isPanesFrozen ? '32px' : undefined, 
+                                                top: isPanesFrozen ? 0 : undefined, 
                                                 left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, 
                                                 zIndex: isPanesFrozen ? 55 : undefined, 
                                                 backgroundColor: '#0F172A', 
@@ -4153,63 +4084,190 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                         >
                                             D: Producto
                                         </th>
-                                    </>
+                                    </React.Fragment>
                                 )}
 
-                                {/* Columnas E - G */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>E: Inicial (+)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>F: Correc. (±)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>G: Compra (+)</th>
+                                {/* Columnas E - X Reordenables por Drag & Drop con Tooltips Enriquecidos */}
+                                {columnOrder.map((colKey) => {
+                                    const meta = COLUMN_METADATA[colKey];
+                                    const isDragging = draggedCol === colKey;
+                                    const isDragOver = dragOverCol === colKey;
+                                    const isSpecialColS = colKey === 'S';
+                                    const isSpecialColTU = colKey === 'T' || colKey === 'U';
+                                    const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
 
-                                {/* Columnas H - J */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px' }}>H: Venta KG (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px' }}>I: Venta UN (Info)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>J: Peso UN (-)</th>
+                                    // Tooltip con Bloque, Fórmula y Signo Contable (SPEC.md §8.8.8)
+                                    const tooltipText = meta 
+                                        ? `[${meta.block}] Columna ${colKey}: ${meta.title} ${meta.sign}\n• Efecto: ${meta.effect}${meta.formula ? `\n• Lógica / Fórmula: ${meta.formula}` : ''}\n\n(Arrastra para comparar y colocar columnas juntas)`
+                                        : `${colKey}: Columna Kardex`;
 
-                                {/* Columnas K - N */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>K: Escaso (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>L: Sin Enviar (+)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px' }}>M: Vta Extra (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>N: Vta Nómina (-)</th>
-
-                                {/* Columnas O - R */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px' }}>O: Devol. (+)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, padding: '6px 8px', textAlign: 'right', color: '#FBBF24', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px' }}>P: Pesada (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, padding: '6px 8px', textAlign: 'right', color: '#F87171', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px' }}>Q: Desperd. (-)</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>R: Basura (-)</th>
-
-                                {/* Columnas S - U */}
-                                <th style={{ 
-                                    height: '32px',
-                                    boxSizing: 'border-box',
-                                    position: isPanesFrozen ? 'sticky' : 'static',
-                                    top: isPanesFrozen ? '32px' : undefined,
-                                    zIndex: isPanesFrozen ? 40 : undefined,
-                                    padding: '4px 8px', 
-                                    textAlign: 'right', 
-                                    color: '#5EEAD4', 
-                                    backgroundColor: '#042F2E', 
-                                    borderLeft: '2px solid #0D9488', 
-                                    borderRight: '2px solid #0D9488',
-                                    width: '95px',
-                                    minWidth: '95px',
-                                    maxWidth: '95px'
-                                }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
-                                        <span style={{ fontSize: '0.50rem', fontWeight: '900', backgroundColor: '#0D9488', color: '#FFFFFF', padding: '1px 3px', borderRadius: '3px', letterSpacing: '0.04em', lineHeight: 1 }}>
-                                            RESULTADO
-                                        </span>
-                                        <span style={{ lineHeight: 1.1 }}>S: Calc. Final</span>
-                                    </div>
-                                </th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px' }}>T: Conteo Real</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, padding: '6px 4px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px', fontSize: '0.60rem' }} title="Inventario en bodega (devoluciones) (U = T + O)">U: Inv. Bodega (Dev)</th>
-
-                                {/* Columnas V - X */}
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>V: Faltantes</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>W: Sobrantes</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, zIndex: isPanesFrozen ? 40 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px' }}>X: Donación</th>
+                                    return (
+                                        <th
+                                            key={`header-${colKey}`}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, colKey)}
+                                            onDragOver={(e) => handleDragOver(e, colKey)}
+                                            onDrop={(e) => handleDrop(e, colKey)}
+                                            onDragEnd={handleDragEnd}
+                                            title={tooltipText}
+                                            style={{
+                                                height: '32px',
+                                                boxSizing: 'border-box',
+                                                position: isPanesFrozen ? 'sticky' : 'static',
+                                                top: isPanesFrozen ? 0 : undefined,
+                                                zIndex: isPanesFrozen ? 40 : undefined,
+                                                backgroundColor: isSpecialColS ? '#042F2E' : (isSpecialColTU ? '#1E293B' : '#0F172A'),
+                                                padding: colKey === 'U' ? '4px 4px' : '4px 8px',
+                                                textAlign: 'right',
+                                                color: isSpecialColS ? '#5EEAD4' : (meta?.color || '#F8FAFC'),
+                                                width: '95px',
+                                                minWidth: '95px',
+                                                maxWidth: '95px',
+                                                cursor: 'grab',
+                                                userSelect: 'none',
+                                                borderRight: isSpecialColS ? '2px solid #0D9488' : (hasRightBorder ? '2px solid #334155' : '1px solid #1E293B'),
+                                                borderLeft: isSpecialColS ? '2px solid #0D9488' : undefined,
+                                                outline: isDragOver ? '2px dashed #10B981' : undefined,
+                                                opacity: isDragging ? 0.35 : 1,
+                                                transition: 'background-color 0.15s ease, outline 0.15s ease, opacity 0.15s ease'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                                                <GripVertical size={10} color="#64748B" style={{ opacity: 0.6, flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.69rem', fontWeight: '800', letterSpacing: '0.02em' }}>
+                                                    {colKey}: {meta?.shortName || colKey}
+                                                </span>
+                                            </div>
+                                        </th>
+                                    );
+                                })}
                             </tr>
+
+                            {/* FILA DE FILTROS EN CABECERA (IN-HEADER FILTERS - 28px de altura) (SPEC.md §8.8.9) */}
+                            {isColumnFilterOpen && (
+                                <tr style={{ height: '28px', backgroundColor: '#0B132B', borderBottom: '2px solid #334155' }}>
+                                    {/* Identificación A-D Filtros */}
+                                    {isCompactIdentification ? (
+                                        <th
+                                            key="filter-compact-id"
+                                            style={{
+                                                height: '28px',
+                                                padding: '2px 6px',
+                                                position: isPanesFrozen ? 'sticky' : 'static',
+                                                top: isPanesFrozen ? '32px' : undefined,
+                                                left: isPanesFrozen ? 0 : undefined,
+                                                zIndex: isPanesFrozen ? 55 : undefined,
+                                                backgroundColor: '#0B132B',
+                                                borderRight: '2px solid #334155'
+                                            }}
+                                        >
+                                            <input
+                                                type="text"
+                                                placeholder="Filtrar prod / SKU..."
+                                                value={columnFilters['product'] || ''}
+                                                onChange={e => setColumnFilters(prev => ({ ...prev, product: e.target.value }))}
+                                                style={{
+                                                    width: '100%',
+                                                    height: '22px',
+                                                    backgroundColor: '#1E293B',
+                                                    border: columnFilters['product'] ? '1px solid #10B981' : '1px solid #334155',
+                                                    borderRadius: '4px',
+                                                    padding: '1px 6px',
+                                                    fontSize: '0.67rem',
+                                                    color: '#F8FAFC',
+                                                    outline: 'none',
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            />
+                                        </th>
+                                    ) : (
+                                        <React.Fragment key="filter-traditional-id">
+                                            <th key="filter-A" style={{ height: '28px', padding: '2px 4px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0B132B' }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Fecha..."
+                                                    value={columnFilters['date'] || ''}
+                                                    onChange={e => setColumnFilters(prev => ({ ...prev, date: e.target.value }))}
+                                                    style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['date'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
+                                                />
+                                            </th>
+                                            <th key="filter-B" style={{ height: '28px', padding: '2px 4px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0B132B' }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="ID..."
+                                                    value={columnFilters['id'] || ''}
+                                                    onChange={e => setColumnFilters(prev => ({ ...prev, id: e.target.value }))}
+                                                    style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['id'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
+                                                />
+                                            </th>
+                                            <th key="filter-C" style={{ height: '28px', padding: '2px 4px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? '155px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0B132B' }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Cél..."
+                                                    value={columnFilters['cell'] || ''}
+                                                    onChange={e => setColumnFilters(prev => ({ ...prev, cell: e.target.value }))}
+                                                    style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['cell'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
+                                                />
+                                            </th>
+                                            <th key="filter-D" style={{ height: '28px', padding: '2px 6px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0B132B', borderRight: '2px solid #334155' }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Filtrar producto..."
+                                                    value={columnFilters['product'] || ''}
+                                                    onChange={e => setColumnFilters(prev => ({ ...prev, product: e.target.value }))}
+                                                    style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['product'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 6px', fontSize: '0.67rem', color: '#F8FAFC', outline: 'none', boxSizing: 'border-box' }}
+                                                />
+                                            </th>
+                                        </React.Fragment>
+                                    )}
+
+                                    {/* Filtros numéricos con operadores (>0, <0, =0, !=0) para columnas E - X */}
+                                    {columnOrder.map((colKey) => {
+                                        const filterVal = columnFilters[colKey] || '';
+                                        const isActive = filterVal.trim().length > 0;
+                                        const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
+                                        const isColS = colKey === 'S';
+
+                                        return (
+                                            <th
+                                                key={`filter-${colKey}`}
+                                                style={{
+                                                    height: '28px',
+                                                    padding: '2px 4px',
+                                                    position: isPanesFrozen ? 'sticky' : 'static',
+                                                    top: isPanesFrozen ? '32px' : undefined,
+                                                    zIndex: isPanesFrozen ? 40 : undefined,
+                                                    backgroundColor: '#0B132B',
+                                                    borderRight: isColS ? '2px solid #0D9488' : (hasRightBorder ? '2px solid #334155' : '1px solid #1E293B'),
+                                                    borderLeft: isColS ? '2px solid #0D9488' : undefined
+                                                }}
+                                            >
+                                                <input
+                                                    type="text"
+                                                    placeholder=">0, =0..."
+                                                    value={filterVal}
+                                                    onChange={e => setColumnFilters(prev => ({ ...prev, [colKey]: e.target.value }))}
+                                                    title={`Filtro ${colKey}: Escribe un número o expresión como '>0', '<0', '=0', '!=0'`}
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '22px',
+                                                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.15)' : '#1E293B',
+                                                        border: isActive ? '1px solid #10B981' : '1px solid #334155',
+                                                        borderRadius: '4px',
+                                                        padding: '1px 4px',
+                                                        fontSize: '0.65rem',
+                                                        color: isActive ? '#34D399' : '#CBD5E1',
+                                                        outline: 'none',
+                                                        textAlign: 'right',
+                                                        fontVariantNumeric: 'tabular-nums',
+                                                        boxSizing: 'border-box'
+                                                    }}
+                                                />
+                                            </th>
+                                        );
+                                    })}
+                                </tr>
+                            )}
                         </thead>
 
                         {/* Cuerpo de Datos con Jerarquía Padre - Hijo */}
@@ -4293,6 +4351,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                             <tr style={{ fontWeight: '900', fontSize: '0.78rem' }}>
                                 {/* Sticky Cols A-D */}
                                 <td
+                                    key="total-id"
                                     colSpan={isCompactIdentification ? 1 : 4}
                                     style={{
                                         padding: '7px 10px',
@@ -4321,109 +4380,66 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                                     </div>
                                 </td>
 
-                                {/* E: Inicial */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalE)}
-                                </td>
-                                {/* F: Corrección */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalF)}
-                                </td>
-                                {/* G: Compra */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalG)}
-                                </td>
+                                {/* Totales Numéricos Dinámicos Mapeados según columnOrder (SPEC.md §8.8.10) */}
+                                {columnOrder.map((colKey) => {
+                                    const meta = COLUMN_METADATA[colKey];
+                                    const isColS = colKey === 'S';
+                                    const isSpecialBg = colKey === 'T' || colKey === 'U';
+                                    const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
+                                    const decimals = colKey === 'I' ? 0 : 2;
 
-                                {/* H: Venta KG */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalH)}
-                                </td>
-                                {/* I: Venta UN */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalI, 0)}
-                                </td>
-                                {/* J: Peso UN */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalJ)}
-                                </td>
+                                    if (isColS) {
+                                        return (
+                                            <td
+                                                key={`total-${colKey}`}
+                                                style={{
+                                                    position: isPanesFrozen ? 'sticky' : 'static',
+                                                    bottom: isPanesFrozen ? 0 : undefined,
+                                                    zIndex: isPanesFrozen ? 31 : undefined,
+                                                    padding: '6px 8px',
+                                                    textAlign: 'right',
+                                                    color: '#5EEAD4',
+                                                    backgroundColor: '#042F2E',
+                                                    borderLeft: '2px solid #0D9488',
+                                                    borderRight: '2px solid #0D9488',
+                                                    borderTop: '2px solid #0D9488',
+                                                    width: '95px',
+                                                    minWidth: '95px',
+                                                    maxWidth: '95px',
+                                                    fontWeight: '900',
+                                                    fontSize: '0.84rem',
+                                                    boxShadow: isPanesFrozen ? '0 0 10px rgba(13, 148, 136, 0.4)' : undefined
+                                                }}
+                                            >
+                                                {renderNumericCell(columnTotals.totalS)}
+                                            </td>
+                                        );
+                                    }
 
-                                {/* K: Escaso */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalK)}
-                                </td>
-                                {/* L: Sin Enviar */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalL)}
-                                </td>
-                                {/* M: Vta Extra */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalM)}
-                                </td>
-                                {/* N: Vta Nómina */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalN)}
-                                </td>
+                                    const totalVal = (columnTotals as any)[`total${colKey}`] ?? 0;
 
-                                {/* O: Devoluciones */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalO)}
-                                </td>
-                                {/* P: Pesada */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, padding: '6px 8px', textAlign: 'right', color: '#FBBF24', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalP)}
-                                </td>
-                                {/* Q: Desperdicio */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, padding: '6px 8px', textAlign: 'right', color: '#F87171', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalQ)}
-                                </td>
-                                {/* R: Basura */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalR)}
-                                </td>
-
-                                {/* S: Inventario Calculado (RESALTADO GLASSMORPHISM RESULTADO) */}
-                                <td style={{
-                                    position: isPanesFrozen ? 'sticky' : 'static',
-                                    bottom: isPanesFrozen ? 0 : undefined,
-                                    zIndex: isPanesFrozen ? 31 : undefined,
-                                    padding: '6px 8px',
-                                    textAlign: 'right',
-                                    color: '#5EEAD4',
-                                    backgroundColor: '#042F2E',
-                                    borderLeft: '2px solid #0D9488',
-                                    borderRight: '2px solid #0D9488',
-                                    borderTop: '2px solid #0D9488',
-                                    width: '95px',
-                                    minWidth: '95px',
-                                    maxWidth: '95px',
-                                    fontWeight: '900',
-                                    fontSize: '0.84rem',
-                                    boxShadow: isPanesFrozen ? '0 0 10px rgba(13, 148, 136, 0.4)' : undefined
-                                }}>
-                                    {renderNumericCell(columnTotals.totalS)}
-                                </td>
-
-                                {/* T: Conteo Real */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalT)}
-                                </td>
-                                {/* U: Inventario en bodega (devoluciones) */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, padding: '6px 4px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalU)}
-                                </td>
-
-                                {/* V: Faltantes */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalV)}
-                                </td>
-                                {/* W: Sobrantes */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalW)}
-                                </td>
-                                {/* X: Donación */}
-                                <td style={{ position: isPanesFrozen ? 'sticky' : 'static', bottom: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 30 : undefined, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
-                                    {renderNumericCell(columnTotals.totalX)}
-                                </td>
+                                    return (
+                                        <td
+                                            key={`total-${colKey}`}
+                                            style={{
+                                                position: isPanesFrozen ? 'sticky' : 'static',
+                                                bottom: isPanesFrozen ? 0 : undefined,
+                                                zIndex: isPanesFrozen ? 30 : undefined,
+                                                backgroundColor: isSpecialBg ? '#1E293B' : '#0F172A',
+                                                padding: colKey === 'U' ? '6px 4px' : '6px 8px',
+                                                textAlign: 'right',
+                                                color: meta?.color || '#F8FAFC',
+                                                width: '95px',
+                                                minWidth: '95px',
+                                                maxWidth: '95px',
+                                                borderTop: '2px solid #334155',
+                                                borderRight: hasRightBorder ? '2px solid #334155' : undefined
+                                            }}
+                                        >
+                                            {renderNumericCell(totalVal, decimals)}
+                                        </td>
+                                    );
+                                })}
                             </tr>
                         </tfoot>
                     </table>

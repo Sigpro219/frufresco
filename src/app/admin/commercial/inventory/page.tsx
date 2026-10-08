@@ -2490,6 +2490,8 @@ export default function InventoryAdminPage() {
                                 setCustomStartDate(d);
                                 setCustomEndDate(d);
                             }}
+                            onExitFullscreen={() => setActiveTab('dashboard')}
+                            initialFullscreen={true}
                         />
                     </div>
                 ) : (

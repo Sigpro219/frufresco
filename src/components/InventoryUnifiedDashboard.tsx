@@ -39,9 +39,17 @@ import {
     FileSpreadsheet,
     Download,
     ChevronDown,
-    ShoppingBag
+    ShoppingBag,
+    Plus,
+    Zap,
+    Trash2,
+    ShoppingCart
 } from 'lucide-react';
 import { WorkCell, WorkCellHistoryEntry } from '@/types/workCells';
+import InventoryWasteModal from '@/components/InventoryWasteModal';
+import InventoryPayrollModal from '@/components/InventoryPayrollModal';
+import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSalesModal';
+import FastPlazaPurchasesModal from '@/components/FastPlazaPurchasesModal';
 
 type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month';
 
@@ -158,6 +166,14 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
     const [isReportsMenuOpen, setIsReportsMenuOpen] = useState<boolean>(false);
     const [exportingReport, setExportingReport] = useState<string | null>(null);
     const reportsMenuRef = useRef<HTMLDivElement>(null);
+
+    // Novedades Operativas Desacopladas del Balance Diario (SPEC.md §8.8.11)
+    const [isNoveltyMenuOpen, setIsNoveltyMenuOpen] = useState(false);
+    const [isWasteModalOpen, setIsWasteModalOpen] = useState(false);
+    const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
+    const [isAdditionalSalesModalOpen, setIsAdditionalSalesModalOpen] = useState(false);
+    const [isFastPlazaModalOpen, setIsFastPlazaModalOpen] = useState(false);
+    const noveltyMenuRef = useRef<HTMLDivElement>(null);
 
     const getDateRange = (range: TimeRange) => {
         const now = new Date();
@@ -278,11 +294,15 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 if (reassignModalCell) setReassignModalCell(null);
                 if (historyModalCell) setHistoryModalCell(null);
                 if (isReportsMenuOpen) setIsReportsMenuOpen(false);
+                if (isNoveltyMenuOpen) setIsNoveltyMenuOpen(false);
             }
         };
         const handleClickOutside = (e: MouseEvent) => {
             if (reportsMenuRef.current && !reportsMenuRef.current.contains(e.target as Node)) {
                 setIsReportsMenuOpen(false);
+            }
+            if (noveltyMenuRef.current && !noveltyMenuRef.current.contains(e.target as Node)) {
+                setIsNoveltyMenuOpen(false);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -291,7 +311,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             window.removeEventListener('keydown', handleKeyDown);
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [reassignModalCell, historyModalCell, isReportsMenuOpen]);
+    }, [reassignModalCell, historyModalCell, isReportsMenuOpen, isNoveltyMenuOpen]);
 
     // Auto-focus first editable selector when Reassign modal opens
     useEffect(() => {
@@ -975,6 +995,170 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </div>
                         )}
                     </div>
+
+                    {/* DROPDOWN NOVEDADES OPERATIVAS (SPEC.md §8.8.11) */}
+                    <div style={{ position: 'relative' }} ref={noveltyMenuRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsNoveltyMenuOpen(prev => !prev)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '0.42rem 0.85rem',
+                                borderRadius: THEME.radius.md,
+                                backgroundColor: isNoveltyMenuOpen ? '#FEF3C7' : '#FFFFFF',
+                                border: '1.5px solid #F59E0B',
+                                color: '#B45309',
+                                fontSize: '0.78rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                boxShadow: THEME.shadow.sm
+                            }}
+                            title="Registrar Mermas, Descuento de Nómina o Venta Extra"
+                        >
+                            <Plus size={14} strokeWidth={2.5} />
+                            <span>+ Registrar Novedad</span>
+                            <ChevronDown size={13} strokeWidth={2.5} style={{ transform: isNoveltyMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                        </button>
+
+                        {isNoveltyMenuOpen && (
+                            <div style={{
+                                position: 'absolute',
+                                right: 0,
+                                top: 'calc(100% + 6px)',
+                                width: '270px',
+                                backgroundColor: '#FFFFFF',
+                                borderRadius: THEME.radius.md,
+                                border: `1px solid ${THEME.colors.border}`,
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 0 1px 1px rgba(0, 0, 0, 0.05)',
+                                zIndex: 100,
+                                padding: '6px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '3px'
+                            }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsNoveltyMenuOpen(false);
+                                        setIsWasteModalOpen(true);
+                                    }}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '8px',
+                                        padding: '8px 10px',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        color: '#0F172A',
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FEF3C7')}
+                                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                >
+                                    <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#FDE68A', color: '#B45309', display: 'flex' }}>
+                                        <Trash2 size={13} strokeWidth={2.2} />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Merma / Baja de Producto</div>
+                                        <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Pesada, daño o descapote</div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsNoveltyMenuOpen(false);
+                                        setIsPayrollModalOpen(true);
+                                    }}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '8px',
+                                        padding: '8px 10px',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        color: '#0F172A',
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#EFF6FF')}
+                                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                >
+                                    <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#DBEAFE', color: '#1D4ED8', display: 'flex' }}>
+                                        <User size={13} strokeWidth={2.2} />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Descuento de Nómina</div>
+                                        <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Venta autorizada a empleados</div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsNoveltyMenuOpen(false);
+                                        setIsAdditionalSalesModalOpen(true);
+                                    }}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '8px',
+                                        padding: '8px 10px',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        color: '#0F172A',
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FAF5FF')}
+                                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                >
+                                    <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#F3E8FF', color: '#7E22CE', display: 'flex' }}>
+                                        <ShoppingCart size={13} strokeWidth={2.2} />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Venta Extra / Mostrador</div>
+                                        <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Venta directa en bodega</div>
+                                    </div>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* BOTÓN COMPRAS PLAZA (SPEC.md §8.8.11) */}
+                    <button
+                        type="button"
+                        onClick={() => setIsFastPlazaModalOpen(true)}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '0.42rem 0.85rem',
+                            borderRadius: THEME.radius.md,
+                            border: '1.5px solid #0D7A57',
+                            backgroundColor: '#0D7A57',
+                            color: '#FFFFFF',
+                            fontSize: '0.78rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)',
+                            transition: 'all 0.15s ease'
+                        }}
+                        title="Ingesta directa de compras en Corabastos"
+                    >
+                        <Zap size={14} strokeWidth={2.5} />
+                        <span>Compras Plaza</span>
+                    </button>
                 </div>
             </div>
 
@@ -2288,6 +2472,43 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     <span>{toastMessage}</span>
                 </div>
             )}
+
+            {/* ========================================================================= */}
+            {/* MODALES DE NOVEDADES OPERATIVAS DESACOPLADAS (SPEC.md §8.8.11) */}
+            {/* ========================================================================= */}
+            <InventoryWasteModal
+                isOpen={isWasteModalOpen}
+                onClose={() => setIsWasteModalOpen(false)}
+                onSuccess={() => {
+                    fetchData(true);
+                    setToastMessage('Novedad de merma registrada con éxito.');
+                    setTimeout(() => setToastMessage(null), 3000);
+                }}
+                products={products}
+            />
+
+            <InventoryPayrollModal
+                isOpen={isPayrollModalOpen}
+                onClose={() => setIsPayrollModalOpen(false)}
+            />
+
+            <InventoryAdditionalSalesModal
+                isOpen={isAdditionalSalesModalOpen}
+                onClose={() => setIsAdditionalSalesModalOpen(false)}
+            />
+
+            <FastPlazaPurchasesModal
+                isOpen={isFastPlazaModalOpen}
+                onClose={() => setIsFastPlazaModalOpen(false)}
+                onSuccess={() => {
+                    fetchData(true);
+                    setToastMessage('Compras en plaza registradas y sincronizadas.');
+                    setTimeout(() => setToastMessage(null), 3000);
+                }}
+                currentDate={new Date().toISOString().split('T')[0]}
+                products={products}
+                workCells={workCells}
+            />
         </div>
     );
 }

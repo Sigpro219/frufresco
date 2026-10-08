@@ -1,8 +1,9 @@
-# FruFresco - Especificación de Arquitectura & Contrato Canónico de Negocio (SDD)
-## Supply Chain Operating System (SCOS) — Contrato Integral de 10 Dominios Operativos & 76 Pantallas Físicas Certificadas
+# onFRU — Supply Chain Operating System (SCOS)
+## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
+### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.172 (Protocolo Canónico de Traspaso de Sedes Operativas por Extinción o Escisión de Casa Matriz: Clonación con Nuevo ID Fiscal e Inactivación Histórica — 76/76 Pantallas Certificadas)  
-> **Fecha:** 07 de Octubre, 2026  
+> **Versión:** 1.9.175 (Resolutivo Gemba Integral: Rediseño Power Grid de Balance Diario — Modo Consola Fullscreen, Header Plano con Hover, Filtros In-Header Conmutables, Column Drag & Compare y Desacoplamiento Minimalista al Dashboard — 76/76 Pantallas Certificadas)  
+> **Fecha:** 08 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
@@ -27,14 +28,14 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **43 Capítulos** | **207 Escenarios Canónicos (1..207)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **207 Escenarios Canónicos (1..207)** | **🟢 100%** |
 
 ---
 
 ## 1. Misión del Sistema, Taxonomía SCOS & Principio de Equivalencia Operativa
 
 ### Denominación Formal y Clasificación Arquitectónica
-FruFresco está formalmente clasificado como un **Supply Chain Operating System (SCOS) / ERP Vertical Cloud-Native de Ejecución Agro-Logística y Comercio B2B**. No constituye una tienda virtual o catálogo web convencional, sino una plataforma transaccional de misión crítica que orquesta de forma integrada seis (6) subsistemas empresariales gobernados por este contrato de arquitectura:
+**onFRU** está formalmente clasificado como un **Supply Chain Operating System (SCOS) / ERP Vertical Cloud-Native de Ejecución Agro-Logística y Comercio B2B**, operando sobre la infraestructura del tenant insignia **FruFresco** (*Investments Cortés S.A.S.*). No constituye una tienda virtual o catálogo web convencional, sino una plataforma transaccional de misión crítica que orquesta de forma integrada seis (6) subsistemas empresariales gobernados por este contrato de arquitectura:
 
 1. **WMS (Warehouse Management System):** Balance de masa físico en kilogramos (Entradas en Acopio vs Salidas Despachadas vs Mermas Operativas `D + P + F`), gestión de 6 células de alistamiento con pesaje neto y tara de canastilla, auditoría cíclica de inventarios IRA% y rotación DOH.
 2. **TMS (Transportation Management System):** Cubicaje algorítmico de flota por peso (kg) y volumen (canastillas), enrutamiento dinámico, manifiestos de despacho y prueba de entrega digital móvil (POD) con captura de firma y coordenadas GPS.
@@ -51,7 +52,7 @@ FruFresco está formalmente clasificado como un **Supply Chain Operating System 
 - **Rutas de Servidor Activas:** 109 rutas Next.js App Router (Páginas operativas, endpoints API y webhooks transaccionales).
 
 ### Propósito del Dominio
-El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, valorización y programación logística de pedidos institucionales (B2B) y de hogares (B2C), independientemente de su canal de entrada.
+El Módulo de Pedidos de onFRU centraliza la recepción, interpretación, valorización y programación logística de pedidos institucionales (B2B) y de hogares (B2C), independientemente de su canal de entrada.
 
 ### Regla de Dominio: Jerarquía Matriz vs Sucursales
 > **«En clientes corporativos (HORECA, cadenas y grupos empresariales), el NIT pertenece a la persona jurídica matriz y es heredado por sus diferentes sedes. Sin embargo, los pedidos, la programación de despacho, la georreferenciación y la entrega física SIEMPRE se consignan y ejecutan a nivel de Sucursal. Por diseño, las validaciones de auditoría deben permitir y respetar esta relación sin generar fricción ni bloquear la operación cuando el NIT del documento coincida con la matriz pero la entrega se dirija a una sucursal específica.»**
@@ -1763,6 +1764,120 @@ A partir del hallazgo operativo en planta y el perfil de la Jefatura de Inventar
      - Al oprimir el botón, cambia a `[🔓 Movilizado / Inmovilizar Filas]`. La tabla descongela cabeceras, pie de página y columnas base (`position: static`), permitiendo un desplazamiento vertical y horizontal continuo y completamente libre por toda la sábana sin paneles fijos, tal como la función "Inmovilizar / Movilizar paneles" de Excel.
    - **Persistencia en Almacenamiento Local (`localStorage`):**
      - La selección del operador se almacena de forma persistente en `frufresco_daily_balance_panes_frozen`, respetando su preferencia visual en sesiones posteriores sin requerir reconfiguración manual.
+
+#### 8.8.7 Modo Consola Focus Fullscreen (Zen Power Grid) para Balance Diario (Resolutivo Gemba Octubre 2026 - Solicitud de Maximización Espacial)
+
+A partir del hallazgo operativo en planta y la necesidad imperiosa de erradicar la asfixia visual provocada por el cromo administrativo acumulado (~320px de altura entre Navbar institucional, título de módulo, pestañas y toolbars secundarias), se formaliza canónicamente el **Modo Consola Focus Fullscreen**:
+
+1. **Activación Inmersiva Inmediata (Disparador de Pestaña o Botón ⛶):**
+   - Al pulsar la pestaña **`Balance Diario (24 Col)`** (o el botón conmutador `[⛶ Maximizar / Modo Consola]`), la vista del Balance Diario transiciona automáticamente a modo inmersivo de pantalla completa ocupando el **100% del viewport (`100vw × 100vh`)**.
+   - **Supresión Total de Cromo Administrativo:**
+     - Se oculta el Navbar institucional superior de onFRU (`Navbar.tsx`).
+     - Se oculta la cabecera de la página ("Control de Inventarios", subtítulos y botón de tareas administrativas).
+     - Se oculta la barra de pestañas maestras (`Dashboard Directivo`, `Consolidado`, `Movimientos`, `Auditoría`, `Gobernanza`).
+     - Se anulan los márgenes (`margin`) y rellenos (`padding`) periféricos del layout contenedor para que la tabla fluya de borde a borde del monitor.
+
+2. **Barra Zen Superior de Control Operativo (Micro-Toolbar de 40px Máximo):**
+   - La cabecera se reemplaza por una única línea minimalista de control de alta densidad (altura máxima 40px, fondo oscuro institucional `#0F172A`, borde inferior `#1E293B`):
+     - **Extremo Izquierdo:** Identificador de cabina `onFRU • Balance Diario` + Selector de Fecha de corte con botón "Hoy" + Selector de Modo (`Sábana Oficial` vs `Modo Edición`).
+     - **Zona Central:** Conteo de familias y SKUs visibles, filtro de densidad (`Con Mov.` / `Todos`) y buscador Omnibox compacto.
+     - **Extremo Derecho:**
+       - Botón de acción principal según modo (`[🔒 Cerrar Día]` en Modo Edición / indicador `[🔒 Cerrado]` en Modo Vista).
+       - **Botón de Salida Explícito `[✕ Salir]`:** Con fondo sutil de contraste (`rgba(255, 255, 255, 0.1)`), borde refinado y texto visible para retornar a la vista administrativa estándar.
+       - **Atajo por Teclado Universal (`Escape`):** Al presionar la tecla `Esc` en cualquier momento, el sistema desactiva el modo fullscreen y retorna a la vista administrativa sin perder filtros ni modificaciones en memoria.
+
+3. **Retorno al Estado Administrativo Estándar:**
+   - Al oprimir `[✕ Salir]` o la tecla `Esc`, el sistema restaura fluidamente la vista con el Navbar global, las 6 pestañas maestras y la disposición administrativa original, sin perder los filtros ni el estado de trabajo en curso.
+
+4. **Ganancia Neta en el Gemba:**
+   - **+280 píxeles verticales útiles directos** recuperados para la cuadrícula de datos.
+   - Incremento de capacidad de visualización de **4-5 filas a 18-22 filas simultáneas** en resoluciones estándar de 1080p, permitiendo una auditoría y liquidación de inventario fluida, descansada y de alta productividad.
+
+#### 8.8.8 Aplanamiento Canónico de Encabezados (Single-Tier Flat Header) con Contexto de Agrupación Reactivo por Hover (Resolutivo Gemba Octubre 2026)
+
+A partir de la necesidad de erradicar la duplicidad vertical de cabeceras en la sábana de balance diario, se reestructura la fila superior de la tabla bajo el principio de **alta densidad y cero redundancia espacial**:
+
+1. **Supresión Absoluta de la Fila de Super-Grupos (Nivel 1):**
+   - Se elimina de forma permanente la fila estática de super-agrupaciones con `colSpan` (`IDENTIFICACIÓN (Cols A-D)`, `ENTRADAS (Cols E-G)`, `VENTAS (Cols H-J)`, `EXCEPCIONES (Cols K-N)`, `MERMAS (Cols O-R)`, `CIERRE & BODEGA (Cols S-U)`, `CONCILIACIÓN (Cols V-X)`).
+   - La cabecera se unifica en una **única fila plana de encabezados de 32px de altura**.
+
+2. **Nomenclatura Limpia, Directa e Intuitiva:**
+   - Cada columna exhibe su nombre funcional canónico sin adornos ni prefijos aparatosos:
+     `Fecha`, `ID`, `Célula`, `Producto`, `Inicial`, `Corrección`, `Compras`, `Venta KG`, `Venta UN`, `Peso UN`, `Escaso`, `Sin Enviar`, `Vta Extra`, `Vta Nómina`, `Devoluciones`, `Pesada`, `Desperdicio`, `Basura`, `Calculado`, `Conteo Real`, `Bodega Post-10am`, `Faltantes`, `Sobrantes`, `Donación`.
+   - Se conserva una micro-etiqueta técnica discreta con la letra canónica de la fórmula (`A`, `B`, ..., `X`) en tipografía de 9px atenuada (`#64748B`), permitiendo una referencia matemática rápida sin competir visualmente con el nombre del concepto.
+
+3. **Cápsula Flotante Contextual por Hover (Tooltip Inteligente de Agrupación):**
+   - Al posicionar el cursor sobre el encabezado de cualquier columna (`hover`), se despliega instantáneamente una cápsula flotante (Tooltip) sin consumir un solo píxel de espacio vertical fijo en el viewport:
+     - **Bloque Funcional Oficial:** Identifica el macro-proceso al que pertenece la columna (ej: *«MERMAS & PÉRDIDAS»*, *«ENTRADAS ALMACÉN»*, *«VENTAS & PEDIDOS»*, *«CONCILIACIÓN DE BODEGA»*).
+     - **Signo e Impacto Matemático:** Define explícitamente su rol en la ecuación de balance de masa (ej: *«Resta al inventario (-)»*, *«Suma al stock disponible (+)»*, *«Fórmula: S = E + F + G - H - J - K + L - M - N + O - P - Q - R»*).
+     - **Regla Poka-Yoke / Gobernanza Asociada:** Alerta sobre requisitos mandatorios (ej. *«Exige soporte fotográfico de báscula obligatorio»* en Desperdicio y Basura; *«Conteo físico a ciegas inmutable»* en Conteo Real; *«Cálculo automático SQL determinista»* en Compras y Ventas).
+
+4. **Beneficio en Productividad:**
+   - Ahorro de 32px verticales adicionales en la zona superior de la tabla.
+   - Eliminación del ruido visual provocado por bloques cromáticos superpuestos, permitiendo al operador concentrarse exclusivamente en los números y en el flujo de datos.
+
+#### 8.8.9 Fila de Filtros Conmutable por Columna (In-Header Column Filters) con Atajo Excel y Operadores Numéricos (Resolutivo Gemba Octubre 2026)
+
+Para brindar la velocidad de segmentación del software legado sin penalizar permanentemente la altura vertical útil, se implementa la arquitectura de **Filtros por Columna Conmutables (Excel Style)**:
+
+1. **Conmutación Inteligente & Zero Desperdicio Espacial:**
+   - La fila de micro-filtros por columna no es estática ni forzada; se activa o contrae a demanda mediante el botón conmutador **`[🔍 Filtros de Columna]`** ubicado en la barra Zen o mediante el atajo de teclado nativo de Excel **`[Ctrl + Shift + L]`**.
+   - **Estado Colapsado (Predeterminado):** 0px de consumo espacial vertical, máxima superficie para datos puros.
+   - **Estado Expandido:** Despliega una fila ultra-slim de 24px de altura directamente debajo de los títulos de columna (`<th>`), con inputs individuales de fondo `#1E293B`, bordes finos y placeholders de ayuda.
+
+2. **Capacidades de Filtrado Especializadas por Tipo de Dato:**
+   - **Columnas de Texto (`ID`, `Célula`, `Producto`):**
+     - Filtrado instantáneo reactivo en memoria con normalización fonética (`normalizeSearchText`), permitiendo coincidencias insensibles a tildes, mayúsculas y caracteres especiales.
+   - **Columnas Numéricas y de Balance (Cols E a X):**
+     - Admite coincidencia numérica exacta y operadores de comparación lógica directa:
+       - `>0`: Aísla inmediatamente filas con valores positivos.
+       - `<0`: Aísla en 1 clic los productos con saldo o stock negativo.
+       - `=0` o `0`: Muestra únicamente los SKUs sin movimiento o en cero.
+       - `!=0`: Descarta todos los ceros para auditar filas vivas.
+       - Comparadores cuantitativos: `>=50`, `<100`.
+     - **Casos de Uso de Piso Inmediatos:**
+       - En `Desperdicio (Col Q)`: Ingresar `>0` para auditar exclusivamente los productos dados de baja por avería.
+       - En `Calculado (Col S)`: Ingresar `<0` para aislar los descuadres negativos y requerir compras de ajuste.
+       - En `Faltantes (Col V)`: Ingresar `>0` para fiscalizar las pérdidas netas de bodega.
+
+3. **Insignia Telemétrica de Filtros Activos & Limpieza Instantánea (1-Click Reset):**
+   - Cuando uno o más filtros por columna están activos, el botón conmutador muestra una insignia dinámica de telemetría: **`[🔍 Filtros Activos (N) | ✕ Limpiar]`**.
+   - Al pulsar `[✕ Limpiar]` o presionar la tecla `Escape` dos veces, todos los inputs de columna se vacían a 0ms en memoria, restaurando la visión total del catálogo sin necesidad de recargar la página.
+
+#### 8.8.10 Reordenamiento Dinámico de Columnas (Drag & Compare) con Retorno al Orden Canónico (Resolutivo Gemba Octubre 2026)
+
+Para facilitar la fiscalización y comparación directa cara a cara entre columnas distantes (ej. cotejar *Col G: Compras* vs *Col P: Pesada*, o *Col S: Calculado* vs *Col T: Conteo Real*) sin provocar fatiga por desplazamiento horizontal repetitivo, se establece el protocolo de **Column Drag & Compare**:
+
+1. **Mecanismo de Desplazamiento por Arrastre (Drag & Drop en Cabeceras):**
+   - El operador puede hacer clic sostenido sobre el encabezado de cualquier columna (indicador táctil con cursor `grab` / `grabbing` o micro-manija de arrastre `⋮⋮`) y desplazarla horizontalmente a la izquierda o derecha para reubicarla junto a la columna con la que desea efectuar el cotejo visual.
+   - Una guía de inserción vertical en verde esmeralda brillante (`#10B981`) proporciona retroalimentación visual continua sobre la posición exacta de destino antes de soltar la columna.
+
+2. **Inmutabilidad del Bloque de Identificación (Regla Poka-Yoke):**
+   - La columna de **Producto** (y su ID contable) permanece firmemente congelada a la izquierda (`position: sticky`, base fija). Queda estrictamente restringido reordenar o desplazar el ancla de identificación para garantizar que los datos numéricos cotejados mantengan en todo momento su referencia de SKU sin ambigüedad.
+
+3. **Gobernanza de Retorno al Orden Original (Cero Desconfiguración Permanente):**
+   - **Naturaleza Efímera de Análisis:** El reordenamiento de columnas opera exclusivamente como una herramienta analítica temporal en la memoria de la sesión activa, evitando que un ajuste ad-hoc corrompa la estructura visual estándar de otros usuarios o turnos.
+   - **Botón de Restablecimiento Inmediato:** En cuanto el usuario altera la posición de una columna respecto al orden canónico, la barra Zen superior activa el botón:  
+     **`[↺ Restablecer Orden Canónico]`**  
+     Al pulsarlo, la cuadrícula restaura en 0ms la secuencia original A a X de la ecuación de balance de masa.
+   - **Retorno Automático por Defecto:** Al recargar la página, cambiar de jornada o salir del modo pantalla completa, el sistema restablece de forma automática y transparente el ordenamiento canónico oficial.
+
+#### 8.8.11 Desacoplamiento de Acciones de Captura Operativa hacia el Dashboard Directivo & Minimalismo Zen en Sábana (Resolutivo Gemba Octubre 2026)
+
+Para honrar el principio de segregación funcional y erradicar la saturación visual de botones de captura manual sobre la matriz de balance diario, se establece la **Reubicación Canónica de Acciones**:
+
+1. **Reubicación de Acciones en `Dashboard Directivo` (`InventoryUnifiedDashboard.tsx`):**
+   - Los botones de captura operativa manual:
+     - **`[+ Registrar Novedad ▾]`:** Menú de Mermas/Bajas con evidencia fotográfica (Cols P, Q, R), Descuentos de Nómina (Col N) y Ventas Extra (Col M).
+     - **`[⚡ Compras Plaza]`:** Ingesta rápida de compras de Corabastos por sublistas de células de trabajo (Col G).
+   - Se trasladan formalmente a la barra de acciones rápidas del **Dashboard Directivo**, permitiendo a la jefatura de inventario y administradores registrar novedades desde el centro de control y visualización de indicadores sin invadir la matriz de datos de la sábana.
+
+2. **Purificación Minimalista de la Barra Zen de `Balance Diario` (`InventoryDailyBalanceTab.tsx`):**
+   - La barra superior de la sábana de balance diario queda estrictamente saneada, eliminando botones redundantes o decorativos y conservando únicamente los controles indispensables para la auditoría y cierre:
+     - **Contexto Temporal & Modo:** Fecha del corte con botón "Hoy" + Conmutador `Sábana Oficial` / `Modo Edición`.
+     - **Herramientas de Densidad & Filtrado:** Buscador Omnibox compacto, conmutador de filtros por columna **`[🔍 Filtros Columna]`** (`Ctrl + Shift + L`), y botón condicional de restauración **`[↺ Restablecer Orden Canónico]`** (cuando existan columnas desplazadas).
+     - **Acción de Cierre y Retorno:** Botón de congelamiento **`[🔒 Cerrar Día]`** (en Modo Edición) y botón explícito **`[✕ Salir]`** de pantalla completa.
+   - **Resultado:** Desaparece el amontonamiento de botones multicolores sobre la tabla, ofreciendo una experiencia de usuario sobria, limpia, de estética suiza industrial y 100% enfocada en la precisión numérica.
 
 ---
 
