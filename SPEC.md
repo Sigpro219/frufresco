@@ -59,6 +59,48 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
 ### Principio Rector de Equivalencia Operativa Omnicanal
 > **«Para el operador logístico, procesar una orden de compra recibida por correo electrónico, un archivo PDF/Excel subido manualmente, o un mensaje de texto copiado de WhatsApp/Chat es conceptual, visual y funcionalmente equivalente. El resultado final en todos los canales es invariable: un pedido oficial en estado `pending_approval` programado para la operación del día siguiente, con la misma fidelidad contable, fiscal, de cubicación física y trazabilidad de origen (`origin_source`).»**
 
+### 1.1 Arquitectura de Doble Capa de Identidad (Dual-Brand Architecture): Marca Comercial Externa (FruFresco) vs Plataforma Operativa Interna (onFRU)
+
+Para conciliar la identidad comercial ante el mercado, la inmutabilidad tributaria/jurídica ante la DIAN y la modernización de la plataforma como software de grado industrial (SaaS B2B), el sistema adopta formalmente una **Arquitectura de Doble Capa de Identidad (Dual-Brand Architecture)**:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   ECOSISTEMA DIGITAL FRUFRESCO                         │
+├──────────────────────────────────┬─────────────────────────────────────┤
+│ 🛒 CAPA EXTERNA (Mercado/Público) │ ⚙️ CAPA INTERNA (Operación/Software)│
+│    • Landing Page pública (/)    │    • Módulo Comercial (/admin)      │
+│    • Catálogo y checkout B2C/B2B │    • Sábana Inventario & Kardex     │
+│    • Remisiones y Facturas DIAN  │    • Torre de Control y Compras     │
+│    • Razón Social Investments    │    • Despacho y Bodega (/ops)       │
+├──────────────────────────────────┼─────────────────────────────────────┤
+│       MARCA: FruFresco           │         MARCA: onFRU                │
+└──────────────────────────────────┴─────────────────────────────────────┘
+```
+
+1. **Frontera 1: Entorno Comercial & Vitrina Externa (FruFresco):**
+   - **Rutas:** Landing page pública (`/`), catálogo web de productos, registro de leads comerciales y checkout.
+   - **Identidad:** Conserva en su totalidad la marca comercial **FruFresco**, su logotipo completo (`/logo.png`), paleta fresca y propuesta de valor enfocada en frescura, calidad gourmet y entregas de madrugada. Los clientes corporativos (chefs, restaurantes, hoteles) compran a FruFresco.
+
+2. **Frontera 2: Entorno Legal, Fiscal & Documentación Impresa (Investments Cortés S.A.S. - FruFresco):**
+   - **Componentes:** `UniversalLetterhead`, remisiones oficiales de despacho, albaranes de entrega, actas de calidad RNC y facturación electrónica DIAN.
+   - **Identidad:** Inalterabilidad jurídica absoluta. Se preserva el membrete formal con Razón Social (*Investments Cortés S.A.S.*), NIT (*901.393.217*), Sello de Calidad FruFresco y datos fiscales oficiales. Ningún documento legal con terceros muta a denominaciones informales.
+
+3. **Frontera 3: Entorno Operativo, ERP & Torre de Control (onFRU - Operational OS):**
+   - **Rutas:** `/admin/*`, `/ops/*`, Torre de Control, Sábana de Balance Diario (Kardex), Consola de Compras Plaza, Alistamiento en Bodega y pantallas móviles de muelle.
+   - **Identidad:** Se bautiza como **onFRU** (*«onFRU • Operational OS»* / *«onFRU • Plataforma de Abastecimiento»*).
+   - **Estándar Visual del Imagotipo Canónico:**
+     - **Logosímbolo:** Se incorpora el logosímbolo oficial de FruFresco (`/logosimbolo.png`: estilizada letra `f` verde con hojas orgánicas y manzana roja brillante) situado a la izquierda.
+     - **Tipografía y Proporción Áurea Óptica:**
+       - Altura de referencia del logosímbolo: **44px**.
+       - Altura óptica de la palabra **`onFRU`**: **24px** (`font-size: 1.45rem` / `text-2xl`, `line-height: 1`), alineada de forma que la base del texto coincide con la base de la `f` y la parte superior de las mayúsculas reposa al ras del hombro horizontal de la letra, impidiendo desproporciones visuales.
+       - Ritmo cromático: **`on`** en peso Medium (500) tono pizarra oscuro (`#0F172A` en día / `#FFFFFF` en noche) + **`FRU`** en peso Black (900) tono Verde Esmeralda Corporativo (`#0D7A57` en día / `#10B981` en noche).
+       - Micro-tagline técnico: *«OPERATIONAL OS»* en tipografía geométrica a `9px` con tracking extendido (`letter-spacing: 0.22em`, `#64748B`).
+     - **Discriminador de Enrutamiento en Barra de Navegación (`Navbar.tsx`):**
+       ```tsx
+       const isInternalApp = pathname?.startsWith('/admin') || pathname?.startsWith('/ops');
+       // isInternalApp ? Imagotipo onFRU : Logo FruFresco
+       ```
+
 ---
 
 ## 2. Mapa de Arquitectura: Pipeline Unificado
@@ -2604,6 +2646,7 @@ El Admin Dashboard coordina 5 módulos satélite esenciales que alimentan la ope
 
 5. **Ajustes del Sistema (`/admin/settings`):**
    - Configuración global de identidad corporativa y branding (nombre de empresa, NIT, logos e isotipos).
+   - Gobernanza de Arquitectura de Doble Capa (§1.1): Mapeo bimodal de marca entre Vitrina Comercial (FruFresco) y Plataforma Operativa Interna (onFRU).
    - Integración con bucket de almacenamiento seguro Supabase Storage (`branding`).
    - Parámetros operativos generales: costos de envío base, umbrales de flete gratuito y plantillas de notificación.
 

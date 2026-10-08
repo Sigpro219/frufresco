@@ -268,8 +268,8 @@ export default function Navbar() {
                 justifyContent: 'space-between',
                 maxWidth: '1600px'
             }}>
-                {/* LOGO */}
-                <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} style={{ display: 'flex', alignItems: 'center', transition: 'transform 0.3s ease' }}
+                {/* LOGO (Arquitectura de Doble Capa: FruFresco en Público vs onFRU en Interno) */}
+                <Link href={isShoppingContext ? `/${locale === 'en' ? '?lang=en' : ''}` : (pathname?.startsWith('/ops') ? '/ops' : '/admin')} style={{ display: 'flex', alignItems: 'center', transition: 'transform 0.3s ease' }}
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
@@ -281,32 +281,74 @@ export default function Navbar() {
                         alignItems: 'center', 
                         position: 'relative' 
                     }}>
-                        <img 
-                            className="navbar-logo-img"
-                            src={dynamicLogo || "/logo.png"} 
-                            alt={appName} 
-                            style={{ 
-                                height: '76px', 
-                                width: 'auto', 
-                                filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))',
-                                opacity: settingsLoaded ? 1 : 0,
-                                transition: 'opacity 0.2s ease-in-out'
-                            }} 
-                            onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).src = "/logo.png";
-                            }}
-                        />
-                        {!settingsLoaded && (
-                            <div style={{
-                                position: 'absolute',
-                                left: 0,
-                                height: '20px',
-                                width: '100px',
-                                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-                                backgroundSize: '200% 100%',
-                                animation: 'skeleton-loading 1.5s infinite',
-                                borderRadius: '4px'
-                            }} />
+                        {isShoppingContext ? (
+                            <>
+                                <img 
+                                    className="navbar-logo-img"
+                                    src={dynamicLogo || "/logo.png"} 
+                                    alt={appName} 
+                                    style={{ 
+                                        height: '76px', 
+                                        width: 'auto', 
+                                        filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))',
+                                        opacity: settingsLoaded ? 1 : 0,
+                                        transition: 'opacity 0.2s ease-in-out'
+                                    }} 
+                                    onError={(e) => {
+                                        (e.currentTarget as HTMLImageElement).src = "/logo.png";
+                                    }}
+                                />
+                                {!settingsLoaded && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: 0,
+                                        height: '20px',
+                                        width: '100px',
+                                        background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                                        backgroundSize: '200% 100%',
+                                        animation: 'skeleton-loading 1.5s infinite',
+                                        borderRadius: '4px'
+                                    }} />
+                                )}
+                            </>
+                        ) : (
+                            /* IMAGOTIPO CANÓNICO onFRU (ENTORNO INTERNO / TORRE DE CONTROL) */
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '11px', height: '100%' }}>
+                                <img 
+                                    src="/logosimbolo.png?v=2" 
+                                    alt="onFRU" 
+                                    style={{ 
+                                        height: '42px', 
+                                        width: 'auto', 
+                                        filter: 'drop-shadow(0 2px 8px rgba(13, 122, 87, 0.15))',
+                                        objectFit: 'contain'
+                                    }} 
+                                    onError={(e) => {
+                                        (e.currentTarget as HTMLImageElement).src = "/logo.png";
+                                    }}
+                                />
+                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+                                    <div style={{ 
+                                        fontSize: '1.45rem', 
+                                        letterSpacing: '-0.025em', 
+                                        display: 'flex', 
+                                        alignItems: 'baseline' 
+                                    }}>
+                                        <span style={{ fontWeight: 600, color: '#0F172A' }}>on</span>
+                                        <span style={{ fontWeight: 900, color: '#0D7A57' }}>FRU</span>
+                                    </div>
+                                    <span style={{ 
+                                        fontSize: '9px', 
+                                        fontWeight: 700, 
+                                        letterSpacing: '0.22em', 
+                                        textTransform: 'uppercase', 
+                                        color: '#64748B', 
+                                        marginTop: '3px' 
+                                    }}>
+                                        OPERATIONAL OS
+                                    </span>
+                                </div>
+                            </div>
                         )}
                     </div>
                     {/* Sync Indicator */}

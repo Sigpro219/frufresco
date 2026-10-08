@@ -27,6 +27,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     const [roles, setRoles] = useState<any[]>([]);
 
     useEffect(() => {
+        document.title = 'onFRU OPS | Torre de Control';
         try {
             const saved = localStorage.getItem('ops_theme');
             if (saved !== null) {
@@ -172,29 +173,69 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 top: 0,
                 zIndex: 100
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{
-                        backgroundColor: 'white',
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
+                        width: '36px',
+                        height: '36px',
+                        background: 'linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%)',
+                        borderRadius: '9px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: '0 0 10px rgba(255,255,255,0.1)',
-                        padding: '3px',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+                        border: '1px solid rgba(255, 255, 255, 0.4)',
+                        padding: '4px',
                         flexShrink: 0
                     }}>
                         <img 
-                            src={dynamicLogosymbol || "/logosimbolo.png"} 
-                            alt={appShortName} 
+                            src={dynamicLogosymbol || "/logosimbolo.png?v=2"} 
+                            alt="onFRU" 
                             style={{ height: '100%', width: 'auto', objectFit: 'contain' }} 
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png?v=2"; }}
                         />
                     </div>
-                     <span style={{ fontWeight: '800', fontSize: '0.95rem', letterSpacing: '0.03em', color: 'var(--ops-text)' }}>
-                        {appShortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                            <div style={{ fontSize: '1.25rem', letterSpacing: '-0.025em', display: 'flex', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--ops-text, #FFFFFF)' }}>on</span>
+                                <span style={{ color: 'var(--ops-primary, #10B981)', fontWeight: 900 }}>FRU</span>
+                            </div>
+                            <span style={{ 
+                                fontSize: '9.5px', 
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                fontWeight: 800, 
+                                letterSpacing: '0.1em',
+                                color: '#34D399',
+                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                border: '1px solid rgba(16, 185, 129, 0.35)',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                lineHeight: 1
+                            }}>
+                                OPS
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', marginTop: '3px' }}>
+                            <span style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                backgroundColor: '#10B981',
+                                display: 'inline-block',
+                                marginRight: '5px',
+                                boxShadow: '0 0 6px #10B981'
+                            }} />
+                            <span style={{ 
+                                fontSize: '8.5px', 
+                                fontWeight: 700, 
+                                letterSpacing: '0.2em', 
+                                color: 'var(--ops-text-muted, #94A3B8)', 
+                                textTransform: 'uppercase' 
+                            }}>
+                                Torre de Control
+                            </span>
+                        </div>
+                    </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Link href="/">
