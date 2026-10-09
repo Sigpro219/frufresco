@@ -28,10 +28,23 @@ export default function ReceivingPrintPage() {
         return now.toISOString().split('T')[0];
     });
 
-    const [paperFormat, setPaperFormat] = useState<'oficio' | 'letter'>('letter');
+    const [paperFormat, setPaperFormat] = useState<'oficio' | 'letter'>('oficio');
+    const [rowsPerPage, setRowsPerPage] = useState<number>(46);
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<ProductEntry[]>([]);
     const [generatedAt, setGeneratedAt] = useState<string>('');
+
+    // Sincronizar filas por defecto al cambiar formato de papel (Carta: 36, Oficio: 46)
+    useEffect(() => {
+        setRowsPerPage(paperFormat === 'oficio' ? 46 : 36);
+    }, [paperFormat]);
+
+    // Altura calculada para ocupar toda la hoja armónicamente sin desbordar ni dejar huecos:
+    // Área vertical útil estimada para el cuerpo de la tabla (descontando cabecera y pie):
+    // Carta (279.4mm): ~234mm útiles | Oficio (330mm): ~285mm útiles
+    const availableTbodyHeightMm = paperFormat === 'oficio' ? 285 : 234;
+    const rowHeightMm = Math.min(8.5, Math.max(5.0, availableTbodyHeightMm / rowsPerPage));
+    const rowHeightPx = Math.round(rowHeightMm * 3.78);
 
     useEffect(() => {
         const now = new Date();
@@ -154,24 +167,16 @@ export default function ReceivingPrintPage() {
         }
     };
 
-    // Paginación a 2 Columnas para Conteo a Ciegas:
-    // En Carta Portrait (279.4mm) caben 45 filas por columna (90 productos por hoja).
-    // En Oficio Portrait (330mm) caben 54 filas por columna (108 productos por hoja).
-    const rowsPerColumn = paperFormat === 'oficio' ? 54 : 45;
-    const itemsPerPage = rowsPerColumn * 2;
-
+    // Paginación reactiva basada en el parámetro configurable rowsPerPage:
     const pages = useMemo(() => {
         if (products.length === 0) return [];
-        const result: Array<{ left: ProductEntry[]; right: ProductEntry[] }> = [];
+        const result: ProductEntry[][] = [];
 
-        for (let i = 0; i < products.length; i += itemsPerPage) {
-            const pageChunk = products.slice(i, i + itemsPerPage);
-            const left = pageChunk.slice(0, rowsPerColumn);
-            const right = pageChunk.slice(rowsPerColumn, rowsPerColumn * 2);
-            result.push({ left, right });
+        for (let i = 0; i < products.length; i += rowsPerPage) {
+            result.push(products.slice(i, i + rowsPerPage));
         }
         return result;
-    }, [products, itemsPerPage, rowsPerColumn]);
+    }, [products, rowsPerPage]);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
@@ -191,11 +196,14 @@ export default function ReceivingPrintPage() {
                     .letterhead-container {
                         width: 100% !important;
                         max-width: 100% !important;
-                        padding: 0 !important;
+                        padding: 0.5cm 0.6cm !important;
                         margin: 0 !important;
                         border: none !important;
                         box-shadow: none !important;
-                        min-height: calc(100vh - 4px) !important;
+                        min-height: calc(100vh - 2px) !important;
+                        height: auto !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }
                     .no-print {
                         display: none !important;
@@ -203,6 +211,18 @@ export default function ReceivingPrintPage() {
                     .page-break {
                         page-break-after: always !important;
                         break-after: page !important;
+                    }
+                    .page-break:last-child {
+                        page-break-after: avoid !important;
+                        break-after: avoid !important;
+                    }
+                    tr {
+                        height: ${rowHeightPx}px !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                    }
+                    td {
+                        height: ${rowHeightPx}px !important;
                     }
                 }
             `}</style>
@@ -247,8 +267,8 @@ export default function ReceivingPrintPage() {
                             <Truck size={16} color="#0D7A57" />
                             Control de Llegada (Conteo a Ciegas)
                         </h1>
-                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
-                            2 Columnas A-Z
+                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 7px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
+                            {rowsPerPage} SKUs/hoja · {pages.length} {pages.length === 1 ? 'hoja' : 'hojas'}
                         </span>
                     </div>
                 </div>
@@ -276,9 +296,42 @@ export default function ReceivingPrintPage() {
                             onChange={(e) => setPaperFormat(e.target.value as any)}
                             style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '700', color: '#0F172A', outline: 'none', cursor: 'pointer' }}
                         >
+                            <option value="oficio">Oficio (Legal) - Predeterminado</option>
                             <option value="letter">Carta (Letter)</option>
-                            <option value="oficio">Oficio (Legal)</option>
                         </select>
+                    </div>
+
+                    {/* Parametrizador Dinámico de Filas por Hoja (Ocupar toda la hoja) */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 6px' }} title="Ajusta la cantidad de productos por hoja para ocupar toda la página">
+                        <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>Filas/Hoja:</span>
+                        <button
+                            type="button"
+                            onClick={() => setRowsPerPage(prev => Math.max(15, prev - 1))}
+                            style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', borderRadius: '3px', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', color: '#334155' }}
+                            title="Menos filas (filas más altas que ocupan más hoja)"
+                        >-</button>
+                        <input
+                            type="number"
+                            value={rowsPerPage}
+                            min={15}
+                            max={65}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val) && val >= 15 && val <= 65) {
+                                    setRowsPerPage(val);
+                                }
+                            }}
+                            style={{ width: '32px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: '800', fontSize: '0.76rem', color: '#0F172A', outline: 'none' }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setRowsPerPage(prev => Math.min(65, prev + 1))}
+                            style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', borderRadius: '3px', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', color: '#334155' }}
+                            title="Más filas (más productos por hoja)"
+                        >+</button>
+                        <span style={{ fontSize: '0.64rem', color: '#64748B', marginLeft: '1px' }}>
+                            (~{rowHeightPx}px)
+                        </span>
                     </div>
 
                     <button
@@ -289,7 +342,50 @@ export default function ReceivingPrintPage() {
                                     title: `Control_Llegada_${selectedDate}`,
                                     paperSize: paperFormat,
                                     orientation: 'portrait',
-                                    margin: '0.5cm 0.6cm'
+                                    margin: '0.5cm 0.6cm',
+                                    extraStyles: `
+                                        @page {
+                                            size: ${paperFormat === 'oficio' ? 'legal portrait' : 'letter portrait'} !important;
+                                            margin: 0.5cm 0.6cm !important;
+                                        }
+                                        .letterhead-container {
+                                            padding: 0.5cm 0.6cm !important;
+                                            page-break-inside: avoid !important;
+                                            break-inside: avoid !important;
+                                            page-break-after: always !important;
+                                            break-after: page !important;
+                                            min-height: calc(100vh - 2px) !important;
+                                            height: auto !important;
+                                            box-sizing: border-box !important;
+                                        }
+                                        .letterhead-container:last-child {
+                                            page-break-after: avoid !important;
+                                            break-after: avoid !important;
+                                        }
+                                        table {
+                                            width: 100% !important;
+                                            border-collapse: collapse !important;
+                                            margin-top: 2px !important;
+                                            margin-bottom: 2px !important;
+                                        }
+                                        tr {
+                                            page-break-inside: avoid !important;
+                                            break-inside: avoid !important;
+                                            height: ${rowHeightPx}px !important;
+                                        }
+                                        th {
+                                            padding: 3px 6px !important;
+                                            font-size: 7.2pt !important;
+                                            background-color: #0F172A !important;
+                                            color: #FFFFFF !important;
+                                        }
+                                        td {
+                                            padding: 2px 6px !important;
+                                            font-size: 7.5pt !important;
+                                            height: ${rowHeightPx}px !important;
+                                            border: 1px solid #CBD5E1 !important;
+                                        }
+                                    `
                                 });
                             }
                         }}
@@ -396,75 +492,31 @@ export default function ReceivingPrintPage() {
                                         </div>
                                     </div>
 
-                                    {/* Two-Column Side-by-Side Tables */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', alignItems: 'start' }}>
-                                        {/* Left Table Block */}
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.5pt' }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                                                    <th style={{ width: '42%', textAlign: 'left', padding: '1.5px 3px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
-                                                    <th style={{ width: '14%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
-                                                    <th style={{ width: '16%', textAlign: 'center', padding: '1.5px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.2pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
-                                                    <th style={{ width: '28%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
+                                    {/* Single Full-Width Table */}
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7.5pt' }}>
+                                        <thead>
+                                            <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #CBD5E1', borderBottom: '1.5px solid #0F172A' }}>
+                                                <th style={{ width: '36%', textAlign: 'left', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Producto</th>
+                                                <th style={{ width: '14%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt' }}>Hora Llegada</th>
+                                                <th style={{ width: '26%', textAlign: 'center', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Nombre Proveedor</th>
+                                                <th style={{ width: '12%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>KG</th>
+                                                <th style={{ width: '12%', textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt', lineHeight: 1.15 }}>Calidad<br/><span style={{ fontSize: '6.0pt', fontWeight: '700', color: '#FFFFFF', letterSpacing: '0.02em' }}>(SI/NO)</span></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {page.map((it, idx) => (
+                                                <tr key={it.product_id || idx} style={{ height: `${rowHeightPx}px` }}>
+                                                    <td style={{ textAlign: 'left', padding: '2px 6px', border: '1px solid #CBD5E1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', height: `${rowHeightPx}px`, boxSizing: 'border-box' }} title={it.product_name}>
+                                                        <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
+                                                    </td>
+                                                    <td style={{ border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box' }}></td>
+                                                    <td style={{ border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box' }}></td>
+                                                    <td style={{ border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box' }}></td>
+                                                    <td style={{ border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box' }}></td>
                                                 </tr>
-                                            </thead>
-                                            <tbody>
-                                                {page.left.map((it, idx) => (
-                                                    <tr key={it.product_id || idx} style={{ height: paperFormat === 'oficio' ? '17.5px' : '17px' }}>
-                                                        <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
-                                                            <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
-                                                            {it.accounting_id && (
-                                                                <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
-                                                                    #{it.accounting_id}
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000000' }}></td>
-                                                        <td style={{ border: '1px solid #000000' }}></td>
-                                                        <td style={{ border: '1px solid #000000' }}></td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-
-                                        {/* Right Table Block */}
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.5pt' }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                                                    <th style={{ width: '42%', textAlign: 'left', padding: '1.5px 3px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
-                                                    <th style={{ width: '14%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
-                                                    <th style={{ width: '16%', textAlign: 'center', padding: '1.5px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.2pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
-                                                    <th style={{ width: '28%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {page.right.map((it, idx) => (
-                                                    <tr key={it.product_id || idx} style={{ height: paperFormat === 'oficio' ? '17.5px' : '17px' }}>
-                                                        <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
-                                                            <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
-                                                            {it.accounting_id && (
-                                                                <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
-                                                                    #{it.accounting_id}
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000000' }}></td>
-                                                        <td style={{ border: '1px solid #000000' }}></td>
-                                                        <td style={{ border: '1px solid #000000' }}></td>
-                                                    </tr>
-                                                ))}
-                                                {/* Rellenar filas vacías en la columna derecha si es más corta que la izquierda */}
-                                                {Array.from({ length: Math.max(0, page.left.length - page.right.length) }).map((_, emptyIdx) => (
-                                                    <tr key={`empty-${emptyIdx}`} style={{ height: paperFormat === 'oficio' ? '17.5px' : '17px' }}>
-                                                        <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
-                                                        <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
-                                                        <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
-                                                        <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
 
                                 {/* Clean Bottom Page Number */}

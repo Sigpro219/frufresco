@@ -406,6 +406,22 @@ Cuando el sistema consulta el precio de un producto para un cliente o sucursal, 
 5. **Nivel 5 (Modelo General Institucional - Fallback Universal B2B):** Modelo asignado a la matriz (`profiles.parent.pricing_model_id`), o en su defecto `General Institucional` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) si es cliente B2B. Este precio se deriva estrictamente de: **Costo Base de la Matriz Comercial (`commercial_cost_matrix`) pasado por el margen del modelo de precios (`pricing_models` + `pricing_rules`) y materializado en `pricing_model_prices`**.
 6. **Nivel 6 (Canal Minorista B2C Exclusivo):** Lista `Clientes Hogar` (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`) para consumidores finales residenciales (con IVA incluido).
 
+#### 7.2.1 Contexto de Storefront B2C Hogar & Poka-Yoke Anti-Precio Oculto ("Precio a Consultar")
+En el canal minorista residencial (B2C Hogar) rigen los siguientes contratos de arquitectura:
+1. **Contexto Prevalente para Perfiles Internos en Storefront:**  
+   Al navegar la tienda pública (`/` o `/products/[id]`), cualquier usuario autenticado con rol administrativo o interno (`sys_admin`, `admin`, `employee`, `commercial`, `sales`) que no posea un `pricing_model_id` corporativo explícitamente fijado navegará en el contexto canónico de **`Clientes Hogar` (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`)**. Esto garantiza que el equipo interno audite y experimente el catálogo exactamente como lo ve el consumidor final, evitando la inyección no deseada de tarifas mayoristas institucionales.
+2. **Acceso Server-Side Blindado contra RLS:**  
+   La consulta de productos y listas de precios para renderizado en componentes de servidor (`ProductPage`, `getVisibleProducts`) se ejecuta mediante el cliente administrativo (`createAdminClient()`), de modo que las políticas de sesión de Postgres RLS jamás bloqueen silenciosamente la carga de tarifas de catálogo.
+3. **Triple Red de Seguridad de Precio (Triple Fallback Anti-Cero):**  
+   Para erradicar de raíz la aparición de la etiqueta *"Precio a consultar"* o precios en \$0:
+   - **Nivel A:** Precio del modelo resuelto (`pricing_model_prices[model_id]`).
+   - **Nivel B (Fallback Hogar):** Si el SKU carece de fila en dicho modelo, consulta reactiva al modelo oficial `Clientes Hogar`.
+   - **Nivel C (Fallback Catálogo):** Si aún no existe tarifa calculada, fallback seguro a `products.base_price`.
+4. **Regla Poka-Yoke de Presentación y Peso en Ambiente Hogar:**  
+   - Para productos agrícolas cuya unidad de compra sea `Kg`, si no cuentan con una presentación configurada con gramaje superior a 500g, se venden obligatoriamente por **Libra (500g)**.
+   - El precio proyectado corresponde al 50% de la tarifa por kilo con redondeo comercial a múltiplos de \$50 COP.
+   - El selector de cantidad informa de manera humana el peso acumulado en gramos: `N Libras (~X.000 g aprox.)`.
+
 > [!CAUTION]
 > **Prohibición Estricta de Cotización o Facturación a $0 COP (Poka-Yoke Anti-Tarifa Cero):**  
 > Queda terminantemente prohibido cotizar, ingresar o despachar productos comerciales con tarifa \$0 COP o "sin precio". La DIAN prohíbe facturas comerciales con tarifa cero o consumo abierto sin liquidar. Si un cliente institucional solicita un producto fuera de su acuerdo comercial, el sistema **NUNCA debe ingresar el SKU en \$0 para "cotizar en caliente"**, sino que debe liquidar de forma inmediata y automática la tarifa vigente de **General Institucional** (Nivel 5). La única excepción admitida en todo el ecosistema para tarifa \$0 COP es una Reposición de Garantía por PQR (`orderNature === 'replacement'`), la cual requiere obligatoriamente amparo de un Pedido Original (`parentOrderId`).
@@ -6892,25 +6908,34 @@ La Consola Central de Compras 360 es el punto neurálgico de gobernanza donde co
    - Compatibilidad con exportación inmediata a Microsoft Excel (`.xlsx`).
 
 #### B. Planilla Física de Control de Llegada e Ingreso a Bodega (`/admin/procurement/receiving-print`)
-1. **Diseño Industrial de Doble Columna (A-Z):**
-   - Disposición de alta densidad en dos columnas para maximizar el uso del papel y reducir desperdicio físico.
-   - Sello corporativo Investments Cortés SAS con logosímbolo oficial.
-   - Campos de anotación física en Gemba: Cantidad Recibida, Número de Lote, Proveedor y Check de Calidad Sensorial.
-2. **Arquitectura Golden Print:**
-   - Selector dinámico de formato de papel (Carta / Oficio) con márgenes industriales fijos (`0.5cm 0.6cm`).
-   - Aislamiento de impresión mediante ventana independiente (`printViaNewWindow`) para evitar fugas de cabeceras de navegador y artefactos CSS.
+1. **Diseño Industrial de Tabla Única (1 Columna A-Z de Ancho Completo):**
+   - Disposición de ancho completo (1 sola tabla de 5 columnas que aprovecha el 100% del ancho de hoja), ofreciendo espacio generoso para escritura manuscrita y evitando el apiñamiento de texto.
+   - **Parametrizador Dinámico de Filas por Hoja (Ocupar Toda la Hoja):** Control en barra superior (botones `+` / `-` e input interactivo) que permite al usuario ajustar en caliente la cantidad de filas por hoja (defecto: 36 en Carta, 46 en Oficio). El motor recalcula instantáneamente la altura proporcional de fila (`rowHeightPx`, entre 20px y 26px) para que el contenido se expanda armónicamente y ocupe el 100% del folio vertical sin desbordar hacia hojas fantasma.
+   - **Blindaje Anti-Desbordamiento (Anti-Spillover):** Erradicación del fallo donde alturas excesivas forzaban al motor de impresión a cortar la tabla y expulsar 6 u 8 filas huérfanas a una hoja adicional con 80% de espacio en blanco.
+   - **Cero Desperdicio de Tinta/Tóner (Zero Filler Rows):** Erradicación total de filas vacías ficticias o grillas dibujadas sin productos al pie de página. El documento únicamente renderiza los ítems existentes, dejando el resto de la hoja en blanco natural.
+   - Membrete institucional con logotipo de *FruFresco* y razón social oficial *Investments Cortés S.A.S.*
+   - **Estructura Canónica de 5 Columnas de Entrada en Muelle (Resolutivo Gemba Octubre 2026):**
+     1. **`Producto` (36%):** Nombre limpio del producto sin sufijos numéricos ni IDs contables superfluos (`#{accounting_id}`), maximizando el espacio tipográfico para legibilidad inmediata.
+     2. **`Hora Llegada` (14%):** Casilla manuscrita para registrar el horario exacto de arribo del vehículo/camión a muelle (ej. `04:30 AM`).
+     3. **`Nombre Proveedor` (26%):** Casilla manuscrita para registrar con precisión el proveedor, distribuidor o puesto de plaza abastecedor.
+     4. **`KG` (12%):** Casilla de pesaje físico real en báscula de patio.
+     5. **`Calidad - Apto (SI/NO)` (12%):** Casilla de inspección sensorial de recibo para visto bueno o rechazo técnico con texto blanco de alto contraste sobre cabecera institucional.
+2. **Arquitectura Golden Print e Insumo Eficiente:**
+   - Líneas de cuadrícula delgadas y eficientes en tóner (`1px solid #CBD5E1`) en lugar de marcos negros pesados que saturan la impresora.
+   - Inyección de `extraStyles` en `printViaNewWindow` que anula los paddings inflados de `td` y respeta la altura exacta calculada (`height: ${rowHeightPx}px !important`).
+   - Selector dinámico de formato de papel (Carta / Oficio) con márgenes industriales calibrados (`0.5cm 0.6cm`).
    - Conmutador integrado de documentos de impresión (`PrintDocumentSwitcher`) que sincroniza fecha y filtros entre formatos.
 
 ---
 
 #### Escenario 135: Generación e Impresión de la Planilla de Ingreso a Bodega para Cuadrilla de Muelle (SDD v1.9.96)
-- **Given** una tanda de 12 camiones con 64 SKUs agrícolas que arribarán a planta a las 05:30 AM.
+- **Given** una tanda de camiones con SKUs agrícolas que arribarán a planta en la madrugada.
 - **When** el jefe de bodega ingresa a `/admin/procurement/receiving-print`, selecciona la fecha de entrega y pulsa *Imprimir Control de Llegada*:
 - **Then**:
-  1. El sistema consolida todos los pedidos operativos autorizados de esa fecha.
-  2. Genera las páginas en formato 2 columnas A-Z con paginación estricta y membrete oficial.
+  1. El sistema consolida todos los pedidos operativos autorizados de esa fecha ordenados alfabéticamente de la A a la Z.
+  2. Genera las páginas en formato de 1 tabla de ancho completo (38 filas/hoja en Carta, 46 en Oficio) sin filas vacías ficticias que desperdicien tinta.
   3. Abre la ventana de impresión limpia con configuración de tamaño Letter/Oficio.
-  4. La planilla física permite a los operarios en muelle chequear cada canastilla y registrar diferencias de pesaje directamente contra el manifiesto.
+  4. La planilla física permite a los operarios en muelle chequear cada producto y registrar hora de arribo, proveedor, pesaje real y estado de calidad con amplio espacio de escritura.
 
 ---
 
@@ -9048,9 +9073,15 @@ La ficha técnica de SKU (`src/app/products/[id]/page.tsx` y su cliente `src/com
    - Idéntica prevalencia se aplica de manera masiva sobre los 6 productos sugeridos de la sección de relacionados (`relatedProducts`).
 2. **Modulación por Campañas Promocionales (`campaign_info`):**
    - Cuando un SKU participa en una campaña activa de modulación de margen o precio fijo, la interfaz proyecta el precio de oferta en rojo vivo junto al precio de lista tachado y un badge con el nombre de la campaña y el descuento aplicado.
-3. **Conversión Poka-Yoke de Presentaciones y Pesos:**
+3. **Conversión Poka-Yoke de Presentaciones y Pesos (Gobernanza Canónica Hogar B2C - SDD v1.9.153):**
    - Normalización de opciones provenientes de `options_config` auditadas contra el maestro `product_attributes_master` (excluyendo atributos internos de bodega `show_in_picking = true`).
-   - Para productos cuya unidad base es Kilogramo (`kg`, `kilo`), si carecen de selector explícito de presentación, se inyecta automáticamente la opción canónica `"Libra 500g|500"` (o `"Pound 500g|500"` en inglés).
+   - **Regla Canónica 1 (Compra en `Kg` con gramaje $\le 500\text{g}$):** Todo producto cuya unidad base de abastecimiento sea Kilogramo (`kg`, `kilo`) y carezca de pieza mayor a 500g (ej. Tomate chonto, Tomate larga vida, Cebolla, Zanahoria, Limón, Papa) se vende **EXCLUSIVAMENTE por Libras (500g)**. Quedan terminantemente neutralizadas y purgadas en la tienda pública Hogar las presentaciones sub-libra (ej. "Unidad 200 gr", "Unidad 150 gr"). El sistema impone la opción canónica `"Libra 500g|500"` (o `"Pound 500g|500"` en inglés).
+   - **Regla Canónica 2 (Compra en `Kg` con gramaje $> 500\text{g}$ - Pieza Grande Indivisible):** Frutas de gran porte que se compran en Kg pero constituyen piezas completas cerradas (ej. Sandía baby ~2kg, Sandía grande ~7kg, Melón ~2kg, Papaya maradol ~2kg, Piña ~1.5kg, Calabaza entera) se venden **EXCLUSIVAMENTE por UNIDAD** con su peso referencial aproximado. Se **bloquea la venta por Libras** en estos SKUs para erradicar el fraccionamiento de frutos en picking.
+   - **Regla Canónica 3 (Compra en `Unidad` - Discreto):** Productos cuya unidad base de abastecimiento sea Unidad (ej. Lechuga batavia, atados de hierbas aromáticas, cubetas de huevos, frascos) preservan intacta su presentación por Unidad sin inventar gramajes abstractos.
+   - **Regla Canónica 4 (Feedback Reactivo de Peso Acumulado en UI):** En `QuickViewModal` y `ProductDetailClient`, al modificar el contador de cantidad:
+     - Si la presentación es **Libra**: Proyecta reactivamente `${N} Libras (~${N * 500} g aprox.)` con subtítulo `"Peso aprox. en báscula"`.
+     - Si la presentación es **Unidad de Gran Calibre (> 500g)**: Proyecta `${N} Unidades (~${N * peso_kg} kg aprox.)`.
+     - Si la presentación es **Unidad Discreta**: Proyecta limpiamente `${N} Unidades`.
    - Extracción matemática del peso en kilogramos (`getParsedWeight`) para inyectar `weight_kg` en el ítem del carrito, asegurando que el motor de cubicaje y liquidación de transporte reciba la masa física real.
 
 #### C. Control de Insumo Preexistente & Erradicación de Alertas
@@ -9107,6 +9138,69 @@ La pasarela y formulario de checkout (`src/app/checkout/page.tsx`) centraliza la
   3. Mantiene seleccionado el método Wompi e inhabilita el avance en contra entrega.
   4. Tras verificar que las coordenadas GPS caen dentro de la geocerca activa y que la fecha de entrega respeta el corte de las 17:00, el cliente pulsa `[Confirmar y Pagar Online]`.
   5. El sistema genera la orden en base de datos, calcula el hash criptográfico SHA-256 para Wompi y redirige fluidamente a la pasarela de pagos.
+
+---
+
+#### D. Contrato Canónico de Ciclo de Vida de Direcciones B2C y Georreferenciación de Portería (SDD v1.9.154)
+
+Para erradicar de raíz la pérdida de tiempo en ruta y garantizar que los transportadores y motorizados lleguen con precisión suiza a la portería del cliente residencial (donde más del 70% de las entregas se realizan en conjuntos cerrados y edificios), el sistema de checkout (`/checkout`) opera bajo la **Máquina de Estados de 3 Vías de Adquisición de Domicilios**:
+
+```mermaid
+flowchart TD
+    A["Cliente en Checkout (/checkout)"] --> B{"¿Es cliente recurrente<br>con coordenadas guardadas?"}
+    
+    B -- SÍ (Estado Recurrente) --> C["⚡ 1-Click Delivery (Cero Fricción):<br>Tarjeta fija con dirección + pin ya guardado.<br>NO pide mapa ni re-ingreso de datos.<br>Proceso en 5 segundos."]
+    
+    B -- NO (Cliente Nuevo) --> D["📍 Onboarding de Dirección Asistido:<br>1. Nomenclatura oficial (Calle/Cra).<br>2. Confirmación obligatoria de Pin en mapa (Portería).<br>3. Estructuración semántica de Inmueble (Conjunto + Torre/Apto).<br>4. Persistencia en BD vinculada al Perfil."]
+    
+    A --> E{"¿Marcó 'Enviar a otra persona'<br>o 'Es un Regalo'?"}
+    E -- SÍ (Estado Tercero) --> F["🎁 Flujo Destinatario Tercero:<br>1. Nombre y Celular de quien recibe.<br>2. OBLIGATORIO confirmar pin en mapa para la nueva ubicación.<br>(El conductor no puede navegar a ciegas a un destino inédito)."]
+```
+
+1. **Estado 1: Cliente Nuevo (Georreferenciación Asistida Obligatoria):**
+   - **Regla Poka-Yoke de Coordenadas:** Es estrictamente obligatorio que todo pedido de un cliente nuevo cuente con `latitude` y `longitude` confirmadas mediante el selector de mapa interactivo (`showMapPicker`). El botón de confirmación de pedido bloquea el envío con un banner asistido si la dirección no ha sido fijada satelitalmente.
+   - **Ajuste Fino de Portería:** El mapa interactivo proyecta el marcador centrado en la nomenclatura geocodificada, instruyendo explícitamente: *"Mueve el mapa para centrar el pin en la portería o entrada de domicilios"*.
+   - **Estructuración Semántica del Inmueble (Poka-Yoke Residencial):** En lugar de un campo de texto libre rotulado vagamente como "Opcional", el formulario descompone la ubicación física en campos estructurados:
+     - **Vía / Nomenclatura:** Dirección postal principal (ej: `Calle 140 # 12-34`).
+     - **Nombre del Conjunto o Edificio:** Indispensable para anunciarse ante el personal de seguridad (ej: `Conjunto Residencial Torres del Parque`).
+     - **Unidad Privada:** Torre, Bloque o Interior + Número de Apartamento o Casa (ej: `Torre 3 - Apto 502`).
+   - **Persistencia en Base de Datos:** Tras completar la orden, las coordenadas, dirección limpia y complementos se asocian de forma permanente al registro del perfil (`profiles.address`, `profiles.latitude`, `profiles.longitude`) y en el historial del comprador.
+
+2. **Estado 2: Cliente Recurrente (Zero Friction / 1-Click Delivery):**
+   - Al reconocer al comprador (mediante autenticación de sesión o concordancia de teléfono/identificación `matchProfile`), el sistema auto-selecciona su dirección predeterminada y precarga sus coordenadas GPS guardadas.
+   - Proyecta una tarjeta sobria y confirmada:  
+     `📍 Entrega en: Calle 140 # 12-34 - Conjunto Torres del Parque (T3-502)`  
+     con badge verde de ubicación satelital verificada y un botón discreto `[ Cambiar ]`.
+   - **Prohibición de Fricción Repetitiva:** Al cliente recurrente **JAMÁS se le vuelve a abrir un mapa ni a exigir re-ingreso de datos** a menos que él pulse voluntariamente `[ Cambiar ]`.
+
+3. **Estado 3: Envío a Tercero o Modalidad Regalo (`isGiftForRecipient`):**
+   - Cuando el cliente activa la casilla *"Enviar a otra persona / Es un regalo"*, el sistema despliega el módulo de destinatario:
+     - Nombre completo de quien recibe en puerta y teléfono celular (para aviso del conductor).
+     - Si el comprador cuenta con beneficiarios previamente guardados en su libreta, puede seleccionarlos en 1 clic.
+     - Si es una dirección nueva, **aplica estrictamente la Regla Poka-Yoke del Estado 1**: exige confirmar el pin satelital en el mapa para esa nueva ubicación, evitando que el conductor se desplace a ciegas a una residencia desconocida.
+
+4. **Contrato de Concatenación para la Hoja de Ruta del Conductor (`shipping_address`):**
+   - Para consumo en la aplicación de despacho (`/ops/driver/route-map` y hoja de ruta), la dirección física se formatea con jerarquía decreciente:  
+     $$\mathbf{shipping\_address} = \text{Nomenclatura} + \text{", "} + \text{Nombre del Conjunto/Edificio} + \text{" ("} + \text{Torre/Apto} + \text{")"}$$  
+   - Los botones de navegación de Waze y Google Maps en el módulo del conductor enrutan directamente a las coordenadas numéricas `(latitude, longitude)`, garantizando que el GPS guíe al conductor exactamente a la portería vehicular o peatonal configurada por el cliente.
+
+---
+
+#### Escenario 189: Adquisición de Dirección B2C para Cliente Nuevo vs Recurrente vs Envío a Tercero (SDD v1.9.154)
+- **Given** un usuario que navega en la tienda B2C Hogar con productos en el carrito y accede a `/checkout`.
+- **Scenario A (Cliente Nuevo):**
+  - **When** ingresa su nombre, teléfono y escribe la dirección "Calle 152 # 11 - 45".
+  - **And** intenta pulsar `[Confirmar Pedido]` sin haber abierto el mapa ni fijado el pin.
+  - **Then** el sistema detiene el avance con un banner reactivo: *"Por favor confirma la ubicación exacta en el mapa para que el repartidor llegue a tu puerta"*, abre el mapa centrado en la nomenclatura y le permite situar el pin en la portería.
+  - **And** el usuario diligencia los campos del inmueble: Conjunto "Alameda del Parque" y "Torre 2 Apto 401".
+  - **And** al confirmar, el pedido se guarda con `latitude` y `longitude` exactas, y la dirección formateada `Calle 152 # 11 - 45, Conjunto Alameda del Parque (Torre 2 Apto 401)`.
+- **Scenario B (Cliente Recurrente):**
+  - **When** el mismo cliente regresa una semana después e ingresa su teléfono.
+  - **Then** el sistema reconoce su perfil, precarga su dirección y coordenadas satelitales en 1 clic.
+  - **And** no le exige volver a abrir el mapa ni rellenar formularios, permitiéndole pagar en menos de 10 segundos.
+- **Scenario C (Envío a Tercero / Regalo):**
+  - **When** el cliente marca la casilla *"Es un regalo para otra persona"*.
+  - **Then** el sistema solicita los datos de quien recibe y exige georreferenciar en el mapa la nueva dirección del destinatario antes de procesar el pago.
 
 ---
 

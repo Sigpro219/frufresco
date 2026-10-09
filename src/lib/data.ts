@@ -24,9 +24,16 @@ export const getVisibleProducts = unstable_cache(
       console.error('Error reading scarcity_locked_skus in getVisibleProducts:', e);
     }
 
-    const { data, error } = await supabase
+    let dbClient: any = supabase;
+    try {
+      dbClient = createAdminClient();
+    } catch (e) {
+      // Safe fallback
+    }
+
+    const { data, error } = await dbClient
       .from('products')
-      .select('*, pricing_model_prices(price)')
+      .select('*, pricing_model_prices(price, model_id)')
       .eq('is_active', true)
       .eq('show_on_web', true)
       .eq('pricing_model_prices.model_id', modelId)
@@ -35,7 +42,7 @@ export const getVisibleProducts = unstable_cache(
 
     if (error) {
       console.error('Error fetching products with prices, trying fallback:', error.message);
-      const { data: fallbackData, error: fallbackError } = await supabase
+      const { data: fallbackData, error: fallbackError } = await dbClient
         .from('products')
         .select('*')
         .eq('is_active', true)
@@ -46,10 +53,20 @@ export const getVisibleProducts = unstable_cache(
         console.error('Fallback products fetch failed:', fallbackError);
         return [];
       }
-      const fallbackList = (fallbackData as Product[]).filter(p => !lockedIds.has(p.id));
+      const fallbackList = ((fallbackData || []) as Product[]).map(p => {
+        if ((!p.pricing_model_prices || p.pricing_model_prices.length === 0) && (p as any).base_price) {
+          return { ...p, pricing_model_prices: [{ price: (p as any).base_price, model_id: 'base' }] };
+        }
+        return p;
+      }).filter(p => !lockedIds.has(p.id));
       return fallbackList.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
     }
-    const productList = (data as Product[]).filter(p => !lockedIds.has(p.id));
+    const productList = ((data || []) as Product[]).map(p => {
+      if ((!p.pricing_model_prices || p.pricing_model_prices.length === 0) && (p as any).base_price) {
+        return { ...p, pricing_model_prices: [{ price: (p as any).base_price, model_id: 'base' }] };
+      }
+      return p;
+    }).filter(p => !lockedIds.has(p.id));
     return productList.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
   },
   ['visible-products'],

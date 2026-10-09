@@ -284,7 +284,7 @@ export default function ProductCard({ product }: { product: Product }) {
 
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.2rem 0', flexWrap: 'wrap' }}>
                         {(() => {
-                            const rawPrice = Number(product.pricing_model_prices?.[0]?.price || 0);
+                            const rawPrice = Number(product.pricing_model_prices?.[0]?.price || (product as any).base_price || 0);
                             if (rawPrice <= 0) {
                                 return (
                                     <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#666', fontStyle: 'italic', letterSpacing: '-0.01em' }}>
@@ -303,6 +303,20 @@ export default function ProductCard({ product }: { product: Product }) {
                             if (rawWebUnit.includes('libra') || rawWebUnit.includes('pound') || rawWebUnit === 'lb') {
                                 conversionFactor = 0.5;
                                 unitLabel = locale === 'en' ? 'Pound 500g' : 'Libra 500g';
+                            } else if (isKgBase) {
+                                const factor = product.web_conversion_factor || 0;
+                                const isEmpaque = ['bandeja', 'cubeta', 'caja', 'paquete', 'malla', 'bolsa'].some(pkg => rawWebUnit.includes(pkg));
+                                if (isEmpaque) {
+                                    conversionFactor = factor > 0 ? factor : 1;
+                                    unitLabel = product.web_unit || 'Bandeja';
+                                } else if (factor > 0.5) {
+                                    conversionFactor = factor;
+                                    const formattedKg = factor % 1 === 0 ? factor : (factor.toFixed(1)).replace('.', ',');
+                                    unitLabel = locale === 'en' ? `Unit (±${factor % 1 === 0 ? factor : factor.toFixed(1)} kg)` : `Unidad (±${formattedKg} kg)`;
+                                } else {
+                                    conversionFactor = 0.5;
+                                    unitLabel = locale === 'en' ? 'Pound 500g' : 'Libra 500g';
+                                }
                             } else if (product.web_conversion_factor && product.web_conversion_factor > 0) {
                                 conversionFactor = product.web_conversion_factor;
                                 if (rawWebUnit === 'unidad') {
@@ -316,9 +330,6 @@ export default function ProductCard({ product }: { product: Product }) {
                                 } else {
                                     unitLabel = product.web_unit || 'Un';
                                 }
-                            } else if (isKgBase) {
-                                conversionFactor = 0.5;
-                                unitLabel = locale === 'en' ? 'Pound 500g' : 'Libra 500g';
                             }
 
                             const displayPrice = Math.ceil((rawPrice * conversionFactor) / 50) * 50;

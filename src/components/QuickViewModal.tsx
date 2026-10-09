@@ -24,6 +24,7 @@ interface Product {
     options_config?: any[];
     variants?: any[];
     web_conversion_factor?: number;
+    web_unit?: string;
     display_name?: string;
     pricing_model_prices?: { price: number }[];
     tags?: string[];
@@ -77,47 +78,8 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
         fetchMaster();
     }, []);
 
-    // Normalizar las opciones
-    const displayOptions = useMemo(() => {
-        const unitLower = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
-        const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(unitLower);
-
-        let opts = product.options_config && product.options_config.length > 0
-            ? product.options_config
-                .filter((opt: any) => {
-                    const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
-                    if (master) {
-                        if (master.show_in_picking) return false;
-                        return master.show_on_web === true;
-                    }
-                    if (opt.show_in_picking) return false;
-                    return opt.show_on_web !== false;
-                })
-                .reduce((acc: any, opt: any) => {
-                    let values = opt.values || [];
-                    if (opt.name.toLowerCase().includes('presentaci')) {
-                        if (!values || values.length === 0) {
-                            if (isBaseInKg) {
-                                values = [locale === 'en' ? 'Pound 500g|500' : 'Libra 500g|500'];
-                            } else {
-                                const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Unidad';
-                                values = [defaultVal];
-                            }
-                        }
-                    }
-                    return { ...acc, [opt.name]: values };
-                }, {})
-            : product.options || {};
-
-        const hasPresentationKey = Object.keys(opts).some(k => k.toLowerCase().includes('presentaci'));
-        if (!hasPresentationKey && isBaseInKg) {
-            opts = {
-                ...opts,
-                'Presentación': [locale === 'en' ? 'Pound 500g|500' : 'Libra 500g|500']
-            };
-        }
-        return opts;
-    }, [product, masterAttributes, locale]);
+    const rawBaseUnit = (product.unit_of_measure || '').trim().toLowerCase();
+    const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(rawBaseUnit);
 
     // Helper para extraer peso en Kg
     const getParsedWeight = (text: string): number | null => {
@@ -189,11 +151,69 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
         return val;
     };
 
+    // Normalizar las opciones aplicando reglas canónicas Hogar B2C
+    const displayOptions = useMemo(() => {
+        let opts = product.options_config && product.options_config.length > 0
+            ? product.options_config
+                .filter((opt: any) => {
+                    const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
+                    if (master) {
+                        return master.show_on_web === true;
+                    }
+                    return opt.show_on_web !== false;
+                })
+                .reduce((acc: any, opt: any) => {
+                    let values = opt.values || [];
+                    return { ...acc, [opt.name]: values };
+                }, {})
+            : product.options || {};
+
+        if (isBaseInKg) {
+            const presKey = Object.keys(opts).find(k => k.toLowerCase().includes('presentaci'));
+            const rawPresValues: string[] = presKey ? (opts[presKey] || []) : [];
+
+            // Detectar si alguna presentación supera 500g (Pieza Grande: Sandía, Papaya, Melón, Patilla, Calabaza, etc.)
+            const hasHeavyPiece = (product.web_conversion_factor && product.web_conversion_factor > 0.5) || rawPresValues.some(v => {
+                const w = getParsedWeight(v);
+                return w !== null && w > 0.5; // > 500g
+            });
+
+            if (hasHeavyPiece) {
+                // Pieza Grande (> 500g): Se vende por UNIDAD de fruta completa, PROHIBIDO vender por libras
+                const unitOnlyValues = rawPresValues.filter(v => {
+                    const w = getParsedWeight(v);
+                    return w !== null && w > 0.5;
+                });
+                opts = {
+                    ...opts,
+                    [presKey || 'Presentación']: unitOnlyValues.length > 0 ? unitOnlyValues : (rawPresValues.length > 0 ? rawPresValues : [product.web_unit || 'Unidad'])
+                };
+            } else {
+                // Gramaje <= 500g o sin presentación: En canal Hogar se vende SIEMPRE por LIBRAS (500g)
+                // Se purgan opciones sub-libra ("Unidad 200 gr", "Unidad 150 gr", etc.)
+                const canonicalLibra = locale === 'en' ? 'Pound 500g|500' : 'Libra 500g|500';
+                opts = {
+                    ...opts,
+                    [presKey || 'Presentación']: [canonicalLibra]
+                };
+            }
+        } else {
+            // Unidad de compra es Unidad: Se preserva la presentación
+            const presKey = Object.keys(opts).find(k => k.toLowerCase().includes('presentaci'));
+            if (!presKey) {
+                const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Unidad';
+                opts = {
+                    ...opts,
+                    'Presentación': [defaultVal]
+                };
+            }
+        }
+        return opts;
+    }, [product, masterAttributes, locale, isBaseInKg]);
+
     // Initialize selections with the first option of each category (sorted by weight/name)
     const initialSelections = useMemo(() => {
         const selections: Record<string, string> = {};
-        const unitLower = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
-        const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(unitLower);
         Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
             if (Array.isArray(values) && values.length > 0) {
                 const defaultUnit = isBaseInKg ? (locale === 'en' ? 'pound 500g' : 'libra 500g') : ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
@@ -213,7 +233,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
             }
         });
         return selections;
-    }, [displayOptions, product, locale]);
+    }, [displayOptions, product, locale, isBaseInKg]);
 
     const [selections, setSelections] = useState(initialSelections);
 
@@ -255,11 +275,38 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
         }
     });
 
-    const unitLower = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
-    const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(unitLower);
     const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
-    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (isBaseInKg ? 0.5 : (product.web_conversion_factor || 1));
+    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (isBaseInKg ? 0.5 : ((product as any).web_conversion_factor || 1));
     const activeUnit = selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, locale === 'en') : (isBaseInKg ? (locale === 'en' ? 'Pound 500g' : 'Libra 500g') : ((product as any).web_unit || product.unit_of_measure));
+
+    // Feedback visual humano y claro del peso acumulado (Hogar B2C)
+    const quantityFeedback = useMemo(() => {
+        const isEn = locale === 'en';
+        const isLibra = activeUnit.toLowerCase().includes('libra') || activeUnit.toLowerCase().includes('pound') || (isBaseInKg && (parsedWeight === 0.5 || parsedWeight === null));
+        
+        if (isLibra) {
+            const totalGrams = quantity * 500;
+            const formattedGrams = totalGrams.toLocaleString('es-CO');
+            const unitName = quantity === 1 ? (isEn ? 'Pound' : 'Libra') : (isEn ? 'Pounds' : 'Libras');
+            return `${quantity} ${unitName} (~${formattedGrams} g aprox.)`;
+        }
+
+        if (parsedWeight !== null && parsedWeight > 0.5) {
+            const totalKg = quantity * parsedWeight;
+            const formattedKg = totalKg % 1 === 0 ? totalKg.toString() : (isEn ? totalKg.toFixed(1) : totalKg.toFixed(1).replace('.', ','));
+            const unitName = quantity === 1 ? (isEn ? 'Unit' : 'Unidad') : (isEn ? 'Units' : 'Unidades');
+            return `${quantity} ${unitName} (~${formattedKg} kg aprox.)`;
+        }
+
+        if (parsedWeight !== null && parsedWeight < 0.5 && parsedWeight > 0) {
+            const totalGrams = Math.round(quantity * parsedWeight * 1000);
+            const unitName = quantity === 1 ? (isEn ? 'Unit' : 'Unidad') : (isEn ? 'Units' : 'Unidades');
+            return `${quantity} ${unitName} (~${totalGrams.toLocaleString('es-CO')} g aprox.)`;
+        }
+
+        const unitName = quantity === 1 ? (isEn ? 'Unit' : 'Unidad') : (isEn ? 'Units' : 'Unidades');
+        return `${quantity} ${unitName}`;
+    }, [activeUnit, isBaseInKg, parsedWeight, quantity, locale]);
 
     const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb') || selectedPresentationVal?.toLowerCase().includes('unidad web');
     const isAvailable = product.variants && product.variants.length > 0
@@ -267,7 +314,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
         : true;
     
     // Aplicar factor de conversión y redondeo a 50
-    const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || 0) : (product.pricing_model_prices?.[0]?.price || 0);
+    const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || (product as any).base_price || 0) : (product.pricing_model_prices?.[0]?.price || (product as any).base_price || 0);
     
     // Si la variante tiene price_adj_pct o price_adjustment_percent, aplicarlo al precio base
     const adjustmentPercent = currentVariant ? (currentVariant.price_adj_pct ?? currentVariant.price_adjustment_percent ?? 0) : 0;
@@ -693,20 +740,26 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             >+</button>
                         </div>
 
-                        <span style={{ 
-                            fontSize: '0.9rem', 
-                            fontWeight: '800', 
-                            color: 'var(--primary)', 
-                            textTransform: 'lowercase', 
-                            backgroundColor: 'rgba(34, 197, 94, 0.08)', 
-                            padding: '6px 12px', 
-                            borderRadius: '10px', 
-                            border: '1px solid rgba(34, 197, 94, 0.15)',
-                            display: 'inline-flex',
-                            alignItems: 'center'
-                        }}>
-                            {activeUnit}
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <span style={{ 
+                                fontSize: '0.85rem', 
+                                fontWeight: '800', 
+                                color: 'var(--primary)', 
+                                backgroundColor: 'rgba(34, 197, 94, 0.08)', 
+                                padding: '6px 12px', 
+                                borderRadius: '10px', 
+                                border: '1px solid rgba(34, 197, 94, 0.15)',
+                                display: 'inline-flex',
+                                alignItems: 'center'
+                            }}>
+                                {quantityFeedback}
+                            </span>
+                            {isBaseInKg && (
+                                <span style={{ fontSize: '0.72rem', color: '#6B7280', fontWeight: '500' }}>
+                                    {locale === 'en' ? 'Approx. scale weight' : 'Peso aprox. en báscula'}
+                                </span>
+                            )}
+                        </div>
 
                         <div style={{ flex: 1, textAlign: 'right' }}>
                              <span style={{ fontSize: '0.9rem', color: '#9CA3AF', fontWeight: '600' }}>{t.total}</span>

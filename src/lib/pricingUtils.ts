@@ -24,8 +24,6 @@ export function isB2BProfile(profile?: MinimalProfile | null): boolean {
     if (!profile) return false;
     if (profile.role === 'b2b_client') return true;
     if (profile.profile_type === 'b2b') return true;
-    // System admin / commercial roles acting on B2B
-    if (['admin', 'sys_admin', 'commercial', 'sales'].includes(profile.role || '')) return true;
     return false;
 }
 
@@ -33,7 +31,7 @@ export function isB2BProfile(profile?: MinimalProfile | null): boolean {
  * Resolves the effective pricing model ID for a client profile based on business hierarchy:
  * 1. Explicitly assigned pricing_model_id (own or matrix parent)
  * 2. If B2B client without specific model -> General Institucional (d90a91e5-827c-473d-9d4f-3e28c7c91e15)
- * 3. Default B2C / Guest -> Clientes Hogar (f7043ca1-94d5-4d25-bd10-fbf30ce120ee)
+ * 3. Default B2C / Guest / Internal Staff -> Clientes Hogar (f7043ca1-94d5-4d25-bd10-fbf30ce120ee)
  */
 export function resolvePricingModelId(profile?: MinimalProfile | null): string {
     if (!profile) {
@@ -46,8 +44,8 @@ export function resolvePricingModelId(profile?: MinimalProfile | null): string {
         return assignedModel;
     }
 
-    // 2. Check if user is B2C specifically
-    if (profile.role === 'b2c_client') {
+    // 2. Check if user is B2C specifically or internal staff without explicit assignment
+    if (profile.role === 'b2c_client' || ['admin', 'sys_admin', 'employee', 'commercial', 'sales'].includes(profile.role || '')) {
         return CLIENTES_HOGAR_ID;
     }
 

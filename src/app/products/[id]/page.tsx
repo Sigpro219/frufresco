@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, createAdminClient } from '@/lib/supabase';
 import ProductDetailClient from '@/components/ProductDetailClient';
 import ProductCard from '@/components/ProductCard';
 import { notFound } from 'next/navigation';
@@ -52,18 +52,27 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
         }
     }
 
+    // Instanciar cliente con privilegios de lectura para evitar bloqueos por RLS en storefront público
+    let adminDb: any = null;
+    try {
+        adminDb = createAdminClient();
+    } catch (e) {
+        console.warn('Admin client init notice in ProductPage:', e);
+    }
+    const queryDb = adminDb || serverSupabase;
+
     // 1. Fetch Current Product
     let product: any = null;
-    const resProduct = await serverSupabase
+    const resProduct = await queryDb
         .from('products')
-        .select('*, pricing_model_prices(price)')
+        .select('*, pricing_model_prices(price, model_id)')
         .eq('id', id)
         .eq('pricing_model_prices.model_id', pricingModelId)
         .single();
 
     if (resProduct.error) {
         console.error("Fetch product details failed, running fallback:", resProduct.error.message);
-        const resFallback = await serverSupabase
+        const resFallback = await queryDb
             .from('products')
             .select('*')
             .eq('id', id)
@@ -76,15 +85,32 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
         product = resProduct.data;
     }
 
+    // Red de seguridad Poka-Yoke: Si pricing_model_prices está vacío para este modelo, buscar en Clientes Hogar o base_price
+    if (!product?.pricing_model_prices || product.pricing_model_prices.length === 0) {
+        const { data: hogarPriceData } = await queryDb
+            .from('pricing_model_prices')
+            .select('price, model_id')
+            .eq('product_id', id)
+            .eq('model_id', CLIENTES_HOGAR_ID)
+            .maybeSingle();
+
+        if (hogarPriceData) {
+            product.pricing_model_prices = [hogarPriceData];
+        } else if (product?.base_price && product.base_price > 0) {
+            product.pricing_model_prices = [{ price: product.base_price, model_id: 'base' }];
+        }
+    }
+
     // Override main product price if it's in the agreement
     if (hasActiveAgreement && agreementItems.length > 0 && product) {
-        const agreementItem = agreementItems.find(item => item.product_id === product.id);
+        const agreementItem = agreementItems.find((item: any) => item.product_id === product.id);
         if (agreementItem) {
             product = {
                 ...product,
                 pricing_model_prices: [
                     {
-                        price: agreementItem.unit_price
+                        price: agreementItem.unit_price,
+                        model_id: 'agreement'
                     }
                 ]
             };
@@ -94,9 +120,9 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
     // 2. Fetch "You May Also Like" - Priorizar misma categoría y con foto
     // Traemos 50 para poder barajar y quedarnos con los mejores 12
     let relatedProductsRaw: any[] = [];
-    const resRelated = await serverSupabase
+    const resRelated = await queryDb
         .from('products')
-        .select('*, pricing_model_prices(price)')
+        .select('*, pricing_model_prices(price, model_id)')
         .eq('is_active', true)
         .eq('show_on_web', true)
         .eq('pricing_model_prices.model_id', pricingModelId)
@@ -106,7 +132,7 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
 
     if (resRelated.error) {
         console.error("Fetch related products failed, running fallback:", resRelated.error.message);
-        const resFallback = await serverSupabase
+        const resFallback = await queryDb
             .from('products')
             .select('*')
             .eq('is_active', true)
@@ -118,6 +144,16 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
     } else {
         relatedProductsRaw = resRelated.data || [];
     }
+
+    // Red de seguridad para productos relacionados sin tarifa en el modelo
+    relatedProductsRaw = relatedProductsRaw.map((p: any) => {
+        if (!p.pricing_model_prices || p.pricing_model_prices.length === 0) {
+            if (p.base_price && p.base_price > 0) {
+                return { ...p, pricing_model_prices: [{ price: p.base_price, model_id: 'base' }] };
+            }
+        }
+        return p;
+    });
 
     // Override related products' prices if they are in the agreement
     if (hasActiveAgreement && agreementItems.length > 0 && relatedProductsRaw.length > 0) {

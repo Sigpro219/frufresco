@@ -44,7 +44,8 @@ import {
     UserCheck,
     FileText,
     Banknote,
-    Building2
+    Building2,
+    Home
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
 import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
@@ -63,6 +64,8 @@ export default function CheckoutPage() {
     const [phone, setPhone] = useState('');
     const [address, setAddress] = useState('');
     const [addressDetails, setAddressDetails] = useState('');
+    const [buildingComplex, setBuildingComplex] = useState('');
+    const [unitDetails, setUnitDetails] = useState('');
     const [includePackagingFee, setIncludePackagingFee] = useState(true);
     const [acceptHabeasData, setAcceptHabeasData] = useState(true);
     const [date, setDate] = useState('');
@@ -220,6 +223,8 @@ export default function CheckoutPage() {
             const savedName = localStorage.getItem('checkout_name');
             const savedAddress = localStorage.getItem('checkout_address');
             const savedAddressDetails = localStorage.getItem('checkout_address_details');
+            const savedBuildingComplex = localStorage.getItem('checkout_building_complex');
+            const savedUnitDetails = localStorage.getItem('checkout_unit_details');
             const savedPayment = localStorage.getItem('checkout_payment_method');
             const savedIsGift = localStorage.getItem('checkout_is_gift');
             const savedRecipientName = localStorage.getItem('checkout_recipient_name');
@@ -232,7 +237,20 @@ export default function CheckoutPage() {
             if (savedEmail) setEmail(savedEmail);
             if (savedPhone) setPhone(savedPhone);
             if (savedNotes) setSpecialNotes(savedNotes);
-            if (savedAddressDetails) setAddressDetails(savedAddressDetails);
+            if (savedBuildingComplex) setBuildingComplex(savedBuildingComplex);
+            if (savedUnitDetails) setUnitDetails(savedUnitDetails);
+            if (savedAddressDetails) {
+                setAddressDetails(savedAddressDetails);
+                if (!savedBuildingComplex && !savedUnitDetails) {
+                    if (savedAddressDetails.includes(' - ')) {
+                        const [c, ...rest] = savedAddressDetails.split(' - ');
+                        setBuildingComplex(c.trim());
+                        setUnitDetails(rest.join(' - ').trim());
+                    } else {
+                        setUnitDetails(savedAddressDetails.trim());
+                    }
+                }
+            }
             if (savedPayment === 'wompi' || savedPayment === 'contra_entrega') {
                 setPaymentMethod(savedPayment);
             }
@@ -291,9 +309,37 @@ export default function CheckoutPage() {
         localStorage.setItem('checkout_address', val);
     };
 
+    const handleBuildingComplexChange = (val: string) => {
+        setBuildingComplex(val);
+        localStorage.setItem('checkout_building_complex', val);
+        const combined = val.trim() && unitDetails.trim()
+            ? `${val.trim()} - ${unitDetails.trim()}`
+            : (val.trim() || unitDetails.trim());
+        setAddressDetails(combined);
+        localStorage.setItem('checkout_address_details', combined);
+    };
+
+    const handleUnitDetailsChange = (val: string) => {
+        setUnitDetails(val);
+        localStorage.setItem('checkout_unit_details', val);
+        const combined = buildingComplex.trim() && val.trim()
+            ? `${buildingComplex.trim()} - ${val.trim()}`
+            : (buildingComplex.trim() || val.trim());
+        setAddressDetails(combined);
+        localStorage.setItem('checkout_address_details', combined);
+    };
+
     const handleAddressDetailsChange = (val: string) => {
         setAddressDetails(val);
         localStorage.setItem('checkout_address_details', val);
+        if (val.includes(' - ')) {
+            const [c, ...rest] = val.split(' - ');
+            setBuildingComplex(c.trim());
+            setUnitDetails(rest.join(' - ').trim());
+        } else {
+            setBuildingComplex('');
+            setUnitDetails(val.trim());
+        }
     };
 
     const handleRecipientNameChange = (val: string) => {
@@ -838,6 +884,33 @@ export default function CheckoutPage() {
             notify(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.', 'error');
             return;
         }
+        if (!address || !address.trim()) {
+            notify(locale === 'es' ? 'Por favor ingresa tu Dirección de entrega.' : 'Please enter your Delivery Address.', 'error');
+            return;
+        }
+        if (!latitude || !longitude) {
+            notify(
+                locale === 'es' 
+                    ? '📍 Por favor confirma la ubicación exacta en el mapa para que el domiciliario llegue sin demoras a tu portería o puerta.' 
+                    : '📍 Please confirm the exact location on the map to ensure timely delivery to your gate or door.', 
+                'warning'
+            );
+            if (address.trim().length > 5 && typeof window !== 'undefined' && (window as any).google?.maps?.Geocoder) {
+                setIsGettingLocation(true);
+                const geocoder = new (window as any).google.maps.Geocoder();
+                geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results: any, status: any) => {
+                    setIsGettingLocation(false);
+                    if (status === 'OK' && results && results[0]) {
+                        setLatitude(results[0].geometry.location.lat());
+                        setLongitude(results[0].geometry.location.lng());
+                    }
+                    setShowMapPicker(true);
+                });
+            } else {
+                setShowMapPicker(true);
+            }
+            return;
+        }
         if (!isMinOrderMet) {
             notify(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`, 'error');
             return;
@@ -900,7 +973,16 @@ export default function CheckoutPage() {
             // Sanitize coordinates to ensure they fit DECIMAL(10,8)
             const safeLat = latitude ? parseFloat(latitude.toFixed(8)) : null;
             const safeLng = longitude ? parseFloat(longitude.toFixed(8)) : null;
-            const fullShippingAddress = addressDetails.trim() ? `${address} - ${addressDetails.trim()}` : address;
+
+            const complexPart = buildingComplex.trim();
+            const unitPart = unitDetails.trim();
+            let detailsString = '';
+            if (complexPart && unitPart) detailsString = `${complexPart} (${unitPart})`;
+            else if (complexPart) detailsString = complexPart;
+            else if (unitPart) detailsString = unitPart;
+            else if (addressDetails.trim()) detailsString = addressDetails.trim();
+
+            const fullShippingAddress = detailsString ? `${address.trim()} - ${detailsString}` : address.trim();
 
             const clientNotesHeader = isGiftForRecipient 
                 ? `[COMPRADOR / FACTURACIÓN: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[DESTINATARIO / RECIBE EN PUERTA: ${recipientName} | Tel: ${recipientPhone}]`
@@ -987,6 +1069,8 @@ export default function CheckoutPage() {
                     localStorage.removeItem('checkout_recipient_name');
                     localStorage.removeItem('checkout_recipient_phone');
                     localStorage.removeItem('checkout_address_details');
+                    localStorage.removeItem('checkout_building_complex');
+                    localStorage.removeItem('checkout_unit_details');
                     localStorage.removeItem('checkout_selected_beneficiary_idx');
                 }
                 clearCart();
@@ -1056,6 +1140,8 @@ export default function CheckoutPage() {
                 localStorage.removeItem('checkout_recipient_name');
                 localStorage.removeItem('checkout_recipient_phone');
                 localStorage.removeItem('checkout_address_details');
+                localStorage.removeItem('checkout_building_complex');
+                localStorage.removeItem('checkout_unit_details');
                 localStorage.removeItem('checkout_selected_beneficiary_idx');
             }
             clearCart();
@@ -1814,6 +1900,10 @@ export default function CheckoutPage() {
                                                         handleRecipientPhoneChange('');
                                                         handleAddressChange('');
                                                         handleAddressDetailsChange('');
+                                                        setBuildingComplex('');
+                                                        setUnitDetails('');
+                                                        localStorage.removeItem('checkout_building_complex');
+                                                        localStorage.removeItem('checkout_unit_details');
                                                         setLatitude(null);
                                                         setLongitude(null);
                                                     }}
@@ -2003,73 +2093,99 @@ export default function CheckoutPage() {
 
                                                 {/* GPS Capture Flow Destinatario */}
                                                 {address.trim().length > 3 && !latitude && (
-                                                    <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-                                                        <button
-                                                            onClick={handleGetLocation}
-                                                            type="button"
-                                                            className="btn-glass"
-                                                            style={{ 
-                                                                fontSize: '0.75rem', 
-                                                                background: 'rgba(5, 150, 105, 0.08)', 
-                                                                color: '#047857', 
-                                                                border: '1px solid rgba(5, 150, 105, 0.2)', 
-                                                                padding: '0.7rem', 
-                                                                borderRadius: '12px', 
-                                                                cursor: 'pointer',
-                                                                fontWeight: '800',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                gap: '8px',
-                                                            }}
-                                                            disabled={isGettingLocation}
-                                                        >
-                                                            {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
-                                                            {t.currentLocation}
-                                                        </button>
+                                                    <div style={{
+                                                        marginTop: '0.6rem',
+                                                        padding: '0.85rem 1rem',
+                                                        backgroundColor: '#FEF3C7',
+                                                        border: '1.5px solid #F59E0B',
+                                                        borderRadius: '12px',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '0.6rem',
+                                                        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.1)'
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <MapPin size={18} color="#D97706" />
+                                                            <div>
+                                                                <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400E', display: 'block' }}>
+                                                                    {locale === 'es' ? '📍 Confirmación de Ubicación en el Mapa *' : '📍 Location Confirmation on Map *'}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500' }}>
+                                                                    {locale === 'es' 
+                                                                        ? 'Confirma el punto exacto en el mapa para que el domiciliario llegue directo a la portería o puerta de quien recibe.' 
+                                                                        : 'Confirm the exact pin on the map so the driver arrives directly at the recipient gate or door.'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.2rem' }}>
+                                                            <button
+                                                                onClick={handleGetLocation}
+                                                                type="button"
+                                                                className="btn-glass"
+                                                                style={{ 
+                                                                    fontSize: '0.75rem', 
+                                                                    background: 'white', 
+                                                                    color: '#047857', 
+                                                                    border: '1px solid #A7F3D0', 
+                                                                    padding: '0.6rem', 
+                                                                    borderRadius: '10px', 
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: '700',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '6px',
+                                                                }}
+                                                                disabled={isGettingLocation}
+                                                            >
+                                                                {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                                                {t.currentLocation}
+                                                            </button>
 
-                                                        <button 
-                                                            onClick={() => {
-                                                                if (!latitude && address.trim().length > 5) {
-                                                                    setIsGettingLocation(true);
-                                                                    if (window.google && window.google.maps && window.google.maps.Geocoder) {
-                                                                        const geocoder = new window.google.maps.Geocoder();
-                                                                        geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results, status) => {
+                                                            <button 
+                                                                onClick={() => {
+                                                                    if (!latitude && address.trim().length > 5) {
+                                                                        setIsGettingLocation(true);
+                                                                        if (typeof window !== 'undefined' && (window as any).google?.maps?.Geocoder) {
+                                                                            const geocoder = new (window as any).google.maps.Geocoder();
+                                                                            geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results: any, status: any) => {
+                                                                                setIsGettingLocation(false);
+                                                                                if (status === 'OK' && results && results[0]) {
+                                                                                    setLatitude(results[0].geometry.location.lat());
+                                                                                    setLongitude(results[0].geometry.location.lng());
+                                                                                }
+                                                                                setShowMapPicker(true);
+                                                                            });
+                                                                        } else {
                                                                             setIsGettingLocation(false);
-                                                                            if (status === 'OK' && results && results[0]) {
-                                                                                setLatitude(results[0].geometry.location.lat());
-                                                                                setLongitude(results[0].geometry.location.lng());
-                                                                            }
                                                                             setShowMapPicker(true);
-                                                                        });
+                                                                        }
                                                                     } else {
-                                                                        setIsGettingLocation(false);
                                                                         setShowMapPicker(true);
                                                                     }
-                                                                } else {
-                                                                    setShowMapPicker(true);
-                                                                }
-                                                            }}
-                                                            type="button"
-                                                            className="btn-glass"
-                                                            style={{ 
-                                                                fontSize: '0.75rem', 
-                                                                background: 'white', 
-                                                                color: '#065F46', 
-                                                                border: '1px solid #A7F3D0', 
-                                                                padding: '0.7rem', 
-                                                                borderRadius: '12px', 
-                                                                cursor: 'pointer',
-                                                                fontWeight: '800',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                gap: '8px'
-                                                            }}
-                                                            disabled={isGettingLocation}
-                                                        >
-                                                            {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />} {t.selectOnMap}
-                                                        </button>
+                                                                }}
+                                                                type="button"
+                                                                className="btn-glass"
+                                                                style={{ 
+                                                                    fontSize: '0.75rem', 
+                                                                    background: '#D97706', 
+                                                                    color: 'white', 
+                                                                    border: 'none', 
+                                                                    padding: '0.6rem', 
+                                                                    borderRadius: '10px', 
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: '800',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '6px'
+                                                                }}
+                                                                disabled={isGettingLocation}
+                                                            >
+                                                                {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />}
+                                                                {locale === 'es' ? 'Fijar en el mapa' : 'Set pin on map'}
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 )}
 
@@ -2081,14 +2197,14 @@ export default function CheckoutPage() {
                                                             padding: '0.75rem 1rem', 
                                                             backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
                                                             display: 'flex', 
-                                                            alignItems: 'flex-start', 
+                                                            alignItems: 'center', 
                                                             justifyContent: 'space-between', 
                                                             gap: '12px',
                                                             borderRadius: '12px',
-                                                            border: `1px solid ${isCustomerOutOfZone ? '#FDE68A' : '#A7F3D0'}`,
-                                                            boxShadow: '0 1px 4px rgba(22, 101, 52, 0.05)'
+                                                            border: `1.5px solid ${isCustomerOutOfZone ? '#FDE68A' : '#86EFAC'}`,
+                                                            boxShadow: isCustomerOutOfZone ? '0 1px 4px rgba(217, 119, 6, 0.05)' : '0 1px 4px rgba(22, 101, 52, 0.05)'
                                                         }}>
-                                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1 }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
                                                                 <div style={{
                                                                     width: '28px',
                                                                     height: '28px',
@@ -2097,81 +2213,139 @@ export default function CheckoutPage() {
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
-                                                                    flexShrink: 0,
-                                                                    marginTop: '1px'
+                                                                    flexShrink: 0
                                                                 }}>
                                                                     {isCustomerOutOfZone ? (
                                                                         <MapPin size={15} color="#D97706" strokeWidth={2} />
                                                                     ) : (
-                                                                        <CheckCircle2 size={15} color="#166534" strokeWidth={2} />
+                                                                        <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
                                                                     )}
                                                                 </div>
                                                                 <div style={{ flex: 1 }}>
                                                                     <p style={{ 
-                                                                        fontSize: '0.78rem', 
+                                                                        fontSize: '0.8rem', 
                                                                         color: isCustomerOutOfZone ? '#92400E' : '#166534', 
                                                                         margin: 0, 
-                                                                        fontWeight: '600',
-                                                                        lineHeight: '1.4',
+                                                                        fontWeight: '700',
+                                                                        lineHeight: '1.3',
                                                                         fontFamily: 'var(--font-outfit), sans-serif'
                                                                     }}>
-                                                                        {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
+                                                                        {isCustomerOutOfZone ? t.locationOutOfZone : (locale === 'es' ? 'Ubicación de entrega confirmada ✓' : 'Delivery location verified ✓')}
+                                                                    </p>
+                                                                    <p style={{ margin: '2px 0 0 0', fontSize: '0.7rem', color: isCustomerOutOfZone ? '#B45309' : '#047857', fontWeight: '500' }}>
+                                                                        {locale === 'es' ? 'El domiciliario llegará con Waze/Maps directo a tu coordenada' : 'The driver will navigate directly to your coordinates'}
                                                                     </p>
                                                                 </div>
                                                             </div>
                                                             <button 
-                                                                onClick={() => { setLatitude(null); setLongitude(null); }}
+                                                                type="button"
+                                                                onClick={() => setShowMapPicker(true)}
                                                                 style={{ 
-                                                                    background: 'none', 
-                                                                    border: 'none', 
-                                                                    color: isCustomerOutOfZone ? '#D97706' : '#059669', 
+                                                                    background: 'white', 
+                                                                    border: '1px solid #A7F3D0', 
+                                                                    color: '#047857', 
                                                                     cursor: 'pointer', 
-                                                                    paddingTop: '2px',
+                                                                    padding: '5px 10px',
+                                                                    borderRadius: '8px',
+                                                                    fontSize: '0.72rem',
                                                                     fontWeight: '700',
-                                                                    fontSize: '0.75rem'
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px'
                                                                 }}
                                                             >
-                                                                {t.change}
+                                                                <MapIcon size={12} />
+                                                                {locale === 'es' ? 'Ajustar pin' : 'Adjust pin'}
                                                             </button>
                                                         </div>
                                                     );
                                                 })()}
 
-                                                {/* Complemento de Dirección Destinatario */}
-                                                <div style={{ position: 'relative', marginTop: '0.6rem' }}>
-                                                    <div style={{ 
-                                                        position: 'absolute', 
-                                                        left: '12px', 
-                                                        top: 0, 
-                                                        bottom: 0, 
-                                                        display: 'flex', 
-                                                        alignItems: 'center', 
-                                                        color: '#059669', 
-                                                        opacity: 0.7, 
-                                                        pointerEvents: 'none' 
-                                                    }}>
-                                                        <Building2 size={15} />
+                                                {/* Complemento de Dirección Destinatario: Conjunto/Edificio + Torre/Apto */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }} className="mobile-stack">
+                                                    {/* Campo 1: Nombre del Conjunto o Edificio */}
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '700', fontSize: '0.7rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                            {locale === 'es' ? 'Conjunto / Edificio (Opcional)' : 'Building / Complex (Optional)'}
+                                                        </label>
+                                                        <div style={{ position: 'relative' }}>
+                                                            <div style={{ 
+                                                                position: 'absolute', 
+                                                                left: '12px', 
+                                                                top: 0, 
+                                                                bottom: 0, 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                color: '#059669', 
+                                                                opacity: 0.7, 
+                                                                pointerEvents: 'none' 
+                                                            }}>
+                                                                <Building2 size={14} />
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                placeholder={locale === 'es' ? "Ej: Torres del Parque, Portal..." : "e.g. Park Towers..."}
+                                                                value={buildingComplex}
+                                                                onChange={(e) => handleBuildingComplexChange(e.target.value)}
+                                                                style={{ 
+                                                                    width: '100%', 
+                                                                    padding: '0.55rem 0.75rem 0.55rem 2.3rem', 
+                                                                    borderRadius: '12px', 
+                                                                    border: '1px solid #A7F3D0', 
+                                                                    fontSize: '0.82rem', 
+                                                                    fontWeight: '500', 
+                                                                    backgroundColor: 'white', 
+                                                                    color: '#111827',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                                    outline: 'none' 
+                                                                }}
+                                                                className="checkout-input-modern"
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <input
-                                                        type="text"
-                                                        placeholder={locale === 'es' ? "Apto, Interior, Torre, Nombre del Edificio o Conjunto (Opcional)" : "Apt, Suite, Unit, Building (Optional)"}
-                                                        value={addressDetails}
-                                                        onChange={(e) => handleAddressDetailsChange(e.target.value)}
-                                                        style={{ 
-                                                            width: '100%', 
-                                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
-                                                            borderRadius: '12px', 
-                                                            border: '1px solid #A7F3D0', 
-                                                            fontSize: '0.85rem', 
-                                                            fontWeight: '500', 
-                                                            backgroundColor: 'white', 
-                                                            color: '#111827',
-                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                            fontFamily: 'var(--font-outfit), sans-serif',
-                                                            outline: 'none' 
-                                                        }}
-                                                        className="checkout-input-modern"
-                                                    />
+
+                                                    {/* Campo 2: Torre / Interior / Apto o Casa */}
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '700', fontSize: '0.7rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                            {locale === 'es' ? 'Torre / Apto / Casa' : 'Tower / Apt / House'}
+                                                        </label>
+                                                        <div style={{ position: 'relative' }}>
+                                                            <div style={{ 
+                                                                position: 'absolute', 
+                                                                left: '12px', 
+                                                                top: 0, 
+                                                                bottom: 0, 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                color: '#059669', 
+                                                                opacity: 0.7, 
+                                                                pointerEvents: 'none' 
+                                                            }}>
+                                                                <Home size={14} />
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                placeholder={locale === 'es' ? "Ej: Torre 2 Apto 501, Casa 14" : "e.g. Tower 2 Apt 501, House 14"}
+                                                                value={unitDetails}
+                                                                onChange={(e) => handleUnitDetailsChange(e.target.value)}
+                                                                style={{ 
+                                                                    width: '100%', 
+                                                                    padding: '0.55rem 0.75rem 0.55rem 2.3rem', 
+                                                                    borderRadius: '12px', 
+                                                                    border: '1px solid #A7F3D0', 
+                                                                    fontSize: '0.82rem', 
+                                                                    fontWeight: '500', 
+                                                                    backgroundColor: 'white', 
+                                                                    color: '#111827',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                                    outline: 'none' 
+                                                                }}
+                                                                className="checkout-input-modern"
+                                                            />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </>
@@ -2244,73 +2418,99 @@ export default function CheckoutPage() {
 
                                     {/* GPS Capture Flow */}
                                     {address.trim().length > 3 && !latitude && (
-                                        <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-                                            <button
-                                                onClick={handleGetLocation}
-                                                type="button"
-                                                className="btn-glass"
-                                                style={{ 
-                                                    fontSize: '0.75rem', 
-                                                    background: 'rgba(37, 99, 235, 0.05)', 
-                                                    color: '#2563EB', 
-                                                    border: '1px solid rgba(37, 99, 235, 0.1)', 
-                                                    padding: '0.7rem', 
-                                                    borderRadius: '12px', 
-                                                    cursor: 'pointer',
-                                                    fontWeight: '800',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px',
-                                                }}
-                                                disabled={isGettingLocation}
-                                            >
-                                                {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
-                                                {t.currentLocation}
-                                            </button>
+                                        <div style={{
+                                            marginTop: '0.6rem',
+                                            padding: '0.85rem 1rem',
+                                            backgroundColor: '#FEF3C7',
+                                            border: '1.5px solid #F59E0B',
+                                            borderRadius: '12px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '0.6rem',
+                                            boxShadow: '0 1px 3px rgba(245, 158, 11, 0.1)'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <MapPin size={18} color="#D97706" />
+                                                <div>
+                                                    <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400E', display: 'block' }}>
+                                                        {locale === 'es' ? '📍 Confirmación de Ubicación en el Mapa *' : '📍 Location Confirmation on Map *'}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500' }}>
+                                                        {locale === 'es' 
+                                                            ? 'Confirma el punto exacto en el mapa para que el domiciliario llegue directo a tu portería o puerta sin demoras.' 
+                                                            : 'Confirm the exact pin on the map so the driver arrives directly at your gate or door without delays.'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.2rem' }}>
+                                                <button
+                                                    onClick={handleGetLocation}
+                                                    type="button"
+                                                    className="btn-glass"
+                                                    style={{ 
+                                                        fontSize: '0.75rem', 
+                                                        background: 'white', 
+                                                        color: '#2563EB', 
+                                                        border: '1px solid #BFDBFE', 
+                                                        padding: '0.6rem', 
+                                                        borderRadius: '10px', 
+                                                        cursor: 'pointer',
+                                                        fontWeight: '700',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '6px',
+                                                    }}
+                                                    disabled={isGettingLocation}
+                                                >
+                                                    {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                                    {t.currentLocation}
+                                                </button>
 
-                                            <button 
-                                                onClick={() => {
-                                                    if (!latitude && address.trim().length > 5) {
-                                                        setIsGettingLocation(true);
-                                                        if (window.google && window.google.maps && window.google.maps.Geocoder) {
-                                                            const geocoder = new window.google.maps.Geocoder();
-                                                            geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results, status) => {
+                                                <button 
+                                                    onClick={() => {
+                                                        if (!latitude && address.trim().length > 5) {
+                                                            setIsGettingLocation(true);
+                                                            if (typeof window !== 'undefined' && (window as any).google?.maps?.Geocoder) {
+                                                                const geocoder = new (window as any).google.maps.Geocoder();
+                                                                geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results: any, status: any) => {
+                                                                    setIsGettingLocation(false);
+                                                                    if (status === 'OK' && results && results[0]) {
+                                                                        setLatitude(results[0].geometry.location.lat());
+                                                                        setLongitude(results[0].geometry.location.lng());
+                                                                    }
+                                                                    setShowMapPicker(true);
+                                                                });
+                                                            } else {
                                                                 setIsGettingLocation(false);
-                                                                if (status === 'OK' && results && results[0]) {
-                                                                    setLatitude(results[0].geometry.location.lat());
-                                                                    setLongitude(results[0].geometry.location.lng());
-                                                                }
                                                                 setShowMapPicker(true);
-                                                            });
+                                                            }
                                                         } else {
-                                                            setIsGettingLocation(false);
                                                             setShowMapPicker(true);
                                                         }
-                                                    } else {
-                                                        setShowMapPicker(true);
-                                                    }
-                                                }}
-                                                type="button"
-                                                className="btn-glass"
-                                                style={{ 
-                                                    fontSize: '0.75rem', 
-                                                    background: 'rgba(0,0,0,0.03)', 
-                                                    color: 'var(--text-main)', 
-                                                    border: '1px solid rgba(0,0,0,0.05)', 
-                                                    padding: '0.7rem', 
-                                                    borderRadius: '12px', 
-                                                    cursor: 'pointer',
-                                                    fontWeight: '800',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px'
-                                                }}
-                                                disabled={isGettingLocation}
-                                            >
-                                                {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />} {t.selectOnMap}
-                                            </button>
+                                                    }}
+                                                    type="button"
+                                                    className="btn-glass"
+                                                    style={{ 
+                                                        fontSize: '0.75rem', 
+                                                        background: '#D97706', 
+                                                        color: 'white', 
+                                                        border: 'none', 
+                                                        padding: '0.6rem', 
+                                                        borderRadius: '10px', 
+                                                        cursor: 'pointer',
+                                                        fontWeight: '800',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '6px'
+                                                    }}
+                                                    disabled={isGettingLocation}
+                                                >
+                                                    {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />}
+                                                    {locale === 'es' ? 'Fijar en el mapa' : 'Set pin on map'}
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
 
@@ -2322,14 +2522,14 @@ export default function CheckoutPage() {
                                                 padding: '0.75rem 1rem', 
                                                 backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
                                                 display: 'flex', 
-                                                alignItems: 'flex-start', 
+                                                alignItems: 'center', 
                                                 justifyContent: 'space-between', 
                                                 gap: '12px',
                                                 borderRadius: '12px',
-                                                border: `1px solid ${isCustomerOutOfZone ? '#FDE68A' : '#DCFCE7'}`,
+                                                border: `1.5px solid ${isCustomerOutOfZone ? '#FDE68A' : '#86EFAC'}`,
                                                 boxShadow: isCustomerOutOfZone ? '0 1px 4px rgba(217, 119, 6, 0.05)' : '0 1px 4px rgba(22, 101, 52, 0.05)'
                                             }}>
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
                                                     <div style={{
                                                         width: '28px',
                                                         height: '28px',
@@ -2338,79 +2538,139 @@ export default function CheckoutPage() {
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
-                                                        flexShrink: 0,
-                                                        marginTop: '1px'
+                                                        flexShrink: 0
                                                     }}>
                                                         {isCustomerOutOfZone ? (
                                                             <MapPin size={15} color="#D97706" strokeWidth={2} />
                                                         ) : (
-                                                            <CheckCircle2 size={15} color="#166534" strokeWidth={2} />
+                                                            <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
                                                         )}
                                                     </div>
                                                     <div style={{ flex: 1 }}>
                                                         <p style={{ 
-                                                            fontSize: '0.78rem', 
+                                                            fontSize: '0.8rem', 
                                                             color: isCustomerOutOfZone ? '#92400E' : '#166534', 
                                                             margin: 0, 
-                                                            fontWeight: '600',
-                                                            lineHeight: '1.4',
+                                                            fontWeight: '700',
+                                                            lineHeight: '1.3',
                                                             fontFamily: 'var(--font-outfit), sans-serif'
                                                         }}>
-                                                            {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
+                                                            {isCustomerOutOfZone ? t.locationOutOfZone : (locale === 'es' ? 'Ubicación de entrega confirmada ✓' : 'Delivery location verified ✓')}
+                                                        </p>
+                                                        <p style={{ margin: '2px 0 0 0', fontSize: '0.7rem', color: isCustomerOutOfZone ? '#B45309' : '#047857', fontWeight: '500' }}>
+                                                            {locale === 'es' ? 'El domiciliario llegará con Waze/Maps directo a tu coordenada' : 'The driver will navigate directly to your coordinates'}
                                                         </p>
                                                     </div>
                                                 </div>
                                                 <button 
-                                                    onClick={() => { setLatitude(null); setLongitude(null); }}
+                                                    type="button"
+                                                    onClick={() => setShowMapPicker(true)}
                                                     style={{ 
-                                                        background: 'none', 
-                                                        border: 'none', 
-                                                        color: isCustomerOutOfZone ? '#D97706' : '#059669', 
+                                                        background: 'white', 
+                                                        border: '1px solid #A7F3D0', 
+                                                        color: '#047857', 
                                                         cursor: 'pointer', 
-                                                        paddingTop: '2px'
+                                                        padding: '5px 10px',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '700',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
                                                     }}
                                                 >
-                                                    {t.change}
+                                                    <MapIcon size={12} />
+                                                    {locale === 'es' ? 'Ajustar pin' : 'Adjust pin'}
                                                 </button>
                                             </div>
                                         );
                                     })()}
 
-                                    {/* Complemento de Dirección: Apto, Torre, Conjunto o Edificio */}
-                                    <div style={{ position: 'relative', marginTop: '0.6rem' }}>
-                                        <div style={{ 
-                                            position: 'absolute', 
-                                            left: '12px', 
-                                            top: 0, 
-                                            bottom: 0, 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            color: '#64748B', 
-                                            opacity: 0.6, 
-                                            pointerEvents: 'none' 
-                                        }}>
-                                            <Building2 size={15} />
+                                    {/* Complemento de Dirección: Conjunto/Edificio + Torre/Apto */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }} className="mobile-stack">
+                                        {/* Campo 1: Nombre del Conjunto o Edificio */}
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '700', fontSize: '0.7rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                {locale === 'es' ? 'Conjunto / Edificio (Opcional)' : 'Building / Complex (Optional)'}
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{ 
+                                                    position: 'absolute', 
+                                                    left: '12px', 
+                                                    top: 0, 
+                                                    bottom: 0, 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    color: '#64748B', 
+                                                    opacity: 0.7, 
+                                                    pointerEvents: 'none' 
+                                                }}>
+                                                    <Building2 size={14} />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    placeholder={locale === 'es' ? "Ej: Torres del Parque, Portal..." : "e.g. Park Towers..."}
+                                                    value={buildingComplex}
+                                                    onChange={(e) => handleBuildingComplexChange(e.target.value)}
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        padding: '0.55rem 0.75rem 0.55rem 2.3rem', 
+                                                        borderRadius: '12px', 
+                                                        border: '1px solid #E2E8F0', 
+                                                        fontSize: '0.82rem', 
+                                                        fontWeight: '500', 
+                                                        backgroundColor: 'white', 
+                                                        color: '#111827',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                                        outline: 'none' 
+                                                    }}
+                                                    className="checkout-input-modern"
+                                                />
+                                            </div>
                                         </div>
-                                        <input
-                                            type="text"
-                                            placeholder="Apto, Interior, Torre, Nombre del Edificio o Conjunto (Opcional)"
-                                            value={addressDetails}
-                                            onChange={(e) => handleAddressDetailsChange(e.target.value)}
-                                            style={{ 
-                                                width: '100%', 
-                                                padding: '0.55rem 1rem 0.55rem 2.5rem', 
-                                                borderRadius: '12px', 
-                                                border: '1px solid #E2E8F0', 
-                                                fontSize: '0.85rem', 
-                                                fontWeight: '500', 
-                                                backgroundColor: 'white', 
-                                                color: '#111827',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                fontFamily: 'var(--font-outfit), sans-serif',
-                                                outline: 'none' 
-                                            }}
-                                            className="checkout-input-modern"
-                                        />
+
+                                        {/* Campo 2: Torre / Interior / Apto o Casa */}
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '700', fontSize: '0.7rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                {locale === 'es' ? 'Torre / Apto / Casa' : 'Tower / Apt / House'}
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{ 
+                                                    position: 'absolute', 
+                                                    left: '12px', 
+                                                    top: 0, 
+                                                    bottom: 0, 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    color: '#64748B', 
+                                                    opacity: 0.7, 
+                                                    pointerEvents: 'none' 
+                                                }}>
+                                                    <Home size={14} />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    placeholder={locale === 'es' ? "Ej: Torre 2 Apto 501, Casa 14" : "e.g. Tower 2 Apt 501, House 14"}
+                                                    value={unitDetails}
+                                                    onChange={(e) => handleUnitDetailsChange(e.target.value)}
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        padding: '0.55rem 0.75rem 0.55rem 2.3rem', 
+                                                        borderRadius: '12px', 
+                                                        border: '1px solid #E2E8F0', 
+                                                        fontSize: '0.82rem', 
+                                                        fontWeight: '500', 
+                                                        backgroundColor: 'white', 
+                                                        color: '#111827',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                                        outline: 'none' 
+                                                    }}
+                                                    className="checkout-input-modern"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}

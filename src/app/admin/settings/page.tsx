@@ -801,6 +801,11 @@ export default function AdminSettingsPage() {
                                                             type="number" 
                                                             defaultValue={setting.value} 
                                                             onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)} 
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.currentTarget.blur();
+                                                                }
+                                                            }}
                                                             style={{ 
                                                                 width: '100%', 
                                                                 padding: '8px 8px 8px 25px', 
