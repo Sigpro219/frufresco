@@ -2911,40 +2911,70 @@ export default function CheckoutPage() {
                                 <div style={{ 
                                     marginTop: '0.6rem',
                                     marginBottom: '0.8rem',
-                                    padding: '0.75rem 1rem', 
+                                    padding: '0.75rem 0.95rem', 
                                     backgroundColor: includePackagingFee ? '#F0FDF4' : '#F8FAFC', 
                                     borderRadius: '14px', 
                                     border: includePackagingFee ? '1.5px solid #A7F3D0' : '1px solid #E2E8F0',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     gap: '4px',
-                                    boxShadow: includePackagingFee ? '0 2px 8px rgba(16, 185, 129, 0.05)' : 'none',
+                                    boxShadow: includePackagingFee ? '0 1px 4px rgba(16, 185, 129, 0.06)' : 'none',
                                     transition: 'all 0.2s ease'
                                 }}>
-                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', userSelect: 'none', margin: 0 }}>
                                         <input 
                                             type="checkbox" 
                                             id="packaging-fee-checkbox"
                                             checked={includePackagingFee} 
                                             onChange={(e) => setIncludePackagingFee(e.target.checked)}
-                                            style={{ width: '16px', height: '16px', marginTop: '2px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                                            style={{ width: '17px', height: '17px', marginTop: '2px', accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
                                         />
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ color: includePackagingFee ? '#047857' : '#334155', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <Package size={14} style={{ color: includePackagingFee ? '#059669' : '#64748B', display: 'inline', verticalAlign: 'middle' }} /> Empaque en bolsas plásticas ({packagingFeePercentage}%):
-                                                </span>
-                                                <span style={{ fontWeight: '900', color: includePackagingFee ? '#047857' : '#94A3B8', fontSize: '0.88rem' }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flexWrap: 'wrap' }}>
+                                                    <span style={{ 
+                                                        color: includePackagingFee ? '#065F46' : '#334155', 
+                                                        fontWeight: '800', 
+                                                        fontSize: '0.82rem', 
+                                                        letterSpacing: '-0.01em',
+                                                        display: 'inline-flex', 
+                                                        alignItems: 'center', 
+                                                        gap: '5px' 
+                                                    }}>
+                                                        <Package size={15} style={{ color: includePackagingFee ? '#059669' : '#64748B', flexShrink: 0 }} />
+                                                        {locale === 'es' ? 'Empaque en bolsas plásticas' : 'Plastic bag packaging'}
+                                                    </span>
+                                                    <span style={{ 
+                                                        fontSize: '0.67rem', 
+                                                        fontWeight: '800', 
+                                                        padding: '1px 6px', 
+                                                        borderRadius: '4px', 
+                                                        backgroundColor: includePackagingFee ? '#DCFCE7' : '#E2E8F0', 
+                                                        color: includePackagingFee ? '#166534' : '#64748B', 
+                                                        lineHeight: '1.25',
+                                                        flexShrink: 0 
+                                                    }}>
+                                                        {packagingFeePercentage}%
+                                                    </span>
+                                                </div>
+                                                <span style={{ 
+                                                    fontWeight: '900', 
+                                                    color: includePackagingFee ? '#047857' : '#94A3B8', 
+                                                    fontSize: '0.9rem',
+                                                    whiteSpace: 'nowrap',
+                                                    flexShrink: 0,
+                                                    fontFamily: 'var(--font-outfit), sans-serif'
+                                                }}>
                                                     {includePackagingFee 
-                                                        ? `+$${packagingFeeAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })} COP`
-                                                        : '$0 COP'
-                                                    }
+                                                        ? `+$${packagingFeeAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}`
+                                                        : '$0'
+                                                    }{locale === 'en' ? ' COP' : ''}
                                                 </span>
                                             </div>
-                                            <p style={{ margin: '3px 0 0 0', fontSize: '0.72rem', color: includePackagingFee ? '#065F46' : '#64748B', opacity: 0.9, lineHeight: '1.35', fontWeight: '500' }}>
+                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.71rem', color: includePackagingFee ? '#047857' : '#64748B', opacity: 0.9, lineHeight: '1.35', fontWeight: '500' }}>
                                                 {includePackagingFee 
-                                                    ? (packagingFeeNote || 'Para garantizar la inocuidad, higiene y conservación de tus alimentos frescos, todos los pedidos se entregan empacados en bolsas plásticas.')
-                                                    : '🌱 Entrega en empaque ecológico / canastilla propia (Sin recargo).'
+                                                    ? (packagingFeeNote || (locale === 'es' ? 'Para garantizar la inocuidad, higiene y conservación de tus alimentos frescos, todos los pedidos se entregan empacados en bolsas plásticas.' : 'To ensure food safety, hygiene and freshness, orders are delivered packed in plastic bags.'))
+                                                    : (locale === 'es' ? '🌱 Entrega en empaque ecológico / canastilla propia (Sin recargo).' : '🌱 Eco-friendly delivery / own crates (No surcharge).')
                                                 }
                                             </p>
                                         </div>
