@@ -2031,114 +2031,322 @@ export default function CheckoutPage() {
                                                 </div>
                                             </div>
 
-                                            {/* Dirección de Entrega del Destinatario */}
-                                            <div>
-                                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                    {locale === 'es' ? 'Dirección de Entrega del Destinatario *' : 'Recipient Delivery Address *'}
-                                                </label>
-                                                <div style={{ position: 'relative', marginBottom: '0.4rem' }}>
-                                                    <div style={{ 
-                                                        position: 'absolute', 
-                                                        left: '12px', 
-                                                        top: 0, 
-                                                        bottom: 0, 
+                                            {/* Tarjeta Unificada de Dirección de Entrega del Destinatario */}
+                                            <div style={{
+                                                backgroundColor: '#FFFFFF',
+                                                border: '1.5px solid #A7F3D0',
+                                                borderRadius: '16px',
+                                                overflow: 'hidden',
+                                                boxShadow: '0 1px 3px rgba(5, 150, 105, 0.05)',
+                                                display: 'flex',
+                                                flexDirection: 'column'
+                                            }}>
+                                                <div style={{ padding: '1rem 1.15rem 0.9rem' }}>
+                                                    <label style={{ 
                                                         display: 'flex', 
                                                         alignItems: 'center', 
-                                                        color: '#059669', 
-                                                        pointerEvents: 'none' 
+                                                        gap: '6px',
+                                                        marginBottom: '0.45rem', 
+                                                        fontWeight: '800', 
+                                                        fontSize: '0.72rem', 
+                                                        color: '#065F46', 
+                                                        textTransform: 'uppercase', 
+                                                        letterSpacing: '0.04em', 
+                                                        fontFamily: 'var(--font-outfit), sans-serif' 
                                                     }}>
-                                                        <MapPin size={15} />
+                                                        <MapPin size={15} color="#059669" />
+                                                        {locale === 'es' ? 'Dirección de Entrega del Destinatario *' : 'Recipient Delivery Address *'}
+                                                    </label>
+                                                    <div style={{ position: 'relative' }}>
+                                                        <input
+                                                            type="text"
+                                                            placeholder={locale === 'es' ? "Ej: Calle 140 # 19-35" : "e.g. 123 Main St"}
+                                                            value={address}
+                                                            onChange={(e) => handleAddressChange(e.target.value)}
+                                                            style={{ 
+                                                                width: '100%', 
+                                                                padding: '0.6rem 0.85rem', 
+                                                                borderRadius: '10px', 
+                                                                border: '1px solid #A7F3D0', 
+                                                                fontSize: '0.88rem', 
+                                                                fontWeight: '600', 
+                                                                backgroundColor: 'white', 
+                                                                color: '#111827', 
+                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)', 
+                                                                fontFamily: 'var(--font-outfit), sans-serif', 
+                                                                outline: 'none' 
+                                                            }}
+                                                            className="checkout-input-modern"
+                                                        />
                                                     </div>
-                                                    <input
-                                                        type="text"
-                                                        placeholder={locale === 'es' ? "Ej: Calle 140 # 19-35, Apto 402" : "e.g. 123 Main St"}
-                                                        value={address}
-                                                        onChange={(e) => handleAddressChange(e.target.value)}
-                                                        style={{ 
-                                                            width: '100%', 
-                                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
-                                                            borderRadius: '12px', 
-                                                            border: '1px solid #A7F3D0', 
-                                                            fontSize: '0.85rem', 
-                                                            fontWeight: '500', 
-                                                            backgroundColor: 'white', 
-                                                            color: '#111827',
-                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                            fontFamily: 'var(--font-outfit), sans-serif',
-                                                            outline: 'none' 
-                                                        }}
-                                                        className="checkout-input-modern"
-                                                    />
+
+                                                    {addressSyncNotice && (
+                                                        <div style={{
+                                                            marginTop: '0.45rem',
+                                                            padding: '0.35rem 0.75rem',
+                                                            backgroundColor: '#ECFDF5',
+                                                            border: '1px solid #A7F3D0',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.74rem',
+                                                            color: '#065F46',
+                                                            fontWeight: '600',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            fontFamily: 'var(--font-outfit), sans-serif'
+                                                        }}>
+                                                            <CheckCircle2 size={13} color="#059669" style={{ flexShrink: 0 }} />
+                                                            <span>{locale === 'es' ? `Dirección sincronizada con el mapa: "${addressSyncNotice}"` : `Address synced with map: "${addressSyncNotice}"`}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Complemento de Dirección Destinatario: Conjunto/Edificio + Torre/Apto */}
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginTop: '0.75rem' }}>
+                                                        {/* Campo 1: Nombre del Conjunto o Edificio */}
+                                                        <div>
+                                                            <label style={{ 
+                                                                display: 'flex', 
+                                                                alignItems: 'baseline', 
+                                                                justifyContent: 'space-between', 
+                                                                marginBottom: '0.3rem', 
+                                                                fontSize: '0.7rem', 
+                                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                                minHeight: '1.2rem',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                <span style={{ fontWeight: '700', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                                    {locale === 'es' ? 'Conjunto / Edificio' : 'Building / Complex'}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: '#6EE7B7' }}>
+                                                                    {locale === 'es' ? '(Opcional)' : '(Optional)'}
+                                                                </span>
+                                                            </label>
+                                                            <div style={{ position: 'relative' }}>
+                                                                <div style={{ 
+                                                                    position: 'absolute', 
+                                                                    left: '11px', 
+                                                                    top: 0, 
+                                                                    bottom: 0, 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    color: '#059669', 
+                                                                    opacity: 0.7, 
+                                                                    pointerEvents: 'none' 
+                                                                }}>
+                                                                    <Building2 size={14} />
+                                                                </div>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder={locale === 'es' ? "Ej: Torres del Parque" : "e.g. Park Towers"}
+                                                                    value={buildingComplex}
+                                                                    onChange={(e) => handleBuildingComplexChange(e.target.value)}
+                                                                    style={{ 
+                                                                        width: '100%', 
+                                                                        padding: '0.52rem 0.75rem 0.52rem 2.2rem', 
+                                                                        borderRadius: '10px', 
+                                                                        border: '1px solid #A7F3D0', 
+                                                                        fontSize: '0.82rem', 
+                                                                        fontWeight: '500', 
+                                                                        backgroundColor: 'white', 
+                                                                        color: '#111827', 
+                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)', 
+                                                                        fontFamily: 'var(--font-outfit), sans-serif', 
+                                                                        outline: 'none' 
+                                                                    }}
+                                                                    className="checkout-input-modern"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Campo 2: Torre / Interior / Apto o Casa */}
+                                                        <div>
+                                                            <label style={{ 
+                                                                display: 'flex', 
+                                                                alignItems: 'baseline', 
+                                                                justifyContent: 'space-between', 
+                                                                marginBottom: '0.3rem', 
+                                                                fontSize: '0.7rem', 
+                                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                                minHeight: '1.2rem',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                <span style={{ fontWeight: '700', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                                    {locale === 'es' ? 'Torre / Apto / Casa' : 'Tower / Apt / House'}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: '#6EE7B7' }}>
+                                                                    {locale === 'es' ? '(Detalle)' : '(Detail)'}
+                                                                </span>
+                                                            </label>
+                                                            <div style={{ position: 'relative' }}>
+                                                                <div style={{ 
+                                                                    position: 'absolute', 
+                                                                    left: '11px', 
+                                                                    top: 0, 
+                                                                    bottom: 0, 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    color: '#059669', 
+                                                                    opacity: 0.7, 
+                                                                    pointerEvents: 'none' 
+                                                                }}>
+                                                                    <Home size={14} />
+                                                                </div>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder={locale === 'es' ? "Ej: Torre 2 Apto 501" : "e.g. Tower 2 Apt 501"}
+                                                                    value={unitDetails}
+                                                                    onChange={(e) => handleUnitDetailsChange(e.target.value)}
+                                                                    style={{ 
+                                                                        width: '100%', 
+                                                                        padding: '0.52rem 0.75rem 0.52rem 2.2rem', 
+                                                                        borderRadius: '10px', 
+                                                                        border: '1px solid #A7F3D0', 
+                                                                        fontSize: '0.82rem', 
+                                                                        fontWeight: '500', 
+                                                                        backgroundColor: 'white', 
+                                                                        color: '#111827', 
+                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)', 
+                                                                        fontFamily: 'var(--font-outfit), sans-serif', 
+                                                                        outline: 'none' 
+                                                                    }}
+                                                                    className="checkout-input-modern"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
 
-                                                {addressSyncNotice && (
-                                                    <div style={{
-                                                        marginBottom: '0.5rem',
-                                                        padding: '0.45rem 0.85rem',
-                                                        backgroundColor: '#ECFDF5',
-                                                        border: '1px solid #A7F3D0',
-                                                        borderRadius: '10px',
-                                                        fontSize: '0.76rem',
-                                                        color: '#065F46',
-                                                        fontWeight: '700',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '6px',
-                                                        fontFamily: 'var(--font-outfit), sans-serif'
-                                                    }}>
-                                                        <CheckCircle2 size={14} color="#059669" />
-                                                        <span>{locale === 'es' ? `Dirección sincronizada con el mapa: "${addressSyncNotice}"` : `Address synced with map: "${addressSyncNotice}"`}</span>
-                                                    </div>
-                                                )}
+                                                {/* Docked GPS Status Bar - Destinatario */}
+                                                {latitude && (() => {
+                                                    const isCustomerOutOfZone = outOfZone && !isB2B;
+                                                    return (
+                                                        <div style={{ 
+                                                            borderTop: `1px solid ${isCustomerOutOfZone ? '#FDE68A' : '#BBF7D0'}`,
+                                                            backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
+                                                            padding: '0.65rem 1.15rem', 
+                                                            display: 'flex', 
+                                                            alignItems: 'center', 
+                                                            justifyContent: 'space-between', 
+                                                            gap: '10px'
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
+                                                                <div style={{
+                                                                    width: '26px',
+                                                                    height: '26px',
+                                                                    borderRadius: '50%',
+                                                                    backgroundColor: isCustomerOutOfZone ? '#FEF3C7' : '#DCFCE7',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0
+                                                                }}>
+                                                                    {isCustomerOutOfZone ? (
+                                                                        <MapPin size={14} color="#D97706" strokeWidth={2} />
+                                                                    ) : (
+                                                                        <CheckCircle2 size={15} color="#166534" strokeWidth={2.5} />
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ minWidth: 0 }}>
+                                                                    <p style={{ 
+                                                                        fontSize: '0.78rem', 
+                                                                        color: isCustomerOutOfZone ? '#92400E' : '#166534', 
+                                                                        margin: 0, 
+                                                                        fontWeight: '700',
+                                                                        lineHeight: '1.25',
+                                                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                                                        whiteSpace: 'nowrap',
+                                                                        overflow: 'hidden',
+                                                                        textOverflow: 'ellipsis'
+                                                                    }}>
+                                                                        {isCustomerOutOfZone ? t.locationOutOfZone : (locale === 'es' ? 'Ubicación de entrega confirmada' : 'Delivery location verified')}
+                                                                    </p>
+                                                                    <p style={{ margin: '1px 0 0 0', fontSize: '0.68rem', color: isCustomerOutOfZone ? '#B45309' : '#047857', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                        {locale === 'es' ? 'El domiciliario llegará con Waze/Maps directo al punto' : 'Driver navigates directly via Waze/Maps'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => setShowMapPicker(true)}
+                                                                style={{ 
+                                                                    background: 'white', 
+                                                                    border: '1px solid #A7F3D0', 
+                                                                    color: '#047857', 
+                                                                    cursor: 'pointer', 
+                                                                    padding: '4px 10px',
+                                                                    borderRadius: '8px',
+                                                                    fontSize: '0.72rem',
+                                                                    fontWeight: '700',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    whiteSpace: 'nowrap',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                                                                    flexShrink: 0
+                                                                }}
+                                                            >
+                                                                <MapIcon size={12} />
+                                                                {locale === 'es' ? 'Ajustar pin' : 'Adjust pin'}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })()}
 
-                                                {/* GPS Capture Flow Destinatario */}
                                                 {address.trim().length > 3 && !latitude && (
                                                     <div style={{
-                                                        marginTop: '0.6rem',
-                                                        padding: '0.85rem 1rem',
-                                                        backgroundColor: '#FEF3C7',
-                                                        border: '1.5px solid #F59E0B',
-                                                        borderRadius: '12px',
+                                                        borderTop: '1px solid #FDE68A',
+                                                        backgroundColor: '#FFFBEB',
+                                                        padding: '0.75rem 1.15rem',
                                                         display: 'flex',
                                                         flexDirection: 'column',
-                                                        gap: '0.6rem',
-                                                        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.1)'
+                                                        gap: '0.55rem'
                                                     }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <MapPin size={18} color="#D97706" />
+                                                            <div style={{
+                                                                width: '26px',
+                                                                height: '26px',
+                                                                borderRadius: '50%',
+                                                                backgroundColor: '#FEF3C7',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                flexShrink: 0
+                                                            }}>
+                                                                <MapPin size={14} color="#D97706" />
+                                                            </div>
                                                             <div>
-                                                                <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400E', display: 'block' }}>
-                                                                    {locale === 'es' ? '📍 Confirmación de Ubicación en el Mapa *' : '📍 Location Confirmation on Map *'}
+                                                                <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#92400E', display: 'block', lineHeight: '1.2' }}>
+                                                                    {locale === 'es' ? 'Confirmación de Ubicación en el Mapa *' : 'Location Confirmation on Map *'}
                                                                 </span>
-                                                                <span style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500' }}>
+                                                                <span style={{ fontSize: '0.68rem', color: '#B45309', fontWeight: '500', display: 'block', marginTop: '1px' }}>
                                                                     {locale === 'es' 
-                                                                        ? 'Confirma el punto exacto en el mapa para que el domiciliario llegue directo a la portería o puerta de quien recibe.' 
-                                                                        : 'Confirm the exact pin on the map so the driver arrives directly at the recipient gate or door.'}
+                                                                        ? 'Confirma el punto exacto para que el domiciliario llegue directo a la portería o puerta de quien recibe.' 
+                                                                        : 'Confirm the pin on the map so the driver arrives directly at the recipient gate or door.'}
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                        <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.2rem' }}>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', marginTop: '0.1rem' }}>
                                                             <button
                                                                 onClick={handleGetLocation}
                                                                 type="button"
-                                                                className="btn-glass"
                                                                 style={{ 
-                                                                    fontSize: '0.75rem', 
+                                                                    fontSize: '0.74rem', 
                                                                     background: 'white', 
                                                                     color: '#047857', 
                                                                     border: '1px solid #A7F3D0', 
-                                                                    padding: '0.6rem', 
-                                                                    borderRadius: '10px', 
+                                                                    padding: '0.5rem', 
+                                                                    borderRadius: '8px', 
                                                                     cursor: 'pointer',
                                                                     fontWeight: '700',
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
                                                                     gap: '6px',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                                                                 }}
                                                                 disabled={isGettingLocation}
                                                             >
-                                                                {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                                                {isGettingLocation ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
                                                                 {t.currentLocation}
                                                             </button>
 
@@ -2165,305 +2373,372 @@ export default function CheckoutPage() {
                                                                     }
                                                                 }}
                                                                 type="button"
-                                                                className="btn-glass"
                                                                 style={{ 
-                                                                    fontSize: '0.75rem', 
+                                                                    fontSize: '0.74rem', 
                                                                     background: '#D97706', 
                                                                     color: 'white', 
                                                                     border: 'none', 
-                                                                    padding: '0.6rem', 
-                                                                    borderRadius: '10px', 
+                                                                    padding: '0.5rem', 
+                                                                    borderRadius: '8px', 
                                                                     cursor: 'pointer',
-                                                                    fontWeight: '800',
+                                                                    fontWeight: '700',
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
-                                                                    gap: '6px'
+                                                                    gap: '6px',
+                                                                    boxShadow: '0 1px 2px rgba(217, 119, 6, 0.2)'
                                                                 }}
                                                                 disabled={isGettingLocation}
                                                             >
-                                                                {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />}
+                                                                {isGettingLocation ? <Loader2 size={13} className="animate-spin" /> : <MapIcon size={13} />}
                                                                 {locale === 'es' ? 'Fijar en el mapa' : 'Set pin on map'}
                                                             </button>
                                                         </div>
                                                     </div>
                                                 )}
-
-                                                {latitude && (() => {
-                                                    const isCustomerOutOfZone = outOfZone && !isB2B;
-                                                    return (
-                                                        <div style={{ 
-                                                            marginTop: '0.6rem', 
-                                                            padding: '0.75rem 1rem', 
-                                                            backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
-                                                            display: 'flex', 
-                                                            alignItems: 'center', 
-                                                            justifyContent: 'space-between', 
-                                                            gap: '12px',
-                                                            borderRadius: '12px',
-                                                            border: `1.5px solid ${isCustomerOutOfZone ? '#FDE68A' : '#86EFAC'}`,
-                                                            boxShadow: isCustomerOutOfZone ? '0 1px 4px rgba(217, 119, 6, 0.05)' : '0 1px 4px rgba(22, 101, 52, 0.05)'
-                                                        }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                                                                <div style={{
-                                                                    width: '28px',
-                                                                    height: '28px',
-                                                                    borderRadius: '50%',
-                                                                    backgroundColor: isCustomerOutOfZone ? '#FEF3C7' : '#DCFCE7',
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    flexShrink: 0
-                                                                }}>
-                                                                    {isCustomerOutOfZone ? (
-                                                                        <MapPin size={15} color="#D97706" strokeWidth={2} />
-                                                                    ) : (
-                                                                        <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
-                                                                    )}
-                                                                </div>
-                                                                <div style={{ flex: 1 }}>
-                                                                    <p style={{ 
-                                                                        fontSize: '0.8rem', 
-                                                                        color: isCustomerOutOfZone ? '#92400E' : '#166534', 
-                                                                        margin: 0, 
-                                                                        fontWeight: '700',
-                                                                        lineHeight: '1.3',
-                                                                        fontFamily: 'var(--font-outfit), sans-serif'
-                                                                    }}>
-                                                                        {isCustomerOutOfZone ? t.locationOutOfZone : (locale === 'es' ? 'Ubicación de entrega confirmada ✓' : 'Delivery location verified ✓')}
-                                                                    </p>
-                                                                    <p style={{ margin: '2px 0 0 0', fontSize: '0.7rem', color: isCustomerOutOfZone ? '#B45309' : '#047857', fontWeight: '500' }}>
-                                                                        {locale === 'es' ? 'El domiciliario llegará con Waze/Maps directo a tu coordenada' : 'The driver will navigate directly to your coordinates'}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => setShowMapPicker(true)}
-                                                                style={{ 
-                                                                    background: 'white', 
-                                                                    border: '1px solid #A7F3D0', 
-                                                                    color: '#047857', 
-                                                                    cursor: 'pointer', 
-                                                                    padding: '5px 10px',
-                                                                    borderRadius: '8px',
-                                                                    fontSize: '0.72rem',
-                                                                    fontWeight: '700',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '4px'
-                                                                }}
-                                                            >
-                                                                <MapIcon size={12} />
-                                                                {locale === 'es' ? 'Ajustar pin' : 'Adjust pin'}
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })()}
-
-                                                {/* Complemento de Dirección Destinatario: Conjunto/Edificio + Torre/Apto */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }} className="mobile-stack">
-                                                    {/* Campo 1: Nombre del Conjunto o Edificio */}
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '700', fontSize: '0.7rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                            {locale === 'es' ? 'Conjunto / Edificio (Opcional)' : 'Building / Complex (Optional)'}
-                                                        </label>
-                                                        <div style={{ position: 'relative' }}>
-                                                            <div style={{ 
-                                                                position: 'absolute', 
-                                                                left: '12px', 
-                                                                top: 0, 
-                                                                bottom: 0, 
-                                                                display: 'flex', 
-                                                                alignItems: 'center', 
-                                                                color: '#059669', 
-                                                                opacity: 0.7, 
-                                                                pointerEvents: 'none' 
-                                                            }}>
-                                                                <Building2 size={14} />
-                                                            </div>
-                                                            <input
-                                                                type="text"
-                                                                placeholder={locale === 'es' ? "Ej: Torres del Parque, Portal..." : "e.g. Park Towers..."}
-                                                                value={buildingComplex}
-                                                                onChange={(e) => handleBuildingComplexChange(e.target.value)}
-                                                                style={{ 
-                                                                    width: '100%', 
-                                                                    padding: '0.55rem 0.75rem 0.55rem 2.3rem', 
-                                                                    borderRadius: '12px', 
-                                                                    border: '1px solid #A7F3D0', 
-                                                                    fontSize: '0.82rem', 
-                                                                    fontWeight: '500', 
-                                                                    backgroundColor: 'white', 
-                                                                    color: '#111827',
-                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                                                    outline: 'none' 
-                                                                }}
-                                                                className="checkout-input-modern"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Campo 2: Torre / Interior / Apto o Casa */}
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '700', fontSize: '0.7rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                            {locale === 'es' ? 'Torre / Apto / Casa' : 'Tower / Apt / House'}
-                                                        </label>
-                                                        <div style={{ position: 'relative' }}>
-                                                            <div style={{ 
-                                                                position: 'absolute', 
-                                                                left: '12px', 
-                                                                top: 0, 
-                                                                bottom: 0, 
-                                                                display: 'flex', 
-                                                                alignItems: 'center', 
-                                                                color: '#059669', 
-                                                                opacity: 0.7, 
-                                                                pointerEvents: 'none' 
-                                                            }}>
-                                                                <Home size={14} />
-                                                            </div>
-                                                            <input
-                                                                type="text"
-                                                                placeholder={locale === 'es' ? "Ej: Torre 2 Apto 501, Casa 14" : "e.g. Tower 2 Apt 501, House 14"}
-                                                                value={unitDetails}
-                                                                onChange={(e) => handleUnitDetailsChange(e.target.value)}
-                                                                style={{ 
-                                                                    width: '100%', 
-                                                                    padding: '0.55rem 0.75rem 0.55rem 2.3rem', 
-                                                                    borderRadius: '12px', 
-                                                                    border: '1px solid #A7F3D0', 
-                                                                    fontSize: '0.82rem', 
-                                                                    fontWeight: '500', 
-                                                                    backgroundColor: 'white', 
-                                                                    color: '#111827',
-                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                                                    outline: 'none' 
-                                                                }}
-                                                                className="checkout-input-modern"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
                                             </div>
                                         </>
                                     )}
                                 </div>
                             )}
 
-                            {/* 5. Dirección de Entrega (Entrega Directa al Comprador) */}
+                            {/* 5. Tarjeta Unificada de Dirección de Entrega (Entrega Directa al Comprador) */}
                             {!isGiftForRecipient && (
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                        {locale === 'es' ? 'Dirección de Entrega *' : 'Delivery Address *'}
-                                    </label>
-                                    <div style={{ position: 'relative', marginBottom: '0.4rem' }}>
-                                        <div style={{ 
-                                            position: 'absolute', 
-                                            left: '12px', 
-                                            top: 0, 
-                                            bottom: 0, 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            color: isProfileMatched ? '#3B82F6' : 'var(--primary)', 
-                                            opacity: 0.5, 
-                                            pointerEvents: 'none' 
-                                        }}>
-                                            {isProfileMatched ? <LockIcon size={14} /> : <MapPin size={15} />}
-                                        </div>
-                                        <input
-                                            type="text"
-                                            placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
-                                            value={isProfileMatched ? maskedAddress : address}
-                                            onChange={(e) => handleAddressChange(e.target.value)}
-                                            readOnly={isProfileMatched}
-                                            style={{ 
-                                                width: '100%', 
-                                                padding: '0.55rem 1rem 0.55rem 2.5rem', 
-                                                borderRadius: '12px', 
-                                                border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E2E8F0', 
-                                                fontSize: '0.85rem', 
-                                                fontWeight: '500', 
-                                                backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
-                                                color: isProfileMatched ? '#6B7280' : '#111827',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                <div style={{
+                                    backgroundColor: '#FFFFFF',
+                                    border: '1.5px solid #E2E8F0',
+                                    borderRadius: '16px',
+                                    overflow: 'hidden',
+                                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}>
+                                    <div style={{ padding: '1rem 1.15rem 0.9rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+                                            <label style={{ 
+                                                margin: 0, 
+                                                fontWeight: '800', 
+                                                fontSize: '0.72rem', 
+                                                color: '#334155', 
+                                                textTransform: 'uppercase', 
+                                                letterSpacing: '0.04em', 
                                                 fontFamily: 'var(--font-outfit), sans-serif',
-                                                outline: 'none' 
-                                            }}
-                                            className="checkout-input-modern"
-                                        />
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px'
+                                            }}>
+                                                <MapPin size={15} color="#059669" />
+                                                {locale === 'es' ? 'Dirección de Entrega *' : 'Delivery Address *'}
+                                            </label>
+                                            {isProfileMatched ? (
+                                                <span style={{ fontSize: '0.68rem', color: '#2563EB', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#EFF6FF', padding: '2px 8px', borderRadius: '6px' }}>
+                                                    <LockIcon size={11} /> {locale === 'es' ? 'Dirección Guardada' : 'Saved Address'}
+                                                </span>
+                                            ) : null}
+                                        </div>
+
+                                        <div style={{ position: 'relative' }}>
+                                            <div style={{ 
+                                                position: 'absolute', 
+                                                left: '12px', 
+                                                top: 0, 
+                                                bottom: 0, 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                color: isProfileMatched ? '#3B82F6' : '#059669', 
+                                                opacity: isProfileMatched ? 0.7 : 0.6, 
+                                                pointerEvents: 'none' 
+                                            }}>
+                                                {isProfileMatched ? <LockIcon size={14} /> : <MapPin size={15} />}
+                                            </div>
+                                            <input
+                                                type="text"
+                                                placeholder={locale === 'es' ? "Ej: Calle 151 # 11-40" : "e.g. 123 Main St"}
+                                                value={isProfileMatched ? maskedAddress : address}
+                                                onChange={(e) => handleAddressChange(e.target.value)}
+                                                readOnly={isProfileMatched}
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '0.6rem 0.85rem 0.6rem 2.4rem', 
+                                                    borderRadius: '10px', 
+                                                    border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #CBD5E1', 
+                                                    fontSize: '0.88rem', 
+                                                    fontWeight: '600', 
+                                                    backgroundColor: isProfileMatched ? '#F8FAFC' : 'white', 
+                                                    color: isProfileMatched ? '#64748B' : '#0F172A',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                    outline: 'none' 
+                                                }}
+                                                className="checkout-input-modern"
+                                            />
+                                        </div>
+
+                                        {addressSyncNotice && (
+                                            <div style={{
+                                                marginTop: '0.45rem',
+                                                padding: '0.35rem 0.75rem',
+                                                backgroundColor: '#ECFDF5',
+                                                border: '1px solid #A7F3D0',
+                                                borderRadius: '8px',
+                                                fontSize: '0.74rem',
+                                                color: '#065F46',
+                                                fontWeight: '600',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                fontFamily: 'var(--font-outfit), sans-serif'
+                                            }}>
+                                                <CheckCircle2 size={13} color="#059669" style={{ flexShrink: 0 }} />
+                                                <span>{locale === 'es' ? `Dirección sincronizada con el mapa: "${addressSyncNotice}"` : `Address synced with map: "${addressSyncNotice}"`}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Complemento de Dirección: Conjunto/Edificio + Torre/Apto */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginTop: '0.75rem' }}>
+                                            {/* Campo 1: Nombre del Conjunto o Edificio */}
+                                            <div>
+                                                <label style={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'baseline', 
+                                                    justifyContent: 'space-between', 
+                                                    marginBottom: '0.3rem', 
+                                                    fontSize: '0.7rem', 
+                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                    minHeight: '1.2rem',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    <span style={{ fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                        {locale === 'es' ? 'Conjunto / Edificio' : 'Building / Complex'}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: '500', color: '#94A3B8' }}>
+                                                        {locale === 'es' ? '(Opcional)' : '(Optional)'}
+                                                    </span>
+                                                </label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <div style={{ 
+                                                        position: 'absolute', 
+                                                        left: '11px', 
+                                                        top: 0, 
+                                                        bottom: 0, 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        color: '#64748B', 
+                                                        opacity: 0.7, 
+                                                        pointerEvents: 'none' 
+                                                    }}>
+                                                        <Building2 size={14} />
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        placeholder={locale === 'es' ? "Ej: Torres del Parque" : "e.g. Park Towers"}
+                                                        value={buildingComplex}
+                                                        onChange={(e) => handleBuildingComplexChange(e.target.value)}
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.52rem 0.75rem 0.52rem 2.2rem', 
+                                                            borderRadius: '10px', 
+                                                            border: '1px solid #CBD5E1', 
+                                                            fontSize: '0.82rem', 
+                                                            fontWeight: '500', 
+                                                            backgroundColor: 'white', 
+                                                            color: '#111827', 
+                                                            fontFamily: 'var(--font-outfit), sans-serif', 
+                                                            outline: 'none' 
+                                                        }}
+                                                        className="checkout-input-modern"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Campo 2: Torre / Interior / Apto o Casa */}
+                                            <div>
+                                                <label style={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'baseline', 
+                                                    justifyContent: 'space-between', 
+                                                    marginBottom: '0.3rem', 
+                                                    fontSize: '0.7rem', 
+                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                    minHeight: '1.2rem',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    <span style={{ fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                        {locale === 'es' ? 'Torre / Apto / Casa' : 'Tower / Apt / House'}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: '500', color: '#94A3B8' }}>
+                                                        {locale === 'es' ? '(Detalle)' : '(Detail)'}
+                                                    </span>
+                                                </label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <div style={{ 
+                                                        position: 'absolute', 
+                                                        left: '11px', 
+                                                        top: 0, 
+                                                        bottom: 0, 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        color: '#64748B', 
+                                                        opacity: 0.7, 
+                                                        pointerEvents: 'none' 
+                                                    }}>
+                                                        <Home size={14} />
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        placeholder={locale === 'es' ? "Ej: Torre 2 Apto 501" : "e.g. Tower 2 Apt 501"}
+                                                        value={unitDetails}
+                                                        onChange={(e) => handleUnitDetailsChange(e.target.value)}
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.52rem 0.75rem 0.52rem 2.2rem', 
+                                                            borderRadius: '10px', 
+                                                            border: '1px solid #CBD5E1', 
+                                                            fontSize: '0.82rem', 
+                                                            fontWeight: '500', 
+                                                            backgroundColor: 'white', 
+                                                            color: '#111827', 
+                                                            fontFamily: 'var(--font-outfit), sans-serif', 
+                                                            outline: 'none' 
+                                                        }}
+                                                        className="checkout-input-modern"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    {addressSyncNotice && (
-                                        <div style={{
-                                            marginBottom: '0.5rem',
-                                            padding: '0.45rem 0.85rem',
-                                            backgroundColor: '#ECFDF5',
-                                            border: '1px solid #A7F3D0',
-                                            borderRadius: '10px',
-                                            fontSize: '0.76rem',
-                                            color: '#065F46',
-                                            fontWeight: '700',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            fontFamily: 'var(--font-outfit), sans-serif'
-                                        }}>
-                                            <CheckCircle2 size={14} color="#059669" />
-                                            <span>{locale === 'es' ? `Dirección sincronizada con el mapa: "${addressSyncNotice}"` : `Address synced with map: "${addressSyncNotice}"`}</span>
-                                        </div>
-                                    )}
+                                    {/* Docked GPS Status Bar - Comprador Directo */}
+                                    {latitude && (() => {
+                                        const isCustomerOutOfZone = outOfZone && !isB2B;
+                                        return (
+                                            <div style={{ 
+                                                borderTop: `1px solid ${isCustomerOutOfZone ? '#FDE68A' : '#BBF7D0'}`,
+                                                backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
+                                                padding: '0.65rem 1.15rem', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'space-between', 
+                                                gap: '10px'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
+                                                    <div style={{
+                                                        width: '26px',
+                                                        height: '26px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: isCustomerOutOfZone ? '#FEF3C7' : '#DCFCE7',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        flexShrink: 0
+                                                    }}>
+                                                        {isCustomerOutOfZone ? (
+                                                            <MapPin size={14} color="#D97706" strokeWidth={2} />
+                                                        ) : (
+                                                            <CheckCircle2 size={15} color="#166534" strokeWidth={2.5} />
+                                                        )}
+                                                    </div>
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <p style={{ 
+                                                            fontSize: '0.78rem', 
+                                                            color: isCustomerOutOfZone ? '#92400E' : '#166534', 
+                                                            margin: 0, 
+                                                            fontWeight: '700',
+                                                            lineHeight: '1.25',
+                                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                                            whiteSpace: 'nowrap',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'
+                                                        }}>
+                                                            {isCustomerOutOfZone ? t.locationOutOfZone : (locale === 'es' ? 'Ubicación de entrega confirmada' : 'Delivery location verified')}
+                                                        </p>
+                                                        <p style={{ margin: '1px 0 0 0', fontSize: '0.68rem', color: isCustomerOutOfZone ? '#B45309' : '#047857', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {locale === 'es' ? 'El domiciliario llegará con Waze/Maps directo al punto' : 'Driver navigates directly via Waze/Maps'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => setShowMapPicker(true)}
+                                                    style={{ 
+                                                        background: 'white', 
+                                                        border: '1px solid #A7F3D0', 
+                                                        color: '#047857', 
+                                                        cursor: 'pointer', 
+                                                        padding: '4px 10px',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '700',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        whiteSpace: 'nowrap',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                                                        flexShrink: 0
+                                                    }}
+                                                >
+                                                    <MapIcon size={12} />
+                                                    {locale === 'es' ? 'Ajustar pin' : 'Adjust pin'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
 
-                                    {/* GPS Capture Flow */}
                                     {address.trim().length > 3 && !latitude && (
                                         <div style={{
-                                            marginTop: '0.6rem',
-                                            padding: '0.85rem 1rem',
-                                            backgroundColor: '#FEF3C7',
-                                            border: '1.5px solid #F59E0B',
-                                            borderRadius: '12px',
+                                            borderTop: '1px solid #FDE68A',
+                                            backgroundColor: '#FFFBEB',
+                                            padding: '0.75rem 1.15rem',
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            gap: '0.6rem',
-                                            boxShadow: '0 1px 3px rgba(245, 158, 11, 0.1)'
+                                            gap: '0.55rem'
                                         }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <MapPin size={18} color="#D97706" />
+                                                <div style={{
+                                                    width: '26px',
+                                                    height: '26px',
+                                                    borderRadius: '50%',
+                                                    backgroundColor: '#FEF3C7',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>
+                                                    <MapPin size={14} color="#D97706" />
+                                                </div>
                                                 <div>
-                                                    <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400E', display: 'block' }}>
-                                                        {locale === 'es' ? '📍 Confirmación de Ubicación en el Mapa *' : '📍 Location Confirmation on Map *'}
+                                                    <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#92400E', display: 'block', lineHeight: '1.2' }}>
+                                                        {locale === 'es' ? 'Confirmación de Ubicación en el Mapa *' : 'Location Confirmation on Map *'}
                                                     </span>
-                                                    <span style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500' }}>
+                                                    <span style={{ fontSize: '0.68rem', color: '#B45309', fontWeight: '500', display: 'block', marginTop: '1px' }}>
                                                         {locale === 'es' 
-                                                            ? 'Confirma el punto exacto en el mapa para que el domiciliario llegue directo a tu portería o puerta sin demoras.' 
-                                                            : 'Confirm the exact pin on the map so the driver arrives directly at your gate or door without delays.'}
+                                                            ? 'Ubica el punto en el mapa para que el domiciliario llegue directo a tu portería o puerta sin demoras.' 
+                                                            : 'Confirm the pin on the map so the driver arrives directly at your gate or door without delays.'}
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.2rem' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', marginTop: '0.1rem' }}>
                                                 <button
                                                     onClick={handleGetLocation}
                                                     type="button"
-                                                    className="btn-glass"
                                                     style={{ 
-                                                        fontSize: '0.75rem', 
+                                                        fontSize: '0.74rem', 
                                                         background: 'white', 
                                                         color: '#2563EB', 
                                                         border: '1px solid #BFDBFE', 
-                                                        padding: '0.6rem', 
-                                                        borderRadius: '10px', 
+                                                        padding: '0.5rem', 
+                                                        borderRadius: '8px', 
                                                         cursor: 'pointer',
                                                         fontWeight: '700',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
                                                         gap: '6px',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                                                     }}
                                                     disabled={isGettingLocation}
                                                 >
-                                                    {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                                    {isGettingLocation ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
                                                     {t.currentLocation}
                                                 </button>
 
@@ -2490,188 +2765,29 @@ export default function CheckoutPage() {
                                                         }
                                                     }}
                                                     type="button"
-                                                    className="btn-glass"
                                                     style={{ 
-                                                        fontSize: '0.75rem', 
+                                                        fontSize: '0.74rem', 
                                                         background: '#D97706', 
                                                         color: 'white', 
                                                         border: 'none', 
-                                                        padding: '0.6rem', 
-                                                        borderRadius: '10px', 
+                                                        padding: '0.5rem', 
+                                                        borderRadius: '8px', 
                                                         cursor: 'pointer',
-                                                        fontWeight: '800',
+                                                        fontWeight: '700',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
-                                                        gap: '6px'
+                                                        gap: '6px',
+                                                        boxShadow: '0 1px 2px rgba(217, 119, 6, 0.2)'
                                                     }}
                                                     disabled={isGettingLocation}
                                                 >
-                                                    {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />}
+                                                    {isGettingLocation ? <Loader2 size={13} className="animate-spin" /> : <MapIcon size={13} />}
                                                     {locale === 'es' ? 'Fijar en el mapa' : 'Set pin on map'}
                                                 </button>
                                             </div>
                                         </div>
                                     )}
-
-                                    {latitude && (() => {
-                                        const isCustomerOutOfZone = outOfZone && !isB2B;
-                                        return (
-                                            <div style={{ 
-                                                marginTop: '0.6rem', 
-                                                padding: '0.75rem 1rem', 
-                                                backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'space-between', 
-                                                gap: '12px',
-                                                borderRadius: '12px',
-                                                border: `1.5px solid ${isCustomerOutOfZone ? '#FDE68A' : '#86EFAC'}`,
-                                                boxShadow: isCustomerOutOfZone ? '0 1px 4px rgba(217, 119, 6, 0.05)' : '0 1px 4px rgba(22, 101, 52, 0.05)'
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                                                    <div style={{
-                                                        width: '28px',
-                                                        height: '28px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: isCustomerOutOfZone ? '#FEF3C7' : '#DCFCE7',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        flexShrink: 0
-                                                    }}>
-                                                        {isCustomerOutOfZone ? (
-                                                            <MapPin size={15} color="#D97706" strokeWidth={2} />
-                                                        ) : (
-                                                            <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
-                                                        )}
-                                                    </div>
-                                                    <div style={{ flex: 1 }}>
-                                                        <p style={{ 
-                                                            fontSize: '0.8rem', 
-                                                            color: isCustomerOutOfZone ? '#92400E' : '#166534', 
-                                                            margin: 0, 
-                                                            fontWeight: '700',
-                                                            lineHeight: '1.3',
-                                                            fontFamily: 'var(--font-outfit), sans-serif'
-                                                        }}>
-                                                            {isCustomerOutOfZone ? t.locationOutOfZone : (locale === 'es' ? 'Ubicación de entrega confirmada ✓' : 'Delivery location verified ✓')}
-                                                        </p>
-                                                        <p style={{ margin: '2px 0 0 0', fontSize: '0.7rem', color: isCustomerOutOfZone ? '#B45309' : '#047857', fontWeight: '500' }}>
-                                                            {locale === 'es' ? 'El domiciliario llegará con Waze/Maps directo a tu coordenada' : 'The driver will navigate directly to your coordinates'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => setShowMapPicker(true)}
-                                                    style={{ 
-                                                        background: 'white', 
-                                                        border: '1px solid #A7F3D0', 
-                                                        color: '#047857', 
-                                                        cursor: 'pointer', 
-                                                        padding: '5px 10px',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '700',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}
-                                                >
-                                                    <MapIcon size={12} />
-                                                    {locale === 'es' ? 'Ajustar pin' : 'Adjust pin'}
-                                                </button>
-                                            </div>
-                                        );
-                                    })()}
-
-                                    {/* Complemento de Dirección: Conjunto/Edificio + Torre/Apto */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }} className="mobile-stack">
-                                        {/* Campo 1: Nombre del Conjunto o Edificio */}
-                                        <div>
-                                            <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '700', fontSize: '0.7rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                {locale === 'es' ? 'Conjunto / Edificio (Opcional)' : 'Building / Complex (Optional)'}
-                                            </label>
-                                            <div style={{ position: 'relative' }}>
-                                                <div style={{ 
-                                                    position: 'absolute', 
-                                                    left: '12px', 
-                                                    top: 0, 
-                                                    bottom: 0, 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    color: '#64748B', 
-                                                    opacity: 0.7, 
-                                                    pointerEvents: 'none' 
-                                                }}>
-                                                    <Building2 size={14} />
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    placeholder={locale === 'es' ? "Ej: Torres del Parque, Portal..." : "e.g. Park Towers..."}
-                                                    value={buildingComplex}
-                                                    onChange={(e) => handleBuildingComplexChange(e.target.value)}
-                                                    style={{ 
-                                                        width: '100%', 
-                                                        padding: '0.55rem 0.75rem 0.55rem 2.3rem', 
-                                                        borderRadius: '12px', 
-                                                        border: '1px solid #E2E8F0', 
-                                                        fontSize: '0.82rem', 
-                                                        fontWeight: '500', 
-                                                        backgroundColor: 'white', 
-                                                        color: '#111827',
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                        fontFamily: 'var(--font-outfit), sans-serif',
-                                                        outline: 'none' 
-                                                    }}
-                                                    className="checkout-input-modern"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Campo 2: Torre / Interior / Apto o Casa */}
-                                        <div>
-                                            <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '700', fontSize: '0.7rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                {locale === 'es' ? 'Torre / Apto / Casa' : 'Tower / Apt / House'}
-                                            </label>
-                                            <div style={{ position: 'relative' }}>
-                                                <div style={{ 
-                                                    position: 'absolute', 
-                                                    left: '12px', 
-                                                    top: 0, 
-                                                    bottom: 0, 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    color: '#64748B', 
-                                                    opacity: 0.7, 
-                                                    pointerEvents: 'none' 
-                                                }}>
-                                                    <Home size={14} />
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    placeholder={locale === 'es' ? "Ej: Torre 2 Apto 501, Casa 14" : "e.g. Tower 2 Apt 501, House 14"}
-                                                    value={unitDetails}
-                                                    onChange={(e) => handleUnitDetailsChange(e.target.value)}
-                                                    style={{ 
-                                                        width: '100%', 
-                                                        padding: '0.55rem 0.75rem 0.55rem 2.3rem', 
-                                                        borderRadius: '12px', 
-                                                        border: '1px solid #E2E8F0', 
-                                                        fontSize: '0.82rem', 
-                                                        fontWeight: '500', 
-                                                        backgroundColor: 'white', 
-                                                        color: '#111827',
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                        fontFamily: 'var(--font-outfit), sans-serif',
-                                                        outline: 'none' 
-                                                    }}
-                                                    className="checkout-input-modern"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             )}
 
