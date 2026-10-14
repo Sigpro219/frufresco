@@ -128,8 +128,9 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
     };
 
     // Data Fetching
-    const fetchData = useCallback(async () => {
-        setLoading(true);
+    const fetchData = useCallback(async (silentOrEvent?: boolean | React.MouseEvent) => {
+        const silent = silentOrEvent === true;
+        if (!silent) setLoading(true);
         try {
             const { data: pqrsData, error: pqrsError } = await supabase
                 .from('customer_service_pqrs')
@@ -188,7 +189,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
         } catch (e: any) {
             console.error('Error fetching customer service data:', e);
-            showToast('Error cargando datos: ' + e.message, 'error');
+            if (!silent) showToast('Error cargando datos: ' + e.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -196,6 +197,47 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
     useEffect(() => {
         fetchData();
+    }, [fetchData]);
+
+    // Real-Time Synchronization (WebSockets + Tab Focus + Silent Heartbeat)
+    useEffect(() => {
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const triggerSilentRefresh = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchData(true);
+            }, 350);
+        };
+
+        const channel = supabase
+            .channel('customer-service-live-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_service_pqrs' }, triggerSilentRefresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'billing_returns' }, triggerSilentRefresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, triggerSilentRefresh)
+            .subscribe();
+
+        const handleFocusOrVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                triggerSilentRefresh();
+            }
+        };
+
+        window.addEventListener('focus', handleFocusOrVisibility);
+        document.addEventListener('visibilitychange', handleFocusOrVisibility);
+
+        const heartbeatInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                fetchData(true);
+            }
+        }, 10000);
+
+        return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            clearInterval(heartbeatInterval);
+            window.removeEventListener('focus', handleFocusOrVisibility);
+            document.removeEventListener('visibilitychange', handleFocusOrVisibility);
+            supabase.removeChannel(channel);
+        };
     }, [fetchData]);
 
     // Open Audit Wizard Modal

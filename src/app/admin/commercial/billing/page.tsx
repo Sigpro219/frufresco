@@ -974,9 +974,17 @@ export default function BillingDashboard() {
         }
     };
 
+    const [isRefreshingRealtime, setIsRefreshingRealtime] = useState(false);
+    const [lastRealtimeSync, setLastRealtimeSync] = useState<string>('');
+
     // Central Data Fetching
-    const fetchData = useCallback(async () => {
-        setLoading(true);
+    const fetchData = useCallback(async (silentOrEvent?: boolean | React.MouseEvent) => {
+        const silent = silentOrEvent === true;
+        if (!silent) {
+            setLoading(true);
+        } else {
+            setIsRefreshingRealtime(true);
+        }
         try {
             // 1. Fetch cuts
             const { data: cutsData, error: cutsError } = await supabase
@@ -1053,8 +1061,21 @@ export default function BillingDashboard() {
 
             const { data: pOrdersData, error: pOrdersErr } = await pOrdersQuery;
             if (!pOrdersErr && pOrdersData) {
-                // Si la fecha seleccionada fue 'Hoy' y no hay pedidos pendientes, verificar automáticamente si 'Ayer' tiene pedidos pendientes
+                // Si la fecha seleccionada fue 'Hoy' y no hay pedidos pendientes:
+                // 1. Verificar si 'Mañana' (tanda activa D+1) tiene pedidos por facturar
+                // 2. Si no, verificar si 'Ayer' tiene pedidos pendientes rezagados
                 if (pOrdersData.length === 0 && selectedBillingDate === getBogotaDate(0)) {
+                    const { data: tomorrowOrders } = await supabase
+                        .from('orders')
+                        .select('id')
+                        .is('billing_cut_id', null)
+                        .eq('delivery_date', getBogotaDate(1))
+                        .limit(1);
+                    if (tomorrowOrders && tomorrowOrders.length > 0) {
+                        setSelectedBillingDate(getBogotaDate(1));
+                        return;
+                    }
+
                     const { data: yesterdayOrders, error: yErr } = await supabase
                         .from('orders')
                         .select('id')
@@ -1114,10 +1135,13 @@ export default function BillingDashboard() {
                     if (s.key === 'billing_delivery_grace_minutes' && s.value) setGraceMinutes(Number(s.value));
                 });
             }
+
+            setLastRealtimeSync(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         } catch (err: any) {
             console.error('Error in billing fetchData:', err);
         } finally {
             setLoading(false);
+            setIsRefreshingRealtime(false);
         }
     }, [selectedBillingDate, includeAllStatuses]);
 
@@ -1175,6 +1199,51 @@ export default function BillingDashboard() {
         if (permissionsLoaded && (hasInvoicingAccess || hasPortfolioAccess || hasConfigAccess)) {
             fetchData();
         }
+    }, [permissionsLoaded, hasInvoicingAccess, hasPortfolioAccess, hasConfigAccess, fetchData]);
+
+    // Real-Time Synchronization (WebSockets + Tab Focus + Silent Heartbeat)
+    useEffect(() => {
+        if (!permissionsLoaded || !(hasInvoicingAccess || hasPortfolioAccess || hasConfigAccess)) return;
+
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const triggerSilentRefresh = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchData(true);
+            }, 350);
+        };
+
+        const channel = supabase
+            .channel('billing-live-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, triggerSilentRefresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'billing_returns' }, triggerSilentRefresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_service_pqrs' }, triggerSilentRefresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'billing_cuts' }, triggerSilentRefresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'billing_invoices' }, triggerSilentRefresh)
+            .subscribe();
+
+        const handleFocusOrVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                triggerSilentRefresh();
+            }
+        };
+
+        window.addEventListener('focus', handleFocusOrVisibility);
+        document.addEventListener('visibilitychange', handleFocusOrVisibility);
+
+        const heartbeatInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                fetchData(true);
+            }
+        }, 10000);
+
+        return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            clearInterval(heartbeatInterval);
+            window.removeEventListener('focus', handleFocusOrVisibility);
+            document.removeEventListener('visibilitychange', handleFocusOrVisibility);
+            supabase.removeChannel(channel);
+        };
     }, [permissionsLoaded, hasInvoicingAccess, hasPortfolioAccess, hasConfigAccess, fetchData]);
 
     // Memoized Status Counts for Pending Orders
@@ -2666,6 +2735,22 @@ export default function BillingDashboard() {
                                         <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B' }}>Tanda:</span>
                                         <button
                                             type="button"
+                                            onClick={() => setSelectedBillingDate(getBogotaDate(1))}
+                                            style={{
+                                                border: 'none',
+                                                padding: '2px 5px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.66rem',
+                                                fontWeight: selectedBillingDate === getBogotaDate(1) ? '800' : '600',
+                                                backgroundColor: selectedBillingDate === getBogotaDate(1) ? '#0D7A57' : 'transparent',
+                                                color: selectedBillingDate === getBogotaDate(1) ? 'white' : '#475569',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            Mañana ({getBogotaDate(1)})
+                                        </button>
+                                        <button
+                                            type="button"
                                             onClick={() => setSelectedBillingDate(getBogotaDate(0))}
                                             style={{
                                                 border: 'none',
@@ -2714,7 +2799,7 @@ export default function BillingDashboard() {
                                         </button>
                                         {/* COM-32: Selector de fecha extemporáneo con Lucide Icons */}
                                         {(() => {
-                                            const isCustomDate = selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all';
+                                            const isCustomDate = selectedBillingDate !== getBogotaDate(1) && selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all';
                                             return (
                                                 <div
                                                     title="Seleccionar fecha histórica de despacho"
@@ -2788,9 +2873,58 @@ export default function BillingDashboard() {
                                         })()}
                                     </div>
 
+                                    {/* Botón & Telemetría Realtime En Vivo */}
+                                    <button
+                                        type="button"
+                                        onClick={() => fetchData(true)}
+                                        title={lastRealtimeSync ? `Sincronización en tiempo real activa (Última: ${lastRealtimeSync}) — Clic para refrescar ahora` : 'Sincronización en tiempo real activa — Clic para refrescar ahora'}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            backgroundColor: '#ECFDF5',
+                                            border: '1px solid #A7F3D0',
+                                            padding: '0.2rem 0.55rem',
+                                            borderRadius: '6px',
+                                            fontSize: '0.64rem',
+                                            fontWeight: '800',
+                                            color: '#065F46',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <span style={{
+                                            width: '6px',
+                                            height: '6px',
+                                            borderRadius: '50%',
+                                            backgroundColor: '#10B981',
+                                            boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)'
+                                        }} />
+                                        <span>EN VIVO</span>
+                                        <RefreshCw
+                                            size={10}
+                                            style={{
+                                                color: '#059669',
+                                                animation: isRefreshingRealtime ? 'spin 0.8s linear infinite' : 'none'
+                                            }}
+                                        />
+                                    </button>
+
+                                    {/* Indicador de Tanda Activa D+1 (Mañana) */}
+                                    {selectedBillingDate === getBogotaDate(1) && (
+                                        <div style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                            backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0',
+                                            padding: '0.2rem 0.55rem', borderRadius: '5px',
+                                            fontSize: '0.65rem', fontWeight: '800', color: '#065F46'
+                                        }}>
+                                            <Clock size={10} style={{ color: '#059669' }} />
+                                            Tanda Activa: Mañana ({getBogotaDate(1)})
+                                        </div>
+                                    )}
+
                                     {/* COM-32: Poka-Yoke — Indicador de estado de la fecha seleccionada */}
                                     {(() => {
-                                        if (selectedBillingDate === 'all' || selectedBillingDate === getBogotaDate(0) || selectedBillingDate === getBogotaDate(-1)) return null;
+                                        if (selectedBillingDate === 'all' || selectedBillingDate === getBogotaDate(1) || selectedBillingDate === getBogotaDate(0) || selectedBillingDate === getBogotaDate(-1)) return null;
                                         const closedCutsForDate = cuts.filter(c =>
                                             c.scheduled_date === selectedBillingDate && (c.status === 'closed' || c.status === 'exported')
                                         );
