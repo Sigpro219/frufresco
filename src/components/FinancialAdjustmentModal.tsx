@@ -83,6 +83,7 @@ export default function FinancialAdjustmentModal({
     useEffect(() => {
         if (!isOpen || !pqr) return;
 
+        let cancelled = false;
         setErrorMsg(null);
         setRcaCategoryL1(defaultRcaCategory);
         setRcaSubtypeL2(defaultRcaSubtype);
@@ -94,60 +95,99 @@ export default function FinancialAdjustmentModal({
             : `Ajuste de facturación y cantidades recibidas por PQR #${pqr.id.substring(0, 8)} (${pqr.subject}).`;
         setNotes(defaultNote);
 
-        // Parse items from order
-        if (orderItems && orderItems.length > 0) {
-            // Try to extract quantity from PQR description / subject if possible
-            const combined = `${pqr.subject || ''} ${pqr.description || ''}`;
-            const qtyMatch = combined.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilos?|kls?|und|unidades?|libras?)/i);
-            const extractedQty = qtyMatch ? parseFloat(qtyMatch[1].replace(',', '.')) : 0;
+        const loadItemsAndReturns = async () => {
+            try {
+                let effectiveOrderItems = orderItems && orderItems.length > 0 ? orderItems : [];
+                let existingReturns: any[] = [];
 
-            const mapped: FinancialAdjustmentItem[] = orderItems.map((item, idx) => {
-                const origQty = Number(item.quantity) || 0;
-                const price = Number(item.unit_price) || 0;
-                const name = item.products?.name || item.nickname || `Producto #${idx + 1}`;
-                const uom = item.products?.unit_of_measure || 'Kg';
+                if (pqr.order_id) {
+                    if (effectiveOrderItems.length === 0) {
+                        const { data: fetchedItems } = await supabase
+                            .from('order_items')
+                            .select('*, products(name, sku, unit_of_measure)')
+                            .eq('order_id', pqr.order_id);
+                        effectiveOrderItems = fetchedItems || [];
+                    }
 
-                // Check if this item is mentioned in PQR subject or description
-                const cleanSubject = (pqr.subject || '').toLowerCase();
-                const cleanItemName = name.toLowerCase();
-                const isMentioned = cleanItemName.split(' ').some((word) => word.length > 3 && cleanSubject.includes(word));
-
-                // Default affected qty: if mentioned, use extracted or 1, else 0
-                let initialAffQty = 0;
-                let initialSelected = false;
-
-                if (orderItems.length === 1 || isMentioned) {
-                    initialSelected = true;
-                    initialAffQty = extractedQty > 0 && extractedQty <= origQty ? extractedQty : Math.min(origQty, 1);
+                    const { data: fetchedReturns } = await supabase
+                        .from('billing_returns')
+                        .select('id, product_id, quantity_returned, status, reason, notes')
+                        .eq('order_id', pqr.order_id);
+                    existingReturns = fetchedReturns || [];
                 }
 
-                return {
-                    id: item.id || `item-${idx}`,
-                    product_id: item.product_id,
-                    product_name: name,
-                    unit_of_measure: uom,
-                    original_quantity: origQty,
-                    unit_price: price,
-                    affected_quantity: initialAffQty,
-                    novelty_type: 'averia',
-                    selected: initialSelected,
-                    notes: ''
-                };
-            });
+                if (cancelled) return;
 
-            // If none was auto-selected, select the first one with 1 unit
-            if (!mapped.some(m => m.selected) && mapped.length > 0) {
-                mapped[0].selected = true;
-                mapped[0].affected_quantity = Math.min(mapped[0].original_quantity, 1);
+                if (effectiveOrderItems.length > 0) {
+                    setUseManualGlobal(false);
+                    setCustomGlobalAmount(null);
+
+                    const combined = `${pqr.subject || ''} ${pqr.description || ''}`;
+                    const qtyMatch = combined.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilos?|kls?|und|unidades?|libras?)/i);
+                    const extractedQty = qtyMatch ? parseFloat(qtyMatch[1].replace(',', '.')) : 0;
+
+                    const mapped: FinancialAdjustmentItem[] = effectiveOrderItems.map((item, idx) => {
+                        const origQty = Number(item.quantity) || 0;
+                        const price = Number(item.unit_price) || 0;
+                        const name = item.products?.name || item.nickname || `Producto #${idx + 1}`;
+                        const uom = item.products?.unit_of_measure || 'Kg';
+
+                        // 1. Priority: Match against existing billing_returns for this order_id + product_id
+                        const matchedReturn = existingReturns.find(r => r.product_id === item.product_id);
+
+                        // 2. Fallback: Check if this item is mentioned in PQR subject or description
+                        const cleanSubject = (pqr.subject || '').toLowerCase();
+                        const cleanItemName = name.toLowerCase();
+                        const isMentioned = cleanItemName.split(' ').some((word: string) => word.length > 3 && cleanSubject.includes(word));
+
+                        let initialAffQty = 0;
+                        let initialSelected = false;
+
+                        if (matchedReturn && Number(matchedReturn.quantity_returned) > 0) {
+                            initialSelected = true;
+                            initialAffQty = Math.min(origQty, Number(matchedReturn.quantity_returned));
+                        } else if (existingReturns.length === 0 && (effectiveOrderItems.length === 1 || isMentioned)) {
+                            initialSelected = true;
+                            initialAffQty = extractedQty > 0 && extractedQty <= origQty ? extractedQty : Math.min(origQty, 1);
+                        }
+
+                        return {
+                            id: item.id || `item-${idx}`,
+                            product_id: item.product_id,
+                            product_name: name,
+                            unit_of_measure: uom,
+                            original_quantity: origQty,
+                            unit_price: price,
+                            affected_quantity: initialAffQty,
+                            novelty_type: 'averia',
+                            selected: initialSelected,
+                            notes: matchedReturn?.reason || ''
+                        };
+                    });
+
+                    // Sort so selected (returned) items appear at the very top of the breakdown list
+                    mapped.sort((a, b) => (b.selected ? 1 : 0) - (a.selected ? 1 : 0));
+
+                    if (!mapped.some(m => m.selected) && mapped.length > 0) {
+                        mapped[0].selected = true;
+                        mapped[0].affected_quantity = Math.min(mapped[0].original_quantity, 1);
+                    }
+
+                    setItems(mapped);
+                } else {
+                    setItems([]);
+                    setUseManualGlobal(true);
+                    setCustomGlobalAmount(0);
+                }
+            } catch (err) {
+                console.error('Error loading order items/returns in FinancialAdjustmentModal:', err);
             }
+        };
 
-            setItems(mapped);
-        } else {
-            // No order items: allow custom single item or global amount
-            setItems([]);
-            setUseManualGlobal(true);
-            setCustomGlobalAmount(0);
-        }
+        loadItemsAndReturns();
+        return () => {
+            cancelled = true;
+        };
     }, [isOpen, pqr, orderItems, mode, defaultRcaCategory, defaultRcaSubtype, defaultRcaResponsible]);
 
     // Financial Calculations
@@ -266,22 +306,50 @@ export default function FinancialAdjustmentModal({
                 deductionAmount: calculatedCreditAmount
             });
 
+            const upsertApprovedReturn = async (item: FinancialAdjustmentItem, prefixTag: string) => {
+                const { data: existingPending } = await supabase
+                    .from('billing_returns')
+                    .select('id')
+                    .eq('order_id', orderId)
+                    .eq('product_id', item.product_id)
+                    .eq('status', 'pending_review')
+                    .maybeSingle();
+
+                const reasonText = `[${prefixTag} PQR #${shortPqrId}] ${item.novelty_type.toUpperCase()}: ${notes || pqr.subject}`;
+                const notesText = `RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}`;
+
+                if (existingPending?.id) {
+                    await supabase
+                        .from('billing_returns')
+                        .update({
+                            quantity_returned: item.affected_quantity,
+                            reason: reasonText,
+                            status: 'approved',
+                            notes: notesText,
+                            resolved_at: nowIso
+                        })
+                        .eq('id', existingPending.id);
+                } else {
+                    await supabase
+                        .from('billing_returns')
+                        .insert([{
+                            order_id: orderId,
+                            product_id: item.product_id,
+                            quantity_returned: item.affected_quantity,
+                            reason: reasonText,
+                            status: 'approved',
+                            notes: notesText
+                        }]);
+                }
+            };
+
             if (mode === 'credit_note') {
                 // =========================================================
                 // OPCIÓN 3: NOTA CRÉDITO COMERCIAL
                 // =========================================================
                 if (orderId && selectedItems.length > 0) {
                     for (const item of selectedItems) {
-                        await supabase
-                            .from('billing_returns')
-                            .insert([{
-                                order_id: orderId,
-                                product_id: item.product_id,
-                                quantity_returned: item.affected_quantity,
-                                reason: `[NOTA CRÉDITO PQR #${shortPqrId}] ${item.novelty_type.toUpperCase()}: ${notes || pqr.subject}`,
-                                status: 'approved',
-                                notes: `RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}`
-                            }]);
+                        await upsertApprovedReturn(item, 'NOTA CRÉDITO');
                     }
                 }
 
@@ -309,7 +377,7 @@ export default function FinancialAdjustmentModal({
                     throw new Error('Esta PQR no tiene un pedido asociado en base de datos para recalcular.');
                 }
 
-                // 1. Update order_items quantities
+                // 1. Update order_items quantities and approve billing_returns
                 for (const item of selectedItems) {
                     const newQty = Math.max(0, Number(item.original_quantity) - Number(item.affected_quantity));
                     await supabase
@@ -318,17 +386,7 @@ export default function FinancialAdjustmentModal({
                         .eq('order_id', orderId)
                         .eq('product_id', item.product_id);
 
-                    // Insert approved billing_returns record for traceability
-                    await supabase
-                        .from('billing_returns')
-                        .insert([{
-                            order_id: orderId,
-                            product_id: item.product_id,
-                            quantity_returned: item.affected_quantity,
-                            reason: `[AJUSTE FACTURA PQR #${shortPqrId}] ${item.novelty_type.toUpperCase()}: ${notes || pqr.subject}`,
-                            status: 'approved',
-                            notes: `RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}`
-                        }]);
+                    await upsertApprovedReturn(item, 'AJUSTE FACTURA');
                 }
 
                 // 2. Update orders total

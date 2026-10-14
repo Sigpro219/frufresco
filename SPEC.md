@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.175 (Resolutivo Gemba Integral: Rediseño Power Grid de Balance Diario — Modo Consola Fullscreen, Header Plano con Hover, Filtros In-Header Conmutables, Column Drag & Compare y Desacoplamiento Minimalista al Dashboard — 76/76 Pantallas Certificadas)  
-> **Fecha:** 08 de Octubre, 2026  
+> **Versión:** 1.9.176 (Resolutivo Gemba Integral: Sincronización Realtime Silenciosa en Facturación y SAC, Desbloqueo de Tandas Operativas D+1..D+7 y Pre-Liquidación Automática de Devoluciones illing_returns en FinancialAdjustmentModal — 76/76 Pantallas Certificadas)  
+> **Fecha:** 14 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 207 Escenarios BDD Ininterrumpidos (1..207)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 208 Escenarios BDD Ininterrumpidos (1..208)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **207 Escenarios Canónicos (1..207)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **208 Escenarios Canónicos (1..208)** | **🟢 100%** |
 
 ---
 
@@ -4766,8 +4766,9 @@ El módulo exporta el archivo plano oficial estructurado bajo el estándar de im
 
 ### 21.7 Telemetría de Tandas de Facturación, Selector Extemporáneo Resiliente (Poka-Yoke) y Rigor Iconográfico Lucide
 1. **Telemetría Automática y Preservación de Tanda Activa:**
-   - La galería de facturación (`/admin/commercial/billing`) inspecciona por defecto la tanda `Hoy` ($D$).
-   - Si no existen pedidos pendientes por facturar en el día corriente, el sistema audita de forma proactiva la existencia de pedidos sin corte correspondientes a `Ayer` ($D-1$) y conmuta la vista automáticamente, evitando pantallas vacías ficticias.
+   - La galería de facturación (`/admin/commercial/billing`) ofrece botones de acceso rápido de 1 clic para las tandas operativas clave: `Mañana` ($D+1$), `Hoy` ($D$), `Ayer` ($D-1$) y `Todas`.
+   - Si no existen pedidos pendientes por facturar en `Hoy` ($D$), el sistema audita de forma proactiva la existencia de pedidos de la **tanda activa de entrega en curso** (`Mañana` $D+1$) y conmuta la vista automáticamente, evitando pantallas vacías ficticias ("0 pedidos"). Si tampoco hay en $D+1$, verifica pedidos pendientes rezagados de `Ayer` ($D-1$).
+   - Cuando la tanda activa $D+1$ está seleccionada, la interfaz proyecta el badge de telemetría: `<Clock /> Tanda Activa: Mañana (YYYY-MM-DD)`.
 2. **Selector Extemporáneo Poka-Yoke & Disparador Imperativo `showPicker()`:**
    - Para auditar tandas de fines de semana, festivos o fechas extemporáneas, el módulo provee un selector de fecha reactivo.
    - **Ergonomía Web & Compatibilidad Chromium:** El elemento interactivo vincula un disparador imperativo `HTMLInputElement.prototype.showPicker()` mediante `useRef<HTMLInputElement>` activado por cualquier evento `onClick` del contenedor píldora.
@@ -9933,6 +9934,16 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   2. Si el SKU no forma parte del acuerdo pero el cliente está autorizado para adquirir catálogo abierto, el sistema asigna el badge gris `[Fuera de Convenio (Institucional)]` y liquida automáticamente la tarifa oficial de **General Institucional** (`pricing_model_prices` con modelo `d90a91e5-827c-473d-9d4f-3e28c7c91e15`).
   3. Queda terminantemente bloqueada la incorporación de productos con precio \$0 COP para ventas regulares; si el insumo carece de costo y tarifa en modelos, el buscador despliega el badge rojo `[SIN PRECIO ($0)]` y el validador `handleSubmit` veta el guardado del pedido para evitar facturación a ciegas y contingencias tributarias ante la DIAN.
   4. La única excepción admitida para \$0 COP es una reposición por garantía amparada por PQR y Pedido Padre (`orderNature === 'replacement'`).
+
+---
+
+#### Escenario 208: Sincronización Realtime en Facturación/SAC y Pre-Liquidación Automática de Devoluciones en Ajuste de Factura (SDD v1.9.176)
+- **Given** un pedido entregado (status = 'delivered', ej. Pedido #1088 por \.451.560 COP) que registra una novedad en illing_returns (status = 'pending_review', 6 Kg de Aguacate a \.000/Kg) y un ticket activo en customer_service_pqrs.
+- **When** el pedido cambia de estado en ruta o el inspector de Calidad abre FinancialAdjustmentModal en modo **Opción 3 (Nota Crédito)** u **Opción 4 (Ajuste de Factura)**.
+- **Then**:
+  1. La consola de Facturación (/admin/commercial/billing) y la consola de Atención al Cliente (/admin/customer-service) reflejan en tiempo real (etchData(true)) el cambio de estado y la alerta de novedad sin requerir recarga manual F5.
+  2. FinancialAdjustmentModal hidrata automáticamente los order_items y illing_returns del pedido, pre-selecciona los 6 Kg de Aguacate y proyecta de inmediato el descuento de -\.000 COP y el nuevo total neto de \.379.560 COP.
+  3. Al confirmar el ajuste, el registro existente en illing_returns transiciona en sitio de pending_review a pproved sin duplicar filas, restando la cantidad devuelta en order_items.quantity y habilitando el pedido como Listo para Corte en Facturación.
 
 ---
 

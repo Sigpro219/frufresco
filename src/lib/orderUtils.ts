@@ -488,12 +488,34 @@ export function resolveProductCharacteristicsBadges(item: {
 
     // Limpiar notas de picking/entrega que van en sus propios badges
     textToAnalyze = textToAnalyze.replace(/\s*\((Nota|Entr):[^\)]*\)/gi, ' ');
-    // Si contiene el nombre completo del producto o partes de él, removerlo
+    // Si contiene el nombre completo del producto o partes de él, removerlo (incluyendo variaciones de género y plural)
     if (prodName) {
-        const prodWords = prodName.split(/\s+/).filter(w => w.length > 2);
+        const prodWords = prodName.split(/[\s\-_\/]+/).filter(w => w.length > 2);
         prodWords.forEach(w => {
             textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${w}\\b`, 'gi'), ' ');
+            if (w.endsWith('s')) textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${w.slice(0, -1)}\\b`, 'gi'), ' ');
+            else textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${w}s\\b`, 'gi'), ' ');
+            if (w.endsWith('a') || w.endsWith('o')) textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${w.slice(0, -1)}[ao]\\b`, 'gi'), ' ');
+            if (w.length > 4) textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${w.slice(0, -2)}[a-z]*\\b`, 'gi'), ' ');
         });
+
+        // Variaciones fonéticas / sinónimos habituales de catálogo agrícola
+        const synonymMap: Record<string, string[]> = {
+            zukini: ['suchini', 'zuquini', 'zucchini'],
+            albahacon: ['albacon', 'albahaca'],
+            cebollin: ['cebolleta'],
+            uchuvas: ['uchuva'],
+            hierbabuena: ['yerbabuena'],
+            isabelita: ['isabela'],
+            tahiti: ['tahity']
+        };
+        for (const [key, syns] of Object.entries(synonymMap)) {
+            if (prodName.includes(key)) {
+                syns.forEach(s => {
+                    textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${s}\\b`, 'gi'), ' ');
+                });
+            }
+        }
     }
 
     // 1. Extraer Conteo / Densidad Unit (ej: "55 unds", "50 und", "55 unds/kilo")
@@ -626,15 +648,22 @@ export function resolveProductCharacteristicsBadges(item: {
         }
     }
 
-    // 6. Filtrar ruido residual de unidades (ej: "x kilo", "x kg", "1000 gr", "kg", "kilo")
+    // 6. Filtrar ruido residual de unidades, tiers de catálogo B2B, clientes y empaques
     textToAnalyze = textToAnalyze
-        .replace(/\b(?:x\s*kilo|x\s*kg|al\s*kilo|por\s*kilo|kilo|kg|1000\s*gr|1000g)\b/gi, ' ')
-        .replace(/[\(\)\[\],.:]/g, ' ')
+        .replace(/\b(?:institucional|instiucional|instit|inst|horeca|retail|hogar|b2b|base|premium|estandar|estándar)\b/gi, ' ')
+        .replace(/\b(?:colsubs|colsubsidio|sodexo|compass|alsea|granelcolsubsidio)\b/gi, ' ')
+        .replace(/\b(?:paq|paquete|bolsa|granel|malla|caja|atado|manojo|bandeja|pesado|limpio|rizada|organi|organico|organica|dtamal|tamal|bca|junca|rojo|roja|amarillo|amarilla|blanco|blanca|morado|morada)\b/gi, ' ')
+        .replace(/\b(?:x\s*kilo|x\s*kg|al\s*kilo|por\s*kilo|kilo|kg|libras?|lb)\b/gi, ' ')
+        .replace(/\b\d+\s*(?:gr|gms?|g|gramos|kilos?|kg)?\b/gi, ' ')
+        .replace(/\b(?:unds?|unidades?|und|u)\b/gi, ' ')
+        .replace(/\b(?:x|al|por|de|en|d\/|con|sin|del?)\b/gi, ' ')
+        .replace(/[\(\)\[\],.:\-_/]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 
     // 7. Si queda texto residual válido no catalogado
-    if (textToAnalyze.length > 2 && !/^\d+$/.test(textToAnalyze) && textToAnalyze.toLowerCase() !== 'estandar' && textToAnalyze.toLowerCase() !== 'estándar') {
+    const isTrivial = /^(?:n\/?a|ningun[oa]|sin\s+especificaci[oó]n|est[aá]ndar)$/i.test(textToAnalyze);
+    if (textToAnalyze.length > 2 && !/^\d+$/.test(textToAnalyze) && !isTrivial) {
         badges.push({
             type: 'custom',
             label: 'Especificación',

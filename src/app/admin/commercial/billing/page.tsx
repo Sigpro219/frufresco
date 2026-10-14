@@ -1686,7 +1686,7 @@ export default function BillingDashboard() {
             setPreviewCutPokaYokeError(errorMsg);
             showToast({
                 type: 'error',
-                title: '⛔ Poka-Yoke de Facturación Activo',
+                title: 'Poka-Yoke de Facturación Activo',
                 message: errorMsg
             });
             return;
@@ -4038,7 +4038,7 @@ export default function BillingDashboard() {
                                                                             </div>
                                                                             <div style={{ fontSize: '0.60rem', color: '#991B1B', fontWeight: '800', backgroundColor: '#FEE2E2', border: '1px solid #FCA5A5', padding: '1px 5px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
                                                                                 <AlertTriangle size={9} style={{ color: '#DC2626', flexShrink: 0 }} />
-                                                                                <span>⚠️ Se despachó sin precio</span>
+                                                                                <span>Se despachó sin precio</span>
                                                                             </div>
                                                                         </div>
                                                                     );
@@ -5058,7 +5058,7 @@ export default function BillingDashboard() {
                                 }}>
                                     <AlertTriangle size={18} style={{ color: '#DC2626', flexShrink: 0, marginTop: '2px' }} />
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: '800', fontSize: '0.82rem', marginBottom: '2px' }}>⛔ Poka-Yoke de Facturación Activo</div>
+                                        <div style={{ fontWeight: '800', fontSize: '0.82rem', marginBottom: '2px' }}>Poka-Yoke de Facturación Activo</div>
                                         <div style={{ fontSize: '0.76rem', color: '#B91C1C', lineHeight: 1.4, fontWeight: '600' }}>{previewCutPokaYokeError}</div>
                                     </div>
                                     <button

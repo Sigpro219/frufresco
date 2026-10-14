@@ -1031,7 +1031,10 @@ export default function PqrLeanDashboard({
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        <span>🌐 Todas las Macrocausas (Apiladas)</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <Layers size={13} />
+                            <span>Todas las Macrocausas (Apiladas)</span>
+                        </span>
                         <span style={{
                             fontSize: '0.64rem',
                             fontWeight: '900',
@@ -1129,9 +1132,18 @@ export default function PqrLeanDashboard({
                         <span style={{ color: '#64748B', display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: '800' }}>Tendencia Run-Chart</span>
                         <strong style={{ 
                             color: trendAnalysis.status === 'improving' ? '#059669' : trendAnalysis.status === 'worsening' ? '#DC2626' : '#475569', 
-                            fontSize: '0.82rem' 
+                            fontSize: '0.82rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
                         }}>
-                            {trendAnalysis.status === 'improving' ? '📉 Reduciendo Fallas' : trendAnalysis.status === 'worsening' ? '📈 Crecimiento de Fallas' : '➡️ Estable'}
+                            {trendAnalysis.status === 'improving' ? (
+                                <><TrendingDown size={14} /> Reduciendo Fallas</>
+                            ) : trendAnalysis.status === 'worsening' ? (
+                                <><TrendingUp size={14} /> Crecimiento de Fallas</>
+                            ) : (
+                                <><Minus size={14} /> Estable</>
+                            )}
                         </strong>
                     </div>
 
@@ -1323,8 +1335,9 @@ export default function PqrLeanDashboard({
                             minWidth: '220px',
                             zIndex: 10
                         }}>
-                            <div style={{ fontWeight: '800', borderBottom: '1px solid #334155', paddingBottom: '4px', marginBottom: '6px' }}>
-                                📅 {histogramBuckets[hoveredBucketIdx].fullLabel}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: '800', borderBottom: '1px solid #334155', paddingBottom: '4px', marginBottom: '6px' }}>
+                                <Calendar size={13} style={{ color: '#94A3B8' }} />
+                                <span>{histogramBuckets[hoveredBucketIdx].fullLabel}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                 <span style={{ color: '#94A3B8' }}>Total Casos:</span>

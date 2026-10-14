@@ -9,7 +9,7 @@ import {
     ChevronRight, ChevronLeft, Sparkles, Phone, MessageCircle, Link2,
     Unlink, Plus, Trash2, Loader2, Maximize2, DollarSign, Percent,
     PackageMinus, AlertCircle, Edit2, RotateCcw, ExternalLink, Copy,
-    Clock, ArrowRight, PackageX, ShoppingBag
+    Clock, ArrowRight, PackageX, ShoppingBag, Package
 } from 'lucide-react';
 import {
     RCA_CATEGORIES_L1,
@@ -1250,7 +1250,7 @@ export default function PqrAuditModal({
                                             </div>
                                             <div>
                                                 <span style={{ fontSize: '0.78rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                                    🚨 PROTOCOLO DE QUIEBRE DE ABASTECIMIENTO EN CORABASTOS (PQRS PROACTIVA)
+                                                    PROTOCOLO DE QUIEBRE DE ABASTECIMIENTO EN CORABASTOS (PQRS PROACTIVA)
                                                 </span>
                                                 <p style={{ fontSize: '0.68rem', color: '#B45309', margin: '2px 0 0 0' }}>
                                                     Producto no disponible en la central mayorista. Consulta activa con el cliente antes de la salida del furgón.
@@ -1378,7 +1378,7 @@ export default function PqrAuditModal({
                                                 }}
                                             >
                                                 <RotateCcw size={14} />
-                                                <span>⚡ Auto-Liberar Despacho Ahora</span>
+                                                <span>Auto-Liberar Despacho Ahora</span>
                                             </button>
                                         )}
                                     </div>
@@ -1523,8 +1523,9 @@ export default function PqrAuditModal({
                                                     <span>Abrir Chat WhatsApp ({authorInfo.phoneParsed.display})</span>
                                                 </a>
                                             ) : (
-                                                <span style={{ fontSize: '0.7rem', color: '#B45309', backgroundColor: '#FEF3C7', padding: '5px 10px', borderRadius: '6px', border: '1px solid #FDE68A' }}>
-                                                    ⚠️ Sin número celular válido
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#B45309', backgroundColor: '#FEF3C7', padding: '5px 10px', borderRadius: '6px', border: '1px solid #FDE68A' }}>
+                                                    <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                                                    <span>Sin número celular válido</span>
                                                 </span>
                                             )}
 
@@ -1834,7 +1835,8 @@ export default function PqrAuditModal({
                                                     onChange={e => setHasPhysicalReturn(e.target.checked)}
                                                     style={{ width: '15px', height: '15px', accentColor: '#0D7A57', cursor: 'pointer' }}
                                                 />
-                                                📦 ¿Retorna físicamente en el camión a bodega? (Ingresa a Cuarentena de Patio)
+                                                <Package size={14} style={{ color: hasPhysicalReturn ? '#0D7A57' : '#64748B', flexShrink: 0 }} />
+                                                <span>¿Retorna físicamente en el camión a bodega? (Ingresa a Cuarentena de Patio)</span>
                                             </label>
                                         </div>
                                     </div>
@@ -2422,8 +2424,9 @@ export default function PqrAuditModal({
                                 </select>
                             </div>
 
-                            <p style={{ fontSize: '0.7rem', color: '#64748B', margin: 0, backgroundColor: '#F0FDF4', padding: '8px 10px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
-                                💡 Al confirmar, el sistema actualiza la línea del pedido en caliente, notifica a la cuadrilla de alistamiento y emite la remisión con el producto sustituto conforme.
+                            <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: '#64748B', margin: 0, backgroundColor: '#F0FDF4', padding: '8px 10px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                                <Sparkles size={14} style={{ color: '#16A34A', flexShrink: 0 }} />
+                                <span>Al confirmar, el sistema actualiza la línea del pedido en caliente, notifica a la cuadrilla de alistamiento y emite la remisión con el producto sustituto conforme.</span>
                             </p>
                         </div>
 
