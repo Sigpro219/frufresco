@@ -30,68 +30,104 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { email, nit, phone } = body;
 
-        if (!email || !nit) {
-            return NextResponse.json({ error: 'Email and identification (nit) are required' }, { status: 400 });
-        }
+        const normalizedEmail = (email || '').toLowerCase().trim();
+        const normalizedNit = (nit || '').toLowerCase().trim();
+        const rawPhone = cleanPhone(phone);
 
-        const normalizedEmail = email.toLowerCase().trim();
-        const normalizedNit = nit.toLowerCase().trim();
+        if (!normalizedEmail && !rawPhone && !normalizedNit) {
+            return NextResponse.json({ error: 'Phone, email or identification is required' }, { status: 400 });
+        }
 
         let clientRecord: {
             id?: string;
             name: string;
             address: string;
             phone: string;
+            email?: string;
             latitude: number | null;
             longitude: number | null;
         } | null = null;
 
-        // 1. Query client profile strictly from profiles table where role is 'b2c_client'
-        const { data: profilesList } = await supabase
-            .from('profiles')
-            .select('id, contact_name, address, phone, contact_phone, latitude, longitude')
-            .eq('role', 'b2c_client')
-            .eq('email', normalizedEmail)
-            .eq('nit', normalizedNit)
-            .order('created_at', { ascending: false })
-            .limit(1);
+        let matchedProfile: any = null;
 
-        if (profilesList && profilesList.length > 0) {
-            const prof = profilesList[0];
-            clientRecord = {
-                id: prof.id,
-                name: prof.contact_name || '',
-                address: prof.address || '',
-                phone: prof.contact_phone || prof.phone || '',
-                latitude: prof.latitude ? parseFloat(prof.latitude) : null,
-                longitude: prof.longitude ? parseFloat(prof.longitude) : null
-            };
+        // 1. Direct phone lookup (B2C primary fast-track)
+        if (rawPhone && rawPhone.length >= 10) {
+            const { data: profByPhone } = await supabase
+                .from('profiles')
+                .select('id, contact_name, address, phone, contact_phone, email, latitude, longitude, logistics_data')
+                .or(`phone.eq.${rawPhone},contact_phone.eq.${rawPhone}`)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (profByPhone && profByPhone.length > 0) {
+                matchedProfile = profByPhone[0];
+                clientRecord = {
+                    id: matchedProfile.id,
+                    name: matchedProfile.contact_name || '',
+                    address: matchedProfile.address || '',
+                    phone: matchedProfile.contact_phone || matchedProfile.phone || rawPhone,
+                    email: matchedProfile.email || undefined,
+                    latitude: matchedProfile.latitude ? parseFloat(matchedProfile.latitude) : null,
+                    longitude: matchedProfile.longitude ? parseFloat(matchedProfile.longitude) : null
+                };
+            }
         }
 
-        // 2. Fallback: Query historical approved B2C orders matching BOTH Email AND NIT strictly
+        // 2. Query client profile by Email and NIT if phone didn't match or wasn't provided
+        if (!clientRecord && normalizedEmail && normalizedNit) {
+            const { data: profilesList } = await supabase
+                .from('profiles')
+                .select('id, contact_name, address, phone, contact_phone, email, latitude, longitude, logistics_data')
+                .eq('role', 'b2c_client')
+                .eq('email', normalizedEmail)
+                .eq('nit', normalizedNit)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (profilesList && profilesList.length > 0) {
+                matchedProfile = profilesList[0];
+                clientRecord = {
+                    id: matchedProfile.id,
+                    name: matchedProfile.contact_name || '',
+                    address: matchedProfile.address || '',
+                    phone: matchedProfile.contact_phone || matchedProfile.phone || '',
+                    email: matchedProfile.email || undefined,
+                    latitude: matchedProfile.latitude ? parseFloat(matchedProfile.latitude) : null,
+                    longitude: matchedProfile.longitude ? parseFloat(matchedProfile.longitude) : null
+                };
+            }
+        }
+
+        // 3. Fallback: Query historical approved B2C orders
         if (!clientRecord || !clientRecord.latitude || !clientRecord.longitude) {
-            const { data: orderList } = await supabase
+            let orderQuery = supabase
                 .from('orders')
                 .select('id, shipping_address, latitude, longitude, special_notes, created_at')
                 .not('latitude', 'is', null)
                 .not('longitude', 'is', null)
-                .in('type', ['b2c_client', 'b2c_guest', 'b2c_wompi'])
-                .ilike('special_notes', `%ID: ${normalizedNit}%`)
-                .ilike('special_notes', `%Email: ${normalizedEmail}%`)
-                .order('created_at', { ascending: false })
-                .limit(1);
+                .in('type', ['b2c_client', 'b2c_guest', 'b2c_wompi']);
+
+            if (rawPhone && rawPhone.length >= 10) {
+                orderQuery = orderQuery.ilike('special_notes', `%Tel: ${rawPhone}%`);
+            } else if (normalizedNit && normalizedEmail) {
+                orderQuery = orderQuery.ilike('special_notes', `%ID: ${normalizedNit}%`).ilike('special_notes', `%Email: ${normalizedEmail}%`);
+            } else if (normalizedEmail) {
+                orderQuery = orderQuery.ilike('special_notes', `%Email: ${normalizedEmail}%`);
+            }
+
+            const { data: orderList } = await orderQuery.order('created_at', { ascending: false }).limit(1);
 
             if (orderList && orderList.length > 0) {
                 const ord = orderList[0];
                 const notes = ord.special_notes || '';
-                const nameMatch = notes.match(/\[CLIENTE:\s*([^|]+)\|/i);
+                const nameMatch = notes.match(/\[CLIENTE:\s*([^|]+)\|/i) || notes.match(/\[COMPRADOR[^:]*:\s*([^|]+)\|/i);
                 const telMatch = notes.match(/Tel:\s*([^|]+)\|/i);
 
                 clientRecord = {
                     id: ord.id,
                     name: nameMatch?.[1]?.trim() || clientRecord?.name || '',
                     address: ord.shipping_address || clientRecord?.address || '',
-                    phone: telMatch?.[1]?.trim() || clientRecord?.phone || '',
+                    phone: telMatch?.[1]?.trim() || clientRecord?.phone || rawPhone,
                     latitude: ord.latitude ? parseFloat(ord.latitude) : null,
                     longitude: ord.longitude ? parseFloat(ord.longitude) : null
                 };
@@ -99,25 +135,26 @@ export async function POST(request: Request) {
         }
 
         if (!clientRecord || (!clientRecord.name && !clientRecord.address)) {
-            console.log(`Lookup not found for email: ${normalizedEmail}, nit: ${normalizedNit}`);
+            console.log(`Lookup not found for email: ${normalizedEmail}, phone: ${rawPhone}, nit: ${normalizedNit}`);
             return NextResponse.json({ found: false });
         }
 
         // STEP 2: If phone is provided, run verification and return unmasked data with GPS coordinates
-        if (phone !== undefined) {
-            const clientEnteredPhone = cleanPhone(phone);
+        if (phone !== undefined || (rawPhone && rawPhone.length >= 10)) {
+            const clientEnteredPhone = cleanPhone(phone || rawPhone);
             const dbPhone = cleanPhone(clientRecord.phone);
 
-            if (clientEnteredPhone && dbPhone && clientEnteredPhone === dbPhone) {
-                console.log(`Successfully verified and unlocked profile/history for: ${normalizedEmail}`);
+            const isPhoneMatch = !dbPhone || !clientEnteredPhone || clientEnteredPhone === dbPhone || (dbPhone.includes(clientEnteredPhone) || clientEnteredPhone.includes(dbPhone));
+
+            if (isPhoneMatch) {
+                console.log(`Successfully verified and unlocked profile/history for phone: ${clientEnteredPhone}, email: ${normalizedEmail}`);
 
                 // Fetch or compile gift beneficiaries from profile and historical orders
                 const beneficiariesMap = new Map<string, any>();
 
                 // From profile logistics_data / beneficiaries if present
-                if (profilesList && profilesList.length > 0) {
-                    const prof = profilesList[0] as any;
-                    const savedBeneficiaries = prof.beneficiaries || prof.logistics_data?.beneficiaries || [];
+                if (matchedProfile) {
+                    const savedBeneficiaries = matchedProfile.beneficiaries || matchedProfile.logistics_data?.beneficiaries || [];
                     if (Array.isArray(savedBeneficiaries)) {
                         savedBeneficiaries.forEach((b: any) => {
                             if (b && b.name) {
@@ -130,10 +167,16 @@ export async function POST(request: Request) {
 
                 // From historical orders
                 try {
+                    const orderOrConditions: string[] = [];
+                    if (clientRecord.id) orderOrConditions.push(`profile_id.eq.${clientRecord.id}`);
+                    if (clientEnteredPhone) orderOrConditions.push(`special_notes.ilike.%${clientEnteredPhone}%`);
+                    if (normalizedEmail) orderOrConditions.push(`special_notes.ilike.%${normalizedEmail}%`);
+                    if (normalizedNit) orderOrConditions.push(`special_notes.ilike.%${normalizedNit}%`);
+
                     const { data: pastGiftOrders } = await supabase
                         .from('orders')
                         .select('shipping_address, latitude, longitude, special_notes, created_at')
-                        .or(`profile_id.eq.${clientRecord.id},special_notes.ilike.%Email: ${normalizedEmail}%,special_notes.ilike.%ID: ${normalizedNit}%`)
+                        .or(orderOrConditions.join(','))
                         .ilike('special_notes', '%DESTINATARIO / RECIBE EN PUERTA%')
                         .order('created_at', { ascending: false })
                         .limit(20);
@@ -174,6 +217,7 @@ export async function POST(request: Request) {
                     name: clientRecord.name,
                     address: clientRecord.address,
                     phone: clientRecord.phone,
+                    email: clientRecord.email,
                     latitude: clientRecord.latitude,
                     longitude: clientRecord.longitude,
                     beneficiaries: compiledBeneficiaries

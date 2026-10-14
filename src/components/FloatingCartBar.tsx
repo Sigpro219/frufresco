@@ -42,11 +42,11 @@ export default function FloatingCartBar() {
         }
     }, [items.length, mounted, isMinimized]);
 
-    // Don't render on admin, ops or print pages
+    // Don't render on admin, ops, print, or checkout pages
     const isOpsOrAdmin = pathname?.startsWith('/ops') || pathname?.startsWith('/admin') || pathname?.includes('/print');
     const isCheckout = pathname === '/checkout';
 
-    if (!mounted || isOpsOrAdmin || items.length === 0) {
+    if (!mounted || isOpsOrAdmin || isCheckout || items.length === 0) {
         return null;
     }
 

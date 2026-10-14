@@ -9121,10 +9121,22 @@ La pasarela y formulario de checkout (`src/app/checkout/page.tsx`) centraliza la
 1. **Tope de Seguridad para Pago Contra Entrega (COD):**
    - Para clientes B2C (Hogar), las compras con pago contra entrega (`contra_entrega`) están limitadas a un monto máximo de **$400.000 COP** (`maxOrderHogarCod`).
    - Si el total del pedido excede este valor, el selector bloquea la opción y exige el pago en línea con Wompi para mitigar el riesgo de cartera y seguridad física de los conductores.
-2. **Tarifa de Empaque e Inocuidad Alimentaria (`packaging_fee`):**
-   - Cálculo transparente de una cuota de empaque (3% o parametrizable en `app_settings`), garantizando la preservación térmica y bioseguridad en canastillas y bolsas plásticas grado alimenticio.
+2. **Selector de Modalidad de Empaque y Compra de Canastilla Naranja Única Vez (`packaging_fee` vs `SKU: D-CNS-K`):**
+   - El bloque de empaque en `/checkout` ofrece tres modalidades mutuamente excluyentes para clientes Hogar (B2C):
+     - **Opción A — Empaque en bolsas plásticas (`plastic_bags`, por defecto):** Aplica la tarifa porcentual parametrizada en `app_settings` (`packaging_fee_percentage`, ej. 2%) calculada sobre el subtotal de alimentos frescos (excluyendo el valor de canastillas). Registra en `special_notes`: `[EMPAQUE PLÁSTICO (X%): +$Y COP]`.
+     - **Opción B — Compra de Canastilla Naranja Única Vez (`buy_crate`):** Exime el recargo porcentual de bolsas plásticas (`packagingFeeAmount = 0`) e inyecta/sincroniza directamente en el carrito y en `order_items` el producto oficial **`Canastilla frutal` (`id: c13cfedc-c803-495b-9b9d-71a54d472aa3`, `sku: D-CNS-K`, `base_price: $25.000 COP`, `accounting_id: 803`, `weight_kg: 1.8`)** con selector de cantidad en línea (`1, 2...` unidades), garantizando su trazabilidad en Picking de bodega, Remisión de transporte y cruce contable Siigo. Registra en `special_notes`: `[EMPAQUE: COMPRA CANASTILLA NARANJA (ÚNICA VEZ) xN - SIN BOLSAS PLÁSTICAS]`.
+     - **Opción C — Ya tengo mi Canastilla Naranja (`own_crate` — Recambio `$0`):** Para clientes que adquirieron previamente su canastilla naranja y realizan recambio mano a mano en portería/puerta sin cobro de bolsas ni recompra de envase. Registra en `special_notes`: `[EMPAQUE: RECAMBIO CANASTILLA NARANJA PROPIA ($0) - SIN BOLSAS PLÁSTICAS]`.
    - Redondeo financiero hacia abajo al múltiplo de $50 inferior (`finalOrderTotal`), asegurando que cualquier fracción beneficie al comprador.
-3. **Cero-Alert Dogma Militar:**
+3. **Regla de Domicilio B2C y Umbral de Domicilio Gratis (`delivery_fee` & `min_order_hogar`):**
+   - Parametrización centralizada en `app_settings`:
+     - `min_order_hogar`: Umbral monetario para acceder a Domicilio Gratis (canónico: **$150.000 COP**).
+     - `delivery_fee`: Tarifa plana de flete urbano para pedidos por debajo del umbral (canónico: **$20.000 COP**).
+   - Lógica de liquidación y erradicación del bloqueo duro:
+     - **Subtotal Alimentos $\ge \$150.000$ COP:** Flete automático a costo cero (`deliveryFeeAmount = 0`). Proyecta en el checkout: `🚚 Domicilio: ¡GRATIS! ($0)` con `~$20.000~` tachado y badge de meta cumplida. Registra en `special_notes`: `[DOMICILIO: GRATIS (PEDIDO >= $150.000)]`.
+     - **Subtotal Alimentos $< \$150.000$ COP:** Se prohíbe el bloqueo en seco del botón de pago (`disabled`). En su lugar, el sistema despliega la tarjeta de micro-conversión B2C:
+       1. Barra de progreso dinámica: *"Te faltan solo **$X COP** para tener **Domicilio GRATIS**"* con acceso directo a `[+ Agregar más productos]`.
+       2. Opción de flete habilitada: *"Entrega a domicilio para pedidos menores a $150.000 (+ $20.000)"*. Al liquidarse, suma los $20.000 al total a pagar (`finalOrderTotal`), habilita el avance transaccional y registra en `special_notes`: `[DOMICILIO (< $150.000): +$20.000 COP]`.
+4. **Cero-Alert Dogma Militar:**
    - Erradicación militar total de 24 llamadas a `alert()` nativo en el flujo de validaciones, sustituidas por el bus de notificaciones Toast (`showToast`) y el banner reactivo in-UI `checkoutNotice` con iconos Lucide y cierre automático tras 8 segundos.
 
 ---
@@ -9201,6 +9213,193 @@ flowchart TD
 - **Scenario C (Envío a Tercero / Regalo):**
   - **When** el cliente marca la casilla *"Es un regalo para otra persona"*.
   - **Then** el sistema solicita los datos de quien recibe y exige georreferenciar en el mapa la nueva dirección del destinatario antes de procesar el pago.
+
+---
+
+#### E. Arquitectura de Experiencia B2C Ultra-Premium (Lufthansa First Class Standard) (SDD v1.9.155)
+
+Para erradicar la sobrecarga cognitiva del *"Síndrome de la Tirilla de Supermercado"* (donde el usuario es sometido a 15 campos apilados verticalmente y a modales redundantes con tablas de productos de 260px de alto), el checkout de FruFresco (`/checkout`) adopta la **Arquitectura Bimodal de Check-in Aéreo de Alta Fidelidad (Lufthansa Senator / First Class Standard)**:
+
+```mermaid
+flowchart TD
+    A["Cliente accede a /checkout"] --> B{"¿Reconocido por sesión,<br>perfil o localStorage?"}
+    
+    B -- SÍ (Cliente Recurrente) --> C["✈️ ESTADO 1: FAST-TRACK CHECK-IN (~5 segundos)<br>• Ficha Verificada de Despacho (Boarding Pass Card).<br>• Identidad, teléfono, dirección y portería satelital precargadas.<br>• Botón sutil [✏️ Modificar datos].<br>• 3 decisiones tácticas: Fecha, Empaque, Pago.<br>• Cero scroll vertical. 1 Solo golpe de vista."]
+    
+    B -- NO (Cliente Nuevo) --> D["🧭 ESTADO 2: ONBOARDING DE PRECISIÓN GUIADO<br>• Bloque A: ¿Dónde entregamos? (Nomenclatura + GPS Portería + Grilla Inmueble).<br>• Bloque B: ¿Quién recibe y factura? (Grilla 2x2: Nombre/Teléfono y Cédula/Email).<br>• Al completar: Guarda perfil y conmuta al Estado 1."]
+    
+    C --> E["🎟️ MODAL BOARDING PASS EJECUTIVO (< 440px, CERO SCROLL)<br>• Prohibida la tabla larga de productos (tirilla de supermercado).<br>• Píldora de canasta: '🛒 7 referencias frescas seleccionadas' [Ver detalle ▼].<br>• Ticket de despacho: Portería verificada + Fecha + Desglose financiero.<br>• Botón primario de 1 toque: [ Confirmar y Despachar ]."]
+    D --> E
+```
+
+1. **Estado 1: Fast-Track Check-In (Cliente Recurrente Reconocido):**
+   - **Selector de Destino a Primera Vista (Segmented Destination Tabs):** Justo debajo del encabezado de entrega, el usuario visualiza de forma permanente e inmediata un conmutador bimodal en píldoras:
+     - `[ 👤 Entregar a mí ]`: Muestra la ficha verificada del titular con su dirección predeterminada.
+     - `[ 🎁 Enviar a otra persona ]`: Conmuta en 1 toque hacia la captura o selección de destinatario (regalo, familiar, oficina) sin obligar a abrir menús ocultos.
+   - **Ficha Ejecutiva de Despacho:** Al detectar coincidencias de sesión o teléfono, el sidebar colapsa los campos en una tarjeta de precisión suiza que resume:
+     - Nombre completo y celular WhatsApp con micro-badge de validación (`UserCheck` o `Gift`).
+     - Dirección completa con conjunto, torre/apto y confirmación de portería georreferenciada.
+     - Botón `[✏️ Modificar datos]` que permite desplegar el formulario completo únicamente si el cliente lo solicita.
+     - **Pie de Tarjeta Táctico:** Enlace directo de conmutación `🎁 ¿Enviar como regalo o a otra persona?` y acceso rápido a `Cambiar dirección`.
+   - **3 Decisiones Rápidas en Píldoras Horizontales:**
+     1. Fecha de entrega (Píldoras de días hábiles validados).
+     2. Modalidad de empaque (Bolsas 2% vs Canastilla Naranja vs Recambio $0).
+     3. Método de pago (Wompi PSE/Tarjeta vs Contra Entrega).
+   - **Tiempo de Cierre de Compra:** Reducción del tiempo de permanencia de 65 segundos a $< 8$ segundos.
+
+2. **Estado 2: Onboarding de Precisión Guiado (Cliente Nuevo):**
+   - **Ergonomía de Grilla 2x2:** Los campos de contacto y dirección se organizan en pares simétricos de alta densidad visual para no desbordar el alto útil de la pantalla (evitando que el botón de confirmación quede sepultado en scroll vertical):
+     - `Nombre Completo` al lado de `Celular WhatsApp`.
+     - `Cédula / NIT` al lado de `Correo Electrónico`.
+     - `Conjunto / Edificio` al lado de `Torre / Apto`.
+   - **Persistencia Silenciosa:** Tras la confirmación, el sistema registra el perfil en Supabase (`public.profiles`) permitiendo que toda compra subsecuente sea tratada automáticamente bajo el Estado 1 (Fast-Track).
+
+3. **Modal de Confirmación "Boarding Pass" (Erradicación Total de la Tirilla):**
+   - **Veto a la Tabla Pasiva:** Queda estrictamente vetada la duplicación de tablas con encabezados `PRODUCTO | CANTIDAD | SUBTOTAL` y scroll interno dentro del modal de confirmación.
+   - **Especificación de Dimensiones:** Altura máxima del modal **440px** en viewport de escritorio, garantizando **CERO SCROLL interno**.
+   - **Estructura del Boarding Pass:**
+     - **Cabecera de Vuelo:** Logo onFRU / FruFresco + Píldora compacta: `🛒 N referencias frescas • X unidades / kg` con acordeón colapsable `[Ver detalle de ítems ▼]` (cerrado por defecto).
+     - **Cuerpo del Ticket (2 Columnas Limpias):**
+       - *Columna Logística:* Portería georreferenciada, dirección estructurada y fecha programada.
+       - *Columna Financiera:* Método de pago + Desglose de 4 líneas (Subtotal Alimentos, Empaque, Domicilio [$20.000 o GRATIS], Total Final).
+     - **Acción Inmediata:** Botón primario a ancho completo `[ Confirmar y Despachar Pedido ]`.
+
+---
+
+#### Escenario 190: Cobro de Domicilio B2C ($20.000) con Umbral de Envío Gratis ($150.000) y Checkout Fast-Track Lufthansa (SDD v1.9.155)
+- **Given** un consumidor final B2C que accede a `/checkout`.
+- **Case A (Subtotal $< \$150.000$, ej. $140.050 COP):**
+  - **When** revisa el resumen financiero en el sidebar:
+  - **Then** el sistema NO bloquea el botón de pago.
+  - **And** proyecta la barra de progreso: *"Te faltan solo $9.950 COP para Domicilio GRATIS (pedidos $\ge \$150.000$)"*.
+  - **And** incluye el renglón interactivo de flete: `🚚 Domicilio (Pedido < $150.000): +$20.000 COP`.
+  - **And** al confirmarse, suma los $20.000 al total de la compra y registra `[DOMICILIO (< $150.000): +$20.000 COP]` en las notas de la orden.
+- **Case B (Subtotal $\ge \$150.000$, ej. $165.000 COP):**
+  - **When** el carrito supera o iguala los $150.000 COP:
+  - **Then** el renglón de flete marca `🚚 Domicilio: ¡GRATIS! ($0)` con `~$20.000~` tachado y badge verde de beneficio cumplido.
+  - **And** registra en la orden: `[DOMICILIO: GRATIS (PEDIDO >= $150.000)]`.
+- **Case C (Cliente Recurrente):**
+  - **When** el usuario es reconocido por su número de teléfono:
+  - **Then** el sidebar colapsa automáticamente los 15 inputs en la **Ficha Verificada Fast-Track** (Lufthansa Standard).
+  - **And** el usuario puede confirmar su pedido en 1 solo clic sin realizar scroll.
+- **Case D (Modal Boarding Pass):**
+  - **When** pulsa `[Confirmar Pedido]`:
+  - **Then** el modal proyecta el ticket ejecutivo de despacho de 420px de alto, sin tablas largas ni scrollbars internas, permitiendo la autorización inmediata.
+
+---
+
+#### F. Arquitectura Split Layout 60/40 & Motor de Direcciones Google Places Autocomplete (SDD v1.9.156)
+
+Para erradicar definitivamente la sobrecarga cognitiva del sidebar comprimido y alinearse con el estándar de oro de la industria global de e-grocery (*Instacart, Whole Foods, Misfits Market, Farmstead*), la pantalla de compra (`/checkout`) se estructura en un **Split Layout Canónico 60/40**:
+
+```mermaid
+flowchart LR
+    subgraph Columna_Izquierda ["Columna Principal (60%): Journey de 3 Pasos"]
+        P1["PASO 1: ¿A DÓNDE Y A QUIÉN ENTREGAMOS?<br>• Selector [👤 Para mí] vs [🎁 Para otra persona]<br>• Cliente Recurrente: Ficha Monolítica VIP (1-Click)<br>• Cliente Nuevo: Nombre, WhatsApp, Email<br>• Google Places Autocomplete (Captura lat/lng instantánea)<br>• Detalle unificado de Torre/Apto/Portería<br>• Radar de Portería [Ajustar en mapa]<br>• Toggle Opcional: Factura Electrónica con NIT"]
+        P2["PASO 2: ¿CUÁNDO ENTREGAMOS Y EMPAQUE?<br>• Selector Concierge de Fechas (Píldoras)<br>• Modalidad de Empaque (Recambio $0 vs Canastilla Naranja)<br>• Notas e instrucciones para el domiciliario"]
+        P3["PASO 3: MÉTODO DE PAGO<br>• Wompi (PSE / Nequi / Tarjetas)<br>• Pago Contra Entrega (Efectivo / Transferencia)"]
+        P1 --> P2 --> P3
+    end
+
+    subgraph Columna_Derecha ["Columna Sticky (40%): Resumen Financiero"]
+        R1["🛒 Canasta de Alimentos Frescos (Desplegable)"]
+        R2["Subtotal Productos + Empaque Ecológico"]
+        R3["Flete Domicilio ($20.000 / GRATIS con barra de progreso)"]
+        R4["Gran Total Oficial (COP)"]
+        R5["⚡ BOTÓN CTA PRIMARIO: [ Confirmar y Pagar ]"]
+        R6["Badges de Confianza: SSL 256-bit + Garantía Frescura 100%"]
+    end
+```
+
+1. **Supresión de Cédula Obligatoria en B2C (Protección de Conversión):**
+   - La adquisición B2C para consumo del hogar se procesa legalmente bajo el NIT genérico `222222222222` ("Consumidor Final" según normativa DIAN).
+   - Queda estrictamente vetada la solicitud de documento de identidad como campo bloqueante en el checkout de frutas y verduras.
+   - **Mecanismo de Facturación Fiscal Opcional:** Se incorpora un selector discreto:  
+     `[ ] ¿Requieres Factura Electrónica con NIT para tu empresa?`  
+     Solo si el cliente activa esta casilla, se solicitan de forma contextual la Cédula/NIT y la Razón Social.
+
+2. **Motor de Direcciones con Google Places Autocomplete (Anclaje Espacial en 2 Fases):**
+   - **Fase 1 (Captura Invisible de Coordenadas):** Al interactuar con el campo de dirección, el componente consume el servicio de Google Places (`libraries=['places']`). Al hacer clic en la sugerencia oficial, el sistema extrae de forma inmediata e invisible `geometry.location.lat()` y `geometry.location.lng()` con 8 decimales de precisión satelital, eliminando la necesidad de abrir modales de mapas.
+   - **Fase 2 (Verificación de Cobertura en Tiempo Real):** En el mismo ciclo de evento, el algoritmo `isInsidePolygon({ lat, lng }, b2cGeofence)` valida si las coordenadas pertenecen al perímetro operativo de Bogotá.
+   - **Micro-Radar de Portería:** Inmediatamente debajo del input, se despliega una píldora visual:  
+     `🟢 Ubicación exacta confirmada [ Ajustar punto en el mapa ]`.
+   - **Detalle de Inmueble en 1 Solo Campo:** Un solo input complementario: `"Conjunto, Torre, Apto o indicaciones de acceso"`.
+
+3. **Integridad Absoluta de Datos en la Base de Datos (`orders`):**
+   - El payload enviado al backend (`/api/orders/public`) preserva rigurosamente el esquema canónico:
+     - `latitude` y `longitude`: Coordenadas de alta precisión derivadas de Google Places o ajuste de portería.
+     - `shipping_address`: Nomenclatura oficial + detalle de inmueble.
+     - `customer_name`, `customer_phone`, `customer_email`: Datos de contacto y entrega.
+     - `customer_identification`: `222222222222` (o el NIT corporativo si fue suministrado).
+     - `special_notes`: Indicaciones de acceso + desglose de destinatario de regalo + etiqueta de auditoría de domicilio.
+     - `delivery_fee`, `packaging_fee`, `total`: Liquidación exacta respetando umbral de $150.000 COP.
+
+---
+
+#### Escenario 191: Checkout Split 60/40 de Alimentos Frescos con Google Places y Facturación Flexible (SDD v1.9.156)
+- **Given** un consumidor final B2C que accede a `/checkout` con productos en el carrito.
+- **Scenario A (Adquisición con Google Places Autocomplete):**
+  - **When** el usuario teclea en el buscador de dirección: "Calle 140 # 19".
+  - **Then** Google Places despliega las opciones viales oficiales de Bogotá.
+  - **And** al seleccionar una dirección sugerida, el sistema captura automáticamente `latitude` y `longitude` de fondo sin abrir ningún mapa.
+  - **And** valida instantáneamente que el punto se encuentre dentro del polígono geofence B2C.
+  - **And** habilita el micro-radar de confirmación de portería.
+- **Scenario B (Flujo B2C sin Fricción de Cédula):**
+  - **When** el usuario realiza su compra para el hogar:
+  - **Then** el sistema no le exige digitar cédula ni NIT, agilizando el pago en menos de 15 segundos.
+  - **And** la orden se registra con identificación fiscal de Consumidor Final (`222222222222`).
+- **Scenario C (Factura Corporativa a Solicitud):**
+  - **When** el cliente marca la casilla *"¿Requieres Factura Electrónica con NIT para tu empresa?"*:
+  - **Then** se despliegan los campos de NIT/Cédula y Razón Social.
+  - **And** la orden se emite con la identificación tributaria solicitada.
+- **Scenario D (Preservación Absoluta para Despacho en Ruta):**
+  - **When** la orden es confirmada:
+  - **Then** el registro en la base de datos contiene `latitude` y `longitude` exactas, permitiendo que la hoja de ruta del conductor (`/ops/driver/route-map`) dispare Waze y Google Maps directamente al punto sin desvíos.
+
+---
+
+#### Escenario 192: Protocolo de Elegidos y Storytelling en Envíos de Regalo B2C (SDD v1.9.157 - Principio SpaceX)
+- **Given** un comprador recurrente en `/checkout` con historial de pedidos o beneficiarios guardados en su perfil (`logistics_data.beneficiaries` u órdenes pasadas con `[DESTINATARIO / RECIBE EN PUERTA]`).
+- **Scenario A (Activación Inmediata de Elegidos en 1 Clic):**
+  - **When** el usuario hace clic en el selector *"Para otra persona"* (Regalo):
+  - **Then** el sistema presenta inmediatamente en la cabecera del Paso 1 las píldoras de sus destinatarios habituales ("Tus Elegidos habituales:") junto a la opción `[+ Enviar a alguien nuevo]`.
+  - **And** si ya tiene un elegido previo, se preselecciona automáticamente cargando en 1 clic el nombre, teléfono de WhatsApp, dirección y coordenadas GPS satelitales del destinatario.
+  - **And** se proyecta la Tarjeta de Destinatario Elegido Verificado sin requerir digitar un solo campo.
+- **Scenario B (Aislamiento Cognitivo Comprador vs Destinatario - Regla SpaceX Anti-Confusión):**
+  - **When** se encuentra activo el modo *"Para otra persona"*:
+  - **Then** los campos de dirección corresponden única y exclusivamente a la caseta/puerta donde el repartidor dejará la verdura al destinatario.
+  - **And** los datos del comprador (Luis Fernando) se proyectan como una barra discreta de facturación de 1 línea (`Comprador / Facturación: {nombre} ({teléfono})`), evitando la mezcla visual de inputs que genera duda sobre a quién pertenece la dirección.
+- **Scenario C (Creación de un Nuevo Destinatario):**
+  - **When** el cliente tiene elegidos pero desea enviar a un nuevo amigo o familiar:
+  - **Then** hace clic en `[+ Enviar a alguien nuevo]`.
+  - **And** el sistema despliega fluidamente los campos de "Nombre de quien recibe *" y "WhatsApp de quien recibe *", el buscador Google Places y el complemento de inmueble.
+  - **And** conserva un botón de retorno `[← Volver a mis elegidos]` para revertir la acción sin perder contexto.
+- **Scenario D (Deduplicación Estricta de Radares de Portería):**
+  - **When** se visualiza el formulario o la tarjeta VIP:
+  - **Then** existe exactamente un único micro-radar de verificación de coordenadas satelitales para el conductor, erradicando repeticiones redundantes en el eje Y.
+
+#### Escenario 193: Integración Dinámica de Cubicaje de Canastillas con Estándar de Transporte (SDD v1.9.158)
+- **Given** un comprador en `/checkout` con un carrito de mercado de cualquier volumen y peso acumulado (`produceWeightKg`).
+- **And** el parámetro logístico oficial de transporte `avg_kg_per_crate` (12.5 kg por canastilla) consultado de la tabla `logistic_parameters` con fallback de resguardo a 12.5 kg.
+- **When** el usuario interactúa con la sección de Modalidad de Empaque Ecológico:
+- **Then**:
+  1. **Cálculo de Aforo Real:** El sistema calcula las canastillas necesarias para la carga de alimentos mediante `suggestedCrates = Math.max(1, Math.ceil(produceWeightKg / avgKgPerCrate))`.
+  2. **Opción Recambio Propio ($0):** Informa con precisión la cantidad exacta de canastillas vacías que el cliente debe entregar al conductor al arribo del vehículo (ej: *"Entregas 6 canastillas vacías al conductor al recibir tu pedido (~75.0 kg). $0 en bolsas"*).
+  3. **Opción Comprar Canastilla Naranja:** Al seleccionarla, precarga automáticamente las `suggestedCrates` canastillas necesarias en lugar de un valor estático de 1 unidad, exime el recargo de bolsas plásticas y despliega el micro-radar de transporte: *"Aforo de transporte: 12.5 kg/canastilla. Carga: ~75.0 kg → Sugeridas: 6 canastillas"*.
+  4. **Control Interactivo de Ajuste:** Proporciona botones stepper `[ - ] N [ + ]` y botón de ajuste rápido `[Ajustar a N]` si el usuario decide comprar una cantidad diferente a la sugerida.
+  5. **Trazabilidad en Manifiesto:** La orden transmitida a `/api/orders/public` estampa en las notas del pedido el detalle del aforo logístico calculado para alistamiento en bodega y despacho en ruta (`[EMPAQUE: COMPRA CANASTILLA NARANJA (ÚNICA VEZ) xN - AFORO: ~X kg @ 12.5 kg/canastilla - SIN BOLSAS PLÁSTICAS]`).
+
+---
+
+#### Escenario 208: Humanización y Lenguaje Cercano en el Micro-Radar de Ubicación del Checkout (SDD v1.9.170)
+- **Given** un comprador en `/checkout` que visualiza sus datos de entrega (sea cliente frecuente o nuevo con dirección autocompletada).
+- **When** se proyecta la píldora de estado de ubicación y el enlace de interacción con el mapa:
+- **Then**:
+  1. **Erradicación de Términos Militares e Industriales:** Queda estrictamente vetado el uso de términos acartonados o presuntivos de conjuntos cerrados como *"¿Ajustar caseta de portería en el mapa?"* y jerga técnica como *"Coordenadas satelitales listas"*.
+  2. **Copy Canónico Universal:** El micro-radar adopta una redacción sobria, universal y humana:
+     - Etiqueta de confirmación: `✓ Ubicación exacta confirmada` (o `Punto de entrega listo para el domiciliario`).
+     - Acción interactiva en mapa: `[Ajustar punto en el mapa]`.
+  3. **Universalidad de Vivienda:** El texto opera de forma neutral para casas unifamiliares, apartamentos, edificios o locales comerciales, garantizando claridad cognitiva sin sesgos arquitectónicos.
 
 ---
 
