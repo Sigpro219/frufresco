@@ -2733,7 +2733,7 @@ export default function BillingDashboard() {
                                                     <Calendar size={11} strokeWidth={2.2} style={{ color: isCustomDate ? '#FFFFFF' : '#0D7A57', flexShrink: 0 }} />
                                                     <input
                                                         type="date"
-                                                        max={getBogotaDate(0)}
+                                                        max={getBogotaDate(7)}
                                                         value={isCustomDate ? selectedBillingDate : ''}
                                                         onChange={(e) => {
                                                             if (e.target.value) {
