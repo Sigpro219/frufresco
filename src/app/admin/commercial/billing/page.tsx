@@ -1429,8 +1429,13 @@ export default function BillingDashboard() {
 
     const { ready: readyCount, grace: graceCount, inRoute: inRouteCount, novelties: noveltiesCount, inProcess: inProcessCount } = pendingGraceCounts;
     const openConsumptionCount = useMemo(() => {
-        return pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')).length;
-    }, [pendingOrders]);
+        return pendingOrders.filter(o => {
+            const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
+            const isGiftOrReplacement = docInfo.type === 'gift_remission' || o.admin_notes?.includes('REMISIÓN DE OBSEQUIO') || o.admin_notes?.includes('REPOSICIÓN');
+            if (isGiftOrReplacement) return false;
+            return o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO');
+        }).length;
+    }, [pendingOrders, parentProfilesMap]);
 
     // Filter & Sort Pending Orders
     const filteredPendingOrders = useMemo(() => {
@@ -1836,12 +1841,16 @@ export default function BillingDashboard() {
         setPreviewCutPokaYokeError(null);
 
         // Poka-Yoke Canónico (Escenario 121 SDD):
-        // Se prohíbe emitir corte o factura definitiva sobre pedidos despachados sin precio o consumo abierto no liquidado
-        const unpricedOrder = previewOrders.find(o => 
-            o.netTotal === 0 || 
-            o.admin_notes?.includes('DESPACHADO SIN PRECIO') || 
-            o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')
-        );
+        // Se prohíbe emitir corte o factura definitiva sobre pedidos despachados sin precio o consumo abierto no liquidado (excepto Remisión Obsequio o Reposición)
+        const unpricedOrder = previewOrders.find(o => {
+            const isGiftOrReplacement = o.profile?.document_type === 'gift_remission' || o.admin_notes?.includes('REMISIÓN DE OBSEQUIO') || o.admin_notes?.includes('REPOSICIÓN');
+            if (isGiftOrReplacement) return false;
+            return (
+                o.netTotal === 0 || 
+                o.admin_notes?.includes('DESPACHADO SIN PRECIO') || 
+                o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')
+            );
+        });
         if (unpricedOrder) {
             const errorMsg = `El pedido #${unpricedOrder.sequence_id || unpricedOrder.id.slice(0, 8)} fue despachado sin precio (o sobre consumo abierto no liquidado). Acción requerida: El Área Comercial debe fijar la tarifa o se debe liquidar el pedido a costo vigente antes de emitir la factura electrónica.`;
             setPreviewCutPokaYokeError(errorMsg);

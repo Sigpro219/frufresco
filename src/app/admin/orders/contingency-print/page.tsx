@@ -12,6 +12,8 @@ import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/compo
 import { formatTimeWindow } from '@/lib/logistics-parser';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
 import { QRCodeSVG } from 'qrcode.react';
+import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
+import SpecialClientBadge from '@/components/SpecialClientBadge';
 
 interface OrderItem {
     id: string;
@@ -60,6 +62,8 @@ interface OrderData {
     customer_phone?: string;
     admin_notes?: string;
     special_notes?: string;
+    profile_id?: string;
+    special_attention?: SpecialClientAttentionState;
     profiles?: {
         id?: string;
         company_name?: string;
@@ -76,11 +80,15 @@ interface OrderData {
         nit?: string;
         role?: string;
         parent_id?: string | null;
+        document_type?: string;
+        remission_with_prices?: boolean;
         needs_crates?: boolean;
         crate_balance?: number;
         parent?: {
             id?: string;
             company_name?: string;
+            document_type?: string;
+            remission_with_prices?: boolean;
         } | null;
     };
     order_items: OrderItem[];
@@ -481,10 +489,10 @@ function ContingencyPrintContent() {
                 let query = supabase
                     .from('orders')
                     .select(`
-                        id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax,
+                        id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, profile_id,
                         total_weight_kg, crates_count, is_manual_delivery, manual_delivery_time, manual_delivery_margin, manual_delivery_note, logistics_data,
                         latitude, longitude, shipping_address, admin_notes, special_notes, warehouse_spaces,
-                        profiles:profiles(id, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, needs_crates, crate_balance, parent:parent_id(id, company_name)),
+                        profiles:profiles(id, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, document_type, remission_with_prices, needs_crates, crate_balance, parent:parent_id(id, company_name, document_type, remission_with_prices)),
                         order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, parent_id, min_inventory_level, iva_rate))
                     `);
 
@@ -551,7 +559,43 @@ function ContingencyPrintContent() {
                 if (ordersRes.error) {
                     console.error('Error cargando pedidos para contingencia:', ordersRes.error);
                 } else {
-                    setOrders((ordersRes.data as any) || []);
+                    const rawOrders = (ordersRes.data as any[]) || [];
+                    const profileIds = Array.from(new Set(rawOrders.map(o => o.profile_id || o.profiles?.id).filter(Boolean)));
+                    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+                    const [histOrdersRes, histPqrsRes] = await Promise.all([
+                        profileIds.length > 0
+                            ? supabase.from('orders').select('id, profile_id, status, delivery_date, created_at, total, subtotal').in('profile_id', profileIds).gte('delivery_date', sixtyDaysAgo)
+                            : Promise.resolve({ data: [] }),
+                        profileIds.length > 0
+                            ? supabase.from('customer_service_pqrs').select('id, client_profile_id, created_at, status, stage').in('client_profile_id', profileIds).gte('created_at', sixtyDaysAgo)
+                            : Promise.resolve({ data: [] })
+                    ]);
+
+                    const overridesByProfile: Record<string, any> = {};
+                    rawOrders.forEach(o => {
+                        const pid = o.profile_id || o.profiles?.id;
+                        if (pid && (o.profiles?.logistics_data?.special_attention || o.logistics_data?.special_attention)) {
+                            overridesByProfile[pid] = o.profiles?.logistics_data?.special_attention || o.logistics_data?.special_attention;
+                        }
+                    });
+
+                    const specialAttentionMap = buildSpecialAttentionByProfileMap(
+                        profileIds as string[],
+                        (histOrdersRes.data || []) as any[],
+                        (histPqrsRes.data || []) as any[],
+                        overridesByProfile
+                    );
+
+                    const enrichedOrders = rawOrders.map(o => {
+                        const pid = o.profile_id || o.profiles?.id;
+                        return {
+                            ...o,
+                            special_attention: pid ? specialAttentionMap[pid] : undefined
+                        };
+                    });
+
+                    setOrders(enrichedOrders);
                 }
 
                 const stockMap: Record<string, number> = {};
@@ -1181,12 +1225,15 @@ function ContingencyPrintContent() {
                     const orderNum = getFriendlyOrderId(order);
                     const subtotal = order.subtotal || order.total || 0;
                     const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici') || Boolean(order.logistics_data?.is_replacement);
+                    const rawDocType = order.profiles?.document_type || order.profiles?.parent?.document_type || '';
+                    const isObsequio = !isReposicion && (rawDocType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO'));
+                    const isZeroCostDoc = isReposicion || isObsequio;
                     const parentSeq = order.logistics_data?.parent_order_sequence || (() => {
                         const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`;
                         const m = notes.match(/pedido\s*(?:#|no\.?|num\.?)?\s*(\d{3,})/i) || notes.match(/#ped-(\d{3,})/i);
                         return m ? m[1] : null;
                     })();
-                    const remissionPrefix = isReposicion ? 'REPOSICIÓN' : 'REMISIÓN';
+                    const remissionPrefix = isReposicion ? 'REPOSICIÓN' : isObsequio ? 'REMISIÓN DE OBSEQUIO' : 'REMISIÓN';
                     const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
                         ? formatSpaceLabel(order.warehouse_spaces)
                         : (order.sequence_id ? `${order.sequence_id}` : `${orderIdx + 1}`);
@@ -1209,7 +1256,7 @@ function ContingencyPrintContent() {
                             return (
                                 <Letterhead
                                     key={`remission-${order.id}-copy-${copyIdx}-page-${pageIdx}`}
-                                    title={isReposicion ? `REPOSICIÓN DE GARANTÍA #${orderNum}` : `REMISIÓN #${orderNum}`}
+                                    title={isReposicion ? `REPOSICIÓN DE GARANTÍA #${orderNum}` : isObsequio ? `REMISIÓN DE OBSEQUIO #${orderNum}` : `REMISIÓN #${orderNum}`}
                                     subtitle={pageSubtitle}
                                     date={order.delivery_date}
                                     badge={copyInfo.copyType}
@@ -1224,6 +1271,37 @@ function ContingencyPrintContent() {
                                         <div style={{ backgroundColor: '#FEF2F2', border: '1.2px solid #EF4444', padding: '3px 8px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.8pt', color: '#991B1B', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span>RECUERDE: Los productos en este documento NO TIENEN COBRO ($0 COP - Reposición de Calidad autorizada).</span>
                                             {parentSeq && <span style={{ color: '#B91C1C' }}>Ampara Pedido #{parentSeq}</span>}
+                                        </div>
+                                    )}
+                                    {/* Banner Amable de Entrega para Remisión Obsequio */}
+                                    {isObsequio && (
+                                        <div style={{ backgroundColor: '#FAF5FF', border: '1.2px solid #A855F7', padding: '4px 9px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.9pt', color: '#581C87', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                            <span><strong>DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).</span>
+                                            <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', border: '1px solid #D8B4FE', padding: '1px 6px', borderRadius: '3px', fontWeight: 800, fontSize: '6.2pt', whiteSpace: 'nowrap' }}>CORTESÍA $0</span>
+                                        </div>
+                                    )}
+
+                                    {/* Regla de Confidencialidad Comercial: Solo visible en COPIA - TRANSPORTADOR / CONTABILIDAD (isCopy === true), JAMÁS en ORIGINAL - CLIENTE */}
+                                    {copyInfo.isCopy && order.special_attention?.isActive && (
+                                        <div style={{
+                                            backgroundColor: '#F8FAFC',
+                                            border: '1.2px solid #0F172A',
+                                            padding: '3px 8px',
+                                            borderRadius: '4px',
+                                            marginBottom: '4px',
+                                            fontSize: '6.6pt',
+                                            color: '#0F172A',
+                                            fontWeight: 800,
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }}>
+                                            <span>
+                                                [{order.special_attention.printCode}] {order.special_attention.title.toUpperCase()} ({order.special_attention.progressLabel}) &bull; USO INTERNO: {order.special_attention.reasonText}
+                                            </span>
+                                            <span style={{ fontWeight: 900, whiteSpace: 'nowrap' }}>
+                                                CUIDADO: SELECCIÓN 1A &bull; PESO EXACTO &bull; CANASTILLA LIMPIA
+                                            </span>
                                         </div>
                                     )}
 
@@ -1311,9 +1389,9 @@ function ContingencyPrintContent() {
                                                             return rawUom;
                                                         })();
                                                         const qty = Number(itm.quantity || 0);
-                                                        const price = isReposicion ? 0 : Number(itm.unit_price || 0);
+                                                        const price = isZeroCostDoc ? 0 : Number(itm.unit_price || 0);
                                                         const lineSubtotal = qty * price;
-                                                        const ivaPct = isReposicion ? 0 : Number(itm.products?.iva_rate || 0);
+                                                        const ivaPct = isZeroCostDoc ? 0 : Number(itm.products?.iva_rate || 0);
                                                         const ivaVal = lineSubtotal * (ivaPct / 100);
                                                         const lineTotal = lineSubtotal + ivaVal;
                                                         const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
@@ -1405,15 +1483,15 @@ function ContingencyPrintContent() {
                                                     <div style={{ width: isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isDense ? '3px 6px' : '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isDense ? '6.6pt' : '7pt' }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                                                             <span style={{ color: '#475569' }}>Subtotal:</span>
-                                                            <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isReposicion ? '$0' : formatMoney(subtotal)}</span>
+                                                            <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isZeroCostDoc ? '$0' : formatMoney(subtotal)}</span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                                                             <span style={{ color: '#475569' }}>IVA (0% / Excluido):</span>
-                                                            <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isReposicion ? '$0' : formatMoney(order.tax || 0)}</span>
+                                                            <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isZeroCostDoc ? '$0' : formatMoney(order.tax || 0)}</span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '1px', fontSize: isDense ? '7.8pt' : '8.4pt', fontWeight: '900' }}>
                                                             <span style={{ color: '#0F172A' }}>TOTAL:</span>
-                                                            <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{isReposicion ? '$0' : formatMoney(order.total || subtotal)}</span>
+                                                            <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{isZeroCostDoc ? '$0' : formatMoney(order.total || subtotal)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1525,8 +1603,9 @@ function ContingencyPrintContent() {
                                                         )}
                                                     </td>
                                                     <td>
-                                                        <strong style={{ fontSize: '8.2pt', color: '#0F172A', display: 'block', lineHeight: 1.2 }}>
-                                                            {branchName}
+                                                        <strong style={{ fontSize: '8.2pt', color: '#0F172A', display: 'flex', alignItems: 'center', lineHeight: 1.2 }}>
+                                                            <SpecialClientBadge state={order.special_attention} variant="print-stamp" />
+                                                            <span>{branchName}</span>
                                                         </strong>
                                                     </td>
                                                     <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '8px' }}>

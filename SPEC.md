@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.185 (Trazabilidad SAC en Facturación y Erradicación de Ruido en Especificaciones — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.186 (Sistema Autónomo de Atención Especial Operativa por Ciclo de Vida y Estándar Carta RNC — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 217 Escenarios BDD Ininterrumpidos (1..217)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 218 Escenarios BDD Ininterrumpidos (1..218)
 
 ---
 
@@ -4727,13 +4727,14 @@ Para evitar colisiones entre documentos de débito y crédito:
 - **Avance Atómico:** Al confirmar un corte masivo o selectivo, la secuencia global en `public.app_settings` se incrementa atómicamente en $+N$ (`N = cantidad de documentos emitidos`).
 
 ### 21.3 Matriz de Tipos de Emisión Documental por Cliente & Sucursal
-El motor `resolveOrderBillingInfo` evalúa el tipo de documento aplicable:
-1. **Factura Impresa:** Clientes B2B con `print_invoice = true` o empresas que exigen factura física al momento de la descarga.
-2. **Remisión con Valor:** Clientes B2B con `document_type = 'remission'` y `remission_with_prices = true`.
-3. **Remisión sin Precios:** Clientes con entrega a ciegas en muelle (`document_type = 'remission'` y `remission_with_prices = false`).
-4. **Factura Digital:** Clientes B2C o clientes B2B con radicación electrónica vía email/XML DIAN.
+El motor `resolveOrderBillingInfo` evalúa las cinco (5) modalidades de documento aplicables:
+1. **Factura Impresa (`FAC-IMP`):** Clientes B2B con `document_type = 'invoice'` y `print_invoice = true` o empresas que exigen factura física al momento de la descarga.
+2. **Factura Digital (`FAC-DIG`):** Clientes B2C o clientes B2B con `document_type = 'invoice'` y `print_invoice = false` (radicación electrónica vía email/XML DIAN).
+3. **Remisión con Valor (`REM-VALOR`):** Clientes B2B con `document_type = 'remission'` y `remission_with_prices = true`.
+4. **Remisión sin Precios (`REM-S/S`):** Clientes con entrega a ciegas en muelle (`document_type = 'remission'` y `remission_with_prices = false`).
+5. **Remisión Obsequio (`REM-OBSEQUIO`):** Clientes o sucursales de cortesía con `document_type = 'gift_remission'`. Todo pedido para una sucursal con esta modalidad nace exonerado de cobro (`unit_price = $0`, `subtotal = $0`, `tax = $0`, `total = $0`, `payment_status = 'Exonerado'`, `payment_method = 'obsequio_cortesia'`), exento de bloqueo de cartera y de Poka-Yoke de tarifa cero, e imprime en su documento físico (`REMISIÓN DE OBSEQUIO`) todos los precios en `$0` junto con el mensaje institucional de cortesía de entrega.
 - **Plazos de Pago:**
-  - **B2B Institucional:** Hereda `payment_days` de la sucursal o matriz (ej. 15, 30, 45, 60 días de crédito; nunca contado).
+  - **B2B Institucional:** Hereda `payment_days` de la sucursal o matriz (ej. 15, 30, 45, 60 días de crédito; nunca contado, salvo `gift_remission` que es Cortesía $0 COP).
   - **B2C Hogar:** `Contra Entrega` o `Pasarela de Pagos (Pagado Previamente)`.
 
 ### 21.4 Protocolo de Auditoría y Corte Masivo / Selectivo AM/PM
@@ -8916,9 +8917,10 @@ La mesa de facturación (`/admin/commercial/billing`) centraliza la emisión mas
 La vista de impresión masiva de corte (`/admin/commercial/billing/print/[id]`) genera en un único lote paginado los folios oficiales listos para emisión física en papel membreteado institucional de *Investments Cortés S.A.S.* Procesa de manera determinista cada pedido asignado al corte `billing_cuts.id`, aplicando el estándar Golden Print suizo con saltos de página inviolables (`@page { size: letter portrait; margin: 0.8cm 1.0cm; }`), membrete ejecutivo, franja de resolución DIAN y discriminación estricta entre Factura Electrónica de Venta y Remisión Oficial de Entrega.
 
 #### B. Arquitectura de Datos & Lógica Poka-Yoke de Impresión
-1. **Diferenciación Canónica de Documentos (Factura vs Remisión):**
+1. **Diferenciación Canónica de Documentos (Factura vs Remisión vs Remisión Obsequio):**
    - Si `order.document_type === 'invoice'` (o el perfil del cliente exige factura), el encabezado emite `FACTURA ELECTRÓNICA DE VENTA` con badge `DIAN VÁLIDA` en modo oscuro, exponiendo obligatoriamente los precios unitarios, subtotal, IVA (0% según Art. 424 E.T. para productos agrícolas no procesados) y total liquidado.
    - Si `order.document_type === 'remission'`, el encabezado emite `REMISIÓN OFICIAL DE ENTREGA` con badge `VALORIZADA` o `A CIEGAS`.
+   - Si `order.document_type === 'gift_remission'` (o el perfil de la sucursal/matriz tiene `document_type === 'gift_remission'`), tanto en `/admin/orders/contingency-print` como en `/admin/commercial/billing/print/[id]` el encabezado emite `REMISIÓN DE OBSEQUIO` con badge `CORTESÍA / OBSEQUIO`, despliega las columnas de precios explícitamente en `$0` (`Valor Unitario: $0`, `IVA: 0%`, `Subtotal: $0`, `Total: $0`) e incorpora una nota amable de entrega (*"🎁 DETALLE ESPECIAL FRUFRESCO: Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP)."*).
 2. **Poka-Yoke de Remisión a Ciegas vs Valorizada (Gobernanza Financiera B2B):**
    - El sistema respeta la bandera `remission_with_prices` del pedido o del cliente (`profiles.remission_with_prices`): si es `false`, las columnas de valor unitario y total se ocultan automáticamente del papel para evitar que el personal de recepción en muelle del cliente conozca las tarifas comerciales acordadas con la gerencia.
    - La barra de control superior no imprimible incluye un interruptor táctico `[Precios: Forzados en Todo]` que permite al cajero/despachador habilitar temporalmente los precios si la entrega requiere valorización en sitio.
@@ -10044,9 +10046,9 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Se implementa `cleanHumanResolutionNotes` para sanear recursivamente las notas de resolución, suprimiendo metadatos crudos de sistema y deduplicando bloques redundantes de disposición sanitaria.
   3. **Visibilidad Incondicional de Novedades Declaradas:**
      - Se suprime el filtro excluyente `&& n.status !== 'rejected'` en `caseReturns`. Los productos declarados en novedades de pedidos resueltos bajo Opción 1 (Sin Costo) permanecen visibles en la auditoría con su respectiva insignia `Sin Costo` y detalle de cantidad devuelta.
-  4. **Reporte Oficial RNC bajo Estándar Universal Golden Print:**
-     - La ruta `/admin/customer-service/rnc/[id]/print` adopta la envoltura canónica `<UniversalLetterhead>` con el preset de marca `INVESTMENTS_CORTES_BRAND`.
-     - El documento estandariza 6 secciones de alta densidad: 1. Cliente & Despacho Logístico, 2. Causa Raíz (RCA) e Imputabilidad Nominal (incluyendo funcionario, cargo, % y deducción COP), 3. Novedades Declaradas y CoQ, 4. Evidencias Fotográficas, 5. Dictamen Técnico, Plan CAPA y Disposición Sanitaria In Situ (filtrada sin tags de sistema), 6. Triángulo de Firmas (Aseguramiento de Calidad, Imputado / Aceptación y Recibido Cliente).
+  4. **Reporte Oficial RNC bajo Estándar Carta SGC ISO 9001 (`SGC-RNC-001`):**
+     - La ruta `/admin/customer-service/rnc/[id]/print` renderiza un lienzo estricto tamaño Carta (`@page { size: letter portrait; margin: 8mm 10mm 8mm 10mm; }`, ancho físico `215.9mm`, alto `279.4mm`) con tabla oficial de control documental ISO 9001:2015 de 3 celdas (Logo e Identidad Legal Investments Cortés S.A.S., Título SGC / RNC / BPM Invima Res. 2674/2013, y Metadatos: Código `SGC-RNC-001`, Versión `003`, Radicado y Fecha de Emisión).
+     - Calibración de densidad vertical para ajuste en **exactamente una (1) página Carta** en casos estándar (miniaturas fotográficas a `maxHeight: 62px`, `page-break-inside: avoid` en las 6 secciones y pie de página legal anclado al borde inferior), suprimiendo metadatos crudos mediante `parseSanitaryAndHumanNotes`.
 
 #### Escenario 215: Poda de Píldoras Redundantes y Botón Directo de WhatsApp con Respuesta Resolutiva Corta (SDD v1.9.183)
 - **Given** un analista de Calidad o agente SAC gestionando la consola de Atención al Cliente (`/admin/customer-service`).
@@ -10108,6 +10110,26 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        - **Directriz Inequívoca de Facturación:** Instrucción clara y no ambigua para el operador contable (ej. facturar los 30 Kg completos sin aplicar deducciones ni notas crédito).
        - **Reporte del Cliente:** Cantidad afectada, valor en discusión, motivo y evidencia fotográfica con enlace de ampliación.
        - **Evaluación Técnica & Disposición Sanitaria:** Concepto técnico de Calidad y disposición final del producto (ej. disposición en sitio por el cliente sin retorno a bodega).
+
+#### Escenario 218: Sistema Autónomo de Atención Especial Operativa por Ciclo de Vida (Cliente Nuevo, PQR Recurrente y Bajo Consumo) con Telemetría Minimalista y Propagación Impresa/Digital (SDD v1.9.186)
+- **Given** la operación integral de planta, alistamiento, pesaje, despacho y mesa de control (`/admin/orders/loading`, `/ops/picking/cliente/[id]`, `/admin/orders/alistamiento-print`, `/admin/orders/contingency-print`, `/admin/orders/print-labels` y `/admin/commercial`).
+- **When** se procesan pedidos de clientes que requieren cuidado prioritario en **Selección, Peso, Características y Limpieza de Canastillas**:
+- **Then**:
+  1. **Motor Algorítmico 100% Autónomo con Ciclo de Vida Anti-Fatiga (`src/lib/specialClientAttention.ts`):**
+     - El sistema evalúa automáticamente el historial del cliente (y respeta cualquier marcación en `profiles.logistics_data.special_attention` o `orders.logistics_data.special_attention`) clasificando 3 estados con condiciones de graduación automáticas:
+       - **Estado 1 — Cliente Nuevo (`new_client`):** Se activa cuando el cliente registra $\le 2$ pedidos históricos entregados. Ciclo de vida: se gradúa automáticamente al completar el **3º pedido entregado sin novedades** (`X/3`).
+       - **Estado 2 — Recurrente en No Conformidades / PQR (`recurring_pqr`):** Se activa cuando el cliente registra $\ge 1$ reclamación/PQR en los últimos 15 días en `customer_service_pqrs`. Ciclo de vida: se gradúa automáticamente tras encadenar **3 pedidos consecutivos entregados sin reclamos** (`X/3`).
+       - **Estado 3 — Seguimiento por Bajo Consumo / Riesgo de Fuga (`low_consumption`):** Ventana táctica corta de **7 a 14 días** para perecederos B2B. Se activa si el volumen/facturación de los últimos 7-14 días cae $> 20\%$ frente al periodo equivalente previo (o $> 7$ días sin pedir en cliente habitual con $\ge 3$ órdenes previas). Ciclo de vida: se gradúa automáticamente al encadenar **2 pedidos consecutivos** recuperando su ticket promedio (`X/2`).
+  2. **Indicador Minimalista por Color + Tooltip Interactivo (100% Iconografía `lucide-react`, Cero Emojis):**
+     - En pantalla (`/admin/orders/loading`, `/ops/picking/cliente/[id]`, `/admin/commercial`), se prohíbe saturar las filas con textos largos. Se proyecta únicamente el componente `<SpecialClientBadge />`: una micro-píldora diferenciable por color e icono vectorial `lucide-react`:
+       - **Cliente Nuevo:** Ámbar (`#FEF3C7` / `#F59E0B` / `#B45309`), icono `<Sparkles />`, texto corto `Nuevo · X/3`.
+       - **PQR Recurrente:** Rojo (`#FEE2E2` / `#EF4444` / `#B91C1C`), icono `<ShieldAlert />`, texto corto `PQR · X/3`.
+       - **Bajo Consumo:** Índigo (`#E0E7FF` / `#6366F1` / `#4338CA`), icono `<TrendingDown />`, texto corto `Consumo · X/2`.
+     - Al pasar el cursor (hover) o tocar el indicador en tablet, se despliega un **Tooltip / Popover técnico** con el diagnóstico puntual del caso y los 4 pilares obligatorios de cuidado representados con iconos `lucide-react` (`CheckCircle2` Selección, `Scale` Peso exacto, `SlidersHorizontal` Características/Calibre, `PackageCheck` Canastilla limpia).
+  3. **Resolución en Planillas Físicas Impresas y Regla de Confidencialidad:**
+     - **Sábana de Alistamiento por Célula (`/admin/orders/alistamiento-print`):** En la celda de `SUCURSAL / CLIENTE` se antepone el micro-sello compacto en recuadro de alto contraste (`[NUE]`, `[PQR]` o `[SEG]`) sin truncar el nombre de la sede, acompañado de una nota de pie de página de 1 línea: `[NUE / PQR / SEG] Cuidado Especial: Verificar Selección · Peso Exacto · Calibre · Canastilla Limpia`.
+     - **Rótulos de Canastilla (`/admin/orders/print-labels`):** Incorpora el distintivo compacto `[CUIDADO ESPECIAL · CANASTA LIMPIA]` en los stickers de canastillas de clientes marcados.
+     - **Remisiones de Contingencia (`/admin/orders/contingency-print`):** Regla estricta de confidencialidad comercial: el distintivo de cuidado especial se imprime **únicamente en la copia interna (`COPIA - TRANSPORTADOR / CONTABILIDAD`) y planillas de cargue**, quedando **terminantemente oculto en la hoja `ORIGINAL - CLIENTE`** para que el comprador jamás lea marcaciones internas de PQR o bajo consumo.
 
 ---
 

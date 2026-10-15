@@ -401,6 +401,25 @@ function CreateOrderContent() {
 
     const activeCustomerId = selectedClient || (clientType === 'B2C' && selectedClientB2C ? selectedClientB2C : null);
 
+    // SDD §21.3 / §39.3: Detección de sucursal o cliente con Remisión Obsequio (gift_remission -> $0 COP)
+    const isGiftRemissionClient = useMemo(() => {
+        if (clientType === 'B2B' && selectedClient) {
+            const c = clients.find((cl: any) => cl.id === selectedClient);
+            if (!c) return false;
+            if (c.document_type === 'gift_remission') return true;
+            if (c.parent_id) {
+                const parent = clients.find((cl: any) => cl.id === c.parent_id);
+                if (parent?.document_type === 'gift_remission') return true;
+            }
+            return false;
+        }
+        if (clientType === 'B2C' && b2cMode === 'search' && selectedClientB2C) {
+            const c = b2cClients.find((cl: any) => cl.id === selectedClientB2C);
+            return c?.document_type === 'gift_remission';
+        }
+        return false;
+    }, [clientType, selectedClient, clients, b2cMode, selectedClientB2C, b2cClients]);
+
     // SDD §7.5.8: Naturaleza del Pedido (Venta Ordinaria vs Reposición por Calidad $0 COP)
     const [orderNature, setOrderNature] = useState<'regular' | 'replacement'>(
         (searchParams.get('replacement') === 'true' || searchParams.get('isReplacement') === 'true') ? 'replacement' : 'regular'
@@ -791,7 +810,7 @@ function CreateOrderContent() {
         }
         const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-        const isStrictAgreement = !allowOffAgreementPurchases && agreementProductIds.size > 0;
+        const isStrictAgreement = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
         const eligibleProducts = isStrictAgreement
             ? products.filter(p => agreementProductIds.has(p.id))
             : products;
@@ -1760,7 +1779,7 @@ function CreateOrderContent() {
             }
         }
 
-        const resolvedPrice = orderNature === 'replacement'
+        const resolvedPrice = (orderNature === 'replacement' || isGiftRemissionClient)
             ? 0
             : ((contractPrices[product.id] !== undefined && contractPrices[product.id] !== null && contractPrices[product.id] > 0)
                 ? contractPrices[product.id]
@@ -1768,7 +1787,9 @@ function CreateOrderContent() {
 
         const defaultObservations = orderNature === 'replacement'
             ? (parentOrderFriendlyId ? `Reposición de garantía (Ampara #${parentOrderFriendlyId})` : 'Reposición de garantía ($0 COP)')
-            : '';
+            : isGiftRemissionClient
+                ? 'Obsequio de Cortesía ($0 COP)'
+                : '';
 
         setCart(prev => [{ 
             product, 
@@ -2570,7 +2591,7 @@ function CreateOrderContent() {
     };
 
     const calculateTotal = () => {
-        if (orderNature === 'replacement') return 0;
+        if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
             const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
@@ -2600,7 +2621,7 @@ function CreateOrderContent() {
     };
 
     const calculateTotalTax = () => {
-        if (orderNature === 'replacement') return 0;
+        if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
             const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
@@ -2611,7 +2632,7 @@ function CreateOrderContent() {
     };
 
     const calculateSubtotal = () => {
-        if (orderNature === 'replacement') return 0;
+        if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
         return calculateTotal() - calculateTotalTax();
     };
 
@@ -3613,13 +3634,15 @@ function CreateOrderContent() {
             const itemsDataForInsert = stagedItems.map(item => {
                 const prod = item.suggestedProduct!;
                 const prodId = prod.id;
-                const unitPrice = (clientType === 'B2B' && prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
-                    ? contractPrices[prodId]
-                    : (item.price || (prodId && contractPrices[prodId]) || 0);
+                const unitPrice = isGiftRemissionClient
+                    ? 0
+                    : ((clientType === 'B2B' && prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
+                        ? contractPrices[prodId]
+                        : (item.price || (prodId && contractPrices[prodId]) || 0));
 
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '1');
                 const itemTotal = unitPrice * qtyNum;
-                const ivaRate = prod.iva_rate !== null && prod.iva_rate !== undefined ? Number(prod.iva_rate) : 19;
+                const ivaRate = isGiftRemissionClient ? 0 : (prod.iva_rate !== null && prod.iva_rate !== undefined ? Number(prod.iva_rate) : 19);
                 const itemTax = itemTotal * (ivaRate / (100 + ivaRate));
                 const itemSubtotal = itemTotal - itemTax;
 
@@ -3659,6 +3682,9 @@ function CreateOrderContent() {
 
             // 4. Armar notas de orden y entrega logística
             const poTokens: string[] = [];
+            if (isGiftRemissionClient) {
+                poTokens.push('[REMISIÓN DE OBSEQUIO / CORTESÍA $0 COP]');
+            }
             const effectivePo = purchaseOrderNumber?.trim() || (importValidation?.poNumber ? String(importValidation.poNumber).trim() : null);
             const effectiveSolped = solpedNumber?.trim() || (importValidation?.solpedNumber ? String(importValidation.solpedNumber).trim() : null);
             if (effectivePo && !adminNotes.includes(`OC: ${effectivePo}`)) poTokens.push(`OC: ${effectivePo}`);
@@ -3696,8 +3722,8 @@ function CreateOrderContent() {
                 };
             }
 
-            // GAP-01: Interbloqueo de Crédito y Cartera (Solo para B2B)
-            if (clientType === 'B2B' && finalProfileId) {
+            // GAP-01: Interbloqueo de Crédito y Cartera (Solo para B2B con cobro)
+            if (clientType === 'B2B' && finalProfileId && !isGiftRemissionClient) {
                 const creditCheck = await checkClientCreditStatus(finalProfileId, Math.round(total));
                 if (!creditCheck.allowed) {
                     showToast(creditCheck.reason || 'Operación cancelada por control de crédito.', 'error');
@@ -3728,13 +3754,13 @@ function CreateOrderContent() {
                 .insert({
                     profile_id: finalProfileId,
                     type: clientType === 'B2B' ? 'b2b' : 'b2c',
-                    total: Math.round(total),
+                    total: isGiftRemissionClient ? 0 : Math.round(total),
                     total_weight_kg: parseFloat(totalWeightKg.toFixed(3)),
-                    subtotal: Math.round(subtotal),
-                    tax: Math.round(tax),
+                    subtotal: isGiftRemissionClient ? 0 : Math.round(subtotal),
+                    tax: isGiftRemissionClient ? 0 : Math.round(tax),
                     status: 'pending_approval',
-                    payment_status: 'Pendiente',
-                    payment_method: paymentMethod || (clientType === 'B2B' ? 'Crédito B2B' : 'Contra Entrega'),
+                    payment_status: isGiftRemissionClient ? 'Exonerado' : 'Pendiente',
+                    payment_method: isGiftRemissionClient ? 'obsequio_cortesia' : (paymentMethod || (clientType === 'B2B' ? 'Crédito B2B' : 'Contra Entrega')),
                     origin: 'Admin Panel',
                     origin_source: 'document_upload',
                     delivery_date: targetDeliveryDate,
@@ -3747,7 +3773,7 @@ function CreateOrderContent() {
                     manual_delivery_time: manualDeliveryTime || null,
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
-                    logistics_data: logisticsOverride,
+                    logistics_data: { ...(logisticsOverride || {}), is_gift_remission: isGiftRemissionClient },
                     document_url: finalDocUrl || permanentDocumentUrl || null
                 })
                 .select()
@@ -4316,9 +4342,9 @@ function CreateOrderContent() {
 
         if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
-        // Block Zero Margin / Zero Price ONLY IF NOT covered by an open agreement AND NOT replacement
+        // Block Zero Margin / Zero Price ONLY IF NOT covered by an open agreement AND NOT replacement/gift
         const zeroPriceItem = cart.find(item => {
-            if (orderNature === 'replacement') return false; // SDD §7.5.8: Reposición de garantía exonerada a $0 COP
+            if (orderNature === 'replacement' || isGiftRemissionClient) return false; // SDD §7.5.8 / §21.3: Reposición u Obsequio exonerado a $0 COP
             const isZero = !item.price || parseFloat(item.price.toString()) === 0;
             if (!isZero) return false;
             const isCoveredByAgreement = agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0;
@@ -4333,8 +4359,8 @@ function CreateOrderContent() {
             return showToast('❌ Atención: Todo pedido de reposición debe estar vinculado a un Pedido Original para trazabilidad de calidad.', 'error');
         }
 
-        // Poka-Yoke SDD §7.5.9: Para pedidos de Colsubsidio es obligatorio ingresar OC o SOLPED
-        if (isColsubsidioSelected) {
+        // Poka-Yoke SDD §7.5.9: Para pedidos de Colsubsidio es obligatorio ingresar OC o SOLPED (Excepto en Remisión de Obsequio)
+        if (isColsubsidioSelected && !isGiftRemissionClient) {
             const effectivePo = purchaseOrderNumber?.trim() || (importValidation?.poNumber ? String(importValidation.poNumber).trim() : null);
             const effectiveSolped = solpedNumber?.trim() || (importValidation?.solpedNumber ? String(importValidation.solpedNumber).trim() : null);
             if (!effectivePo && !effectiveSolped) {
@@ -4406,6 +4432,8 @@ function CreateOrderContent() {
             if (orderNature === 'replacement') {
                 const parentTag = parentOrderFriendlyId ? `#PED-${parentOrderFriendlyId}` : (parentOrderId ? parentOrderId.substring(0, 8) : 'S/F');
                 finalAdminNotes = `[REPOSICIÓN DE GARANTÍA $0 COP - VINCULADA AL PEDIDO ${parentTag}]\n${finalAdminNotes}`.trim();
+            } else if (isGiftRemissionClient && !finalAdminNotes.includes('REMISIÓN DE OBSEQUIO')) {
+                finalAdminNotes = `[REMISIÓN DE OBSEQUIO / CORTESÍA $0 COP]\n${finalAdminNotes}`.trim();
             }
             
             if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
@@ -4413,7 +4441,7 @@ function CreateOrderContent() {
             }
 
             // Anotar si contiene ítems sobre Lista Abierta a Consumo ($0 COP)
-            const hasOpenConsumptionItems = cart.some(item => agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0);
+            const hasOpenConsumptionItems = !isGiftRemissionClient && cart.some(item => agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0);
             if (hasOpenConsumptionItems && !finalAdminNotes.includes('CONSUMO ABIERTO')) {
                 finalAdminNotes = `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]\n${finalAdminNotes}`.trim();
             }
@@ -4536,8 +4564,10 @@ function CreateOrderContent() {
                 }
             }
 
+            const isExoneratedZero = orderNature === 'replacement' || isGiftRemissionClient;
+
             // GAP-01: Interbloqueo de Crédito y Cartera para clientes B2B (Solo ventas ordinarias con cobro)
-            if (clientType === 'B2B' && finalProfileId && orderNature !== 'replacement') {
+            if (clientType === 'B2B' && finalProfileId && !isExoneratedZero) {
                 const creditCheck = await checkClientCreditStatus(finalProfileId, calculateTotal());
                 if (!creditCheck.allowed) {
                     showToast(creditCheck.reason || 'Operación cancelada por control de crédito.', 'error');
@@ -4548,6 +4578,7 @@ function CreateOrderContent() {
             const finalLogisticsData = {
                 ...(logisticsOverride || {}),
                 is_replacement: orderNature === 'replacement',
+                is_gift_remission: isGiftRemissionClient,
                 parent_order_id: parentOrderId || null,
                 parent_order_sequence: parentOrderFriendlyId || null,
                 is_colsubsidio: isColsubsidioSelected,
@@ -4563,13 +4594,13 @@ function CreateOrderContent() {
                 .insert({
                     profile_id: finalProfileId,
                     purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
-                    total: orderNature === 'replacement' ? 0 : calculateTotal(),
+                    total: isExoneratedZero ? 0 : calculateTotal(),
                     total_weight_kg: calculateTotalWeight(),
-                    subtotal: orderNature === 'replacement' ? 0 : calculateSubtotal(),
-                    tax: orderNature === 'replacement' ? 0 : calculateTotalTax(),
+                    subtotal: isExoneratedZero ? 0 : calculateSubtotal(),
+                    tax: isExoneratedZero ? 0 : calculateTotalTax(),
                     status: 'pending_approval',
-                    payment_status: orderNature === 'replacement' ? 'Exonerado' : 'Pendiente',
-                    payment_method: orderNature === 'replacement' ? 'reposicion_garantia' : paymentMethod,
+                    payment_status: isExoneratedZero ? 'Exonerado' : 'Pendiente',
+                    payment_method: orderNature === 'replacement' ? 'reposicion_garantia' : isGiftRemissionClient ? 'obsequio_cortesia' : paymentMethod,
                     origin: 'Admin Panel',
                     origin_source: orderNature === 'replacement' && originSource === 'phone' ? 'customer_service' : originSource,
                     delivery_date: deliveryDate,
@@ -4596,7 +4627,7 @@ function CreateOrderContent() {
 
             const itemsData = cart.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                const unitPrice = orderNature === 'replacement' ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                const unitPrice = isExoneratedZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
@@ -4710,7 +4741,7 @@ function CreateOrderContent() {
     const filteredProducts = useMemo(() => {
         if (!productSearch || productSearch.trim().length < 2) return [];
 
-        const isStrictAgreement = !allowOffAgreementPurchases && agreementProductIds.size > 0;
+        const isStrictAgreement = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
         const candidatePool = isStrictAgreement
             ? (products || []).filter(p => agreementProductIds.has(p.id))
             : (products || []);
@@ -8709,19 +8740,23 @@ function CreateOrderContent() {
                                                         );
                                                     })()}
 
-                                                    {/* Unit Price (Read-only, Protected by Commercial Agreement / Catalog / $0 Replacement) */}
+                                                    {/* Unit Price (Read-only, Protected by Commercial Agreement / Catalog / $0 Replacement or Gift) */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: '2px' }}>
                                                         <div style={{ 
                                                             fontWeight: '800', 
                                                             fontSize: '0.95rem', 
-                                                            color: orderNature === 'replacement' ? '#6D28D9' : isZeroPrice ? '#DC2626' : '#1E293B',
+                                                            color: (orderNature === 'replacement' || isGiftRemissionClient) ? '#6D28D9' : isZeroPrice ? '#DC2626' : '#1E293B',
                                                             fontVariantNumeric: 'tabular-nums'
                                                         }}>
-                                                            {formatMoney(orderNature === 'replacement' ? 0 : unitPrice)}
+                                                            {formatMoney((orderNature === 'replacement' || isGiftRemissionClient) ? 0 : unitPrice)}
                                                         </div>
                                                         {orderNature === 'replacement' ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#EDE9FE', border: '1px solid #C4B5FD', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                 <RotateCcw size={10} color="#6D28D9" /> Reposición $0
+                                                            </span>
+                                                        ) : isGiftRemissionClient ? (
+                                                            <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#FAF5FF', border: '1px solid #D8B4FE', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                🎁 Obsequio $0
                                                             </span>
                                                         ) : isZeroPrice ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -8731,8 +8766,8 @@ function CreateOrderContent() {
                                                     </div>
 
                                                     {/* Subtotal */}
-                                                    <div style={{ textAlign: 'right', fontWeight: '800', color: orderNature === 'replacement' ? '#6D28D9' : '#111827', fontSize: '0.95rem' }}>
-                                                        {formatMoney(orderNature === 'replacement' ? 0 : (unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0')))}
+                                                    <div style={{ textAlign: 'right', fontWeight: '800', color: (orderNature === 'replacement' || isGiftRemissionClient) ? '#6D28D9' : '#111827', fontSize: '0.95rem' }}>
+                                                        {formatMoney((orderNature === 'replacement' || isGiftRemissionClient) ? 0 : (unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0')))}
                                                     </div>
 
                                                     {/* Actions (Edit and Delete) */}

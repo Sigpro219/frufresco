@@ -86,9 +86,9 @@ export default function BillingPrintPage() {
                 const { data: ordersData, error: ordersErr } = await supabase
                     .from('orders')
                     .select(`
-                        id, sequence_id, created_at, delivery_date, total, subtotal, document_type, remission_with_prices, payment_method, special_notes, admin_notes,
+                        id, sequence_id, created_at, delivery_date, total, subtotal, document_type, remission_with_prices, payment_method, special_notes, admin_notes, logistics_data,
                         profiles:profile_id (
-                            id, company_name, razon_social, contact_name, contact_phone, phone, address, document_type, remission_with_prices, nit, payment_days
+                            id, company_name, razon_social, contact_name, contact_phone, phone, address, document_type, remission_with_prices, nit, payment_days, parent:parent_id (id, document_type, remission_with_prices)
                         ),
                         order_items (
                             id, quantity, unit_price, nickname, variant_label, selected_options,
@@ -404,15 +404,20 @@ export default function BillingPrintPage() {
                 ) : (
                     filteredOrders.map((order) => {
                         const profile = order.profiles || {};
-                        const docType = order.document_type || profile.document_type || 'invoice';
+                        const docType = order.document_type || profile.document_type || profile.parent?.document_type || 'invoice';
                         const isInvoice = docType === 'invoice';
+                        const isObsequio = docType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO');
                         
-                        // Respetar política de precios o forzado global
-                        const showPrices = forcePrices 
+                        // Respetar política de precios o forzado global (En Obsequio se muestran siempre las columnas en $0)
+                        const showPrices = forcePrices || isObsequio
                             ? true 
                             : (isInvoice ? true : (order.remission_with_prices ?? profile.remission_with_prices ?? true));
 
-                        const titleText = isInvoice ? 'FACTURA ELECTRÓNICA DE VENTA' : 'REMISIÓN OFICIAL DE ENTREGA';
+                        const titleText = isInvoice
+                            ? 'FACTURA ELECTRÓNICA DE VENTA'
+                            : isObsequio
+                                ? 'REMISIÓN OFICIAL DE OBSEQUIO'
+                                : 'REMISIÓN OFICIAL DE ENTREGA';
                         const footerSender = isInvoice 
                             ? 'Investments Cortés S.A.S. • Facturación & Cartera' 
                             : 'Investments Cortés S.A.S. • Despachos & Logística';
@@ -421,7 +426,8 @@ export default function BillingPrintPage() {
                             ? new Date(order.delivery_date).toLocaleDateString()
                             : new Date(order.created_at).toLocaleDateString();
 
-                        const subtotalOrder = order.subtotal || order.total || 0;
+                        const subtotalOrder = isObsequio ? 0 : (order.subtotal || order.total || 0);
+                        const totalOrder = isObsequio ? 0 : (order.total || subtotalOrder);
 
                         return (
                             <Letterhead 
@@ -430,11 +436,35 @@ export default function BillingPrintPage() {
                                 subtitle={`${profile.company_name || 'Cliente B2B'} • NIT: ${profile.nit || '222222222222'}`}
                                 date={deliveryDateFormatted}
                                 reference={`#${getFriendlyOrderId(order)}`}
-                                badge={isInvoice ? 'DIAN VÁLIDA' : (showPrices ? 'VALORIZADA' : 'A CIEGAS')}
+                                badge={isInvoice ? 'DIAN VÁLIDA' : isObsequio ? 'CORTESÍA / OBSEQUIO' : (showPrices ? 'VALORIZADA' : 'A CIEGAS')}
                                 badgeVariant={isInvoice ? 'dark' : (showPrices ? 'emerald' : 'light')}
                                 className="page-break"
                             >
                                 <div style={{ padding: '0.25rem 0' }}>
+                                    {/* BANNER AMABLE DE ENTREGA PARA REMISIÓN OBSEQUIO */}
+                                    {isObsequio && (
+                                        <div style={{
+                                            backgroundColor: '#FAF5FF',
+                                            border: '1.2px solid #A855F7',
+                                            borderRadius: '6px',
+                                            padding: '6px 10px',
+                                            marginBottom: '0.55rem',
+                                            fontSize: '0.66rem',
+                                            color: '#581C87',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            gap: '10px'
+                                        }}>
+                                            <span>
+                                                <strong>🎁 DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).
+                                            </span>
+                                            <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', border: '1px solid #D8B4FE', padding: '2px 7px', borderRadius: '4px', fontWeight: 800, fontSize: '0.60rem', whiteSpace: 'nowrap' }}>
+                                                CORTESÍA $0
+                                            </span>
+                                        </div>
+                                    )}
+
                                     {/* INFO CLIENTE & DESTINO */}
                                     <div style={{ 
                                         display: 'grid', 
@@ -472,8 +502,8 @@ export default function BillingPrintPage() {
                                             <div style={{ color: '#475569', fontSize: '0.64rem', marginTop: '2px' }}>
                                                 Teléfono: {profile.contact_phone || profile.phone || 'N/A'}
                                             </div>
-                                            <div style={{ color: '#0D7A57', fontWeight: 700, fontSize: '0.64rem', marginTop: '1px' }}>
-                                                Plazo: {profile.payment_days ? `${profile.payment_days} días de crédito` : order.payment_method || 'Contado'}
+                                            <div style={{ color: isObsequio ? '#6B21A8' : '#0D7A57', fontWeight: 700, fontSize: '0.64rem', marginTop: '1px' }}>
+                                                Plazo: {isObsequio ? 'Obsequio / Cortesía ($0 COP)' : (profile.payment_days ? `${profile.payment_days} días de crédito` : order.payment_method || 'Contado')}
                                             </div>
                                         </div>
                                     </div>
@@ -516,7 +546,7 @@ export default function BillingPrintPage() {
                                                     nickname: item.nickname,
                                                     selected_options: item.selected_options
                                                 });
-                                                const unitPrice = item.unit_price || 0;
+                                                const unitPrice = isObsequio ? 0 : (item.unit_price || 0);
                                                 const lineTotal = item.quantity * unitPrice;
 
                                                 return (
@@ -580,7 +610,7 @@ export default function BillingPrintPage() {
                                                         TOTAL DOCUMENTO (COP):
                                                     </td>
                                                     <td colSpan={2} className="text-right" style={{ fontWeight: 900, color: '#0D7A57', fontSize: '0.84rem', fontVariantNumeric: 'tabular-nums' }}>
-                                                        ${(order.total || subtotalOrder).toLocaleString('es-CO')}
+                                                        ${totalOrder.toLocaleString('es-CO')}
                                                     </td>
                                                 </tr>
                                             </tfoot>

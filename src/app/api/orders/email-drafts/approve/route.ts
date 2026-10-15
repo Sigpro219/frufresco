@@ -60,6 +60,8 @@ export async function POST(req: Request) {
       .in('id', productIds);
     const productsMap = new Map((dbProducts || []).map((p: any) => [p.id, p]));
 
+    const isGiftRemission = profile.document_type === 'gift_remission';
+
     // Calcular subtotales, IVA y Peso acumulado idéntico a create/page.tsx
     let totalTax = 0;
     let totalWeightKg = 0;
@@ -68,13 +70,13 @@ export async function POST(req: Request) {
     const formattedItems = items.map((item: any) => {
       const pId = item.productId || item.product_id || item.id;
       const dbProd = productsMap.get(pId);
-      const unitPrice = Number(item.unitPrice || item.price || 0);
+      const unitPrice = isGiftRemission ? 0 : Number(item.unitPrice || item.price || 0);
       const qty = Number(item.quantity || item.qty || 1);
       const itemTotal = unitPrice * qty;
       totalGross += itemTotal;
 
       // Paridad Fiscal: IVA según tarifa del producto (19%, 5% o exento 0%)
-      const rate = dbProd?.iva_rate !== null && dbProd?.iva_rate !== undefined ? Number(dbProd.iva_rate) : 0;
+      const rate = isGiftRemission ? 0 : (dbProd?.iva_rate !== null && dbProd?.iva_rate !== undefined ? Number(dbProd.iva_rate) : 0);
       if (rate > 0) {
         totalTax += itemTotal * (rate / (100 + rate));
       }
@@ -104,13 +106,14 @@ export async function POST(req: Request) {
       };
     });
 
-    const taxes = Math.round(totalTax * 100) / 100;
-    const subtotal = Math.round((totalGross - taxes) * 100) / 100;
+    const taxes = isGiftRemission ? 0 : Math.round(totalTax * 100) / 100;
+    const subtotal = isGiftRemission ? 0 : Math.round((totalGross - taxes) * 100) / 100;
     const shippingFee = 0;
-    const totalAmount = totalGross + shippingFee;
+    const totalAmount = isGiftRemission ? 0 : (totalGross + shippingFee);
     const roundedWeight = Math.round(totalWeightKg * 1000) / 1000;
 
     // 2. Insert order header into 'orders' table
+    const baseAdminNotes = notes || `Pedido ingresado desde Borrador de Correo ID: ${draftId || 'N/A'}`;
     const orderData: any = {
       profile_id: clientId,
       type: (clientType === 'b2c_client' || profile.role === 'b2c') ? 'b2c' : 'b2b',
@@ -119,10 +122,13 @@ export async function POST(req: Request) {
       tax: taxes,
       total: totalAmount,
       total_weight_kg: roundedWeight,
+      payment_status: isGiftRemission ? 'Exonerado' : 'Pendiente',
+      payment_method: isGiftRemission ? 'obsequio_cortesia' : 'Crédito B2B',
       delivery_date: deliveryDate || new Date().toISOString().split('T')[0],
       delivery_slot: deliverySlot || 'AM',
       shipping_address: address || profile.address || 'Bogotá',
-      admin_notes: notes || `Pedido ingresado desde Borrador de Correo ID: ${draftId || 'N/A'}`,
+      admin_notes: isGiftRemission ? `[REMISIÓN DE OBSEQUIO / CORTESÍA $0 COP] ${baseAdminNotes}` : baseAdminNotes,
+      logistics_data: isGiftRemission ? { is_gift_remission: true } : null,
       origin_source: originSource || 'email',
       document_url: finalDocumentUrl
     };

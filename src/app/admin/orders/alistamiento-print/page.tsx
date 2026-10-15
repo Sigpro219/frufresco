@@ -9,6 +9,8 @@ import { Printer, ArrowLeft, Filter, Layers, CheckSquare, Download, Columns } fr
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
+import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/specialClientAttention';
+import SpecialClientBadge from '@/components/SpecialClientBadge';
 
 interface OrderItem {
     id: string;
@@ -34,6 +36,7 @@ interface OrderItem {
 
 interface OrderInfo {
     id: string;
+    profile_id?: string;
     sequence_id?: number;
     delivery_date: string;
     delivery_slot?: string;
@@ -45,6 +48,7 @@ interface OrderInfo {
     order_num: string;
     space_label: string;
     first_space: number;
+    special_attention?: SpecialAttentionState | null;
 }
 
 interface ProductInCell {
@@ -421,8 +425,8 @@ export default function AlistamientoSabanaPrintPage() {
             let orderQuery = supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, delivery_date, delivery_slot, shipping_address, warehouse_spaces, status, profile_id, type,
-                    profiles:profile_id(id, company_name, contact_name, address, role),
+                    id, sequence_id, delivery_date, delivery_slot, shipping_address, warehouse_spaces, status, profile_id, type, logistics_data,
+                    profiles:profile_id(id, company_name, contact_name, address, role, logistics_data),
                     order_items(
                         id, order_id, product_id, quantity, unit, nickname, variant_label, selected_options,
                         products(id, name, sku, accounting_id, unit_of_measure, buying_team, category, weight_kg, parent_id)
@@ -440,6 +444,41 @@ export default function AlistamientoSabanaPrintPage() {
 
             const { data: rawOrders, error: oErr } = await orderQuery.order('created_at', { ascending: true });
             if (oErr) throw oErr;
+
+            // Evaluar Atención Especial por Ciclo de Vida para los clientes de la tanda
+            const clientProfileIds = Array.from(new Set(
+                (rawOrders || []).map((o: any) => o.profile_id || o.profiles?.id).filter(Boolean)
+            )) as string[];
+
+            let attentionMap: Record<string, SpecialAttentionState> = {};
+            if (clientProfileIds.length > 0) {
+                const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                const [{ data: histOrders }, { data: recentPqrs }] = await Promise.all([
+                    supabase
+                        .from('orders')
+                        .select('id, profile_id, created_at, delivery_date, status, total, logistics_data')
+                        .in('profile_id', clientProfileIds)
+                        .neq('status', 'cancelled')
+                        .gte('created_at', thirtyDaysAgoIso),
+                    supabase
+                        .from('customer_service_pqrs')
+                        .select('id, client_id, created_at, status, subject, order_id')
+                        .in('client_id', clientProfileIds)
+                        .gte('created_at', thirtyDaysAgoIso)
+                ]);
+
+                const profLookup: Record<string, any> = {};
+                (rawOrders || []).forEach((o: any) => {
+                    const pid = o.profile_id || o.profiles?.id;
+                    if (pid && o.profiles) profLookup[pid] = o.profiles;
+                });
+
+                attentionMap = buildSpecialAttentionByProfileMap(
+                    histOrders && histOrders.length > 0 ? histOrders : (rawOrders || []),
+                    recentPqrs || [],
+                    profLookup
+                );
+            }
 
             // Recolectar parent_ids únicos para mapear el nombre de la Familia
             const parentIdSet = new Set<string>();
@@ -483,9 +522,11 @@ export default function AlistamientoSabanaPrintPage() {
                     : 999;
 
                 const orderNum = getFriendlyOrderId(o);
+                const pid = o.profile_id || o.profiles?.id;
 
                 parsedOrders.push({
                     id: o.id,
+                    profile_id: pid,
                     sequence_id: o.sequence_id,
                     delivery_date: o.delivery_date,
                     delivery_slot: o.delivery_slot,
@@ -496,7 +537,8 @@ export default function AlistamientoSabanaPrintPage() {
                     client_type: clientType,
                     order_num: orderNum,
                     space_label: spaceLabel,
-                    first_space: firstSpace
+                    first_space: firstSpace,
+                    special_attention: pid ? (attentionMap[pid] || null) : null
                 });
 
                 (o.order_items || []).forEach((it: any) => {
@@ -1071,10 +1113,11 @@ export default function AlistamientoSabanaPrintPage() {
                                                         {ord.space_label}
                                                     </td>
 
-                                                    {/* Sucursal del Cliente (Estricto: solo nombre de sucursal) */}
+                                                    {/* Sucursal del Cliente (Estricto: solo nombre de sucursal + Sello Cuidado Especial) */}
                                                     <td style={{ textAlign: 'left', padding: '2.5px 6px', border: '1px solid #94A3B8', color: '#000000', maxWidth: '180px' }} title={ord.branch_name}>
-                                                        <div style={{ fontWeight: 800, fontSize: '7.1pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000' }}>
-                                                            {ord.branch_name}
+                                                        <div style={{ fontWeight: 800, fontSize: '7.1pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000', display: 'flex', alignItems: 'center' }}>
+                                                            <SpecialClientBadge state={ord.special_attention} variant="print-stamp" />
+                                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ord.branch_name}</span>
                                                         </div>
                                                     </td>
 
@@ -1170,10 +1213,13 @@ export default function AlistamientoSabanaPrintPage() {
                                     </tfoot>
                                 </table>
 
-                                {/* Pie de Página con Control Relativo por Célula */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '6.5pt', color: '#475569', fontWeight: '600' }}>
+                                {/* Pie de Página con Control Relativo por Célula + Leyenda de Cuidado Especial */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '6.3pt', color: '#475569', fontWeight: '600', gap: '8px' }}>
                                     <div>
                                         CÉLULA: <strong style={{ color: '#0F172A' }}>{cellName}</strong> &bull; Hoja {chunkIdx + 1} de {totalChunksForCell}
+                                    </div>
+                                    <div style={{ color: '#0F172A', fontWeight: 800, letterSpacing: '-0.01em' }}>
+                                        [NUE] Nuevo (1-3) &bull; [PQR] Reclamo Reciente &bull; [SEG] Seguimiento Consumo &rarr; Cuidado 1A, Peso Exacto y Canastilla Limpia
                                     </div>
                                     <div>
                                         Pág. Global {sheetGlobalIdx + 1} de {printableSheets.length}

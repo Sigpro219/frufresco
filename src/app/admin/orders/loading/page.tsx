@@ -12,6 +12,8 @@ import EmailDraftsModule from '@/components/EmailDraftsModule';
 import EmailOutboxModule from '@/components/EmailOutboxModule';
 import VariantModal from '@/components/VariantModal';
 import ManualDispatchWizardModal from '@/components/ManualDispatchWizardModal';
+import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
+import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { 
     MessageSquare, 
     Phone, 
@@ -1353,6 +1355,33 @@ function OrderLoadingContent() {
                 }
 
                 if (active) {
+                    const profileIds = Array.from(new Set((data || []).map((o: any) => o.profile_id || o.profiles?.id).filter(Boolean)));
+                    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+                    const [histOrdersRes, histPqrsRes] = await Promise.all([
+                        profileIds.length > 0
+                            ? supabase.from('orders').select('id, profile_id, status, delivery_date, created_at, total, subtotal').in('profile_id', profileIds).gte('delivery_date', sixtyDaysAgo)
+                            : Promise.resolve({ data: [] }),
+                        profileIds.length > 0
+                            ? supabase.from('customer_service_pqrs').select('id, client_profile_id, created_at, status, stage').in('client_profile_id', profileIds).gte('created_at', sixtyDaysAgo)
+                            : Promise.resolve({ data: [] })
+                    ]);
+
+                    const overridesByProfile: Record<string, any> = {};
+                    (data || []).forEach((o: any) => {
+                        const pid = o.profile_id || o.profiles?.id;
+                        if (pid && (o.profiles?.logistics_data?.special_attention || o.logistics_data?.special_attention)) {
+                            overridesByProfile[pid] = o.profiles?.logistics_data?.special_attention || o.logistics_data?.special_attention;
+                        }
+                    });
+
+                    const specialAttentionMap = buildSpecialAttentionByProfileMap(
+                        profileIds as string[],
+                        (histOrdersRes.data || []) as any[],
+                        (histPqrsRes.data || []) as any[],
+                        overridesByProfile
+                    );
+
                     const processedData = (data || []).map(order => {
                         let name = 'Cliente Desconocido';
                         let phone = 'Sin Teléfono';
@@ -1461,6 +1490,8 @@ function OrderLoadingContent() {
                             }
                         }
 
+                        const pid = order.profile_id || order.profiles?.id;
+
                         return {
                             ...order,
                             customer_name: name,
@@ -1471,6 +1502,7 @@ function OrderLoadingContent() {
                             total_weight_kg: totalWeight,
                             item_count: items.length,
                             origin_source: originSource,
+                            special_attention: pid ? specialAttentionMap[pid] : undefined,
                             isComplete: true
                         };
                     });
@@ -1615,6 +1647,10 @@ function OrderLoadingContent() {
                     if (['duplicado', 'duplicados', 'repetido', 'repetidos', 'doble', 'duplicada'].includes(command)) {
                         return duplicatesMap.has(order.id);
                     }
+                    if (['especial', 'cuidado', 'cuidado_especial'].includes(command)) return Boolean(order.special_attention?.isActive);
+                    if (['pqr', 'reclamo'].includes(command)) return order.special_attention?.code === 'recurring_pqr';
+                    if (['nuevo', 'cliente_nuevo'].includes(command)) return order.special_attention?.code === 'new_client';
+                    if (['seguimiento', 'consumo', 'bajo_consumo'].includes(command)) return order.special_attention?.code === 'low_consumption';
                 }
 
                 // B. Extracción de productos/SKUs dentro de los ítems del pedido
@@ -1643,6 +1679,7 @@ function OrderLoadingContent() {
                     order.paymentMethod,
                     order.admin_notes,
                     order.special_notes,
+                    order.special_attention?.isActive ? `especial ${order.special_attention.badgeShort} ${order.special_attention.printCode} ${order.special_attention.title}` : '',
                     duplicatesMap.has(order.id) ? 'duplicado repetido colision alerta_duplicado' : '',
                     productText
                 ].filter(Boolean).join(' '));
@@ -3974,7 +4011,10 @@ function OrderLoadingContent() {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem' }}>
-                                                        <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>{order.customer_name}</div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>{order.customer_name}</span>
+                                                            <SpecialClientBadge state={order.special_attention} />
+                                                        </div>
                                                         <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '2px' }}><Phone size={10} strokeWidth={1.5} /> {order.customer_phone || 'Sin tel.'}</div>
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem' }}>
@@ -4992,10 +5032,11 @@ function OrderLoadingContent() {
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                            <div style={{ fontWeight: '700', color: '#334155', fontSize: '1rem' }}>
-                                                {selectedOrder.customer_name}
+                                            <div style={{ fontWeight: '700', color: '#334155', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                <span>{selectedOrder.customer_name}</span>
+                                                <SpecialClientBadge state={selectedOrder.special_attention} />
                                                 {selectedOrder.customer_nit && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '500', marginLeft: '8px' }}>
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>
                                                         (NIT: {selectedOrder.customer_nit})
                                                     </span>
                                                 )}

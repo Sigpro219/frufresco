@@ -13,6 +13,8 @@ import {
     X,
     Scale
 } from 'lucide-react';
+import { evaluateSpecialClientAttention, SpecialAttentionState } from '@/lib/specialClientAttention';
+import SpecialClientBadge from '@/components/SpecialClientBadge';
 
 interface ProductItem {
     id: string; // order_item_id
@@ -33,6 +35,7 @@ function PickingClientContent() {
     const [loading, setLoading] = useState(true);
     const [items, setItems] = useState<ProductItem[]>([]);
     const [clientName, setClientName] = useState('');
+    const [specialAttention, setSpecialAttention] = useState<SpecialAttentionState | null>(null);
     const [selectedItem, setSelectedItem] = useState<ProductItem | null>(null);
     
     // Form State
@@ -52,8 +55,9 @@ function PickingClientContent() {
             const { data: order, error } = await supabase
                 .from('orders')
                 .select(`
+                    id, profile_id, created_at, delivery_date, status, total, logistics_data,
                     profiles:profile_id (
-                        id, company_name, contact_name, role
+                        id, company_name, contact_name, role, logistics_data
                     ),
                     order_items (
                         id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
@@ -73,6 +77,34 @@ function PickingClientContent() {
                     : (p.contact_name || p.company_name || 'Cliente B2C');
             }
             setClientName(name);
+
+            // Evaluate autonomous special attention state for this client
+            const clientId = (order as any).profile_id || p?.id;
+            if (clientId) {
+                const [{ data: clientOrdersData }, { data: clientPqrsData }] = await Promise.all([
+                    supabase
+                        .from('orders')
+                        .select('id, created_at, delivery_date, status, total')
+                        .eq('profile_id', clientId)
+                        .order('created_at', { ascending: false })
+                        .limit(20),
+                    supabase
+                        .from('customer_service_pqrs')
+                        .select('id, created_at, status, subject, order_id')
+                        .eq('client_id', clientId)
+                        .order('created_at', { ascending: false })
+                        .limit(10)
+                ]);
+
+                const attState = evaluateSpecialClientAttention({
+                    profileId: clientId,
+                    profile: p,
+                    order,
+                    clientOrders: clientOrdersData || [],
+                    clientPqrs: clientPqrsData || []
+                });
+                setSpecialAttention(attState);
+            }
             
             const filteredItems = (order.order_items || [])
                 .filter((item: any) => item.products?.category === category)
@@ -159,8 +191,11 @@ function PickingClientContent() {
                 <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#0D7A57', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}>
                     <ChevronLeft size={24} strokeWidth={2.5} />
                 </button>
-                <div>
-                    <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900' }}>{clientName}</h1>
+                <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900' }}>{clientName}</h1>
+                        <SpecialClientBadge state={specialAttention} darkMode />
+                    </div>
                     <p style={{ margin: 0, fontSize: '0.8rem', color: '#9CA3AF' }}>Célula: {category}</p>
                 </div>
             </div>

@@ -46,6 +46,8 @@ import Link from 'next/link';
 import { Map as GoogleMap, Marker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import { evaluateCostFreshness, getFreshnessSLA } from '@/lib/commercial/costFreshnessPolicy';
 import WeeklyMarketBulletinModal from './WeeklyMarketBulletinModal';
+import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
+import SpecialClientBadge from './SpecialClientBadge';
 
 type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month' | 'all';
 
@@ -341,6 +343,7 @@ interface ClientConsumptionItem {
     growthPct: number;
     orderCount: number;
     avgTicket: number;
+    specialAttention?: SpecialClientAttentionState;
 }
 
 interface ProductRotItem {
@@ -830,6 +833,24 @@ export default function CommercialUnifiedDashboard({
             });
 
             // --- BUILD CLIENT CONSUMPTION LIST ---
+            const activeProfileIds = Array.from(clientAggMap.keys());
+            const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const { data: recentPqrsData } = activeProfileIds.length > 0
+                ? await supabase
+                    .from('customer_service_pqrs')
+                    .select('id, client_profile_id, created_at, status, stage')
+                    .in('client_profile_id', activeProfileIds)
+                    .gte('created_at', sixtyDaysAgo)
+                : { data: [] };
+
+            const allEvaluatedOrders = [...currentOrders, ...prevOrders];
+            const specialAttentionMap = buildSpecialAttentionByProfileMap(
+                activeProfileIds,
+                allEvaluatedOrders as any[],
+                (recentPqrsData || []) as any[],
+                {}
+            );
+
             const clientList: ClientConsumptionItem[] = [];
             clientAggMap.forEach((val, cId) => {
                 const prof = profileMap.get(cId);
@@ -855,7 +876,8 @@ export default function CommercialUnifiedDashboard({
                     prevVolume: Math.round(prev.volume * 10) / 10,
                     growthPct,
                     orderCount: val.orderCount,
-                    avgTicket: val.orderCount > 0 ? Math.round(val.amount / val.orderCount) : val.amount
+                    avgTicket: val.orderCount > 0 ? Math.round(val.amount / val.orderCount) : val.amount,
+                    specialAttention: specialAttentionMap[cId]
                 });
             });
 
@@ -2513,7 +2535,10 @@ export default function CommercialUnifiedDashboard({
                                     return (
                                         <tr key={c.id || idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
                                             <td style={{ padding: '0.75rem 1rem' }}>
-                                                <div style={{ fontWeight: '800', color: THEME.colors.textMain }}>{c.name}</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <span style={{ fontWeight: '800', color: THEME.colors.textMain }}>{c.name}</span>
+                                                    <SpecialClientBadge state={c.specialAttention} />
+                                                </div>
                                                 {c.nit && <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary }}>NIT: {c.nit}</div>}
                                             </td>
                                             <td style={{ padding: '0.75rem 1rem' }}>

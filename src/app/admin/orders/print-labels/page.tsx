@@ -8,6 +8,7 @@ import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { QRCodeSVG } from 'qrcode.react';
 import { Printer, ArrowLeft, Tag, Package, Sparkles, Scale, Building2, Calendar, Truck, Clock } from 'lucide-react';
 import { PrintDocumentSwitcher } from '@/components/print';
+import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
 
 interface OrderItemData {
     id: string;
@@ -36,6 +37,8 @@ interface OrderData {
     total_weight_kg: number;
     shipping_address?: string;
     warehouse_spaces?: number[];
+    profile_id?: string;
+    logistics_data?: any;
     profiles?: {
         id?: string;
         company_name?: string;
@@ -44,8 +47,10 @@ interface OrderData {
         address?: string;
         phone?: string;
         contact_phone?: string;
+        logistics_data?: any;
     } | null;
     order_items?: OrderItemData[];
+    special_attention?: SpecialClientAttentionState;
 }
 
 interface CrateLabelInfo {
@@ -63,6 +68,7 @@ interface CrateLabelInfo {
     crateNumber: number;
     totalCrates: number;
     qrPayload: string;
+    specialAttention?: SpecialClientAttentionState;
 }
 
 interface ProductLabelInfo {
@@ -128,8 +134,8 @@ export default function BulkOrderPrintLabelsPage() {
                     .from('orders')
                     .select(`
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, total_weight_kg, 
-                        shipping_address, warehouse_spaces, profile_id,
-                        profiles:profile_id(id, company_name, contact_name, nit, address, phone, contact_phone)
+                        shipping_address, warehouse_spaces, profile_id, logistics_data,
+                        profiles:profile_id(id, company_name, contact_name, nit, address, phone, contact_phone, logistics_data)
                     `)
                     .order('created_at', { ascending: true });
 
@@ -155,32 +161,64 @@ export default function BulkOrderPrintLabelsPage() {
                     return;
                 }
 
-                // 2. Fetch order items with products
-                const { data: itemsData, error: itemsErr } = await supabase
-                    .from('order_items')
-                    .select(`
-                        id, order_id, quantity, unit, nickname, variant_label,
-                        product:products (
-                            id, name, sku, requires_label, accounting_id, unit_of_measure
-                        )
-                    `)
-                    .in('order_id', resolvedIds);
+                // 2. Fetch order items with products + historical orders/pqrs for Special Client Attention
+                const profileIds = Array.from(new Set((ordersData || []).map((o: any) => o.profile_id || (Array.isArray(o.profiles) ? o.profiles[0]?.id : o.profiles?.id)).filter(Boolean)));
+                const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-                if (itemsErr) {
-                    console.error('Error fetching order items for labels:', itemsErr);
+                const [itemsRes, histOrdersRes, histPqrsRes] = await Promise.all([
+                    supabase
+                        .from('order_items')
+                        .select(`
+                            id, order_id, quantity, unit, nickname, variant_label,
+                            product:products (
+                                id, name, sku, requires_label, accounting_id, unit_of_measure
+                            )
+                        `)
+                        .in('order_id', resolvedIds),
+                    profileIds.length > 0
+                        ? supabase.from('orders').select('id, profile_id, status, delivery_date, created_at, total, subtotal').in('profile_id', profileIds).gte('delivery_date', sixtyDaysAgo)
+                        : Promise.resolve({ data: [] }),
+                    profileIds.length > 0
+                        ? supabase.from('customer_service_pqrs').select('id, client_profile_id, created_at, status, stage').in('client_profile_id', profileIds).gte('created_at', sixtyDaysAgo)
+                        : Promise.resolve({ data: [] })
+                ]);
+
+                if (itemsRes.error) {
+                    console.error('Error fetching order items for labels:', itemsRes.error);
                 }
 
+                const overridesByProfile: Record<string, any> = {};
+                (ordersData || []).forEach((o: any) => {
+                    const prof = Array.isArray(o.profiles) ? o.profiles[0] : o.profiles;
+                    const pid = o.profile_id || prof?.id;
+                    if (pid && (prof?.logistics_data?.special_attention || o.logistics_data?.special_attention)) {
+                        overridesByProfile[pid] = prof?.logistics_data?.special_attention || o.logistics_data?.special_attention;
+                    }
+                });
+
+                const specialAttentionMap = buildSpecialAttentionByProfileMap(
+                    profileIds as string[],
+                    (histOrdersRes.data || []) as any[],
+                    (histPqrsRes.data || []) as any[],
+                    overridesByProfile
+                );
+
                 const itemsByOrder: Record<string, OrderItemData[]> = {};
-                (itemsData || []).forEach((item: any) => {
+                (itemsRes.data || []).forEach((item: any) => {
                     if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
                     itemsByOrder[item.order_id].push(item);
                 });
 
-                const compiledOrders: OrderData[] = (ordersData || []).map((o: any) => ({
-                    ...o,
-                    profiles: Array.isArray(o.profiles) ? o.profiles[0] : o.profiles,
-                    order_items: itemsByOrder[o.id] || []
-                }));
+                const compiledOrders: OrderData[] = (ordersData || []).map((o: any) => {
+                    const prof = Array.isArray(o.profiles) ? o.profiles[0] : o.profiles;
+                    const pid = o.profile_id || prof?.id;
+                    return {
+                        ...o,
+                        profiles: prof,
+                        order_items: itemsByOrder[o.id] || [],
+                        special_attention: pid ? specialAttentionMap[pid] : undefined
+                    };
+                });
 
                 setOrders(compiledOrders);
             } catch (err) {
@@ -241,7 +279,8 @@ export default function BulkOrderPrintLabelsPage() {
                     totalWeightKg: weight,
                     crateNumber: i,
                     totalCrates: totalLabelsForThisOrder,
-                    qrPayload
+                    qrPayload,
+                    specialAttention: order.special_attention
                 });
             }
         });
@@ -524,7 +563,7 @@ export default function BulkOrderPrintLabelsPage() {
                                 <div style={{ width: '71mm', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '1.5mm' }}>
                                     {/* Brand Header & Slot */}
                                     <div style={{ borderBottom: '1px solid #000000', paddingBottom: '1mm', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <div style={{ fontSize: '7.5pt', fontWeight: '900', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                        <div style={{ fontSize: '7.2pt', fontWeight: '900', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
                                             FRUFRESCO LOGÍSTICA &bull; DESPACHO
                                         </div>
                                         <div style={{ fontSize: '7pt', fontWeight: '800' }}>
@@ -533,11 +572,25 @@ export default function BulkOrderPrintLabelsPage() {
                                     </div>
 
                                     {/* Client & Branch (High Visibility in Dark Warehouses) */}
-                                    <div style={{ marginTop: '1mm' }}>
+                                    <div style={{ marginTop: '0.8mm' }}>
+                                        {lbl.specialAttention?.isActive && (
+                                            <div style={{
+                                                display: 'inline-block',
+                                                fontSize: '6.3pt',
+                                                fontWeight: '900',
+                                                border: '1.5px solid #000000',
+                                                padding: '0.5px 4px',
+                                                borderRadius: '2px',
+                                                marginBottom: '0.8mm',
+                                                letterSpacing: '0.03em'
+                                            }}>
+                                                [CUIDADO ESPECIAL &bull; CANASTA LIMPIA]
+                                            </div>
+                                        )}
                                         <div style={{ 
-                                            fontSize: '11.5pt', 
+                                            fontSize: lbl.specialAttention?.isActive ? '10.5pt' : '11.5pt', 
                                             fontWeight: '900', 
-                                            lineHeight: '1.15', 
+                                            lineHeight: '1.12', 
                                             color: '#000000',
                                             display: '-webkit-box',
                                             WebkitLineClamp: 2,
@@ -548,11 +601,11 @@ export default function BulkOrderPrintLabelsPage() {
                                             {lbl.clientName}
                                         </div>
                                         {lbl.branchName && (
-                                            <div style={{ fontSize: '8.5pt', fontWeight: '800', marginTop: '0.5mm', color: '#000000' }}>
+                                            <div style={{ fontSize: '8.2pt', fontWeight: '800', marginTop: '0.4mm', color: '#000000' }}>
                                                 {lbl.branchName.toUpperCase()}
                                             </div>
                                         )}
-                                        <div style={{ fontSize: '6.8pt', fontWeight: '600', color: '#111827', marginTop: '0.5mm', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ fontSize: '6.8pt', fontWeight: '600', color: '#111827', marginTop: '0.4mm', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {lbl.shippingAddress}
                                         </div>
                                     </div>
