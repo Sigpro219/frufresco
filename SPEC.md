@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.180 (Disposición Sanitaria In Situ por el Cliente Sin Retorno a Bodega, Erradicación de Truncamiento en Comboboxes y Poka-Yoke de Contaminación Cruzada — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.181 (Imputabilidad Formativa sin Deducción en Casos Rechazados/Conformes y Erradicación de Fallback CoQ Total — 76/76 Pantallas Certificadas) (Disposición Sanitaria In Situ por el Cliente Sin Retorno a Bodega, Erradicación de Truncamiento en Comboboxes y Poka-Yoke de Contaminación Cruzada — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 212 Escenarios BDD Ininterrumpidos (1..212)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 213 Escenarios BDD Ininterrumpidos (1..212)
 
 ---
 
@@ -10010,6 +10010,23 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Se dota a cada plantilla sanitaria de un campo `summary` conciso y de alta legibilidad que acompaña al título con sangría alineada e icono de categoría (tienda, destrucción, transformación, donación, compostaje).
   3. **Idempotencia y Reemplazo Limpio de Dictamen en Notas de Resolución:**
      - Al alternar entre diferentes protocolos sanitarios en el desplegable, el sistema ejecuta un reemplazo regex idempotente sobre el bloque preexistente `[DISPOSICIÓN SANITARIA: ...]`, evitando la concatenación repetitiva de plantillas en el campo de observaciones finales.
+
+---
+
+#### Escenario 213: Imputabilidad Formativa sin Deducción en Casos Rechazados / Conformes y Erradicación de Fallback al Total del Pedido (SDD v1.9.181)
+- **Given** un analista de Calidad, auditor SAC o supervisor gestionando la auditoría de un caso en `PqrAuditModal.tsx` donde la reclamación es Desestimada, Rechazada o resuelta bajo la Opción 1 (*«Cerrar Conforme - Sin Costo Económico»*).
+- **When** inspecciona la causa raíz (Paso 2) e imputa la responsabilidad operativa a un colaborador (auxiliar de bodega, líder de alistamiento, conductor, asesor comercial) o al cliente:
+- **Then**:
+  1. **Inexistencia de Daño Patrimonial y Cobro Cero ($0 COP) a Colaboradores:**
+     - Al no haber nota crédito, reposición gratuita ni merma asumida financieramente por FruFresco frente al cliente, el Costo de Mala Calidad (`caseCoQ`) es estrictamente **$0 COP**.
+     - Es terminantemente prohibido descontar dinero de nómina o fletes a los colaboradores en casos sin daño económico real. Toda deducción monetaria proyectada en pantalla y persistida en base de datos (`deductionAmount`) es **estrictamente $0 COP**.
+  2. **Imputación con Propósito de Trazabilidad Formativa & Near-Miss (Casi-Accidente):**
+     - La interfaz permite imputar al colaborador (o al cliente) para alimentar los indicadores estadísticos de Calidad (Pareto de no conformidades, trazabilidad de lote y control de procesos ISO 9001), preservando el porcentaje de participación operativa para métricas internas.
+     - La interfaz proyecta un banner informativo azul zafiro: *«Caso sin impacto económico (Cerrado Conforme / Sin Costo): La imputación de funcionarios o áreas se registra exclusivamente para trazabilidad operativa y estadísticas de Calidad (RCA). La deducción en nómina es estrictamente $0 COP»*.
+     - En cada fila de colaborador se visualiza la insignia verde: `Deducción COP: $0 COP (Sin Cobro)`.
+  3. **Erradicación del Fallback Ciego al Total de la Factura del Pedido:**
+     - Se erradica de forma definitiva el fallback que asignaba el total completo de la orden (`pqr.orders.total`) ante la ausencia de novedades activas en `billing_returns`.
+     - El impacto liquidable solo adopta el valor total del pedido si la reclamación indica de forma explícita un *«Rechazo Total de Pedido»* con devolución íntegra del furgón. En cualquier otro escenario sin novedades específicas de línea, `caseCoQ` evalúa a $0 COP.
 
 ---
 

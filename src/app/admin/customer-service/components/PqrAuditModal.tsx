@@ -9,7 +9,8 @@ import {
     ChevronRight, ChevronLeft, Sparkles, Phone, MessageCircle, Link2,
     Unlink, Plus, Trash2, Loader2, Maximize2, DollarSign, Percent,
     PackageMinus, AlertCircle, Edit2, RotateCcw, ExternalLink, Copy,
-    Clock, ArrowRight, PackageX, ShoppingBag, Package, Save, HeartHandshake
+    Clock, ArrowRight, PackageX, ShoppingBag, Package, Save, HeartHandshake,
+    Info
 } from 'lucide-react';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import {
@@ -19,7 +20,8 @@ import {
     buildRcaMetadataTag,
     DISPOSICION_SANITARIA_TEMPLATES,
     DefectCategoryL1,
-    ImputedEntity
+    ImputedEntity,
+    cleanHumanResolutionNotes
 } from '@/lib/rcaTaxonomy';
 import { 
     cleanColombianPhone, 
@@ -130,12 +132,26 @@ export default function PqrAuditModal({
 
     const caseReturns = useMemo(() => {
         if (!pqr?.order_id) return [];
-        return novelties.filter(n => n.order_id === pqr.order_id && n.status !== 'rejected');
+        return novelties.filter(n => n.order_id === pqr.order_id);
     }, [pqr?.order_id, novelties]);
 
     // Calculate CoQ for this case
     const caseCoQ = useMemo(() => {
         if (!pqr) return 0;
+
+        // Escenario 213: Cierre conforme / rechazado sin costo, o seleccionado Opción 1 de cierre conforme sin impacto económico
+        if (
+            resolutionOption === 'opt1' ||
+            pqr.status === 'rejected' ||
+            (pqr.resolution_notes && (
+                pqr.resolution_notes.includes('Cerrado conforme sin impacto económico') ||
+                pqr.resolution_notes.includes('Rechazo de solicitud') ||
+                pqr.resolution_notes.includes('CASO RECHAZADO / ARCHIVADO SIN COSTO')
+            ))
+        ) {
+            return 0;
+        }
+
         if (pqr.order_id && caseReturns.length > 0) {
             return caseReturns.reduce((sum, item) => {
                 const oi = orderItems.find(o => o.product_id === item.product_id) || 
@@ -144,8 +160,11 @@ export default function PqrAuditModal({
                 return sum + (price * (Number(item.quantity_returned) || 0));
             }, 0);
         }
-        return pqr.orders?.total ? Number(pqr.orders.total) : 0;
-    }, [pqr, caseReturns, orderItems]);
+
+        // Erradicación de fallback ciego al total de la orden. Solo aplica si explícitamente se especifica 'rechazo total'
+        const isTotalRejection = (pqr.subject?.toLowerCase().includes('rechazo total') || pqr.description?.toLowerCase().includes('rechazo total'));
+        return isTotalRejection && pqr.orders?.total ? Number(pqr.orders.total) : 0;
+    }, [pqr, caseReturns, orderItems, resolutionOption]);
 
     // Clear saved case draft helper
     const clearCaseDraft = (pqrId: string) => {
@@ -192,7 +211,7 @@ export default function PqrAuditModal({
         if (!pqr) return;
 
         setCurrentStep(1);
-        setResolutionNotes(pqr.resolution_notes || '');
+        setResolutionNotes(cleanHumanResolutionNotes(pqr.resolution_notes || ''));
         setActivePhotoIdx(0);
         setSelectedItemId('');
         setNoveltyQty(0);
@@ -215,11 +234,33 @@ export default function PqrAuditModal({
             setImputedEntities([]);
         }
 
+        const rawNotes = pqr.resolution_notes || '';
+        // Pre-hydrate sanitary protocol template if saved in notes
+        if (rawNotes.includes('DISPOSICIÓN EN SITIO') || rawNotes.includes('disposicion_cliente_sin_retorno')) {
+            setSanitaryKey('disposicion_cliente_sin_retorno');
+        } else if (rawNotes.includes('BAJA TOTAL') || rawNotes.includes('destruccion_biologica')) {
+            setSanitaryKey('destruccion_biologica');
+        } else if (rawNotes.includes('TRANSFORMACIÓN') || rawNotes.includes('transformacion_industrial')) {
+            setSanitaryKey('transformacion_industrial');
+        } else if (rawNotes.includes('BANCO DE ALIMENTOS') || rawNotes.includes('donacion_banco_alimentos')) {
+            setSanitaryKey('donacion_banco_alimentos');
+        } else if (rawNotes.includes('COMPOSTAJE') || rawNotes.includes('compostaje_agricola')) {
+            setSanitaryKey('compostaje_agricola');
+        }
+
         const isReplacement = rca.isReplacementRejection || 
             (pqr.subject || '').includes('[ALERTA PING-PONG]') || 
             (pqr.description || '').includes('ALERTA CORTE DE BUCLE');
 
-        setResolutionOption(isReplacement ? 'opt3' : (pqr.status === 'resolved' ? 'opt1' : 'opt1'));
+        if (rawNotes.includes('Opción 2') || rawNotes.includes('Reponer D+1')) {
+            setResolutionOption('opt2');
+        } else if (rawNotes.includes('Opción 3') || rawNotes.includes('Nota Crédito')) {
+            setResolutionOption('opt3');
+        } else if (rawNotes.includes('Opción 4') || rawNotes.includes('Ajuste de Factura')) {
+            setResolutionOption('opt4');
+        } else {
+            setResolutionOption(isReplacement ? 'opt3' : 'opt1');
+        }
 
         // Check for progressive draft saved in localStorage
         const draftKey = `pqr_audit_draft_${pqr.id}`;
@@ -336,7 +377,7 @@ export default function PqrAuditModal({
         } else {
             setClientRecentOrders([]);
         }
-    }, [pqr, caseCoQ]);
+    }, [pqr]);
 
     // Progressive Auto-Save Draft to LocalStorage (Debounced 400ms)
     useEffect(() => {
@@ -796,6 +837,18 @@ export default function PqrAuditModal({
                     deductionAmount: 0
                 };
             }
+        } else if (rcaResponsible === 'cliente') {
+            if (pqr?.profiles) {
+                newEntity = {
+                    id: pqr.client_id,
+                    name: pqr.profiles.company_name || pqr.profiles.contact_name || 'Cliente',
+                    documentId: pqr.profiles.nit,
+                    role: 'cliente',
+                    entityType: 'client',
+                    sharePercent: 100,
+                    deductionAmount: 0
+                };
+            }
         } else {
             const colab = collaboratorsList.find(c => c.id === entityId);
             if (colab) {
@@ -1244,17 +1297,22 @@ export default function PqrAuditModal({
                 }
             }
 
+            const isZeroDeductionCase = resolutionOption === 'opt1' || status === 'rejected' || caseCoQ === 0;
+            const finalizedImputedEntities = isZeroDeductionCase
+                ? imputedEntities.map(e => ({ ...e, deductionAmount: 0 }))
+                : imputedEntities;
+
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
                 subtypeL2: rcaSubtypeL2,
                 responsible: rcaResponsible,
-                notes: rcaEvidenceNotes || resolutionNotes,
+                notes: rcaEvidenceNotes || '',
                 isReplacementRejection: isReplacementRejection,
                 imputedTargetType: imputedTargetType,
-                imputedEntities: imputedEntities
+                imputedEntities: finalizedImputedEntities
             });
             const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
-            finalNotes = `${finalNotes}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
+            finalNotes = `${cleanHumanResolutionNotes(finalNotes)}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
 
             const { error } = await supabase
                 .from('customer_service_pqrs')
@@ -1279,6 +1337,66 @@ export default function PqrAuditModal({
             }
         } catch (e: any) {
             showToast('Error al procesar resolución: ' + e.message, 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Save audit edits for an already resolved case without re-triggering operations
+    const handleSaveAuditUpdate = async () => {
+        setActionLoading(true);
+        try {
+            let cleanNotes = cleanHumanResolutionNotes(resolutionNotes);
+
+            // Re-apply concept tag if not present
+            if (resolutionOption === 'opt1' && !cleanNotes.includes('[CONCEPTO:')) {
+                cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Cerrado conforme sin impacto económico]`;
+            } else if (resolutionOption === 'opt2' && !cleanNotes.includes('[CONCEPTO:')) {
+                cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Opción 2 - Reponer D+1 ($0 COP)]`;
+            } else if (resolutionOption === 'opt3' && !cleanNotes.includes('[CONCEPTO:')) {
+                cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Opción 3 - Nota Crédito]`;
+            } else if (resolutionOption === 'opt4' && !cleanNotes.includes('[CONCEPTO:')) {
+                cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Opción 4 - Ajuste de Factura]`;
+            }
+
+            const rcaParsed = parseRcaFromRecord(pqr);
+            const isReplacementRejection = rcaParsed.isReplacementRejection || 
+                (pqr.subject || '').includes('[ALERTA PING-PONG]') || 
+                (pqr.description || '').includes('ALERTA CORTE DE BUCLE');
+
+            const isZeroDeductionCase = resolutionOption === 'opt1' || pqr.status === 'rejected' || caseCoQ === 0;
+            const finalizedImputedEntities = isZeroDeductionCase
+                ? imputedEntities.map(e => ({ ...e, deductionAmount: 0 }))
+                : imputedEntities;
+
+            const rcaTag = buildRcaMetadataTag({
+                categoryL1: rcaCategoryL1,
+                subtypeL2: rcaSubtypeL2,
+                responsible: rcaResponsible,
+                notes: rcaEvidenceNotes || '',
+                isReplacementRejection: isReplacementRejection,
+                imputedTargetType: imputedTargetType,
+                imputedEntities: finalizedImputedEntities
+            });
+            const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
+            const finalNotes = `${cleanNotes}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
+
+            const { error } = await supabase
+                .from('customer_service_pqrs')
+                .update({
+                    resolution_notes: finalNotes,
+                    resolved_at: pqr.resolved_at || new Date().toISOString()
+                })
+                .eq('id', pqr.id);
+
+            if (error) throw error;
+
+            clearCaseDraft(pqr.id);
+            showToast('Auditoría del caso actualizada y guardada exitosamente.', 'success');
+            onResolved();
+            onClose();
+        } catch (e: any) {
+            showToast('Error al actualizar auditoría: ' + e.message, 'error');
         } finally {
             setActionLoading(false);
         }
@@ -2293,6 +2411,16 @@ export default function PqrAuditModal({
                                                                                         Retorno Físico
                                                                                     </span>
                                                                                 )}
+                                                                                <span style={{
+                                                                                    fontSize: '0.62rem',
+                                                                                    fontWeight: '700',
+                                                                                    padding: '1px 6px',
+                                                                                    borderRadius: '4px',
+                                                                                    backgroundColor: ret.status === 'approved' ? '#D1FAE5' : ret.status === 'rejected' ? '#F1F5F9' : '#FEF3C7',
+                                                                                    color: ret.status === 'approved' ? '#065F46' : ret.status === 'rejected' ? '#475569' : '#92400E'
+                                                                                }}>
+                                                                                    {ret.status === 'approved' ? 'Aprobada' : ret.status === 'rejected' ? 'Sin Costo' : 'Pendiente'}
+                                                                                </span>
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -2447,7 +2575,7 @@ export default function PqrAuditModal({
                                             3. Matriz de Imputabilidad Nominal & Descuento
                                         </span>
                                         <p style={{ fontSize: '0.68rem', color: '#64748B', margin: '2px 0 0 0' }}>
-                                            Política de Responsabilidad: Asigna a los funcionarios o proveedores para deducción en nómina / fletes / nota débito.
+                                            Política de Responsabilidad: Asigna a los funcionarios, proveedores o cliente para trazabilidad y deducción en nómina / fletes / nota débito.
                                         </p>
                                     </div>
 
@@ -2488,14 +2616,34 @@ export default function PqrAuditModal({
                                     </div>
                                 </div>
 
+                                {caseCoQ === 0 && (
+                                    <div style={{
+                                        padding: '8px 12px',
+                                        backgroundColor: '#EFF6FF',
+                                        border: '1px solid #BFDBFE',
+                                        borderRadius: '8px',
+                                        fontSize: '0.72rem',
+                                        color: '#1E40AF',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        lineHeight: '1.4'
+                                    }}>
+                                        <Info size={16} style={{ flexShrink: 0, color: '#3B82F6' }} />
+                                        <span>
+                                            <strong>Caso Formativo / Sin Costo (Cerrado Conforme o Rechazado):</strong> La imputación de funcionarios o clientes se registra exclusivamente con fines de trazabilidad operativa y estadísticas de Calidad (RCA). <u>La deducción en nómina o cobro financiero es estrictamente $0 COP</u>.
+                                        </span>
+                                    </div>
+                                )}
+
                                 {/* Selector to Add Entity */}
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                     <div style={{ flex: '1', minWidth: 0 }}>
                                         <SearchableSelect
                                             value={selectedImputedToAdd}
                                             onChange={setSelectedImputedToAdd}
-                                            placeholder={`-- Seleccionar ${rcaResponsible === 'proveedor' ? 'Proveedor' : 'Funcionario'} para Imputar --`}
-                                            searchPlaceholder={rcaResponsible === 'proveedor' ? "Buscar proveedor por nombre o NIT..." : "Buscar funcionario por nombre o cargo..."}
+                                            placeholder={`-- Seleccionar ${rcaResponsible === 'proveedor' ? 'Proveedor' : rcaResponsible === 'cliente' ? 'Cliente' : 'Funcionario'} para Imputar --`}
+                                            searchPlaceholder={rcaResponsible === 'proveedor' ? "Buscar proveedor por nombre o NIT..." : rcaResponsible === 'cliente' ? "Buscar cliente..." : "Buscar funcionario por nombre o cargo..."}
                                             clearable
                                             options={rcaResponsible === 'proveedor' ? (
                                                 providersList.map(prov => ({
@@ -2504,6 +2652,13 @@ export default function PqrAuditModal({
                                                     sublabel: prov.nit ? `NIT: ${prov.nit}` : undefined,
                                                     badge: 'Proveedor'
                                                 }))
+                                            ) : rcaResponsible === 'cliente' ? (
+                                                pqr?.profiles ? [{
+                                                    value: pqr.client_id,
+                                                    label: pqr.profiles.company_name || pqr.profiles.contact_name || 'Cliente de la PQR',
+                                                    sublabel: pqr.profiles.nit ? `NIT: ${pqr.profiles.nit}` : undefined,
+                                                    badge: 'Cliente'
+                                                }] : []
                                             ) : (
                                                 collaboratorsList.map(colab => ({
                                                     value: colab.id,
@@ -2598,9 +2753,15 @@ export default function PqrAuditModal({
                                                     {/* Calculated COP Deduction */}
                                                     <div style={{ textAlign: 'right', minWidth: '95px' }}>
                                                         <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Deducción COP</span>
-                                                        <strong style={{ fontSize: '0.82rem', color: '#BE123C' }}>
-                                                            {formatMoney(entity.deductionAmount !== undefined ? entity.deductionAmount : Math.round((caseCoQ * (entity.sharePercent || 0)) / 100))}
-                                                        </strong>
+                                                        {caseCoQ === 0 ? (
+                                                            <strong style={{ fontSize: '0.82rem', color: '#059669' }}>
+                                                                $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Sin Cobro)</span>
+                                                            </strong>
+                                                        ) : (
+                                                            <strong style={{ fontSize: '0.82rem', color: '#BE123C' }}>
+                                                                {formatMoney(entity.deductionAmount !== undefined ? entity.deductionAmount : Math.round((caseCoQ * (entity.sharePercent || 0)) / 100))}
+                                                            </strong>
+                                                        )}
                                                     </div>
 
                                                     <button
@@ -2640,6 +2801,25 @@ export default function PqrAuditModal({
                     {/* ================= STEP 3: RESOLUTION & CAPA ================= */}
                     {currentStep === 3 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {pqr.status === 'resolved' && (
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '10px 14px',
+                                    backgroundColor: '#ECFDF5',
+                                    border: '1px solid #A7F3D0',
+                                    borderRadius: '10px',
+                                    fontSize: '0.74rem',
+                                    color: '#065F46'
+                                }}>
+                                    <ShieldCheck size={16} style={{ color: '#059669', flexShrink: 0 }} />
+                                    <span>
+                                        <strong>Modo Rectificación / Caso Resuelto:</strong> Puedes actualizar la causa raíz (RCA), la imputabilidad a funcionarios, el protocolo sanitario y las observaciones sin duplicar pedidos ni alterar registros contables cerrados.
+                                    </span>
+                                </div>
+                            )}
+
                             {/* 4 Commercial Resolution Action Cards */}
                             <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>

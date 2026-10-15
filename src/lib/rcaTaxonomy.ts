@@ -197,6 +197,94 @@ export interface ParsedRcaResult {
 }
 
 // Helpers to encode & decode RCA metadata from resolution notes/descriptions
+// Robust extractor for [RCA_METADATA: {...}] tags supporting nested arrays/objects and escaping
+export function extractRcaJsonFromText(text: string): any {
+    if (!text) return null;
+    const prefix = '[RCA_METADATA:';
+    const found: any[] = [];
+    let searchFrom = 0;
+
+    while (searchFrom < text.length) {
+        const idx = text.indexOf(prefix, searchFrom);
+        if (idx === -1) break;
+
+        const jsonStart = text.indexOf('{', idx);
+        if (jsonStart === -1) break;
+
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        let parsed: any = null;
+
+        for (let i = jsonStart; i < text.length; i++) {
+            const char = text[i];
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (char === '\\') {
+                escape = true;
+                continue;
+            }
+            if (char === '"') {
+                inString = !inString;
+                continue;
+            }
+            if (!inString) {
+                if (char === '{') {
+                    depth++;
+                } else if (char === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        const jsonStr = text.substring(jsonStart, i + 1);
+                        try {
+                            parsed = JSON.parse(jsonStr);
+                        } catch {
+                            // ignore
+                        }
+                        searchFrom = i + 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (parsed) {
+            found.push(parsed);
+        } else {
+            searchFrom = idx + prefix.length;
+        }
+    }
+
+    if (found.length === 0) return null;
+    // Prefer entry that has populated imputedEntities, otherwise take the latest entry
+    const withEntities = [...found].reverse().find(f => Array.isArray(f.imputedEntities) && f.imputedEntities.length > 0);
+    return withEntities || found[found.length - 1];
+}
+
+export function cleanHumanResolutionNotes(text: string): string {
+    if (!text) return '';
+    let cleaned = text;
+    // Strip from [RCA_METADATA: to the end of that block
+    cleaned = cleaned.replace(/\[RCA_METADATA:[\s\S]*?(?:\[RESPONSABLE IMPUTADO:[^\n]+\]|(?=\[DISPOSICIÓN)|$)/g, '');
+    cleaned = cleaned.replace(/\[RESPONSABLE IMPUTADO:[^\n]+\]/g, '');
+    cleaned = cleaned.replace(/\[CONCEPTO:[^\n]+\]/g, '');
+    cleaned = cleaned.replace(/,?\\?"?imputedEntityId[\s\S]*?(?:\n|$)/g, '');
+    cleaned = cleaned.replace(/\\n/g, '\n');
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+
+    // Deduplicate identical sanitary disposal blocks if repeated
+    const dispRegex = /(\[DISPOSICIÓN SANITARIA:[\s\S]*?)(?=\n\s*\[DISPOSICIÓN SANITARIA:|$)/g;
+    const blocks = cleaned.match(dispRegex);
+    if (blocks && blocks.length > 1) {
+        const unique = blocks[0];
+        cleaned = cleaned.replace(/\[DISPOSICIÓN SANITARIA:[\s\S]*$/g, unique.trim());
+    }
+
+    return cleaned.trim();
+}
+
+// Helpers to encode & decode RCA metadata from resolution notes/descriptions
 // Ensuring 100% backward compatibility even before DB migrations are run
 export function parseRcaFromRecord(record: any): ParsedRcaResult {
     // 1. Direct columns if present in DB
@@ -215,18 +303,11 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             }];
         }
 
-        // Try extracting richer metadata from tag if available
+        // Try extracting richer metadata from tag if available using balanced brace parser
         const textToSearch = `${record.resolution_notes || ''} \n ${record.description || ''}`;
-        const rcaMatch = textToSearch.match(/\[RCA_METADATA:\s*({.*?})\]/);
-        if (rcaMatch && rcaMatch[1]) {
-            try {
-                const parsed = JSON.parse(rcaMatch[1]);
-                if (Array.isArray(parsed.imputedEntities) && parsed.imputedEntities.length > 0) {
-                    parsedEntities = parsed.imputedEntities;
-                }
-            } catch {
-                // ignore
-            }
+        const parsed = extractRcaJsonFromText(textToSearch);
+        if (parsed && Array.isArray(parsed.imputedEntities) && parsed.imputedEntities.length > 0) {
+            parsedEntities = parsed.imputedEntities;
         }
 
         return {
@@ -249,36 +330,33 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
 
     // 2. Fallback to parsing embedded tags in resolution_notes or description
     const textToSearch = `${record.resolution_notes || ''} \n ${record.description || ''}`;
-    const rcaMatch = textToSearch.match(/\[RCA_METADATA:\s*({.*?})\]/);
-    if (rcaMatch && rcaMatch[1]) {
-        try {
-            const parsed = JSON.parse(rcaMatch[1]);
-            const entities: ImputedEntity[] = Array.isArray(parsed.imputedEntities) ? parsed.imputedEntities : 
-                (parsed.imputedEntityName ? [{
-                    id: parsed.imputedEntityId || 'legacy-1',
-                    name: parsed.imputedEntityName,
-                    role: parsed.responsible,
-                    entityType: parsed.imputedTargetType || 'employee',
-                    sharePercent: 100,
-                    deductionAmount: parsed.deductionAmount
-                }] : []);
+    const parsed = extractRcaJsonFromText(textToSearch);
+    if (parsed) {
+        const entities: ImputedEntity[] = Array.isArray(parsed.imputedEntities) ? parsed.imputedEntities : 
+            (parsed.imputedEntityName ? [{
+                id: parsed.imputedEntityId || 'legacy-1',
+                name: parsed.imputedEntityName,
+                role: parsed.responsible,
+                entityType: parsed.imputedTargetType || 'employee',
+                sharePercent: 100,
+                deductionAmount: parsed.deductionAmount
+            }] : []);
 
-            return {
-                categoryL1: parsed.categoryL1 || 'otro',
-                subtypeL2: parsed.subtypeL2 || '',
-                responsible: parsed.responsible || 'no_definido',
-                notes: parsed.notes || '',
-                isReplacementRejection: Boolean(parsed.isReplacementRejection),
-                isExplicitRca: true,
-                imputedTargetType: parsed.imputedTargetType,
-                imputedEntities: entities,
-                imputedEntityId: parsed.imputedEntityId,
-                imputedEntityName: parsed.imputedEntityName,
-                imputedEvidenceNotes: parsed.imputedEvidenceNotes || parsed.notes
-            };
-        } catch {
-            // Ignore parse error and continue
-        }
+        const cleanNotes = cleanHumanResolutionNotes(parsed.notes || '');
+
+        return {
+            categoryL1: parsed.categoryL1 || 'otro',
+            subtypeL2: parsed.subtypeL2 || '',
+            responsible: parsed.responsible || 'no_definido',
+            notes: cleanNotes,
+            isReplacementRejection: Boolean(parsed.isReplacementRejection),
+            isExplicitRca: true,
+            imputedTargetType: parsed.imputedTargetType,
+            imputedEntities: entities,
+            imputedEntityId: parsed.imputedEntityId,
+            imputedEntityName: parsed.imputedEntityName,
+            imputedEvidenceNotes: parsed.imputedEvidenceNotes ? cleanHumanResolutionNotes(parsed.imputedEvidenceNotes) : cleanNotes
+        };
     }
 
     // Intelligent Heuristic Classification for legacy records without RCA tags
