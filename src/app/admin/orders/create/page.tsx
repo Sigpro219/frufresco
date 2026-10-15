@@ -65,7 +65,7 @@ import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
-import { getNextValidDeliveryDate, isValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow, parseStoreVacationConfig, StoreVacationConfig } from '@/lib/colombianHolidays';
+import { getNextValidDeliveryDate, isValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow, parseStoreVacationConfig, StoreVacationConfig, isB2BSameDayExpressAvailable } from '@/lib/colombianHolidays';
 import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 export const normalizeDocUnit = (unitStr: string): string => {
@@ -383,6 +383,7 @@ function CreateOrderContent() {
 
     // Form State
     const [clientType, setClientType] = useState(searchParams.get('type')?.toUpperCase() === 'B2C' ? 'B2C' : 'B2B');
+    const isB2B = clientType === 'B2B';
     
     // B2B State
     const [selectedClient, setSelectedClient] = useState('');
@@ -752,6 +753,7 @@ function CreateOrderContent() {
         }
         fetchDeliverySettings();
     }, []);
+    const [isSameDayExpress, setIsSameDayExpress] = useState(false);
     const [deliverySlot, setDeliverySlot] = useState('AM'); // AM or PM
     const [isManualDelivery, setIsManualDelivery] = useState(false);
     const [manualDeliveryTime, setManualDeliveryTime] = useState('');
@@ -3877,6 +3879,11 @@ function CreateOrderContent() {
                             document_type_override: 'remission',
                             remission_with_prices_override: false,
                             is_off_agreement_split: true
+                        } : {}),
+                        ...((isSameDayExpress || (clientType === 'B2B' && targetDeliveryDate <= minDeliveryDate)) ? {
+                            is_same_day: true,
+                            is_extemporaneous: true,
+                            document_type_override: 'remission'
                         } : {})
                     },
                     document_url: finalDocUrl || permanentDocumentUrl || null
@@ -4832,15 +4839,29 @@ function CreateOrderContent() {
                 primaryAdminNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}]\n${primaryAdminNotes}`.trim();
             }
 
-            const primaryLogisticsData = isOnlyOffAgreement
-                ? {
-                    ...baseLogisticsData,
-                    document_type_override: 'remission',
-                    remission_with_prices_override: false,
-                    is_off_agreement_split: true,
-                    off_agreement_priced: false
-                }
-                : baseLogisticsData;
+            const expressActive = isSameDayExpress || (clientType === 'B2B' && deliveryDate <= minDeliveryDate && isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig).targetDeliveryDate === deliveryDate);
+
+            const primaryLogisticsData = {
+                ...(isOnlyOffAgreement
+                    ? {
+                        ...baseLogisticsData,
+                        document_type_override: 'remission',
+                        remission_with_prices_override: false,
+                        is_off_agreement_split: true,
+                        off_agreement_priced: false
+                    }
+                    : baseLogisticsData),
+                ...(expressActive ? {
+                    is_same_day: true,
+                    is_extemporaneous: true,
+                    document_type_override: 'remission'
+                } : {})
+            };
+
+            if (expressActive && !primaryAdminNotes.includes('SAME-DAY')) {
+                primaryAdminNotes = `[EXCEPCIÓN B2B SAME-DAY: Despacho Extemporáneo - Solo Remisión Oficial]
+${primaryAdminNotes}`.trim();
+            }
 
             const { data: order, error: orderError } = await supabase
                 .from('orders')
@@ -9513,10 +9534,48 @@ function CreateOrderContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Fecha Entrega</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Fecha Entrega</label>
+                                            {clientType === 'B2B' && (() => {
+                                                const expressCheck = isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig);
+                                                if (!expressCheck.available) return null;
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!isSameDayExpress) {
+                                                                setIsSameDayExpress(true);
+                                                                setDeliveryDate(expressCheck.targetDeliveryDate);
+                                                                showToast('⚡ Pedido Express Same-Day activado: Despacho forzado a Remisión Oficial.', 'info');
+                                                            } else {
+                                                                setIsSameDayExpress(false);
+                                                                setDeliveryDate(minDeliveryDate);
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            border: 'none',
+                                                            background: isSameDayExpress ? '#F59E0B' : '#FEF3C7',
+                                                            color: isSameDayExpress ? '#FFFFFF' : '#B45309',
+                                                            fontSize: '0.62rem',
+                                                            fontWeight: '900',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
+                                                        }}
+                                                        title="Ventana Express activa. Despacho exclusivo remisionado."
+                                                    >
+                                                        <Zap size={10} strokeWidth={2.5} />
+                                                        {isSameDayExpress ? 'Express Activo' : '⚡ Habilitar Hoy'}
+                                                    </button>
+                                                );
+                                            })()}
+                                        </div>
                                         <input
                                             type="date"
-                                            min={minDeliveryDate}
+                                            min={isSameDayExpress ? isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig).targetDeliveryDate : minDeliveryDate}
                                             value={deliveryDate}
                                             onChange={e => {
                                                 const newDate = e.target.value;
@@ -9552,6 +9611,11 @@ function CreateOrderContent() {
                                                 outline: 'none'
                                             }}
                                         />
+                                        {isSameDayExpress && (
+                                            <div style={{ marginTop: '4px', fontSize: '0.62rem', fontWeight: '800', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <Zap size={10} strokeWidth={2.5} /> Pedido Express Extemporáneo: Solo Remisión Oficial.
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

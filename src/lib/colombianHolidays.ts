@@ -336,4 +336,52 @@ export function calculateStandardMinDeliveryDate(
     return formatDateToYYYYMMDD(valid);
 }
 
+/**
+ * Determina si la ventana operativa para Pedidos Express B2B Extemporáneos (Same-Day) está activa.
+ * Regla Canónica SDD Escenario 226:
+ * - Aplica exclusivamente para pedidos B2B gestionados de forma asistida (Mesa Comercial / Admin).
+ * - Ventana horaria: Desde el cierre de la jornada previa (ej. 20:00 / 8:00 PM) hasta las 12:00 M (mediodía) del día de entrega.
+ * - Requiere que la fecha objetivo de entrega sea un día hábil de despacho (no domingo salvo autorización, no festivo cerrado, no receso).
+ */
+export function isB2BSameDayExpressAvailable(
+    allowSundays: boolean = false,
+    allowHolidays: boolean = false,
+    vacationConfig?: StoreVacationConfig | null,
+    cutoffHourAdmin: number = 20
+): { available: boolean; targetDeliveryDate: string; reason?: string } {
+    const now = getBogotaNow();
+    const currentHour = now.getHours();
+
+    let targetDate = new Date(now);
+    // Si estamos entre las 20:00 (8:00 PM) y las 23:59 de la noche anterior, el pedido express aplica para la jornada de mañana
+    if (currentHour >= cutoffHourAdmin) {
+        targetDate.setDate(targetDate.getDate() + 1);
+    } else if (currentHour >= 12) {
+        // Pasado el mediodía (12:00 M en punto), la ventana express para el mismo día está cerrada
+        return {
+            available: false,
+            targetDeliveryDate: formatDateToYYYYMMDD(targetDate),
+            reason: 'La ventana para pedidos express del mismo día cerró a las 12:00 M.'
+        };
+    }
+    // Si estamos entre las 00:00 y las 11:59 AM, targetDate es HOY mismo.
+
+    const dateStr = formatDateToYYYYMMDD(targetDate);
+    const check = isValidDeliveryDate(dateStr, allowSundays, allowHolidays, vacationConfig);
+
+    if (!check.valid) {
+        return {
+            available: false,
+            targetDeliveryDate: dateStr,
+            reason: `La fecha de entrega (${dateStr}) es ${check.reason || 'un día no hábil'}.`
+        };
+    }
+
+    return {
+        available: true,
+        targetDeliveryDate: dateStr
+    };
+}
+
+
 

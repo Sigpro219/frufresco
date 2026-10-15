@@ -1718,15 +1718,17 @@ function OrderLoadingContent() {
             return true;
         });
 
-        // Ordenamiento Inteligente: Pedidos con Novedad (Duplicados, Incompletos) DE PRIMERO
+        // Ordenamiento Inteligente: Pedidos Express Same-Day Prioritarios y Novedades DE PRIMERO
         return filtered.sort((a, b) => {
+            const aSameDayActive = (a.is_same_day || a.logistics_data?.is_same_day || a.admin_notes?.includes('SAME-DAY')) && !['delivered', 'cancelled'].includes(a.status);
+            const bSameDayActive = (b.is_same_day || b.logistics_data?.is_same_day || b.admin_notes?.includes('SAME-DAY')) && !['delivered', 'cancelled'].includes(b.status);
             const aDup = duplicatesMap.has(a.id);
             const bDup = duplicatesMap.has(b.id);
             const aIncomplete = !a.isComplete;
             const bIncomplete = !b.isComplete;
 
-            const aScore = (aDup ? 20 : 0) + (aIncomplete ? 10 : 0);
-            const bScore = (bDup ? 20 : 0) + (bIncomplete ? 10 : 0);
+            const aScore = (aSameDayActive ? 30 : 0) + (aDup ? 20 : 0) + (aIncomplete ? 10 : 0);
+            const bScore = (bSameDayActive ? 30 : 0) + (bDup ? 20 : 0) + (bIncomplete ? 10 : 0);
 
             if (aScore !== bScore) {
                 return bScore - aScore; // Mayor prioridad con novedad primero
@@ -1755,7 +1757,11 @@ function OrderLoadingContent() {
     }, [filteredOrders]);
 
     const toggleSelectAll = () => {
-        const launchableOrders = filteredOrders.filter(o => o.isComplete && o.status === 'pending_approval');
+        // Excluir pedidos express extemporáneos de la selección masiva de cadena logística estándar
+        const launchableOrders = filteredOrders.filter(o => {
+            const isSameDay = o.is_same_day || o.logistics_data?.is_same_day || o.admin_notes?.includes('SAME-DAY');
+            return o.isComplete && o.status === 'pending_approval' && !isSameDay;
+        });
         if (launchableOrders.length === 0) return;
         if (selectedOrders.size === launchableOrders.length) {
             setSelectedOrders(new Set());
@@ -7761,20 +7767,22 @@ function KPICard({ title, value, icon, color, subtitle }: { title: string, value
 function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }: any) {
     const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
     const friendlyId = getFriendlyOrderId(order);
+    const isSameDay = Boolean(order.is_same_day || order.logistics_data?.is_same_day || order.admin_notes?.includes('SAME-DAY'));
+    const isSameDayActive = isSameDay && !['delivered', 'cancelled'].includes(order.status);
 
     return (
         <div 
             onClick={onClick}
             style={{
                 borderRadius: '16px',
-                border: duplicateInfo ? '2px solid #F87171' : '1px solid #E5E7EB',
-                borderLeft: duplicateInfo ? '8px solid #DC2626' : !order.isComplete ? '4px solid #F43F5E' : '1px solid #E5E7EB',
-                boxShadow: duplicateInfo ? '0 6px 20px rgba(220, 38, 38, 0.16)' : isSelected ? '0 0 0 2px #6366F1' : '0 2px 8px rgba(0,0,0,0.04)',
+                border: duplicateInfo ? '2px solid #F87171' : isSameDayActive ? '2px solid #F59E0B' : '1px solid #E5E7EB',
+                borderLeft: duplicateInfo ? '8px solid #DC2626' : isSameDayActive ? '8px solid #D97706' : !order.isComplete ? '4px solid #F43F5E' : '1px solid #E5E7EB',
+                boxShadow: duplicateInfo ? '0 6px 20px rgba(220, 38, 38, 0.16)' : isSameDayActive ? '0 6px 20px rgba(245, 158, 11, 0.25)' : isSelected ? '0 0 0 2px #6366F1' : '0 2px 8px rgba(0,0,0,0.04)',
                 cursor: 'pointer',
                 position: 'relative',
                 transition: 'all 0.2s',
                 opacity: order.isComplete ? 1 : 0.8,
-                backgroundColor: duplicateInfo ? '#FEF2F2' : !order.isComplete ? '#FFF1F2' : 'white',
+                backgroundColor: duplicateInfo ? '#FEF2F2' : isSameDayActive ? '#FFFBEB' : !order.isComplete ? '#FFF1F2' : 'white',
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column'
@@ -7782,6 +7790,37 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
         >
+            {/* Banner de Prioridad Máxima: Pedido Express Extemporáneo Same-Day */}
+            {isSameDayActive && !duplicateInfo && (
+                <div style={{
+                    backgroundColor: '#D97706',
+                    color: '#FFFFFF',
+                    padding: '8px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.74rem',
+                    fontWeight: '900',
+                    letterSpacing: '0.02em',
+                    boxShadow: '0 2px 6px rgba(217, 119, 6, 0.25)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Zap size={15} strokeWidth={2.8} />
+                        <span>⚡ PEDIDO EXPRESS EXTEMPORÁNEO (SAME-DAY)</span>
+                    </div>
+                    <span style={{
+                        backgroundColor: '#FFFFFF',
+                        color: '#92400E',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontSize: '0.68rem',
+                        fontWeight: '900'
+                    }}>
+                        DESPACHO PRIORITARIO
+                    </span>
+                </div>
+            )}
+
             {/* Si es duplicado, banner superior de alto impacto rojo */}
             {duplicateInfo && (
                 <div style={{
@@ -7952,6 +7991,35 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                         <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10B981' }}>{formatMoney(order.total)}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{formatNumber(order.total_weight_kg, 1)} kg</div>
                     </div>
+                    {isSameDay && (
+                        <div style={{ marginTop: '0.6rem', borderTop: '1px dashed #FDE68A', paddingTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#B45309', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <Zap size={11} /> Desacoplado de ruta masiva
+                            </span>
+                            <a
+                                href={`/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    backgroundColor: '#F59E0B',
+                                    color: '#FFFFFF',
+                                    padding: '4px 8px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '900',
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    boxShadow: '0 2px 4px rgba(245, 158, 11, 0.2)'
+                                }}
+                                title="Imprimir exclusivamente la remisión oficial de este pedido express"
+                            >
+                                <Printer size={11} strokeWidth={2.5} /> Imprimir Remisión
+                            </a>
+                        </div>
+                    )}
                 </div>
             </div>
 
