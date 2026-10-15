@@ -70,7 +70,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
     };
 
     const INITIAL_ATTRIBUTES = [
-        { name: 'Madurez', values: ['Verde', 'Pintón', 'Maduro', 'Sobremaduro'] },
+        { name: 'Maduración', values: ['Pintón', 'Verde'] },
         { name: 'Tamaño', values: ['Pequeño', 'Mediano', 'Grande', 'Extra Grande'] },
         { name: 'Calidad', values: ['Primera (Extra)', 'Segunda (Estándar)', 'Industrial'] },
         { name: 'Presentación', values: ['Granel', 'Empacado', 'Malla', 'Caja'] },

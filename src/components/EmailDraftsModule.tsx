@@ -2186,6 +2186,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         opts[presOpt.name] = hasClientPref ? (exc.preferred_options[presOpt.name] || exc.preferred_options['Presentación'] || exc.preferred_options['Presentacion']) : kgVal;
       }
     }
+    // SDD v1.9.177: 'Maduro' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
+    Object.keys(opts).forEach(k => {
+      if (k.toLowerCase().includes('madura') && String(opts[k]).toLowerCase().trim() === 'maduro') {
+        delete opts[k];
+      }
+    });
 
     setVariantQuantity(item.quantity ? Number(Number(item.quantity).toFixed(3)).toString().replace('.', ',') : '1');
     setSelectedUnit(item.unit || freshProduct.unit_of_measure || 'Kg');
@@ -11721,6 +11727,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     if (!hasStd) {
                       return { ...opt, values: ['Estándar', ...values] };
                     }
+                  }
+                  // SDD v1.9.177: Retiro canónico de "Maduro" en toma de pedidos B2B
+                  const isRipeness = (opt.name || '').toLowerCase().includes('madura');
+                  if (isRipeness) {
+                    const filteredValues = (opt.values || []).filter((v: string) => v.toLowerCase().trim() !== 'maduro');
+                    return { ...opt, values: filteredValues };
                   }
                   return opt;
                 })

@@ -271,7 +271,7 @@ Para conciliar la identidad comercial ante el mercado, la inmutabilidad tributar
   2. La variable **«Gramaje»** se estaba auto-inyectando e inventando de forma artificial con valores genéricos (*Estándar*) en productos que no tenían dicho atributo configurado en sus variaciones, violando el principio de que los atributos deben ser estrictamente parametrizables por SKU.
 - **Reglas de Contrato Canónicas:**
   1. **Inviolabilidad de Atributos Configurados:** Todo atributo guardado en `options_config` de un SKU (ej. `Maduración`, `Presentación`, `Variedad`) es soberano y pertenece al producto. NUNCA se oculta del modal de montaje de pedidos. En `product_attributes_master`, `Maduración` y `Presentación` poseen `show_in_picking: true`.
-  2. **Conservación de Estados de Maduración:** Se eliminan los filtros que suprimían *Maduro*. Todas las opciones parametrizadas (*Maduro*, *Pintón*, *Verde*) quedan disponibles para selección del operador.
+  2. **Evolución Canónica - Maduración Implícita por Defecto (SDD v1.9.177):** En operaciones B2B agroalimentarias (restaurantes, hoteles, casinos), el 100% de los insumos agrícolas se entregan contractualmente en maduración comercial estándar (*«Maduro»*). Seleccionar explícitamente *«Maduro»* generaba ruido cognitivo, badges redundantes en alistamiento y dispersión en remisiones. Bajo SDD v1.9.177, se deroga la selección de *«Maduro»*: este se convierte en la línea base implícita por defecto (sin variante requerida). Únicamente se parametrizan y seleccionan las verdaderas desviaciones agronómicas requeridas por cocina: *«Pintón»* (mayor vida útil) y *«Verde»* (procesamiento culinario/frituras).
   3. **Auto-Match de Notas de Alistamiento:** Si el cliente o el documento traen una nota informal (ej. *Nota: "Pintón"*), el sistema empareja automáticamente el texto con las opciones del SKU y preselecciona la variante correspondiente.
   4. **Gramaje Estrictamente Parametrizable:**
      - `Gramaje` **NO se auto-inyecta artificialmente**: únicamente aparece si el SKU maestro tiene configurado el atributo `Gramaje` en sus opciones y variaciones (`options_config` / `variants`).
@@ -9944,6 +9944,18 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   1. La consola de Facturación (/admin/commercial/billing) y la consola de Atención al Cliente (/admin/customer-service) reflejan en tiempo real (etchData(true)) el cambio de estado y la alerta de novedad sin requerir recarga manual F5.
   2. FinancialAdjustmentModal hidrata automáticamente los order_items y illing_returns del pedido, pre-selecciona los 6 Kg de Aguacate y proyecta de inmediato el descuento de -\.000 COP y el nuevo total neto de \.379.560 COP.
   3. Al confirmar el ajuste, el registro existente en illing_returns transiciona en sitio de pending_review a pproved sin duplicar filas, restando la cantidad devuelta en order_items.quantity y habilitando el pedido como Listo para Corte en Facturación.
+
+---
+
+#### Escenario 209: Restricción Canónica de Maduración Implícita y Erradicación de Ruido en Pedidos B2B (SDD v1.9.177)
+- **Given** una operadora o ejecutivo comercial radicando pedidos o procesando borradores de correo (`/admin/orders/create` y `EmailDraftsModule`) para insumos agrícolas perecederos (ej. Papaya, Banano, Tomate, Plátano, Aguacate).
+- **When** abre el modal de selección de variantes y configuración física del SKU:
+- **Then**:
+  1. El atributo de gobernanza biológica **«Maduración»** asume por defecto y de manera implícita el estado comercial estándar (*«Maduro»*).
+  2. Queda formalmente prohibida y erradicada la opción seleccionable *«Maduro»* de los desplegables de variantes B2B y del catálogo maestro (`product_attributes_master` y `products.options_config`), eliminando la contaminación visual y la redundancia cognitiva en operarios de digitación.
+  3. Los únicos estados de maduración seleccionables permitidos corresponden a desviaciones agronómicas expresas solicitadas por la cocina del cliente: **«Pintón»** (mayor vida útil en bodega) y **«Verde»** (requerimiento técnico de cocción/fritura).
+  4. Si el pedido no especifica una desviación («Pintón» o «Verde»), el insumo se procesa sin badge superfluo de maduración, asumiendo el equipo de alistamiento en bodega de Corabastos la entrega física en punto óptimo comercial (*Maduro*).
+  5. Los borradores de correo y pedidos preexistentes con notas históricas purgan automáticamente cualquier valor residual de *«Maduro»*, impidiendo que se persista en la base de datos como una variante explícita.
 
 ---
 

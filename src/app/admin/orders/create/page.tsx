@@ -1040,6 +1040,13 @@ function CreateOrderContent() {
                 });
             }
 
+            // SDD v1.9.177: 'Maduro' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
+            Object.keys(initialOptions).forEach(k => {
+                if (k.toLowerCase().includes('madura') && String(initialOptions[k]).toLowerCase().trim() === 'maduro') {
+                    delete initialOptions[k];
+                }
+            });
+
             setSelectedOptions(initialOptions);
         }
     }, [selectedProductForModal, editingCartIndex, editingStagedItemId, clientExceptions]);
@@ -1676,6 +1683,7 @@ function CreateOrderContent() {
                 if (!initialOptions[opt.name] && Array.isArray(opt.values)) {
                     const matchedVal = opt.values.find((val: string) => {
                         const vClean = (val.includes('|') ? val.split('|')[0] : val).trim().toLowerCase();
+                        if (vClean === 'maduro') return false; // SDD v1.9.177: Maduro nunca se preselecciona
                         return noteClean.includes(vClean) || vClean.includes(noteClean);
                     });
                     if (matchedVal) {
@@ -1684,6 +1692,12 @@ function CreateOrderContent() {
                 }
             });
         }
+        // SDD v1.9.177: 'Maduro' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
+        Object.keys(initialOptions).forEach(k => {
+            if (k.toLowerCase().includes('madura') && String(initialOptions[k]).toLowerCase().trim() === 'maduro') {
+                delete initialOptions[k];
+            }
+        });
         setSelectedOptions(initialOptions);
 
         // Always open the product modal to specify quantity, unit, or options
@@ -9399,6 +9413,12 @@ function CreateOrderContent() {
                         if (!hasStd) {
                             values = ['Estándar', ...values];
                         }
+                    }
+
+                    // SDD v1.9.177: Retiro canónico de "Maduro" en toma de pedidos B2B
+                    const isRipeness = opt.name.toLowerCase().includes('madura');
+                    if (isRipeness) {
+                        values = values.filter((v: string) => v.toLowerCase().trim() !== 'maduro');
                     }
                     
                     const sortedValues = values.slice().sort((valA: string, valB: string) => {
