@@ -9,7 +9,7 @@ import {
     Camera, Truck, BarChart2, Sparkles, HelpCircle, Store, Warehouse,
     Layers, User, Building2, ChevronDown, ChevronUp, RefreshCw,
     Maximize2, MessageCircle, ExternalLink, X, DollarSign, Percent,
-    PackageMinus, Sliders, Settings, Check
+    PackageMinus, Sliders, Settings, Check, Bell
 } from 'lucide-react';
 import Link from 'next/link';
 import { GalleryOmnibox } from '@/components/common/GalleryOmnibox';
@@ -39,6 +39,7 @@ import PqrAuditModal from './components/PqrAuditModal';
 import PqrTaxonomyModal from './components/PqrTaxonomyModal';
 import PqrNoveltyReviewModal from './components/PqrNoveltyReviewModal';
 import PqrLeanDashboard from './components/PqrLeanDashboard';
+import MissingOrdersGallery from './components/MissingOrdersGallery';
 
 export default function CustomerServicePage({ initialTab }: { initialTab?: 'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties' } = {}) {
     // Data State
@@ -55,7 +56,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
     const [customTaxonomy, setCustomTaxonomy] = useState<DefectCategoryL1[]>([]);
 
     // Navigation & Filtering
-    const [mainView, setMainView] = useState<'cases' | 'lean_dashboard'>('cases');
+    const [mainView, setMainView] = useState<'cases' | 'lean_dashboard' | 'missing_orders'>('cases');
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties'>(initialTab || 'pending');
     const [showKpis, setShowKpis] = useState(true);
@@ -72,6 +73,10 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
             const tab = params.get('tab');
             if (tab && ['all', 'pending', 'in_progress', 'resolved', 'rejected', 'novelties'].includes(tab)) {
                 setActiveTab(tab as any);
+            }
+            const view = params.get('view');
+            if (view && ['cases', 'lean_dashboard', 'missing_orders'].includes(view)) {
+                setMainView(view as any);
             }
         }
     }, []);
@@ -506,6 +511,29 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                 <BarChart2 size={14} />
                                 <span>Dashboard Lean & Pareto</span>
                             </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setMainView('missing_orders')}
+                                style={{
+                                    padding: '7px 14px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: mainView === 'missing_orders' ? '800' : '600',
+                                    color: mainView === 'missing_orders' ? '#FFFFFF' : '#475569',
+                                    backgroundColor: mainView === 'missing_orders' ? '#0D7A57' : 'transparent',
+                                    borderRadius: '9px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: mainView === 'missing_orders' ? '0 2px 6px rgba(13, 122, 87, 0.3)' : 'none',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                <Bell size={14} />
+                                <span>Pedidos Pendientes</span>
+                            </button>
                         </div>
 
                         <button
@@ -586,6 +614,12 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                         customTaxonomy={customTaxonomy}
                         onRefresh={fetchData}
                         showToast={showToast}
+                    />
+                ) : mainView === 'missing_orders' ? (
+                    <MissingOrdersGallery
+                        onNavigateToCreateOrder={(profileId) => {
+                            window.location.href = `/admin/orders/create?clientId=${profileId}`;
+                        }}
                     />
                 ) : (
                     <>

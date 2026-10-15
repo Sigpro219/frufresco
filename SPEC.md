@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.192 (Gobernanza de Disponibilidad de Tienda, Programación Autónoma de Recesos Operativos en Semana Santa/Vacaciones y Experiencia Anti-Abandono Cero-WhatsApp — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.193 (Galería Centralizada de Control de Pedidos Pendientes, Detección Predictiva de Frecuencia y Recordatorios Asistidos por WhatsApp en Gestión de Calidad — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 224 Escenarios BDD Ininterrumpidos (1..224)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 225 Escenarios BDD Ininterrumpidos (1..225)
 
 ---
 
@@ -10266,6 +10266,40 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - **Autogestión en Checkout (`/checkout` y `/b2b/dashboard`):**
        - En **Modo Preventa / Receso**: Despliega una tarjeta *Frosted Glass* con `<CalendarCheck />` confirmando que el pedido se recibe hoy mismo y queda agendado en **Prioridad #1 de Abastecimiento** para el día de retorno.
        - En **Modo Cerrada Temporalmente (`closed`)**: Sustituye el botón de pago/confirmación por el botón autónomo **`[Guardar mi Carrito para la Reapertura]`** (`<BookmarkCheck />`), preservando la lista en el dispositivo del comprador y confirmándole visualmente que podrá finalizar su compra en 1 clic apenas reabra la tienda.
+
+#### Escenario 225: Galería Centralizada de Control de Pedidos Pendientes (Ruta de Mañana) y Recordatorios Asistidos por WhatsApp en Gestión de Calidad (SDD v1.9.193)
+- **Given** la Consola de Gestión de Calidad, PQRS & Devoluciones (`/admin/customer-service`), el Directorio de Clientes (`profiles`) con sus restricciones logísticas (`delivery_restrictions`, `logistics_data.allowed_days`), y el histórico de órdenes (`orders` y `order_drafts`).
+- **When** el Operador de Gestión de Calidad ingresa a la nueva pestaña canónica **`[🔔 Pedidos Pendientes]`** (ubicada en la barra de vistas junto a `[Consola de Casos]` y `[Dashboard Lean & Pareto]`):
+- **Then**:
+  1. **Motor de Detección de Clientes con Pedido Pendiente (Ruta de Mañana / Próximo Día Hábil):**
+     - Calcula la fecha objetivo de despacho (por defecto Mañana $D+1$, o el siguiente día hábil de ruta según `calculateStandardMinDeliveryDate`, con selector de fecha para auditar cualquier día).
+     - Identifica a los clientes B2B / Institucionales activos cuyo calendario de entrega coincide con el día de la semana de la fecha objetivo (ya sea por su configuración formal `logistics_data.allowed_days` o por su frecuencia histórica en los últimos 90 días).
+     - **Filtro Poka-Yoke de Exclusión Activa:** Excluye automáticamente a los clientes que **ya tienen un pedido registrado** para esa fecha en `orders` (en cualquier estado no cancelado) o que tienen un borrador activo en `order_drafts`.
+     - Consolida la lista de **Clientes Habituales que aún tienen su pedido pendiente**, ordenados por criticidad o volumen habitual.
+  2. **Micro-KPIs Superiores de Control Operativo:**
+     - `🏢 Total Clientes Habituales`: Cantidad de clientes que habitualmente reciben pedidos en la fecha seleccionada.
+     - `✅ Pedidos Ya Recibidos`: Cantidad de clientes que ya tienen su orden radicada o en borrador.
+     - `⚠️ Pedidos Pendientes`: Clientes que aún no han pedido (objetivo de recordatorio).
+     - `📲 Recordatorios Enviados Hoy`: Clientes contactados durante la jornada de hoy.
+  3. **Galería Industrial de Pedidos Pendientes (Swiss Precision Industrial UI):**
+     - Cada tarjeta o fila presenta:
+       - **Cliente & Contacto:** Nombre de la empresa, sede, NIT, nombre de la persona de compras y teléfono celular E.164.
+       - **Días Habituales:** Días de entrega configurados (ej. *"Martes y Viernes"*) o calculados por el motor predictivo.
+       - **Historial Reciente:** Fecha del último pedido despachado y monto promedio.
+       - **Horario Límite:** Hora de corte de recepción (4:00 p.m.).
+       - **Badge de Estado de Gestión:** `🔴 Sin Contactar` (badge ambar/rojo de alerta) vs `🟢 Recordatorio Enviado` (badge esmeralda con hora exacta de envío, ej. *Hoy 2:04 p.m.*).
+     - **Buscador Omnibox:** Permite filtrar instantáneamente por nombre de cliente, contacto, NIT o sede con insensibilidad a tildes (`normalizeSearchText`).
+  4. **Protocolo de Envío Asistido por WhatsApp (1-Clic Centralizado):**
+     - Botón de acción principal verde: **`[📲 Enviar Recordatorio WhatsApp]`**.
+     - Al hacer clic, genera y abre el enlace `https://wa.me/57{telefono}?text={mensaje}` con la plantilla oficial del Gemba:
+       ```
+       🍅 ¡Hola {contacto}!
+       ¡Mañana salimos de ruta! 🚚
+       Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. 🕒
+       ✉️ Esperamos tu pedido: pedidos@frufresco.com
+       Quedamos atentos
+       ```
+     - Al hacer clic, el sistema marca inmediatamente al cliente como `🟢 Recordatorio Enviado` en el estado de la sesión / persistencia local, registrando la hora exacta para prevenir duplicidades entre operadores.
 
 ---
 
