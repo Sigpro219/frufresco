@@ -321,16 +321,38 @@ export async function POST(request: Request) {
                     }
                 }
             }
+            // Si es modalidad obsequio B2C, enriquecer logistics_data para trazabilidad en remisión física ($0 COP)
+            if (customer_info?.is_gift || recName) {
+                order.logistics_data = {
+                    ...(order.logistics_data || {}),
+                    is_b2c_gift: true,
+                    is_gift_remission: true,
+                    sender_name: cName || 'Cliente FruFresco',
+                    recipient_name: recName || '',
+                    recipient_phone: recPhone || ''
+                };
+            }
         } catch (profileSyncErr: any) {
             console.error('Exception during B2C profile sync in checkout:', profileSyncErr.message);
         }
 
-        // 1. Crear la cabecera del pedido
-        const { data: orderData, error: orderError } = await supabase
+        // 1. Crear la cabecera del pedido (con fallback si logistics_data no existe en esquema legado)
+        let { data: orderData, error: orderError } = await supabase
             .from('orders')
             .insert(order)
             .select()
             .single();
+
+        if (orderError && order.logistics_data) {
+            const { logistics_data: _ignored, ...orderWithoutLogistics } = order;
+            const retry = await supabase
+                .from('orders')
+                .insert(orderWithoutLogistics)
+                .select()
+                .single();
+            orderData = retry.data;
+            orderError = retry.error;
+        }
 
         if (orderError) {
             console.error('Error inserting public order:', orderError);

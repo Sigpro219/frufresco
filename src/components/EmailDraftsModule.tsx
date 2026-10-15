@@ -5883,7 +5883,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         }
       }
 
-      // Calculate totals
+      // Calculate totals & Escenario 221 automatic off-agreement split
       let totalAmount = 0;
       let totalWeight = 0;
       const itemsData: any[] = [];
@@ -5891,25 +5891,33 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       let zeroPriceItemName = '';
       let hasOpenConsumption = false;
       const unpricedItems: any[] = [];
+      const resolvedDraftClientRole = currentMatchedProfile?.role || metadata?.clientType || 'b2b_client';
+      const hasActiveAgreementSplit = resolvedDraftClientRole !== 'b2c_client' && agreementProductIds.size > 0;
 
       for (const item of editableItems.filter(itm => !itm.isDeleted)) {
         if (item.matched_product_id) {
           const prod = products.find(p => p.id === item.matched_product_id);
           if (prod) {
+            const isInAgreement = agreementProductIds.has(prod.id);
             const isContractPriceDefined = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null;
-            const resolvedPrice = isContractPriceDefined ? Number(contractPrices[prod.id]) : 0;
-            const isExplicitContractZero = isContractPriceDefined && resolvedPrice === 0;
+            const resolvedPrice = (hasActiveAgreementSplit && !isInAgreement)
+              ? 0
+              : (isContractPriceDefined ? Number(contractPrices[prod.id]) : 0);
+            const isExplicitContractZero = isInAgreement && isContractPriceDefined && resolvedPrice === 0;
+            const isAllowedOffAgreement = hasActiveAgreementSplit && allowOffAgreementPurchases && !isInAgreement;
 
             if (isExplicitContractZero) {
               hasOpenConsumption = true;
             }
 
             if (resolvedPrice === 0 && !isExplicitContractZero) {
-              hasZeroPriceItem = true;
-              zeroPriceItemName = prod.name;
               unpricedItems.push({ item, prod });
-              if (!allowZeroPriceDispatch) {
-                break;
+              if (!isAllowedOffAgreement) {
+                hasZeroPriceItem = true;
+                zeroPriceItemName = prod.name;
+                if (!allowZeroPriceDispatch) {
+                  break;
+                }
               }
             }
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
@@ -5949,7 +5957,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
               variant_label: effectiveVariantLabel,
               unit: item.unit || prod.unit_of_measure || 'Kg',
-              selected_options: enrichedOptions
+              selected_options: enrichedOptions,
+              _weight_kg: qtyNum * w,
+              _prod_name: prod.name
             });
           }
         }
@@ -5961,13 +5971,31 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         return;
       }
 
-      if (unpricedItems.length > 0 && allowZeroPriceDispatch) {
+      const agreementItemsData = hasActiveAgreementSplit
+        ? itemsData.filter(itm => agreementProductIds.has(itm.product_id))
+        : itemsData;
+      const offAgreementItemsData = hasActiveAgreementSplit
+        ? itemsData.filter(itm => !agreementProductIds.has(itm.product_id))
+        : [];
+
+      const isSplitScenario = hasActiveAgreementSplit && agreementItemsData.length > 0 && offAgreementItemsData.length > 0;
+      const isOnlyOffAgreement = hasActiveAgreementSplit && agreementItemsData.length === 0 && offAgreementItemsData.length > 0;
+
+      const primaryItemsGroup = isSplitScenario ? agreementItemsData : itemsData;
+      const primaryTotalAmount = isOnlyOffAgreement ? 0 : primaryItemsGroup.reduce((acc, itm) => acc + (Number(itm.unit_price || 0) * Number(itm.quantity || 0)), 0);
+      const primaryTotalWeight = primaryItemsGroup.reduce((acc, itm) => acc + Number(itm._weight_kg || 0), 0);
+
+      let primaryAdminNotes = finalAdminNotes;
+      if (isOnlyOffAgreement) {
+        const offNames = offAgreementItemsData.map(u => u._prod_name).join(', ');
+        primaryAdminNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}]\n${primaryAdminNotes}`.trim();
+      } else if (!isSplitScenario && unpricedItems.length > 0 && allowZeroPriceDispatch) {
         const unpricedNames = unpricedItems.map(u => u.prod.name).join(', ');
-        finalAdminNotes = `[DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${unpricedNames}]\n${finalAdminNotes}`.trim();
+        primaryAdminNotes = `[DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${unpricedNames}]\n${primaryAdminNotes}`.trim();
       }
 
-      if (hasOpenConsumption && !finalAdminNotes.includes('CONSUMO ABIERTO')) {
-        finalAdminNotes = `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]\n${finalAdminNotes}`.trim();
+      if (hasOpenConsumption && !primaryAdminNotes.includes('CONSUMO ABIERTO')) {
+        primaryAdminNotes = `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]\n${primaryAdminNotes}`.trim();
       }
 
       // 2. Create the order
@@ -5979,8 +6007,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
       const orderPayload: any = {
         profile_id: finalProfileId,
-        total: totalAmount,
-        total_weight_kg: totalWeight,
+        total: primaryTotalAmount,
+        total_weight_kg: primaryTotalWeight,
         status: 'pending_approval',
         payment_status: 'Pendiente',
         payment_method: paymentMethod,
@@ -5988,11 +6016,19 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         origin_source: 'email',
         delivery_date: deliveryDate,
         delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
-        admin_notes: finalAdminNotes,
+        admin_notes: primaryAdminNotes,
         shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
         latitude: draftCoordinates?.lat || metadata?.latitude || null,
         longitude: draftCoordinates?.lng || metadata?.longitude || null,
-        document_url: draftAttachmentUrl
+        document_url: draftAttachmentUrl,
+        ...(isOnlyOffAgreement ? {
+          logistics_data: {
+            document_type_override: 'remission',
+            remission_with_prices_override: false,
+            is_off_agreement_split: true,
+            off_agreement_priced: false
+          }
+        } : {})
       };
 
       if (purchaseOrder?.trim()) {
@@ -6023,7 +6059,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       }
 
       // 3. Create order items
-      const finalItemsData = itemsData.map(itm => ({
+      const finalItemsData = primaryItemsGroup.map(({ _weight_kg, _prod_name, ...itm }) => ({
         order_id: order.id,
         ...itm
       }));
@@ -6036,18 +6072,82 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         throw new Error('Error al registrar ítems: ' + itemsError.message);
       }
 
-      // Si se autorizó el despacho de ítems sin precio ($0), emitir tarea urgente para el Área Comercial
-      if (order && unpricedItems.length > 0 && allowZeroPriceDispatch) {
+      // Escenario 221: Si hubo partición mixta (Pedido A Acuerdo + Pedido B Remisión $0 Fuera de Acuerdo)
+      let childSplitOrder: any = null;
+      if (isSplitScenario && order) {
+        const offNames = offAgreementItemsData.map(u => u._prod_name).join(', ');
+        const parentTag = order.sequence_id ? `#PED-${order.sequence_id}` : `#${order.id.slice(0, 6).toUpperCase()}`;
+        const offNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}] [VINCULADO A PEDIDO ACUERDO ${parentTag}]\n${finalAdminNotes}`.trim();
+        const offTotalWeight = offAgreementItemsData.reduce((acc, itm) => acc + Number(itm._weight_kg || 0), 0);
+
+        const splitPayload: any = {
+          profile_id: finalProfileId,
+          total: 0,
+          subtotal: 0,
+          tax: 0,
+          total_weight_kg: offTotalWeight,
+          status: 'pending_approval',
+          payment_status: 'Pendiente',
+          payment_method: paymentMethod,
+          origin: 'Email Ingest',
+          origin_source: 'email',
+          delivery_date: deliveryDate,
+          delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
+          admin_notes: offNotes,
+          shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
+          latitude: draftCoordinates?.lat || metadata?.latitude || null,
+          longitude: draftCoordinates?.lng || metadata?.longitude || null,
+          document_url: draftAttachmentUrl,
+          logistics_data: {
+            parent_order_id: order.id,
+            parent_order_sequence: order.sequence_id || null,
+            document_type_override: 'remission',
+            remission_with_prices_override: false,
+            is_off_agreement_split: true,
+            off_agreement_priced: false
+          }
+        };
+        if (purchaseOrder?.trim()) {
+          splitPayload.purchase_order_number = purchaseOrder.trim();
+        }
+
+        const { data: splitOrd, error: splitErr } = await supabase
+          .from('orders')
+          .insert(splitPayload)
+          .select()
+          .single();
+
+        if (!splitErr && splitOrd) {
+          childSplitOrder = splitOrd;
+          const splitItemsRows = offAgreementItemsData.map(({ _weight_kg, _prod_name, ...itm }) => ({
+            order_id: splitOrd.id,
+            ...itm,
+            unit_price: 0
+          }));
+          await supabase.from('order_items').insert(splitItemsRows);
+        }
+      }
+
+      // Emitir tarea urgente para el Área Comercial cuando hay remisión $0 fuera de acuerdo o ítems despachados sin precio
+      if (order && (isSplitScenario || isOnlyOffAgreement || (unpricedItems.length > 0 && allowZeroPriceDispatch))) {
         try {
+          const targetOrd = isSplitScenario && childSplitOrder ? childSplitOrder : order;
           const clientName = selectedDraft.client_detected_name || 'Cliente por Correo';
-          const unpricedNames = unpricedItems.map(u => u.prod.name).join(', ');
+          const unpricedNames = (isSplitScenario || isOnlyOffAgreement)
+            ? offAgreementItemsData.map(u => u._prod_name).join(', ')
+            : unpricedItems.map(u => u.prod.name).join(', ');
+          const remSeq = targetOrd.sequence_id ? `REM-${targetOrd.sequence_id}` : `#${targetOrd.id.slice(0, 8)}`;
           await supabase
             .from('admin_tasks')
             .insert([{
-              title: `🚨 ASIGNAR PRECIO URGENTE: Pedido #${order.sequence_id || order.id.slice(0, 8)} (${clientName})`,
-              description: `El pedido #${order.sequence_id || order.id.slice(0, 8)} del cliente "${clientName}" fue despachado a alistamiento con precio $0 COP en los siguientes productos:\n- ${unpricedNames}\n\nAcción comercial urgente: Fijar la tarifa acordada por kilo/unidad para habilitar la facturación electrónica.`,
-              priority: 'high',
-              status: 'todo',
+              type: 'price_extension_request',
+              title: `🚨 ASIGNAR PRECIO URGENTE: Remisión ${remSeq} (${clientName})`,
+              description: `La remisión ${remSeq} del cliente "${clientName}" fue despachada con precio $0 COP en ${isSplitScenario || isOnlyOffAgreement ? offAgreementItemsData.length : unpricedItems.length} producto(s) fuera del acuerdo (${unpricedNames}) para entrega el ${deliveryDate}. Debes asignar el precio comercial antes del cierre del corte de facturación.`,
+              priority: 'critical',
+              status: 'pending',
+              client_id: finalProfileId,
+              client_name: clientName,
+              related_entity_id: targetOrd.id,
               target_role: 'comercial',
               created_by: user?.id || null
             }]);

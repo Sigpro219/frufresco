@@ -172,10 +172,21 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
         || !!prof.is_corporate_parent
         || (prof.company_name && /(SAS|S\.A|LTDA|BIC|E\.U\.|CORP|COLSUBSIDIO|ALDIMARK|MONSERRATE|TEQUENDAMA|IRCC|COLEGIO|HOTEL|CLINICA|CAJA DE COMPENSACION|FONDO|WOK)/i.test(prof.company_name));
 
-    // 1. Resolve Document Type
-    const rawDocType = prof.document_type || parent?.document_type || (isB2B ? 'remission' : 'invoice');
+    // 1. Resolve Document Type (Escenario 221: Si es una remisión fuera de acuerdo despachada a $0 y aún no valorizada, forzar REM-S/S; una vez valorizada por Comercial, emitir según el documento fiscal del cliente)
+    const isUnpricedOffAgreement = Boolean(
+        (order?.admin_notes || '').includes('DESPACHADO SIN PRECIO') ||
+        (order?.admin_notes || '').includes('SE DESPACHÓ SIN PRECIO') ||
+        (order?.logistics_data?.is_off_agreement_split && !order?.logistics_data?.off_agreement_priced)
+    );
+    const rawDocType = isUnpricedOffAgreement
+        ? 'remission'
+        : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
+            ? order.logistics_data.document_type_override
+            : (prof.document_type || parent?.document_type || (isB2B ? 'remission' : 'invoice')));
     const isPrinted = prof.print_invoice !== undefined ? prof.print_invoice : (parent?.print_invoice !== undefined ? parent.print_invoice : true);
-    const isWithPrices = prof.remission_with_prices !== undefined ? prof.remission_with_prices : (parent?.remission_with_prices !== undefined ? parent.remission_with_prices : true);
+    const isWithPrices = isUnpricedOffAgreement
+        ? false
+        : (prof.remission_with_prices !== undefined ? prof.remission_with_prices : (parent?.remission_with_prices !== undefined ? parent.remission_with_prices : true));
 
     let docInfo = {
         code: 'FAC-DIG',
@@ -217,13 +228,13 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
         } else {
             docInfo = {
                 code: 'REM-S/S',
-                label: 'Remisión Sin Valor',
+                label: isUnpricedOffAgreement ? 'Remisión $0 (Por Fijar)' : 'Remisión Sin Valor',
                 type: 'remission',
                 isPrinted: true,
                 isWithPrices: false,
-                bg: '#F1F5F9',
-                color: '#475569',
-                border: '#CBD5E1',
+                bg: isUnpricedOffAgreement ? '#FEF2F2' : '#F1F5F9',
+                color: isUnpricedOffAgreement ? '#991B1B' : '#475569',
+                border: isUnpricedOffAgreement ? '#FECACA' : '#CBD5E1',
                 icon: Package
             };
         }
@@ -418,16 +429,63 @@ export function formatItemQuantityPresentation(item: any) {
     };
 }
 
-export function getOrderGraceInfo(order: any, graceMinutes: number = 120) {
+export function getOrderGraceInfo(order: any, graceMinutes: number = 120, cutCloseTime: string = '17:00') {
     const activeReturns = (order.billing_returns || []).filter((r: any) => r.status !== 'rejected');
     const activePqrs = (order.customer_service_pqrs || []).filter((p: any) => p.status === 'pending' || p.status === 'in_progress');
     const hasReturn = activeReturns.length > 0 || activePqrs.length > 0;
+    const isUnpricedOffAgreement = Boolean(
+        (order.admin_notes || '').includes('DESPACHADO SIN PRECIO') ||
+        (order.admin_notes || '').includes('SE DESPACHÓ SIN PRECIO') ||
+        (order.logistics_data?.is_off_agreement_split && !order.logistics_data?.off_agreement_priced)
+    );
     const isDelivered = order.status === 'delivered';
     const isShipped = order.status === 'shipped';
+
+    // Escenario 221: Novedad Comercial — Remisión Fuera de Acuerdo a $0 con Countdown contra hora de cierre de corte
+    if (isUnpricedOffAgreement) {
+        const targetDateStr = order.delivery_date || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+        const [closeHourStr = '17', closeMinStr = '00'] = (cutCloseTime || '17:00').split(':');
+        const closeTimestamp = new Date(`${targetDateStr}T${closeHourStr.padStart(2, '0')}:${closeMinStr.padStart(2, '0')}:00-05:00`).getTime();
+        const startDayTimestamp = new Date(`${targetDateStr}T06:00:00-05:00`).getTime();
+        const nowMs = Date.now();
+        const remainingCutMs = closeTimestamp - nowMs;
+        const remainingCutMin = Math.ceil(remainingCutMs / 60000);
+        const totalWindowMs = Math.max(1, closeTimestamp - startDayTimestamp);
+        const elapsedWindowMs = Math.max(0, nowMs - startDayTimestamp);
+        const cutProgressPct = Math.min(100, Math.max(15, Math.round((elapsedWindowMs / totalWindowMs) * 100)));
+
+        let cutCountdownLabel = '';
+        if (remainingCutMin > 0) {
+            const hrs = Math.floor(remainingCutMin / 60);
+            const mins = remainingCutMin % 60;
+            cutCountdownLabel = hrs > 0
+                ? `${hrs}h ${String(mins).padStart(2, '0')}m al cierre (${cutCloseTime})`
+                : `${mins}m al cierre (${cutCloseTime})`;
+        } else {
+            cutCountdownLabel = `Cierre vencido (${cutCloseTime})`;
+        }
+
+        return {
+            statusType: 'novelty',
+            isUnpricedNovelty: true,
+            badgeText: 'Asignar Precio ($0)',
+            badgeBg: '#FEF2F2',
+            badgeColor: '#991B1B',
+            badgeBorder: '#FECACA',
+            progressBarBg: remainingCutMin <= 60 ? '#DC2626' : '#EA580C',
+            progressPct: cutProgressPct,
+            isReadyForCut: false,
+            remainingMin: Math.max(0, remainingCutMin),
+            cutCountdownLabel,
+            isCutExpired: remainingCutMin <= 0,
+            label: 'Pendiente Asignar Precio ($0)'
+        };
+    }
     
     if (hasReturn) {
         return {
             statusType: 'novelty',
+            isUnpricedNovelty: false,
             badgeText: activePqrs.length > 0 ? 'PQRS Abierta' : 'Novedad',
             badgeBg: '#FEF2F2',
             badgeColor: '#991B1B',
@@ -436,6 +494,8 @@ export function getOrderGraceInfo(order: any, graceMinutes: number = 120) {
             progressPct: 100,
             isReadyForCut: false,
             remainingMin: 0,
+            cutCountdownLabel: '',
+            isCutExpired: false,
             label: 'Retenido por Calidad'
         };
     }
@@ -559,9 +619,19 @@ export default function BillingDashboard() {
     const [billingSearchQuery, setBillingSearchQuery] = useState('');
     const [includeAllStatuses, setIncludeAllStatuses] = useState(true);
     const [graceMinutes, setGraceMinutes] = useState<number>(120);
+    const [cutCloseTime, setCutCloseTime] = useState<string>('17:00');
     const [pendingStatusFilter, setPendingStatusFilter] = useState<'all' | 'ready' | 'grace' | 'in_route' | 'novelties' | 'in_process'>('all');
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'sequence_id', direction: 'desc' });
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+    // Escenario 221: Modal de Asignación de Precios Fuera de Acuerdo ($0 Remisiones del Día)
+    const [isAssignPriceModalOpen, setIsAssignPriceModalOpen] = useState(false);
+    const [loadingAssignPriceOrders, setLoadingAssignPriceOrders] = useState(false);
+    const [savingAssignPrices, setSavingAssignPrices] = useState(false);
+    const [assignPriceOrders, setAssignPriceOrders] = useState<any[]>([]);
+    const [assignPriceSkuInputs, setAssignPriceSkuInputs] = useState<Record<string, string>>({});
+    const [assignPriceItemInputs, setAssignPriceItemInputs] = useState<Record<string, string>>({});
+    const [assignPriceTargetOrderId, setAssignPriceTargetOrderId] = useState<string | null>(null);
 
     const toggleOrderSelection = (id: string) => {
         setSelectedOrderIds(prev =>
@@ -576,7 +646,7 @@ export default function BillingDashboard() {
 
     const selectReadyOrders = () => {
         const readyIds = pendingOrders
-            .filter(o => getOrderGraceInfo(o, graceMinutes).statusType === 'ready')
+            .filter(o => getOrderGraceInfo(o, graceMinutes, cutCloseTime).statusType === 'ready')
             .map(o => o.id);
         setSelectedOrderIds(readyIds);
     };
@@ -1193,7 +1263,7 @@ export default function BillingDashboard() {
             let pOrdersQuery = supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address,
+                    id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data,
                     profiles:profile_id (
                         id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
                     ),
@@ -1280,7 +1350,8 @@ export default function BillingDashboard() {
                     'billing_resolution_date',
                     'billing_range_from',
                     'billing_range_to',
-                    'billing_delivery_grace_minutes'
+                    'billing_delivery_grace_minutes',
+                    'billing_cut_close_time'
                 ]);
 
             if (settingsData) {
@@ -1294,6 +1365,7 @@ export default function BillingDashboard() {
                     if (s.key === 'billing_range_from' && s.value) setRangeFrom(Number(s.value));
                     if (s.key === 'billing_range_to' && s.value) setRangeTo(Number(s.value));
                     if (s.key === 'billing_delivery_grace_minutes' && s.value) setGraceMinutes(Number(s.value));
+                    if (s.key === 'billing_cut_close_time' && s.value) setCutCloseTime(String(s.value));
                 });
             }
 
@@ -1305,6 +1377,133 @@ export default function BillingDashboard() {
             setIsRefreshingRealtime(false);
         }
     }, [selectedBillingDate, includeAllStatuses]);
+
+    const handleOpenAssignPriceModal = useCallback(async (targetOrderId?: string, overrideDate?: string) => {
+        setIsAssignPriceModalOpen(true);
+        setLoadingAssignPriceOrders(true);
+        setAssignPriceTargetOrderId(targetOrderId || null);
+        try {
+            const params = new URLSearchParams();
+            const effectiveDate = overrideDate || selectedBillingDate;
+            if (targetOrderId) {
+                params.set('orderId', targetOrderId);
+            } else if (effectiveDate && effectiveDate !== 'all') {
+                params.set('date', effectiveDate);
+            }
+            const res = await fetch(`/api/commercial/billing/assign-off-agreement-prices?${params.toString()}`);
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Error cargando remisiones fuera de acuerdo');
+            const ordersList = json.orders || [];
+            setAssignPriceOrders(ordersList);
+
+            const initialItemMap: Record<string, string> = {};
+            const initialSkuMap: Record<string, string> = {};
+            ordersList.forEach((o: any) => {
+                (o.unpriced_items || []).forEach((it: any) => {
+                    const currentVal = Number(it.unit_price || 0);
+                    initialItemMap[it.id] = currentVal > 0 ? String(currentVal) : '';
+                    if (it.product_id && !(it.product_id in initialSkuMap)) {
+                        initialSkuMap[it.product_id] = currentVal > 0 ? String(currentVal) : '';
+                    }
+                });
+            });
+            setAssignPriceItemInputs(initialItemMap);
+            setAssignPriceSkuInputs(initialSkuMap);
+        } catch (err: any) {
+            console.error('Error loading unpriced off-agreement orders:', err);
+            showToast({ type: 'error', message: `Error cargando remisiones $0: ${err.message}` });
+        } finally {
+            setLoadingAssignPriceOrders(false);
+        }
+    }, [selectedBillingDate, showToast]);
+
+    const handleSaveAssignedOffAgreementPrices = async () => {
+        const orderIds = assignPriceOrders.map(o => o.id);
+        if (orderIds.length === 0) return;
+
+        const itemPricesPayload: Record<string, number> = {};
+        let missingCount = 0;
+
+        assignPriceOrders.forEach(o => {
+            (o.unpriced_items || []).forEach((it: any) => {
+                const rawItemPrice = assignPriceItemInputs[it.id];
+                const rawSkuPrice = it.product_id ? assignPriceSkuInputs[it.product_id] : '';
+                const parsed = Number(rawItemPrice || rawSkuPrice || 0);
+                if (parsed > 0) {
+                    itemPricesPayload[it.id] = parsed;
+                } else {
+                    missingCount++;
+                }
+            });
+        });
+
+        if (Object.keys(itemPricesPayload).length === 0) {
+            showToast({
+                type: 'warning',
+                title: 'Tarifa Comercial Requerida',
+                message: 'Ingresa un precio unitario mayor a $0 para al menos un SKU fuera de acuerdo antes de guardar.'
+            });
+            return;
+        }
+
+        if (missingCount > 0) {
+            showToast({
+                type: 'warning',
+                title: 'Ítems Pendientes por Precio',
+                message: `Aún quedan ${missingCount} ítem(s) en $0. Asigna tarifa a todos los ítems de la remisión para liberarla al corte de facturación.`
+            });
+            return;
+        }
+
+        setSavingAssignPrices(true);
+        try {
+            const res = await fetch('/api/commercial/billing/assign-off-agreement-prices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderIds,
+                    itemPrices: itemPricesPayload
+                })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Error al asignar precios fuera de acuerdo');
+
+            showToast({
+                type: 'success',
+                title: 'Tarifa Comercial Asignada',
+                message: json.message || 'Se asignaron los precios a las remisiones fuera de acuerdo sin alterar el acuerdo del cliente.'
+            });
+            setIsAssignPriceModalOpen(false);
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error saving assigned off-agreement prices:', err);
+            showToast({ type: 'error', message: `Error al asignar precios: ${err.message}` });
+        } finally {
+            setSavingAssignPrices(false);
+        }
+    };
+
+    // Deep-link desde Dashboard Comercial (?search=...&assign_price=1&order_id=...&date=...)
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        const qSearch = params.get('search');
+        const qDate = params.get('date');
+        const qAssign = params.get('assign_price');
+        const qOrderId = params.get('order_id');
+
+        if (qSearch) {
+            setBillingSearchQuery(qSearch);
+        }
+        if (qDate) {
+            setSelectedBillingDate(qDate);
+        }
+        if (qAssign === '1') {
+            setActiveTab('invoicing');
+            setSubTab('pending');
+            handleOpenAssignPriceModal(qOrderId || undefined, qDate || undefined);
+        }
+    }, [handleOpenAssignPriceModal]);
 
     const handleLiquidateOpenOrder = async (orderId: string) => {
         setIsProcessing(true);
@@ -1329,10 +1528,14 @@ export default function BillingDashboard() {
     const handleLiquidateSelectedOrAllOpenOrders = async () => {
         const targetIds = selectedOrderIds.length > 0 
             ? selectedOrderIds 
-            : pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')).map(o => o.id);
+            : pendingOrders.filter(o => {
+                const isOffAgreement = o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced);
+                if (isOffAgreement) return false;
+                return o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO');
+            }).map(o => o.id);
 
         if (targetIds.length === 0) {
-            showToast({ type: 'info', message: 'No hay pedidos con tarifa $0, despachados sin precio o sobre lista abierta a consumo para liquidar.' });
+            showToast({ type: 'info', message: 'No hay pedidos sobre lista abierta a consumo para liquidar automáticamente.' });
             return;
         }
 
@@ -1416,7 +1619,7 @@ export default function BillingDashboard() {
         let inProcess = 0;
 
         pendingOrders.forEach(o => {
-            const statusType = getOrderGraceInfo(o, graceMinutes).statusType;
+            const statusType = getOrderGraceInfo(o, graceMinutes, cutCloseTime).statusType;
             if (statusType === 'ready') ready++;
             else if (statusType === 'grace') grace++;
             else if (statusType === 'in_route') inRoute++;
@@ -1425,15 +1628,25 @@ export default function BillingDashboard() {
         });
 
         return { ready, grace, inRoute, novelties, inProcess };
-    }, [pendingOrders, graceMinutes]);
+    }, [pendingOrders, graceMinutes, cutCloseTime]);
 
     const { ready: readyCount, grace: graceCount, inRoute: inRouteCount, novelties: noveltiesCount, inProcess: inProcessCount } = pendingGraceCounts;
+    const unpricedOffAgreementCount = useMemo(() => {
+        return pendingOrders.filter(o =>
+            o.admin_notes?.includes('DESPACHADO SIN PRECIO') ||
+            o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') ||
+            (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced)
+        ).length;
+    }, [pendingOrders]);
+
     const openConsumptionCount = useMemo(() => {
         return pendingOrders.filter(o => {
             const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
             const isGiftOrReplacement = docInfo.type === 'gift_remission' || o.admin_notes?.includes('REMISIÓN DE OBSEQUIO') || o.admin_notes?.includes('REPOSICIÓN');
             if (isGiftOrReplacement) return false;
-            return o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO');
+            const isOffAgreement = o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced);
+            if (isOffAgreement) return false;
+            return o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO');
         }).length;
     }, [pendingOrders, parentProfilesMap]);
 
@@ -1463,7 +1676,7 @@ export default function BillingDashboard() {
         // 2. Status / Grace Filter
         if (pendingStatusFilter !== 'all') {
             result = result.filter(order => {
-                const info = getOrderGraceInfo(order, graceMinutes);
+                const info = getOrderGraceInfo(order, graceMinutes, cutCloseTime);
                 if (pendingStatusFilter === 'ready') return info.statusType === 'ready';
                 if (pendingStatusFilter === 'grace') return info.statusType === 'grace';
                 if (pendingStatusFilter === 'in_route') return info.statusType === 'in_route';
@@ -2414,6 +2627,7 @@ export default function BillingDashboard() {
                 { key: 'billing_range_from', value: String(rangeFrom), description: 'Rango autorizado Desde' },
                 { key: 'billing_range_to', value: String(rangeTo), description: 'Rango autorizado Hasta' },
                 { key: 'billing_delivery_grace_minutes', value: String(graceMinutes), description: 'Ventana de gracia en minutos post-entrega para auditoría de calidad y reclamaciones antes de facturación masiva' },
+                { key: 'billing_cut_close_time', value: String(cutCloseTime || '17:00'), description: 'Hora límite de cierre del corte de facturación (HH:MM) para el countdown de novedades de remisiones fuera de acuerdo a $0' },
             ];
 
             for (const item of updates) {
@@ -3587,6 +3801,32 @@ export default function BillingDashboard() {
                                             )}
                                         </div>
 
+                                        {unpricedOffAgreementCount > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenAssignPriceModal()}
+                                                disabled={isProcessing}
+                                                style={{
+                                                    backgroundColor: '#DC2626',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    padding: '0.4rem 0.85rem',
+                                                    borderRadius: '8px',
+                                                    fontWeight: '800',
+                                                    fontSize: '0.74rem',
+                                                    cursor: isProcessing ? 'wait' : 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)'
+                                                }}
+                                                title="Asignar tarifa comercial a las remisiones de productos fuera de acuerdo despachadas con precio $0 para la fecha seleccionada"
+                                            >
+                                                <AlertTriangle size={13} />
+                                                {`Asignar Precios Fuera de Acuerdo ($0) (${unpricedOffAgreementCount})`}
+                                            </button>
+                                        )}
+
                                         {openConsumptionCount > 0 && (
                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                 {confirmBatchLiquidation ? (
@@ -3636,9 +3876,13 @@ export default function BillingDashboard() {
                                                         onClick={() => {
                                                             const targetIds = selectedOrderIds.length > 0 
                                                                 ? selectedOrderIds 
-                                                                : pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')).map(o => o.id);
+                                                                : pendingOrders.filter(o => {
+                                                                    const isOffAgreement = o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced);
+                                                                    if (isOffAgreement) return false;
+                                                                    return o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO');
+                                                                }).map(o => o.id);
                                                             if (targetIds.length === 0) {
-                                                                showToast({ type: 'info', message: 'No hay pedidos con tarifa $0 o sobre lista abierta para liquidar.' });
+                                                                showToast({ type: 'info', message: 'No hay pedidos sobre lista abierta para liquidar.' });
                                                                 return;
                                                             }
                                                             setConfirmBatchLiquidation(true);
@@ -4089,10 +4333,10 @@ export default function BillingDashboard() {
                                                             })()}
                                                         </td>
 
-                                                        {/* 7. Estado Operativo & Cuenta Regresiva de Gracia */}
-                                                        <td style={{ padding: '0.45rem 0.75rem', minWidth: '125px' }}>
+                                                        {/* 7. Estado Operativo & Cuenta Regresiva de Gracia / Corte */}
+                                                        <td style={{ padding: '0.45rem 0.75rem', minWidth: '135px' }}>
                                                             {(() => {
-                                                                const grace = getOrderGraceInfo(order, graceMinutes);
+                                                                const grace: any = getOrderGraceInfo(order, graceMinutes, cutCloseTime);
                                                                 return (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
                                                                         {/* Badge Principal */}
@@ -4123,7 +4367,9 @@ export default function BillingDashboard() {
                                                                         {/* Barra de Cuenta Regresiva (Glassmorphism & Ghost Track) */}
                                                                         <div 
                                                                             title={
-                                                                                grace.statusType === 'grace' 
+                                                                                grace.isUnpricedNovelty
+                                                                                    ? `Cuenta regresiva contra cierre de corte (${cutCloseTime}): ${grace.cutCountdownLabel}. El área comercial debe asignar precio a esta remisión $0 antes del corte.`
+                                                                                    : grace.statusType === 'grace' 
                                                                                     ? `Cuenta regresiva activa: ${grace.remainingMin}m restantes de la ventana de ${graceMinutes}m post-entrega.`
                                                                                     : grace.statusType === 'ready'
                                                                                     ? `Tiempo de gracia de ${graceMinutes}m cumplido sin reclamaciones. Apto para corte contable.`
@@ -4133,7 +4379,7 @@ export default function BillingDashboard() {
                                                                             }
                                                                             style={{
                                                                                 width: '100%',
-                                                                                maxWidth: '105px',
+                                                                                maxWidth: '115px',
                                                                                 height: '5px',
                                                                                 borderRadius: '9999px',
                                                                                 backgroundColor: grace.statusType === 'in_process' 
@@ -4165,8 +4411,13 @@ export default function BillingDashboard() {
                                                                         </div>
 
                                                                         {/* Micro-telemetría explicativa */}
-                                                                        <div style={{ fontSize: '0.58rem', color: grace.statusType === 'grace' ? '#B45309' : grace.statusType === 'ready' ? '#065F46' : '#94A3B8', fontWeight: '600', lineHeight: '1', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                                            {grace.statusType === 'grace' ? (
+                                                                        <div style={{ fontSize: '0.58rem', color: grace.isUnpricedNovelty ? (grace.isCutExpired ? '#DC2626' : '#C2410C') : grace.statusType === 'grace' ? '#B45309' : grace.statusType === 'ready' ? '#065F46' : '#94A3B8', fontWeight: '700', lineHeight: '1', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                            {grace.isUnpricedNovelty ? (
+                                                                                <>
+                                                                                    <Timer size={9} style={{ color: grace.isCutExpired ? '#DC2626' : '#EA580C', flexShrink: 0 }} />
+                                                                                    <span>{grace.cutCountdownLabel}</span>
+                                                                                </>
+                                                                            ) : grace.statusType === 'grace' ? (
                                                                                 <>
                                                                                     <Clock size={9} style={{ color: '#D97706', flexShrink: 0 }} />
                                                                                     <span>{grace.remainingMin}m restantes</span>
@@ -4196,8 +4447,8 @@ export default function BillingDashboard() {
                                                         {/* 8. Total Pedido */}
                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
                                                             {(() => {
-                                                                const isUnpricedDispatch = order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO');
-                                                                const isOpenConsumption = order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO');
+                                                                const isUnpricedDispatch = order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (order.logistics_data?.is_off_agreement_split && !order.logistics_data?.off_agreement_priced);
+                                                                const isOpenConsumption = !isUnpricedDispatch && (order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO'));
 
                                                                 if (isUnpricedDispatch) {
                                                                     return (
@@ -4208,7 +4459,7 @@ export default function BillingDashboard() {
                                                                             </div>
                                                                             <div style={{ fontSize: '0.60rem', color: '#991B1B', fontWeight: '800', backgroundColor: '#FEE2E2', border: '1px solid #FCA5A5', padding: '1px 5px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
                                                                                 <AlertTriangle size={9} style={{ color: '#DC2626', flexShrink: 0 }} />
-                                                                                <span>Se despachó sin precio</span>
+                                                                                <span>Fuera de Acuerdo ($0)</span>
                                                                             </div>
                                                                         </div>
                                                                     );
@@ -4245,7 +4496,29 @@ export default function BillingDashboard() {
                                                         {/* 9. Acciones Rápidas */}
                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
                                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                {(order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO') || order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')) && (
+                                                                {(order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (order.logistics_data?.is_off_agreement_split && !order.logistics_data?.off_agreement_priced)) ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenAssignPriceModal(order.id, order.delivery_date)}
+                                                                        disabled={isProcessing}
+                                                                        title="Asignar tarifa comercial a los ítems fuera de acuerdo de esta remisión ($0) sin modificar el acuerdo del cliente"
+                                                                        style={{
+                                                                            backgroundColor: '#FEF2F2',
+                                                                            color: '#DC2626',
+                                                                            border: '1px solid #FCA5A5',
+                                                                            padding: '0.25rem 0.5rem',
+                                                                            borderRadius: '5px',
+                                                                            cursor: isProcessing ? 'wait' : 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '3px',
+                                                                            fontSize: '0.70rem',
+                                                                            fontWeight: '800'
+                                                                        }}
+                                                                    >
+                                                                        <AlertTriangle size={11} style={{ color: '#DC2626' }} /> Asignar Precio
+                                                                    </button>
+                                                                ) : (order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO')) ? (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleLiquidateOpenOrder(order.id)}
@@ -4267,7 +4540,7 @@ export default function BillingDashboard() {
                                                                     >
                                                                         <Zap size={11} style={{ color: '#7C3AED' }} /> Liquidar
                                                                     </button>
-                                                                )}
+                                                                ) : null}
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleOpenOrderDetail(order)}
@@ -5107,18 +5380,32 @@ export default function BillingDashboard() {
                                     </div>
                                 </div>
 
-                                <div style={{ maxWidth: '280px' }}>
-                                    <label style={labelStyle}>Minutos de Gracia Personalizados</label>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <input
-                                            type="number"
-                                            value={graceMinutes}
-                                            onChange={(e) => setGraceMinutes(Math.max(0, parseInt(e.target.value) || 0))}
-                                            style={{ ...inputStyle, fontWeight: '800' }}
-                                            min="0"
-                                            max="720"
-                                        />
-                                        <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#64748B' }}>minutos</span>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+                                    <div>
+                                        <label style={labelStyle}>Minutos de Gracia Personalizados</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input
+                                                type="number"
+                                                value={graceMinutes}
+                                                onChange={(e) => setGraceMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+                                                style={{ ...inputStyle, fontWeight: '800' }}
+                                                min="0"
+                                                max="720"
+                                            />
+                                            <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#64748B' }}>minutos</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style={labelStyle}>Hora Límite de Cierre de Corte (Countdown Novedades $0)</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input
+                                                type="time"
+                                                value={cutCloseTime}
+                                                onChange={(e) => setCutCloseTime(e.target.value || '17:00')}
+                                                style={{ ...inputStyle, fontWeight: '800' }}
+                                            />
+                                            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#DC2626', whiteSpace: 'nowrap' }}>SLA Comercial</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -5963,6 +6250,448 @@ export default function BillingDashboard() {
                         </div>
                     );
                 })()}
+
+                {/* MODAL DE ASIGNACIÓN DE PRECIOS FUERA DE ACUERDO DEL DÍA (ESCENARIO 221) */}
+                {isAssignPriceModalOpen && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(15, 23, 42, 0.72)',
+                            backdropFilter: 'blur(6px)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 130,
+                            padding: '1rem'
+                        }}
+                    >
+                        <div
+                            style={{
+                                backgroundColor: 'white',
+                                borderRadius: '18px',
+                                border: '1px solid #FECACA',
+                                width: '100%',
+                                maxWidth: '980px',
+                                maxHeight: '90vh',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                                overflow: 'hidden'
+                            }}
+                        >
+                            {/* Header */}
+                            <div
+                                style={{
+                                    padding: '1rem 1.35rem',
+                                    backgroundColor: '#FEF2F2',
+                                    borderBottom: '1px solid #FECACA',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: '1rem'
+                                }}
+                            >
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span
+                                            style={{
+                                                backgroundColor: '#DC2626',
+                                                color: 'white',
+                                                padding: '2px 8px',
+                                                borderRadius: '999px',
+                                                fontSize: '0.66rem',
+                                                fontWeight: '900',
+                                                letterSpacing: '0.04em'
+                                            }}
+                                        >
+                                            SLA CIERRE DE CORTE: {cutCloseTime}
+                                        </span>
+                                        <span
+                                            style={{
+                                                backgroundColor: '#ECFDF5',
+                                                color: '#065F46',
+                                                border: '1px solid #A7F3D0',
+                                                padding: '2px 8px',
+                                                borderRadius: '999px',
+                                                fontSize: '0.66rem',
+                                                fontWeight: '800'
+                                            }}
+                                        >
+                                            🔒 Aislamiento Contractual Activo (No altera el Acuerdo Comercial)
+                                        </span>
+                                    </div>
+                                    <h3 style={{ margin: '6px 0 2px 0', fontSize: '1.05rem', fontWeight: '900', color: '#7F1D1D' }}>
+                                        🏷️ Asignar Tarifa Comercial — Remisiones Fuera de Acuerdo ($0)
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: '0.74rem', color: '#991B1B', fontWeight: '600' }}>
+                                        Asigna el precio unitario negociado para los SKU despachados en remisión a $0 del día ({selectedBillingDate === 'all' ? 'Todas las fechas' : selectedBillingDate}). Una vez valorizadas, quedarán listas para facturar en el corte.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAssignPriceModalOpen(false)}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        border: '1px solid #FECACA',
+                                        color: '#991B1B',
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontWeight: '800'
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div style={{ padding: '1.15rem 1.35rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {loadingAssignPriceOrders ? (
+                                    <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748B', fontWeight: '700', fontSize: '0.85rem' }}>
+                                        Cargando remisiones fuera de acuerdo en $0...
+                                    </div>
+                                ) : assignPriceOrders.length === 0 ? (
+                                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', color: '#166534' }}>
+                                        <CheckCircle2 size={28} style={{ margin: '0 auto 8px auto', display: 'block' }} />
+                                        <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>No hay remisiones fuera de acuerdo pendientes de precio para este filtro.</div>
+                                        <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Todas las remisiones ya cuentan con tarifa comercial asignada.</div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Resumen Rápido por SKU del Día (Permite fijar tarifa a un SKU para todas las remisiones del día de un golpe) */}
+                                        {(() => {
+                                            const uniqueSkusMap = new Map<string, any>();
+                                            assignPriceOrders.forEach((o: any) => {
+                                                (o.unpriced_items || []).forEach((it: any) => {
+                                                    if (it.product_id && !uniqueSkusMap.has(it.product_id)) {
+                                                        uniqueSkusMap.set(it.product_id, {
+                                                            product_id: it.product_id,
+                                                            name: it.products?.name || it.nickname || 'Producto',
+                                                            sku: it.products?.sku || 'S/N',
+                                                            unit: it.unit || it.products?.unit_of_measure || 'Und',
+                                                            reference_cost: Number(it.reference_cost || 0),
+                                                            reference_general_price: Number(it.reference_general_price || 0),
+                                                            countOrders: 1
+                                                        });
+                                                    } else if (it.product_id) {
+                                                        const entry = uniqueSkusMap.get(it.product_id);
+                                                        entry.countOrders += 1;
+                                                    }
+                                                });
+                                            });
+                                            const uniqueSkus = Array.from(uniqueSkusMap.values());
+                                            if (uniqueSkus.length === 0) return null;
+
+                                            return (
+                                                <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                                                    <div style={{ fontSize: '0.72rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '8px' }}>
+                                                        ⚡ Asignación Rápida por SKU para el Día ({uniqueSkus.length} SKU fuera de acuerdo)
+                                                    </div>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px' }}>
+                                                        {uniqueSkus.map(skuInfo => (
+                                                            <div
+                                                                key={skuInfo.product_id}
+                                                                style={{
+                                                                    backgroundColor: 'white',
+                                                                    border: '1px solid #FCD34D',
+                                                                    borderRadius: '8px',
+                                                                    padding: '0.55rem 0.7rem',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    gap: '5px'
+                                                                }}
+                                                            >
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
+                                                                    <span style={{ fontWeight: '800', fontSize: '0.76rem', color: '#0F172A' }}>
+                                                                        {skuInfo.name} <span style={{ color: '#64748B', fontWeight: '600' }}>({skuInfo.unit})</span>
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '99px' }}>
+                                                                        {skuInfo.countOrders} {skuInfo.countOrders === 1 ? 'remisión' : 'remisiones'}
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                    <input
+                                                                        type="number"
+                                                                        placeholder="Precio unitario $ COP"
+                                                                        value={assignPriceSkuInputs[skuInfo.product_id] || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setAssignPriceSkuInputs(prev => ({ ...prev, [skuInfo.product_id]: val }));
+                                                                            // Propagar a todos los ítems de este SKU en las remisiones cargadas
+                                                                            setAssignPriceItemInputs(prev => {
+                                                                                const next = { ...prev };
+                                                                                assignPriceOrders.forEach((ord: any) => {
+                                                                                    (ord.unpriced_items || []).forEach((it: any) => {
+                                                                                        if (it.product_id === skuInfo.product_id) {
+                                                                                            next[it.id] = val;
+                                                                                        }
+                                                                                    });
+                                                                                });
+                                                                                return next;
+                                                                            });
+                                                                        }}
+                                                                        style={{
+                                                                            flex: 1,
+                                                                            minWidth: '110px',
+                                                                            padding: '0.32rem 0.55rem',
+                                                                            borderRadius: '6px',
+                                                                            border: '1.5px solid #CBD5E1',
+                                                                            fontSize: '0.76rem',
+                                                                            fontWeight: '800',
+                                                                            color: '#0F172A'
+                                                                        }}
+                                                                    />
+                                                                    {skuInfo.reference_general_price > 0 && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const val = String(Math.round(skuInfo.reference_general_price));
+                                                                                setAssignPriceSkuInputs(prev => ({ ...prev, [skuInfo.product_id]: val }));
+                                                                                setAssignPriceItemInputs(prev => {
+                                                                                    const next = { ...prev };
+                                                                                    assignPriceOrders.forEach((ord: any) => {
+                                                                                        (ord.unpriced_items || []).forEach((it: any) => {
+                                                                                            if (it.product_id === skuInfo.product_id) {
+                                                                                                next[it.id] = val;
+                                                                                            }
+                                                                                        });
+                                                                                    });
+                                                                                    return next;
+                                                                                });
+                                                                            }}
+                                                                            title="Usar precio de lista General Institucional como referencia"
+                                                                            style={{
+                                                                                backgroundColor: '#EFF6FF',
+                                                                                color: '#1E40AF',
+                                                                                border: '1px solid #BFDBFE',
+                                                                                borderRadius: '5px',
+                                                                                padding: '0.22rem 0.45rem',
+                                                                                fontSize: '0.64rem',
+                                                                                fontWeight: '800',
+                                                                                cursor: 'pointer',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}
+                                                                        >
+                                                                            Inst: {formatMoney(skuInfo.reference_general_price)}
+                                                                        </button>
+                                                                    )}
+                                                                    {skuInfo.reference_cost > 0 && (
+                                                                        <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '700' }}>
+                                                                            Costo: {formatMoney(skuInfo.reference_cost)}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Detalle por Remisión */}
+                                        {assignPriceOrders.map((ord: any) => {
+                                            const clientLabel = ord.profiles?.company_name || ord.profiles?.razon_social || 'Cliente Institucional';
+                                            const isIvaClient = Boolean(ord.profiles?.iva_responsible);
+                                            const itemsList = ord.unpriced_items || [];
+
+                                            const projectedTotal = itemsList.reduce((acc: number, it: any) => {
+                                                const p = Number(assignPriceItemInputs[it.id] || assignPriceSkuInputs[it.product_id] || 0);
+                                                const billableQty = Number(it.billable_quantity ?? it.quantity ?? 0);
+                                                const sub = p * billableQty;
+                                                const ivaRate = isIvaClient ? Number(it.products?.iva_rate || 0) : 0;
+                                                return acc + sub + (sub * (ivaRate / 100));
+                                            }, 0);
+
+                                            return (
+                                                <div
+                                                    key={ord.id}
+                                                    style={{
+                                                        border: '1px solid #E2E8F0',
+                                                        borderRadius: '12px',
+                                                        overflow: 'hidden',
+                                                        backgroundColor: 'white'
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            padding: '0.65rem 0.95rem',
+                                                            backgroundColor: '#F8FAFC',
+                                                            borderBottom: '1px solid #E2E8F0',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            flexWrap: 'wrap',
+                                                            gap: '8px'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: '900', fontSize: '0.82rem', color: '#0F172A' }}>
+                                                                Remisión #{ord.sequence_id || ord.id.slice(0, 8)}
+                                                            </span>
+                                                            <span style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0D7A57' }}>
+                                                                {clientLabel}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>
+                                                                Entrega: {ord.delivery_date || 'Hoy'}
+                                                            </span>
+                                                            {ord.logistics_data?.parent_order_sequence_id && (
+                                                                <span style={{ fontSize: '0.64rem', backgroundColor: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: '99px', fontWeight: '800' }}>
+                                                                    Vinculada a Pedido Acuerdo #{ord.logistics_data.parent_order_sequence_id}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.78rem', fontWeight: '900', color: projectedTotal > 0 ? '#065F46' : '#DC2626' }}>
+                                                            Total Proyectado: {formatMoney(Math.round(projectedTotal))}
+                                                        </div>
+                                                    </div>
+
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
+                                                        <thead>
+                                                            <tr style={{ backgroundColor: '#F1F5F9', color: '#475569', textAlign: 'left' }}>
+                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800' }}>SKU / Producto Fuera de Acuerdo</th>
+                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'center' }}>Cant. Entregada</th>
+                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'right' }}>Referencias (Costo / Inst.)</th>
+                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'right', width: '190px' }}>Tarifa Unitaria Comercial ($ COP)</th>
+                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'right' }}>Subtotal Neto</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {itemsList.map((it: any) => {
+                                                                const currentPrice = Number(assignPriceItemInputs[it.id] || assignPriceSkuInputs[it.product_id] || 0);
+                                                                const billableQty = Number(it.billable_quantity ?? it.quantity ?? 0);
+                                                                const returnedQty = Number(it.quantity_returned || 0);
+                                                                const lineSubtotal = Math.round(currentPrice * billableQty);
+
+                                                                return (
+                                                                    <tr key={it.id} style={{ borderTop: '1px solid #F1F5F9' }}>
+                                                                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                                            <div style={{ fontWeight: '800', color: '#0F172A' }}>
+                                                                                {it.products?.name || it.nickname || 'Producto'}
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
+                                                                                SKU: {it.products?.sku || 'S/N'} · {it.unit || it.products?.unit_of_measure || 'Und'}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: '800' }}>
+                                                                            <span>{billableQty} {it.unit || it.products?.unit_of_measure || 'Und'}</span>
+                                                                            {returnedQty > 0 && (
+                                                                                <div style={{ fontSize: '0.62rem', color: '#DC2626', fontWeight: '700' }}>
+                                                                                    (-{returnedQty} devuelto QA)
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.68rem', color: '#475569' }}>
+                                                                            <div>Costo: <b>{it.reference_cost > 0 ? formatMoney(it.reference_cost) : 'N/A'}</b></div>
+                                                                            <div>Gral Inst: <b>{it.reference_general_price > 0 ? formatMoney(it.reference_general_price) : 'N/A'}</b></div>
+                                                                        </td>
+                                                                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                placeholder="$ 0"
+                                                                                value={assignPriceItemInputs[it.id] ?? ''}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value;
+                                                                                    setAssignPriceItemInputs(prev => ({ ...prev, [it.id]: val }));
+                                                                                }}
+                                                                                style={{
+                                                                                    width: '145px',
+                                                                                    padding: '0.35rem 0.55rem',
+                                                                                    borderRadius: '6px',
+                                                                                    border: `1.5px solid ${currentPrice > 0 ? '#10B981' : '#FCA5A5'}`,
+                                                                                    backgroundColor: currentPrice > 0 ? '#ECFDF5' : '#FEF2F2',
+                                                                                    fontWeight: '900',
+                                                                                    fontSize: '0.78rem',
+                                                                                    textAlign: 'right',
+                                                                                    color: '#0F172A'
+                                                                                }}
+                                                                            />
+                                                                        </td>
+                                                                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontWeight: '900', color: lineSubtotal > 0 ? '#0F172A' : '#DC2626' }}>
+                                                                            {formatMoney(lineSubtotal)}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            );
+                                        })}
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div
+                                style={{
+                                    padding: '0.85rem 1.35rem',
+                                    backgroundColor: '#F8FAFC',
+                                    borderTop: '1px solid #E2E8F0',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: '1rem',
+                                    flexWrap: 'wrap'
+                                }}
+                            >
+                                <div style={{ fontSize: '0.70rem', color: '#475569', fontWeight: '600' }}>
+                                    💡 Al confirmar, se cerrará la tarea urgente en el Dashboard Comercial y la remisión pasará a estado facturable.
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAssignPriceModalOpen(false)}
+                                        style={{
+                                            backgroundColor: 'white',
+                                            color: '#475569',
+                                            border: '1px solid #CBD5E1',
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: '8px',
+                                            fontWeight: '700',
+                                            fontSize: '0.76rem',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    {assignPriceOrders.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveAssignedOffAgreementPrices}
+                                            disabled={savingAssignPrices}
+                                            style={{
+                                                backgroundColor: '#0D7A57',
+                                                color: 'white',
+                                                border: 'none',
+                                                padding: '0.5rem 1.2rem',
+                                                borderRadius: '8px',
+                                                fontWeight: '900',
+                                                fontSize: '0.78rem',
+                                                cursor: savingAssignPrices ? 'wait' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 2px 8px rgba(13, 122, 87, 0.3)'
+                                            }}
+                                        >
+                                            <CheckCircle2 size={14} />
+                                            {savingAssignPrices ? 'Guardando Tarifas...' : `Confirmar y Valorizar (${assignPriceOrders.length} ${assignPriceOrders.length === 1 ? 'Remisión' : 'Remisiones'})`}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
             </div>
 

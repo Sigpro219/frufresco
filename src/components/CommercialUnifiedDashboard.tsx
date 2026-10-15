@@ -605,7 +605,7 @@ export default function CommercialUnifiedDashboard({
                     .maybeSingle(),
                 supabase
                     .from('orders')
-                    .select('id, sequence_id, created_at, admin_notes, profiles (company_name, contact_name)')
+                    .select('id, sequence_id, created_at, delivery_date, admin_notes, profiles (company_name, contact_name)')
                     .or('admin_notes.ilike.%DESPACHADO SIN PRECIO%,admin_notes.ilike.%SE DESPACHÓ SIN PRECIO%')
                     .neq('status', 'cancelled')
                     .order('created_at', { ascending: false })
@@ -1238,22 +1238,23 @@ export default function CommercialUnifiedDashboard({
                 }
             });
 
-            // Alertas Críticas de Pedidos Despachados Sin Precio ($0 COP) - Escenario 121 SDD
+            // Alertas Críticas de Pedidos / Remisiones Despachados Sin Precio ($0 COP) - Escenario 121 / 221 SDD
             (unpricedOrdersRes?.data || []).forEach((uo: any) => {
                 const prof = Array.isArray(uo.profiles) ? uo.profiles[0] : uo.profiles;
                 const clientName = prof?.company_name || prof?.contact_name || 'Cliente';
                 const matchItems = uo.admin_notes?.match(/PENDIENTE FIJAR TARIFA COMERCIAL: ([^\]]+)\]/);
-                const itemsList = matchItems ? matchItems[1] : 'Ítems sin tarifa';
+                const itemsList = matchItems ? matchItems[1] : 'Ítems fuera de acuerdo a $0';
+                const isOffAgreement = (uo.admin_notes || '').includes('FUERA DE ACUERDO');
 
                 generatedAlerts.push({
                     id: `unpriced-order-${uo.id}`,
                     type: 'unpriced_dispatch',
                     severity: 'critical',
-                    title: `🚨 ASIGNAR PRECIO: Pedido #${uo.sequence_id || uo.id.slice(0, 8)}`,
+                    title: `🚨 ASIGNAR PRECIO: ${isOffAgreement ? 'Remisión Fuera de Acuerdo' : 'Pedido'} #${uo.sequence_id || uo.id.slice(0, 8)}`,
                     subtitle: `${clientName} (${itemsList})`,
-                    dateInfo: 'Despachado a alistamiento sin precio',
-                    linkUrl: `/admin/commercial/billing?search=${uo.sequence_id || uo.id.slice(0, 8)}`,
-                    linkText: 'Fijar Precio'
+                    dateInfo: uo.delivery_date ? `Entrega: ${uo.delivery_date} • Pendiente fijar tarifa antes de cierre de corte` : 'Despachado a alistamiento sin precio ($0)',
+                    linkUrl: `/admin/commercial/billing?search=${uo.sequence_id || uo.id.slice(0, 8)}&assign_price=1&order_id=${uo.id}${uo.delivery_date ? `&date=${uo.delivery_date}` : ''}`,
+                    linkText: 'Asignar Precio'
                 });
             });
 

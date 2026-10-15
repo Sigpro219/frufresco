@@ -306,8 +306,11 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             });
         }
 
-        // Populate fallback general institutional prices for missing SKUs
-        if (isB2B) {
+        // Populate fallback general institutional prices for missing SKUs ONLY when there is NO active agreement.
+        // SDD Escenario 221: Si el cliente tiene acuerdo vigente (activeAgreement != null), cualquier SKU fuera del acuerdo
+        // (cuando allowOffAgreementPurchases === true) entra a $0 COP para despacharse en Remisión Fuera de Acuerdo,
+        // prohibiéndose la auto-asignación de precios de la lista General Institucional.
+        if (isB2B && !activeAgreement) {
             const castedGenPrices = (genPricesMap || {}) as Record<string, number>;
             for (const [prodId, gPrice] of Object.entries(castedGenPrices)) {
                 const numericPrice = Number(gPrice);
@@ -320,7 +323,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         // 7. Resolve Campaigns
         const campMap: Record<string, { value: number; type: string; name: string }> = {};
         const targetCampaigns = campTargetsRes?.data || [];
-        if (targetCampaigns.length > 0) {
+        if (targetCampaigns.length > 0 && !activeAgreement) {
             const campIds = targetCampaigns.map((tc: any) => tc.campaign_id);
             const nowIso = new Date().toISOString();
             const { data: activeCamps } = await supabase

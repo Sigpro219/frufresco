@@ -94,10 +94,92 @@ interface OrderData {
     order_items: OrderItem[];
 }
 
+interface B2CGiftDetails {
+    isB2CGift: boolean;
+    senderName: string;
+    recipientName: string;
+    recipientPhone: string;
+    cleanNote: string;
+}
+
+/**
+ * Detecta y extrae los datos de Remitente (quien obsequia) y Destinatario (quien recibe en puerta)
+ * cuando la compra se realizó por la Landing Page / Checkout Hogar B2C en modalidad "Obsequio"
+ */
+function extractB2CGiftDetails(order: OrderData): B2CGiftDetails {
+    const notes = order.special_notes || '';
+    const logData = order.logistics_data || {};
+    const recMatch = notes.match(/\[DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA:\s*([^|\]\n]+)(?:\|\s*Tel:\s*([^\]\n|]+))?/i);
+    const senderMatch = notes.match(/\[COMPRADOR\s*\/\s*FACTURACI[OÓ]N:\s*([^|\]\n]+)/i);
+    const noteMatch = notes.match(/\[RECOMENDACI[OÓ]N\s*\/\s*NOTA\s*DE\s*ENTREGA:\s*([^\]]+)\]/i);
+
+    const isB2CGift = Boolean(logData.is_b2c_gift || recMatch);
+    if (!isB2CGift) {
+        return {
+            isB2CGift: false,
+            senderName: '',
+            recipientName: '',
+            recipientPhone: '',
+            cleanNote: notes
+        };
+    }
+
+    const senderName = (
+        logData.sender_name ||
+        (senderMatch ? senderMatch[1].trim() : '') ||
+        order.profiles?.contact_name ||
+        order.profiles?.company_name ||
+        order.customer_name ||
+        'Cliente FruFresco'
+    ).trim();
+
+    const recipientName = (
+        logData.recipient_name ||
+        (recMatch ? recMatch[1].trim() : '') ||
+        'Destinatario Especial'
+    ).trim();
+
+    const recipientPhone = (
+        logData.recipient_phone ||
+        (recMatch && recMatch[2] ? recMatch[2].trim() : '') ||
+        ''
+    ).trim();
+
+    let cleanNote = noteMatch ? noteMatch[1].trim() : '';
+    if (!cleanNote && notes) {
+        // Fallback: limpiar etiquetas técnicas entre corchetes para dejar solo texto humano
+        cleanNote = notes
+            .replace(/\[COMPRADOR\s*\/\s*FACTURACI[OÓ]N:[^\]]*\]/gi, '')
+            .replace(/\[CLIENTE:[^\]]*\]/gi, '')
+            .replace(/\[FACTURACI[OÓ]N\s*ELECTR[OÓ]NICA:[^\]]*\]/gi, '')
+            .replace(/\[DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA:[^\]]*\]/gi, '')
+            .replace(/\[DOMICILIO[^\]]*\]/gi, '')
+            .replace(/\[EMPAQUE[^\]]*\]/gi, '')
+            .replace(/\[ORIGIN:[^\]]*\]/gi, '')
+            .replace(/\[RECOMENDACI[OÓ]N\s*\/\s*NOTA\s*DE\s*ENTREGA:\s*([^\]]+)\]/gi, '$1')
+            .trim();
+    }
+
+    return {
+        isB2CGift: true,
+        senderName,
+        recipientName,
+        recipientPhone,
+        cleanNote
+    };
+}
+
 /**
  * Extrae la Casa Matriz (razón social principal) y el nombre de la Sucursal/Sede operativa
  */
 function extractParentAndBranch(order: OrderData): { parentName: string; branchName: string } {
+    const b2cGift = extractB2CGiftDetails(order);
+    if (b2cGift.isB2CGift) {
+        return {
+            parentName: b2cGift.senderName,
+            branchName: `${b2cGift.recipientName} (OBSEQUIO)`
+        };
+    }
     const profile = order.profiles || {};
     const fullCompany = (profile.company_name || profile.contact_name || order.customer_name || 'CLIENTE').trim();
 
@@ -1227,13 +1309,16 @@ function ContingencyPrintContent() {
                 {/*    (Regla de Duplicado Consecutivo: Original + Copia)     */}
                 {/* ========================================================= */}
                 {showRemissions && orders.flatMap((order, orderIdx) => {
+                    const b2cGift = extractB2CGiftDetails(order);
                     const { parentName, branchName } = extractParentAndBranch(order);
                     const orderNum = getFriendlyOrderId(order);
                     const subtotal = order.subtotal || order.total || 0;
                     const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici') || Boolean(order.logistics_data?.is_replacement);
-                    const rawDocType = order.profiles?.document_type || order.profiles?.parent?.document_type || '';
-                    const isObsequio = !isReposicion && (rawDocType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO'));
-                    const isZeroCostDoc = isReposicion || isObsequio;
+                    const rawDocType = order.logistics_data?.document_type_override || order.profiles?.document_type || order.profiles?.parent?.document_type || '';
+                    const isObsequio = !isReposicion && (b2cGift.isB2CGift || rawDocType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO'));
+                    const isOffAgreementRemission = !isReposicion && !isObsequio && (Boolean(order.logistics_data?.is_off_agreement_split) || (order.admin_notes || '').includes('FUERA DE ACUERDO - DESPACHADO SIN PRECIO'));
+                    const isUnpricedOffAgreement = isOffAgreementRemission && !Boolean(order.logistics_data?.off_agreement_priced) && Number(order.total || 0) === 0;
+                    const isZeroCostDoc = isReposicion || isObsequio || isUnpricedOffAgreement;
                     const parentSeq = order.logistics_data?.parent_order_sequence || (() => {
                         const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`;
                         const m = notes.match(/pedido\s*(?:#|no\.?|num\.?)?\s*(\d{3,})/i) || notes.match(/#ped-(\d{3,})/i);
@@ -1257,7 +1342,9 @@ function ContingencyPrintContent() {
                     ].flatMap((copyInfo, copyIdx) => 
                         remissionPages.map((pageItems, pageIdx) => {
                             const isLastPage = pageIdx === remissionPages.length - 1;
-                            const pageSubtitle = `CLIENTE: ${parentName.toUpperCase()}${remissionPages.length > 1 ? ` · PÁG. ${pageIdx + 1} DE ${remissionPages.length}` : ''}`;
+                            const pageSubtitle = b2cGift.isB2CGift
+                                ? `DE PARTE DE (REMITENTE): ${b2cGift.senderName.toUpperCase()} · PARA: ${b2cGift.recipientName.toUpperCase()}${remissionPages.length > 1 ? ` · PÁG. ${pageIdx + 1} DE ${remissionPages.length}` : ''}`
+                                : `CLIENTE: ${parentName.toUpperCase()}${remissionPages.length > 1 ? ` · PÁG. ${pageIdx + 1} DE ${remissionPages.length}` : ''}`;
 
                             return (
                                 <Letterhead
@@ -1279,14 +1366,27 @@ function ContingencyPrintContent() {
                                             {parentSeq && <span style={{ color: '#B91C1C' }}>Ampara Pedido #{parentSeq}</span>}
                                         </div>
                                     )}
+                                    {/* Banner Remisión Fuera de Acuerdo ($0 Pendiente de Liquidación Comercial) */}
+                                    {isOffAgreementRemission && (
+                                        <div style={{ backgroundColor: '#FFFBEB', border: '1.2px solid #F59E0B', padding: '3px 8px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.8pt', color: '#92400E', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>REMISIÓN DE PRODUCTOS ADICIONALES FUERA DE ACUERDO COMERCIAL ({isUnpricedOffAgreement ? 'Valor en liquidación comercial post-entrega' : 'Tarifa comercial asignada'}).</span>
+                                            {parentSeq && <span style={{ color: '#B45309' }}>Anexo al Pedido #{parentSeq}</span>}
+                                        </div>
+                                    )}
                                     {/* Banner Amable de Entrega para Remisión Obsequio */}
                                     {isObsequio && (
                                         <div style={{ backgroundColor: '#FAF5FF', border: '1.2px solid #A855F7', padding: '4px 9px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.9pt', color: '#581C87', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                                 <Gift size={12} color="#6B21A8" style={{ flexShrink: 0 }} />
-                                                <span><strong>DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).</span>
+                                                {b2cGift.isB2CGift ? (
+                                                    <span><strong>DETALLE ESPECIAL FRUFRESCO:</strong> Has recibido un obsequio especial enviado por <strong>{b2cGift.senderName}</strong>. Disfruta de la frescura del campo seleccionada especialmente para ti. Entrega prepagada sin ningún cobro al recibir ($ 0).</span>
+                                                ) : (
+                                                    <span><strong>DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).</span>
+                                                )}
                                             </span>
-                                            <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', border: '1px solid #D8B4FE', padding: '1px 6px', borderRadius: '3px', fontWeight: 800, fontSize: '6.2pt', whiteSpace: 'nowrap' }}>CORTESÍA $0</span>
+                                            <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', border: '1px solid #D8B4FE', padding: '1px 6px', borderRadius: '3px', fontWeight: 800, fontSize: '6.2pt', whiteSpace: 'nowrap' }}>
+                                                {b2cGift.isB2CGift ? 'OBSEQUIO $ 0' : 'CORTESÍA $0'}
+                                            </span>
                                         </div>
                                     )}
 
@@ -1327,10 +1427,21 @@ function ContingencyPrintContent() {
                                         marginBottom: '5px'
                                     }}>
                                         <div>
-                                            <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>SUCURSAL:</strong> {branchName}</div>
-                                            <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>NIT / C.C.:</strong> {order.profiles?.nit || 'N/A'}</div>
-                                            <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DIRECCIÓN:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
-                                            <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>TELÉFONO:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone) || 'Sin registrar'}</div>
+                                            {b2cGift.isB2CGift ? (
+                                                <>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DESTINATARIO (RECIBE):</strong> {b2cGift.recipientName}</div>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DE PARTE DE (OBSEQUIA):</strong> {b2cGift.senderName}</div>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DIRECCIÓN:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>TELÉFONO DESTINATARIO:</strong> {cleanPhoneNumber(b2cGift.recipientPhone || order.customer_phone || order.profiles?.contact_phone) || 'Sin registrar'}</div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>SUCURSAL:</strong> {branchName}</div>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>NIT / C.C.:</strong> {order.profiles?.nit || 'N/A'}</div>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DIRECCIÓN:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>TELÉFONO:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone) || 'Sin registrar'}</div>
+                                                </>
+                                            )}
                                         </div>
                                         <div>
                                             <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>FECHA DESPACHO:</strong> {order.delivery_date}</div>
@@ -1351,7 +1462,11 @@ function ContingencyPrintContent() {
                                                     </div>
                                                 );
                                             })()}
-                                            {order.special_notes && <div style={{ lineHeight: 1.3, color: '#0369A1' }}><strong style={{ color: '#0F172A' }}>OBSERVACIÓN:</strong> {order.special_notes}</div>}
+                                            {(b2cGift.isB2CGift ? b2cGift.cleanNote : order.special_notes) && (
+                                                <div style={{ lineHeight: 1.3, color: '#0369A1' }}>
+                                                    <strong style={{ color: '#0F172A' }}>OBSERVACIÓN:</strong> {b2cGift.isB2CGift ? b2cGift.cleanNote : order.special_notes}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 

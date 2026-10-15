@@ -50,7 +50,26 @@ export async function POST(req: NextRequest) {
         let totalUpdatedOrders = 0;
         let totalUpdatedItems = 0;
 
+        let skippedUnpricedCommercial = 0;
+
         for (const orderId of orderIds) {
+            const { data: ordHeader } = await supabaseAdmin
+                .from('orders')
+                .select('id, admin_notes, logistics_data')
+                .eq('id', orderId)
+                .maybeSingle();
+
+            const notesUpper = (ordHeader?.admin_notes || '').toUpperCase();
+            if (
+                notesUpper.includes('DESPACHADO SIN PRECIO') ||
+                notesUpper.includes('SE DESPACHÓ SIN PRECIO') ||
+                notesUpper.includes('FUERA DE ACUERDO') ||
+                Boolean(ordHeader?.logistics_data?.is_off_agreement_split)
+            ) {
+                skippedUnpricedCommercial++;
+                continue;
+            }
+
             // Cargar order_items con datos de producto
             const { data: items, error: itemsErr } = await supabaseAdmin
                 .from('order_items')

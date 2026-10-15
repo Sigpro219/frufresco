@@ -405,9 +405,17 @@ export default function BillingPrintPage() {
                 ) : (
                     filteredOrders.map((order) => {
                         const profile = order.profiles || {};
-                        const docType = order.document_type || profile.document_type || profile.parent?.document_type || 'invoice';
-                        const isInvoice = docType === 'invoice';
-                        const isObsequio = docType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO');
+                        const notesStr = order.special_notes || '';
+                        const recMatch = notesStr.match(/\[DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA:\s*([^|\]\n]+)(?:\|\s*Tel:\s*([^\]\n|]+))?/i);
+                        const senderMatch = notesStr.match(/\[COMPRADOR\s*\/\s*FACTURACI[OÓ]N:\s*([^|\]\n]+)/i);
+                        const isB2CGift = Boolean(order.logistics_data?.is_b2c_gift || recMatch);
+                        const b2cSenderName = (order.logistics_data?.sender_name || (senderMatch ? senderMatch[1].trim() : '') || profile.contact_name || profile.company_name || 'Cliente FruFresco').trim();
+                        const b2cRecipientName = (order.logistics_data?.recipient_name || (recMatch ? recMatch[1].trim() : '') || 'Destinatario Especial').trim();
+                        const b2cRecipientPhone = (order.logistics_data?.recipient_phone || (recMatch && recMatch[2] ? recMatch[2].trim() : '') || '').trim();
+
+                        const docType = order.document_type || profile.document_type || profile.parent?.document_type || (isB2CGift ? 'gift_remission' : 'invoice');
+                        const isInvoice = docType === 'invoice' && !isB2CGift;
+                        const isObsequio = isB2CGift || docType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO');
                         
                         // Respetar política de precios o forzado global (En Obsequio se muestran siempre las columnas en $0)
                         const showPrices = forcePrices || isObsequio
@@ -434,7 +442,9 @@ export default function BillingPrintPage() {
                             <Letterhead 
                                 key={order.id} 
                                 title={titleText}
-                                subtitle={`${profile.company_name || 'Cliente B2B'} • NIT: ${profile.nit || '222222222222'}`}
+                                subtitle={isB2CGift
+                                    ? `DE PARTE DE (REMITENTE): ${b2cSenderName.toUpperCase()} • PARA: ${b2cRecipientName.toUpperCase()}`
+                                    : `${profile.company_name || 'Cliente B2B'} • NIT: ${profile.nit || '222222222222'}`}
                                 date={deliveryDateFormatted}
                                 reference={`#${getFriendlyOrderId(order)}`}
                                 badge={isInvoice ? 'DIAN VÁLIDA' : isObsequio ? 'CORTESÍA / OBSEQUIO' : (showPrices ? 'VALORIZADA' : 'A CIEGAS')}
@@ -459,12 +469,18 @@ export default function BillingPrintPage() {
                                         }}>
                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                                 <Gift size={13} color="#6B21A8" style={{ flexShrink: 0 }} />
-                                                <span>
-                                                    <strong>DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).
-                                                </span>
+                                                {isB2CGift ? (
+                                                    <span>
+                                                        <strong>DETALLE ESPECIAL FRUFRESCO:</strong> Has recibido un obsequio especial enviado por <strong>{b2cSenderName}</strong>. Disfruta de la frescura del campo seleccionada especialmente para ti. Entrega prepagada sin ningún cobro al recibir ($ 0).
+                                                    </span>
+                                                ) : (
+                                                    <span>
+                                                        <strong>DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).
+                                                    </span>
+                                                )}
                                             </span>
                                             <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', border: '1px solid #D8B4FE', padding: '2px 7px', borderRadius: '4px', fontWeight: 800, fontSize: '0.60rem', whiteSpace: 'nowrap' }}>
-                                                CORTESÍA $0
+                                                {isB2CGift ? 'OBSEQUIO $ 0' : 'CORTESÍA $0'}
                                             </span>
                                         </div>
                                     )}
@@ -483,28 +499,44 @@ export default function BillingPrintPage() {
                                         boxSizing: 'border-box'
                                     }}>
                                         <div>
-                                            <div style={{ fontSize: '0.58rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.04em' }}>
-                                                Cliente / Razón Social
-                                            </div>
-                                            <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.78rem', lineHeight: 1.25, marginTop: '1px' }}>
-                                                {profile.company_name || profile.razon_social || 'Consumidor Final'}
-                                            </div>
-                                            <div style={{ color: '#334155', fontWeight: 700, fontSize: '0.66rem', marginTop: '2px', fontFamily: 'monospace' }}>
-                                                NIT / C.C.: {profile.nit || '222222222222'}
-                                            </div>
-                                            <div style={{ color: '#64748B', fontSize: '0.64rem', marginTop: '1px' }}>
-                                                Contacto: {profile.contact_name || 'Atención en Sede'}
-                                            </div>
+                                            {isB2CGift ? (
+                                                <>
+                                                    <div style={{ fontSize: '0.58rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.04em' }}>
+                                                        Destinatario (Recibe en Puerta)
+                                                    </div>
+                                                    <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.78rem', lineHeight: 1.25, marginTop: '1px' }}>
+                                                        {b2cRecipientName}
+                                                    </div>
+                                                    <div style={{ color: '#334155', fontWeight: 700, fontSize: '0.66rem', marginTop: '2px' }}>
+                                                        De parte de (Obsequia): {b2cSenderName}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div style={{ fontSize: '0.58rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.04em' }}>
+                                                        Cliente / Razón Social
+                                                    </div>
+                                                    <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.78rem', lineHeight: 1.25, marginTop: '1px' }}>
+                                                        {profile.company_name || profile.razon_social || 'Consumidor Final'}
+                                                    </div>
+                                                    <div style={{ color: '#334155', fontWeight: 700, fontSize: '0.66rem', marginTop: '2px', fontFamily: 'monospace' }}>
+                                                        NIT / C.C.: {profile.nit || '222222222222'}
+                                                    </div>
+                                                    <div style={{ color: '#64748B', fontSize: '0.64rem', marginTop: '1px' }}>
+                                                        Contacto: {profile.contact_name || 'Atención en Sede'}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                         <div>
                                             <div style={{ fontSize: '0.58rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.04em' }}>
                                                 Destino / Condiciones de Entrega
                                             </div>
                                             <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.72rem', lineHeight: 1.25, marginTop: '1px' }}>
-                                                {profile.address || 'Entrega en Bodega Central'}
+                                                {order.shipping_address || profile.address || 'Entrega en Bodega Central'}
                                             </div>
                                             <div style={{ color: '#475569', fontSize: '0.64rem', marginTop: '2px' }}>
-                                                Teléfono: {profile.contact_phone || profile.phone || 'N/A'}
+                                                Teléfono: {isB2CGift ? (b2cRecipientPhone || profile.contact_phone || 'N/A') : (profile.contact_phone || profile.phone || 'N/A')}
                                             </div>
                                             <div style={{ color: isObsequio ? '#6B21A8' : '#0D7A57', fontWeight: 700, fontSize: '0.64rem', marginTop: '1px' }}>
                                                 Plazo: {isObsequio ? 'Obsequio / Cortesía ($0 COP)' : (profile.payment_days ? `${profile.payment_days} días de crédito` : order.payment_method || 'Contado')}
