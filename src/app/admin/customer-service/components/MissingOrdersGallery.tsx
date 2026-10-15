@@ -1,15 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 import {
     Bell, Truck, Calendar, MessageCircle, CheckCircle2, AlertTriangle,
     Clock, Building2, User, Phone, Search, RefreshCw, ExternalLink,
-    Check, Sparkles, Filter, AlertCircle, ShoppingCart, ArrowRight
+    Check, Sparkles, Filter, AlertCircle, ShoppingCart, ArrowRight,
+    Layers, ChevronRight, CheckCheck
 } from 'lucide-react';
 import { getBogotaNow, formatDateToYYYYMMDD, addDaysISO } from '@/lib/colombianHolidays';
 import { cleanColombianPhone } from '../utils';
+import { GalleryOmnibox } from '@/components/common/GalleryOmnibox';
 
 interface ClientProfile {
     id: string;
@@ -62,7 +64,23 @@ export default function MissingOrdersGallery({
         return formatDateToYYYYMMDD(tomorrow);
     });
 
-    // 2. Data State
+    // 2. Dynamic Sticky Toolbar Measurement (Magnetic Stacking Zero Gap)
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    const [toolbarHeight, setToolbarHeight] = useState(54);
+
+    useEffect(() => {
+        if (!toolbarRef.current) return;
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const height = entry.borderBoxSize?.[0]?.blockSize || entry.contentRect?.height;
+                if (height) setToolbarHeight(Math.ceil(height));
+            }
+        });
+        observer.observe(toolbarRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    // 3. Data State
     const [profiles, setProfiles] = useState<ClientProfile[]>([]);
     const [ordersMap, setOrdersMap] = useState<Record<string, { id: string; sequence_id?: number; total?: number; status: string }>>({});
     const [draftsMap, setDraftsMap] = useState<Record<string, { id: string; subject?: string }>>({});
@@ -70,11 +88,11 @@ export default function MissingOrdersGallery({
     const [loading, setLoading] = useState<boolean>(true);
     const [refreshing, setRefreshing] = useState<boolean>(false);
 
-    // 3. Search and Status Filter
+    // 4. Search and Status Filter
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [statusFilter, setStatusFilter] = useState<'missing_only' | 'all' | 'contacted' | 'uncontacted'>('missing_only');
 
-    // 4. Contacted tracking stored locally by targetDate
+    // 5. Contacted tracking stored locally by targetDate
     const storageKey = `cs_reminders_${targetDate}`;
     const [contactedMap, setContactedMap] = useState<Record<string, string>>(() => {
         if (typeof window === 'undefined') return {};
@@ -121,7 +139,7 @@ export default function MissingOrdersGallery({
         }
     }, [contactedMap, storageKey]);
 
-    // 5. Fetch Data from Supabase
+    // 6. Fetch Data from Supabase
     const fetchData = useCallback(async () => {
         setRefreshing(true);
         try {
@@ -134,7 +152,7 @@ export default function MissingOrdersGallery({
                 .order('company_name', { ascending: true });
 
             if (profError) throw profError;
-            const validProfiles = (profs || []).filter(p => !p.is_corporate_parent); // Only dispatch branches/individual clients
+            const validProfiles = (profs || []).filter(p => !p.is_corporate_parent);
             setProfiles(validProfiles);
 
             // B. Fetch orders scheduled for the target delivery date
@@ -152,7 +170,7 @@ export default function MissingOrdersGallery({
             });
             setOrdersMap(ordMap);
 
-            // C. Fetch pending drafts for target date (or detected in inbox)
+            // C. Fetch pending drafts for target date
             const { data: targetDrafts } = await supabase
                 .from('order_drafts')
                 .select('id, profile_id, email_subject, status')
@@ -203,7 +221,7 @@ export default function MissingOrdersGallery({
             // Calculate averages
             Object.values(statsMap).forEach(st => {
                 if (st.totalOrders > 0 && st.lastOrderTotal) {
-                    st.averageTotal = Math.round(st.lastOrderTotal); // Approximate or base
+                    st.averageTotal = Math.round(st.lastOrderTotal);
                 }
             });
 
@@ -220,15 +238,15 @@ export default function MissingOrdersGallery({
         fetchData();
     }, [fetchData]);
 
-    // 6. Target Day of the Week calculation
+    // 7. Target Day of the Week calculation
     const targetDayIndex = useMemo(() => {
         const d = new Date(targetDate + 'T12:00:00');
-        return isNaN(d.getTime()) ? 1 : d.getDay(); // 0 = Dom, 1 = Lun, 2 = Mar...
+        return isNaN(d.getTime()) ? 1 : d.getDay();
     }, [targetDate]);
 
     const targetDayName = DAYS_NAMES_ES[targetDayIndex];
 
-    // 7. Compile items with frequency & order match
+    // 8. Compile items with frequency & order match
     const allCompiledItems: MissingOrderItem[] = useMemo(() => {
         return profiles.map(profile => {
             const hasOrder = Boolean(ordersMap[profile.id]);
@@ -236,7 +254,6 @@ export default function MissingOrdersGallery({
             const existingOrder = ordersMap[profile.id];
             const stats = historyStats[profile.id];
 
-            // Evaluate if this client habitually receives on this day of the week
             let isHabitual = false;
             let habitualReason = '';
             let habitualDaysLabel = '';
@@ -255,7 +272,6 @@ export default function MissingOrdersGallery({
                 : (Array.isArray(logisticsObj?.days) ? logisticsObj.days : []);
 
             if (allowedDays.length > 0) {
-                // In allowed_days: 1=Lun, 2=Mar, 3=Mie, 4=Jue, 5=Vie, 6=Sab, 7 or 0=Dom
                 const mappedDays = allowedDays.map(d => (d === 7 ? 0 : d));
                 habitualDaysLabel = mappedDays
                     .map(d => DAYS_NAMES_ES[d])
@@ -316,7 +332,7 @@ export default function MissingOrdersGallery({
         });
     }, [profiles, ordersMap, draftsMap, historyStats, targetDayIndex, targetDayName, contactedMap]);
 
-    // 8. Filtered Items by Omnibox Search and Status
+    // 9. Filtered Items by Omnibox Search and Status
     const filteredItems = useMemo(() => {
         let result = allCompiledItems;
 
@@ -328,7 +344,6 @@ export default function MissingOrdersGallery({
         } else if (statusFilter === 'uncontacted') {
             result = result.filter(item => item.isHabitualToday && !item.hasActiveOrder && !item.contactedAt);
         } else if (statusFilter === 'all') {
-            // Include all habituals
             result = result.filter(item => item.isHabitualToday);
         }
 
@@ -353,7 +368,7 @@ export default function MissingOrdersGallery({
         });
     }, [allCompiledItems, statusFilter, searchTerm]);
 
-    // 9. Metrics Summary for Top Banner
+    // 10. Metrics Summary for Top Banner
     const metrics = useMemo(() => {
         const habitualTotal = allCompiledItems.filter(i => i.isHabitualToday).length;
         const withOrder = allCompiledItems.filter(i => i.isHabitualToday && i.hasActiveOrder).length;
@@ -362,7 +377,7 @@ export default function MissingOrdersGallery({
         return { habitualTotal, withOrder, missingCount, contactedCount };
     }, [allCompiledItems]);
 
-    // 10. Handler to Send WhatsApp Reminder (Gemba Template)
+    // 11. Handler to Send WhatsApp Reminder (Gemba Template)
     const handleSendWhatsApp = (item: MissingOrderItem) => {
         const phone = item.profile.contact_phone || item.profile.phone;
         const cleanPhone = cleanColombianPhone(phone);
@@ -372,9 +387,8 @@ export default function MissingOrdersGallery({
         }
 
         const contactName = item.profile.contact_name?.trim() || item.profile.company_name?.trim() || 'Estimado Cliente';
-        const companyName = item.profile.company_name ? ` (${item.profile.company_name})` : '';
 
-        // Template identical to the Gemba production screenshot
+        // Official WhatsApp message template
         const messageText = `🍅 ¡Hola ${contactName}!
 ¡Mañana salimos de ruta! 🚚
 Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. 🕒
@@ -384,20 +398,17 @@ Quedamos atentos`;
         const encoded = encodeURIComponent(messageText);
         const waUrl = `https://wa.me/57${cleanPhone}?text=${encoded}`;
 
-        // Mark as contacted in local session
         markAsContacted(item.profile.id);
-
-        // Open WhatsApp in new tab
         window.open(waUrl, '_blank');
     };
 
     return (
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1rem' }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
             
-            {/* 1. Control & Date Bar */}
+            {/* 1. Header & Route Configuration Card */}
             <div style={{
                 backgroundColor: '#FFFFFF',
-                borderRadius: '18px',
+                borderRadius: '16px',
                 padding: '1.2rem 1.5rem',
                 border: '1px solid #E2E8F0',
                 display: 'flex',
@@ -405,7 +416,7 @@ Quedamos atentos`;
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
                 gap: '1rem',
-                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.03)'
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{
@@ -422,19 +433,19 @@ Quedamos atentos`;
                         <Bell size={22} strokeWidth={2.2} />
                     </div>
                     <div>
-                        <h2 style={{
-                            margin: 0,
-                            fontSize: '1.1rem',
-                            fontWeight: 800,
-                            color: '#0F172A',
-                            letterSpacing: '-0.02em',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px'
-                        }}>
-                            Control de Pedidos Pendientes & Recordatorios
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <h2 style={{
+                                margin: 0,
+                                fontSize: '1.1rem',
+                                fontWeight: 800,
+                                color: '#0F172A',
+                                letterSpacing: '-0.02em',
+                                fontFamily: 'var(--font-outfit), sans-serif'
+                            }}>
+                                Control de Pedidos Pendientes & Recordatorios
+                            </h2>
                             <span style={{
-                                fontSize: '0.72rem',
+                                fontSize: '0.7rem',
                                 fontWeight: 800,
                                 backgroundColor: '#E0F2FE',
                                 color: '#0369A1',
@@ -444,8 +455,8 @@ Quedamos atentos`;
                             }}>
                                 SDD v1.9.193
                             </span>
-                        </h2>
-                        <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: 500 }}>
+                        </div>
+                        <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: 500 }}>
                             Clientes institucionales que habitualmente reciben ruta el día <strong>{targetDayName}</strong> y aún tienen su pedido pendiente.
                         </p>
                     </div>
@@ -456,13 +467,13 @@ Quedamos atentos`;
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '8px',
                         backgroundColor: '#F8FAFC',
                         border: '1.5px solid #CBD5E1',
                         borderRadius: '12px',
                         padding: '6px 12px'
                     }}>
-                        <Calendar size={16} color="#0D7A57" />
+                        <Calendar size={16} style={{ color: '#0D7A57' }} />
                         <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>
                             Ruta Objetivo:
                         </span>
@@ -512,176 +523,182 @@ Quedamos atentos`;
             {/* 2. Top KPI Cards */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '1rem'
+                gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+                gap: '12px'
             }}>
                 {/* KPI 1: Habituales del Día */}
                 <div style={{
                     backgroundColor: '#FFFFFF',
-                    borderRadius: '16px',
+                    borderRadius: '14px',
                     padding: '1.1rem 1.25rem',
                     border: '1px solid #E2E8F0',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '14px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    justifyContent: 'space-between',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                 }}>
-                    <div style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '12px',
-                        backgroundColor: '#F1F5F9',
-                        color: '#475569',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                    }}>
-                        <Building2 size={22} />
-                    </div>
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                             Habituales ({targetDayName})
                         </div>
-                        <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#0F172A', marginTop: '2px' }}>
+                        <div style={{ fontSize: '1.55rem', fontWeight: 900, color: '#0F172A', marginTop: '2px', letterSpacing: '-0.02em' }}>
                             {loading ? '...' : metrics.habitualTotal}
                         </div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                            Clientes de ruta programada
+                        </div>
+                    </div>
+                    <div style={{ padding: '10px', backgroundColor: '#F8FAFC', color: '#475569', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                        <Building2 size={22} />
                     </div>
                 </div>
 
                 {/* KPI 2: Pedidos Ya Montados */}
                 <div style={{
                     backgroundColor: '#FFFFFF',
-                    borderRadius: '16px',
+                    borderRadius: '14px',
                     padding: '1.1rem 1.25rem',
-                    border: '1px solid #BBF7D0',
+                    border: '1px solid #E2E8F0',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '14px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    justifyContent: 'space-between',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                 }}>
-                    <div style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '12px',
-                        backgroundColor: '#DCFCE7',
-                        color: '#15803D',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                    }}>
-                        <CheckCircle2 size={22} />
-                    </div>
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                             Pedidos Ya Recibidos
                         </div>
-                        <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#15803D', marginTop: '2px' }}>
+                        <div style={{ fontSize: '1.55rem', fontWeight: 900, color: '#0D7A57', marginTop: '2px', letterSpacing: '-0.02em' }}>
                             {loading ? '...' : metrics.withOrder}
                         </div>
+                        <div style={{ fontSize: '0.7rem', color: '#15803D' }}>
+                            En firme o en borrador
+                        </div>
+                    </div>
+                    <div style={{ padding: '10px', backgroundColor: '#DCFCE7', color: '#15803D', borderRadius: '12px', border: '1px solid #BBF7D0' }}>
+                        <CheckCircle2 size={22} />
                     </div>
                 </div>
 
-                {/* KPI 3: "No Pedidos" Pendientes (Criticidad) */}
+                {/* KPI 3: Pedidos Pendientes */}
                 <div style={{
                     backgroundColor: metrics.missingCount > 0 ? '#FFFBEB' : '#FFFFFF',
-                    borderRadius: '16px',
+                    borderRadius: '14px',
                     padding: '1.1rem 1.25rem',
                     border: `1.5px solid ${metrics.missingCount > 0 ? '#F59E0B' : '#E2E8F0'}`,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '14px',
-                    boxShadow: metrics.missingCount > 0 ? '0 4px 12px rgba(245, 158, 11, 0.15)' : '0 2px 4px rgba(0,0,0,0.02)'
+                    justifyContent: 'space-between',
+                    boxShadow: metrics.missingCount > 0 ? '0 3px 8px rgba(245, 158, 11, 0.12)' : '0 1px 3px rgba(0,0,0,0.02)'
                 }}>
-                    <div style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '12px',
-                        backgroundColor: metrics.missingCount > 0 ? '#FDE68A' : '#F1F5F9',
-                        color: metrics.missingCount > 0 ? '#B45309' : '#64748B',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                    }}>
-                        <AlertTriangle size={22} />
-                    </div>
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: metrics.missingCount > 0 ? '#92400E' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: metrics.missingCount > 0 ? '#92400E' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                             Pedidos Pendientes
                         </div>
-                        <div style={{ fontSize: '1.45rem', fontWeight: 900, color: metrics.missingCount > 0 ? '#B45309' : '#0F172A', marginTop: '2px' }}>
+                        <div style={{ fontSize: '1.55rem', fontWeight: 900, color: metrics.missingCount > 0 ? '#B45309' : '#0F172A', marginTop: '2px', letterSpacing: '-0.02em' }}>
                             {loading ? '...' : metrics.missingCount}
                         </div>
+                        <div style={{ fontSize: '0.7rem', color: metrics.missingCount > 0 ? '#B45309' : '#64748B' }}>
+                            Pendientes de enviar orden
+                        </div>
+                    </div>
+                    <div style={{ padding: '10px', backgroundColor: metrics.missingCount > 0 ? '#FDE68A' : '#F8FAFC', color: metrics.missingCount > 0 ? '#B45309' : '#64748B', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                        <AlertTriangle size={22} />
                     </div>
                 </div>
 
                 {/* KPI 4: Contactados Hoy */}
                 <div style={{
                     backgroundColor: '#FFFFFF',
-                    borderRadius: '16px',
+                    borderRadius: '14px',
                     padding: '1.1rem 1.25rem',
-                    border: '1px solid #BAE6FD',
+                    border: '1px solid #E2E8F0',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '14px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    justifyContent: 'space-between',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                 }}>
-                    <div style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '12px',
-                        backgroundColor: '#E0F2FE',
-                        color: '#0369A1',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                    }}>
-                        <MessageCircle size={22} />
-                    </div>
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0369A1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#0369A1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                             Recordatorios Enviados
                         </div>
-                        <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#0284C7', marginTop: '2px' }}>
+                        <div style={{ fontSize: '1.55rem', fontWeight: 900, color: '#0284C7', marginTop: '2px', letterSpacing: '-0.02em' }}>
                             {loading ? '...' : metrics.contactedCount}
                         </div>
+                        <div style={{ fontSize: '0.7rem', color: '#0369A1' }}>
+                            Gestionados en jornada
+                        </div>
+                    </div>
+                    <div style={{ padding: '10px', backgroundColor: '#E0F2FE', color: '#0369A1', borderRadius: '12px', border: '1px solid #BAE6FD' }}>
+                        <MessageCircle size={22} />
                     </div>
                 </div>
             </div>
 
-            {/* 3. Omnibox Search & Filter Tabs */}
-            <div style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: '16px',
-                padding: '0.9rem 1.25rem',
-                border: '1px solid #E2E8F0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '12px'
-            }}>
-                {/* Filter Pills */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {/* 3. Línea 1 Sticky Toolbar (top: 85px, zIndex: 70) — Magnetic Stacking Protocol */}
+            <div
+                ref={toolbarRef}
+                style={{
+                    position: 'sticky',
+                    top: '85px',
+                    zIndex: 70,
+                    margin: '0.5rem 0',
+                    padding: '10px 14px',
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '16px',
+                    border: '1px solid #CBD5E1',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    overflow: 'visible'
+                }}
+            >
+                {/* Filter Segmented Control Pills */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '10px',
+                    padding: '3px',
+                    overflowX: 'auto'
+                }}>
                     <button
                         type="button"
                         onClick={() => setStatusFilter('missing_only')}
                         style={{
                             padding: '6px 12px',
-                            fontSize: '0.78rem',
-                            fontWeight: 800,
-                            borderRadius: '10px',
+                            fontSize: '0.75rem',
+                            fontWeight: statusFilter === 'missing_only' ? '800' : '600',
+                            borderRadius: '7px',
                             border: 'none',
                             cursor: 'pointer',
-                            backgroundColor: statusFilter === 'missing_only' ? '#F59E0B' : '#F1F5F9',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: statusFilter === 'missing_only' ? '#D97706' : 'transparent',
                             color: statusFilter === 'missing_only' ? '#FFFFFF' : '#475569',
+                            boxShadow: statusFilter === 'missing_only' ? '0 2px 6px rgba(217, 119, 6, 0.35)' : 'none',
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        ⚠️ Solo Pendientes ({metrics.missingCount})
+                        <AlertTriangle size={14} />
+                        <span>Solo Pendientes</span>
+                        <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: '900',
+                            padding: '1px 6px',
+                            borderRadius: '10px',
+                            backgroundColor: statusFilter === 'missing_only' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                            color: statusFilter === 'missing_only' ? '#FFFFFF' : '#475569'
+                        }}>
+                            {metrics.missingCount}
+                        </span>
                     </button>
 
                     <button
@@ -689,17 +706,32 @@ Quedamos atentos`;
                         onClick={() => setStatusFilter('uncontacted')}
                         style={{
                             padding: '6px 12px',
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            borderRadius: '10px',
+                            fontSize: '0.75rem',
+                            fontWeight: statusFilter === 'uncontacted' ? '800' : '600',
+                            borderRadius: '7px',
                             border: 'none',
                             cursor: 'pointer',
-                            backgroundColor: statusFilter === 'uncontacted' ? '#EF4444' : '#F1F5F9',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: statusFilter === 'uncontacted' ? '#DC2626' : 'transparent',
                             color: statusFilter === 'uncontacted' ? '#FFFFFF' : '#475569',
+                            boxShadow: statusFilter === 'uncontacted' ? '0 2px 6px rgba(220, 38, 38, 0.35)' : 'none',
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        🔴 Sin Contactar ({metrics.missingCount - metrics.contactedCount})
+                        <AlertCircle size={14} />
+                        <span>Sin Contactar</span>
+                        <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: '900',
+                            padding: '1px 6px',
+                            borderRadius: '10px',
+                            backgroundColor: statusFilter === 'uncontacted' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                            color: statusFilter === 'uncontacted' ? '#FFFFFF' : '#475569'
+                        }}>
+                            {Math.max(0, metrics.missingCount - metrics.contactedCount)}
+                        </span>
                     </button>
 
                     <button
@@ -707,17 +739,32 @@ Quedamos atentos`;
                         onClick={() => setStatusFilter('contacted')}
                         style={{
                             padding: '6px 12px',
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            borderRadius: '10px',
+                            fontSize: '0.75rem',
+                            fontWeight: statusFilter === 'contacted' ? '800' : '600',
+                            borderRadius: '7px',
                             border: 'none',
                             cursor: 'pointer',
-                            backgroundColor: statusFilter === 'contacted' ? '#0D7A57' : '#F1F5F9',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: statusFilter === 'contacted' ? '#0D7A57' : 'transparent',
                             color: statusFilter === 'contacted' ? '#FFFFFF' : '#475569',
+                            boxShadow: statusFilter === 'contacted' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        🟢 Ya Contactados ({metrics.contactedCount})
+                        <CheckCheck size={14} />
+                        <span>Ya Contactados</span>
+                        <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: '900',
+                            padding: '1px 6px',
+                            borderRadius: '10px',
+                            backgroundColor: statusFilter === 'contacted' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                            color: statusFilter === 'contacted' ? '#FFFFFF' : '#475569'
+                        }}>
+                            {metrics.contactedCount}
+                        </span>
                     </button>
 
                     <button
@@ -725,53 +772,44 @@ Quedamos atentos`;
                         onClick={() => setStatusFilter('all')}
                         style={{
                             padding: '6px 12px',
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            borderRadius: '10px',
+                            fontSize: '0.75rem',
+                            fontWeight: statusFilter === 'all' ? '800' : '600',
+                            borderRadius: '7px',
                             border: 'none',
                             cursor: 'pointer',
-                            backgroundColor: statusFilter === 'all' ? '#1E293B' : '#F1F5F9',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: statusFilter === 'all' ? '#1E293B' : 'transparent',
                             color: statusFilter === 'all' ? '#FFFFFF' : '#475569',
+                            boxShadow: statusFilter === 'all' ? '0 2px 6px rgba(30, 41, 59, 0.35)' : 'none',
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        Todos los Habituales ({metrics.habitualTotal})
+                        <Layers size={14} />
+                        <span>Todos ({metrics.habitualTotal})</span>
                     </button>
                 </div>
 
-                {/* Omnibox Search Input */}
-                <div style={{
-                    position: 'relative',
-                    width: '320px',
-                    maxWidth: '100%'
-                }}>
-                    <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                    <input
-                        type="text"
-                        placeholder="Buscar cliente, hotel, NIT o contacto..."
+                {/* Superbuscador Omnibox Universal FruFresco */}
+                <div style={{ flex: '1', maxWidth: '420px', minWidth: '260px' }}>
+                    <GalleryOmnibox
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{
-                            width: '100%',
-                            padding: '8px 12px 8px 36px',
-                            fontSize: '0.82rem',
-                            borderRadius: '10px',
-                            border: '1.5px solid #CBD5E1',
-                            outline: 'none',
-                            backgroundColor: '#F8FAFC',
-                            fontWeight: 500
-                        }}
+                        onChange={setSearchTerm}
+                        placeholder="Buscar cliente, hotel, NIT o contacto (presiona /)..."
+                        filteredCount={filteredItems.length}
+                        totalCount={allCompiledItems.length}
                     />
                 </div>
             </div>
 
-            {/* 4. Main Gallery Table / Cards */}
+            {/* 4. Línea 2 Sticky: Master Data Table Container (overflow: 'visible' inviolable) */}
             <div style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: '18px',
+                backgroundColor: 'white',
+                borderRadius: '14px',
                 border: '1px solid #E2E8F0',
-                overflow: 'hidden',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                overflow: 'visible'
             }}>
                 {loading ? (
                     <div style={{ padding: '3.5rem', textAlign: 'center', color: '#64748B' }}>
@@ -805,226 +843,304 @@ Quedamos atentos`;
                         </p>
                     </div>
                 ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
-                            <thead>
-                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0', color: '#475569', fontWeight: 800, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    <th style={{ padding: '12px 18px' }}>Cliente / Empresa</th>
-                                    <th style={{ padding: '12px 16px' }}>Contacto & Teléfono</th>
-                                    <th style={{ padding: '12px 16px' }}>Frecuencia Habitual</th>
-                                    <th style={{ padding: '12px 16px' }}>Último Pedido</th>
-                                    <th style={{ padding: '12px 16px' }}>Estado Hoy</th>
-                                    <th style={{ padding: '12px 18px', textAlign: 'right' }}>Acción de Contacto</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredItems.map((item, idx) => {
-                                    const phone = item.profile.contact_phone || item.profile.phone;
-                                    const isContacted = Boolean(item.contactedAt);
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                        <thead style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
+                            <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                <th style={{
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight}px`,
+                                    zIndex: 40,
+                                    backgroundColor: '#F8FAFC',
+                                    borderBottom: '2px solid #E2E8F0',
+                                    padding: '12px 16px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    textTransform: 'uppercase',
+                                    color: '#64748B',
+                                    borderTopLeftRadius: '14px'
+                                }}>
+                                    Cliente / Empresa
+                                </th>
+                                <th style={{
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight}px`,
+                                    zIndex: 40,
+                                    backgroundColor: '#F8FAFC',
+                                    borderBottom: '2px solid #E2E8F0',
+                                    padding: '12px 16px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    textTransform: 'uppercase',
+                                    color: '#64748B'
+                                }}>
+                                    Contacto & Teléfono
+                                </th>
+                                <th style={{
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight}px`,
+                                    zIndex: 40,
+                                    backgroundColor: '#F8FAFC',
+                                    borderBottom: '2px solid #E2E8F0',
+                                    padding: '12px 16px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    textTransform: 'uppercase',
+                                    color: '#64748B'
+                                }}>
+                                    Frecuencia Habitual
+                                </th>
+                                <th style={{
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight}px`,
+                                    zIndex: 40,
+                                    backgroundColor: '#F8FAFC',
+                                    borderBottom: '2px solid #E2E8F0',
+                                    padding: '12px 16px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    textTransform: 'uppercase',
+                                    color: '#64748B'
+                                }}>
+                                    Último Pedido
+                                </th>
+                                <th style={{
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight}px`,
+                                    zIndex: 40,
+                                    backgroundColor: '#F8FAFC',
+                                    borderBottom: '2px solid #E2E8F0',
+                                    padding: '12px 16px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    textTransform: 'uppercase',
+                                    color: '#64748B'
+                                }}>
+                                    Estado Hoy
+                                </th>
+                                <th style={{
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight}px`,
+                                    zIndex: 40,
+                                    backgroundColor: '#F8FAFC',
+                                    borderBottom: '2px solid #E2E8F0',
+                                    padding: '12px 16px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    textTransform: 'uppercase',
+                                    color: '#64748B',
+                                    textAlign: 'right',
+                                    borderTopRightRadius: '14px'
+                                }}>
+                                    Acción de Contacto
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredItems.map((item, idx) => {
+                                const phone = item.profile.contact_phone || item.profile.phone;
+                                const isContacted = Boolean(item.contactedAt);
 
-                                    return (
-                                        <tr
-                                            key={item.profile.id}
-                                            style={{
-                                                borderBottom: '1px solid #F1F5F9',
-                                                backgroundColor: isContacted ? '#F8FAFC' : '#FFFFFF',
-                                                transition: 'background-color 0.15s ease'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = isContacted ? '#F1F5F9' : '#F9FBFA';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = isContacted ? '#F8FAFC' : '#FFFFFF';
-                                            }}
-                                        >
-                                            {/* 1. Cliente */}
-                                            <td style={{ padding: '14px 18px', verticalAlign: 'middle' }}>
-                                                <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#0F172A' }}>
-                                                    {item.profile.company_name || 'Sin Razón Social'}
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', fontSize: '0.75rem', color: '#64748B' }}>
-                                                    <span>NIT: {item.profile.nit || 'No registrado'}</span>
-                                                    {item.profile.address && (
-                                                        <span>• {item.profile.address.slice(0, 32)}</span>
+                                return (
+                                    <tr
+                                        key={item.profile.id}
+                                        style={{
+                                            backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA',
+                                            transition: 'background-color 0.15s ease'
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'white' : '#FAFAFA')}
+                                    >
+                                        {/* 1. Cliente */}
+                                        <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                            <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#1A231E' }}>
+                                                {item.profile.company_name || 'Sin Razón Social'}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', fontSize: '0.72rem', color: '#64748B' }}>
+                                                <span>NIT: {item.profile.nit || 'No registrado'}</span>
+                                                {item.profile.address && (
+                                                    <span>• {String(item.profile.address).slice(0, 32)}</span>
+                                                )}
+                                            </div>
+                                        </td>
+
+                                        {/* 2. Contacto & Teléfono */}
+                                        <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                            <div style={{ fontWeight: 700, color: '#334155', fontSize: '0.82rem' }}>
+                                                {item.profile.contact_name || 'Encargado de Compras'}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px', fontSize: '0.74rem', color: '#0D7A57', fontWeight: 600 }}>
+                                                <Phone size={12} />
+                                                <span>{phone || 'Sin número'}</span>
+                                            </div>
+                                        </td>
+
+                                        {/* 3. Frecuencia Habitual */}
+                                        <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                            <div style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                padding: '3px 8px',
+                                                borderRadius: '8px',
+                                                backgroundColor: '#F1F5F9',
+                                                color: '#334155',
+                                                fontWeight: 700,
+                                                fontSize: '0.74rem',
+                                                border: '1px solid #E2E8F0'
+                                            }}>
+                                                <Calendar size={12} style={{ color: '#0D7A57' }} />
+                                                {item.habitualDaysLabel}
+                                            </div>
+                                            <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '3px' }}>
+                                                {item.habitualReason}
+                                            </div>
+                                        </td>
+
+                                        {/* 4. Último Pedido */}
+                                        <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                            {item.lastOrderDate ? (
+                                                <div>
+                                                    <div style={{ fontWeight: 700, color: '#334155', fontSize: '0.8rem' }}>
+                                                        {item.lastOrderDate}
+                                                    </div>
+                                                    {item.lastOrderTotal && item.lastOrderTotal > 0 && (
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>
+                                                            {formatMoney(item.lastOrderTotal)}
+                                                        </div>
                                                     )}
                                                 </div>
-                                            </td>
+                                            ) : (
+                                                <span style={{ color: '#94A3B8', fontSize: '0.74rem' }}>Sin historial reciente</span>
+                                            )}
+                                        </td>
 
-                                            {/* 2. Contacto & Teléfono */}
-                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                                                <div style={{ fontWeight: 700, color: '#334155' }}>
-                                                    {item.profile.contact_name || 'Encargado de Compras'}
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px', fontSize: '0.75rem', color: '#0D7A57', fontWeight: 600 }}>
-                                                    <Phone size={13} />
-                                                    <span>{phone || 'Sin número'}</span>
-                                                </div>
-                                            </td>
-
-                                            {/* 3. Frecuencia Habitual */}
-                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                                                <div style={{
+                                        {/* 5. Estado Hoy */}
+                                        <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                            {item.hasActiveOrder ? (
+                                                <span style={{
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '5px',
-                                                    padding: '3px 8px',
-                                                    borderRadius: '8px',
-                                                    backgroundColor: '#F1F5F9',
-                                                    color: '#334155',
-                                                    fontWeight: 700,
-                                                    fontSize: '0.75rem'
+                                                    gap: '4px',
+                                                    padding: '3px 10px',
+                                                    borderRadius: '20px',
+                                                    backgroundColor: '#DCFCE7',
+                                                    color: '#15803D',
+                                                    fontWeight: 800,
+                                                    fontSize: '0.72rem',
+                                                    border: '1px solid #86EFAC'
                                                 }}>
-                                                    <Calendar size={13} color="#0D7A57" />
-                                                    {item.habitualDaysLabel}
-                                                </div>
-                                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
-                                                    {item.habitualReason}
-                                                </div>
-                                            </td>
-
-                                            {/* 4. Último Pedido */}
-                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                                                {item.lastOrderDate ? (
-                                                    <div>
-                                                        <div style={{ fontWeight: 600, color: '#334155' }}>
-                                                            {item.lastOrderDate}
-                                                        </div>
-                                                        {item.lastOrderTotal && item.lastOrderTotal > 0 && (
-                                                            <div style={{ fontSize: '0.73rem', color: '#64748B', fontWeight: 500 }}>
-                                                                {formatMoney(item.lastOrderTotal)}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span style={{ color: '#94A3B8', fontSize: '0.75rem' }}>Sin historial reciente</span>
-                                                )}
-                                            </td>
-
-                                            {/* 5. Estado Hoy */}
-                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                                                {item.hasActiveOrder ? (
-                                                    <span style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        padding: '3px 10px',
-                                                        borderRadius: '20px',
-                                                        backgroundColor: '#DCFCE7',
-                                                        color: '#15803D',
-                                                        fontWeight: 800,
-                                                        fontSize: '0.73rem',
-                                                        border: '1px solid #86EFAC'
-                                                    }}>
-                                                        <Check size={13} /> {item.existingOrderSeq || 'Ya Radicado'}
-                                                    </span>
-                                                ) : isContacted ? (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                        <span style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '5px',
-                                                            padding: '3px 10px',
-                                                            borderRadius: '20px',
-                                                            backgroundColor: '#E0F2FE',
-                                                            color: '#0369A1',
-                                                            fontWeight: 800,
-                                                            fontSize: '0.73rem',
-                                                            border: '1px solid #BAE6FD'
-                                                        }}>
-                                                            <MessageCircle size={12} /> Enviado ({item.contactedAt})
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeContacted(item.profile.id)}
-                                                            style={{
-                                                                background: 'none',
-                                                                border: 'none',
-                                                                color: '#94A3B8',
-                                                                fontSize: '0.68rem',
-                                                                cursor: 'pointer',
-                                                                textAlign: 'left',
-                                                                padding: '0 4px',
-                                                                textDecoration: 'underline'
-                                                            }}
-                                                        >
-                                                            Desmarcar
-                                                        </button>
-                                                    </div>
-                                                ) : (
+                                                    <Check size={13} /> {item.existingOrderSeq || 'Ya Radicado'}
+                                                </span>
+                                            ) : isContacted ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                                     <span style={{
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
                                                         gap: '5px',
                                                         padding: '3px 10px',
                                                         borderRadius: '20px',
-                                                        backgroundColor: '#FEF3C7',
-                                                        color: '#B45309',
+                                                        backgroundColor: '#E0F2FE',
+                                                        color: '#0369A1',
                                                         fontWeight: 800,
-                                                        fontSize: '0.73rem',
-                                                        border: '1px solid #FCD34D'
+                                                        fontSize: '0.72rem',
+                                                        border: '1px solid #BAE6FD'
                                                     }}>
-                                                        <Clock size={12} /> Sin Pedido (Pendiente)
+                                                        <CheckCheck size={12} /> Enviado ({item.contactedAt})
                                                     </span>
-                                                )}
-                                            </td>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeContacted(item.profile.id)}
+                                                        style={{
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            color: '#94A3B8',
+                                                            fontSize: '0.68rem',
+                                                            cursor: 'pointer',
+                                                            textAlign: 'left',
+                                                            padding: '0 4px',
+                                                            textDecoration: 'underline'
+                                                        }}
+                                                    >
+                                                        Desmarcar
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <span style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    padding: '3px 10px',
+                                                    borderRadius: '20px',
+                                                    backgroundColor: '#FEF3C7',
+                                                    color: '#B45309',
+                                                    fontWeight: 800,
+                                                    fontSize: '0.72rem',
+                                                    border: '1px solid #FCD34D'
+                                                }}>
+                                                    <Clock size={12} /> Sin Pedido (Pendiente)
+                                                </span>
+                                            )}
+                                        </td>
 
-                                            {/* 6. Acción WhatsApp */}
-                                            <td style={{ padding: '14px 18px', verticalAlign: 'middle', textAlign: 'right' }}>
-                                                {item.hasActiveOrder ? (
-                                                    <span style={{ color: '#16A34A', fontSize: '0.75rem', fontWeight: 700 }}>
-                                                        Orden en Proceso
-                                                    </span>
-                                                ) : (
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                        {/* 6. Acción WhatsApp */}
+                                        <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right' }}>
+                                            {item.hasActiveOrder ? (
+                                                <span style={{ color: '#16A34A', fontSize: '0.75rem', fontWeight: 700 }}>
+                                                    Orden en Proceso
+                                                </span>
+                                            ) : (
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleSendWhatsApp(item)}
+                                                        style={{
+                                                            padding: '7px 13px',
+                                                            backgroundColor: isContacted ? '#F1F5F9' : '#0D7A57',
+                                                            color: isContacted ? '#475569' : '#FFFFFF',
+                                                            border: isContacted ? '1px solid #CBD5E1' : 'none',
+                                                            borderRadius: '9px',
+                                                            fontWeight: 800,
+                                                            fontSize: '0.74rem',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            boxShadow: isContacted ? 'none' : '0 2px 6px rgba(13, 122, 87, 0.25)',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <MessageCircle size={14} />
+                                                        <span>{isContacted ? 'Reenviar WhatsApp' : 'Recordar por WhatsApp'}</span>
+                                                    </button>
+
+                                                    {onNavigateToCreateOrder && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleSendWhatsApp(item)}
+                                                            onClick={() => onNavigateToCreateOrder(item.profile.id)}
+                                                            title="Montar pedido manualmente para este cliente"
                                                             style={{
-                                                                padding: '8px 14px',
-                                                                backgroundColor: isContacted ? '#F1F5F9' : '#25D366',
-                                                                color: isContacted ? '#475569' : '#FFFFFF',
-                                                                border: isContacted ? '1px solid #CBD5E1' : 'none',
-                                                                borderRadius: '10px',
-                                                                fontWeight: 800,
-                                                                fontSize: '0.75rem',
+                                                                padding: '7px',
+                                                                backgroundColor: '#F8FAFC',
+                                                                border: '1px solid #CBD5E1',
+                                                                borderRadius: '9px',
+                                                                color: '#475569',
                                                                 cursor: 'pointer',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: '6px',
-                                                                boxShadow: isContacted ? 'none' : '0 2px 6px rgba(37, 211, 102, 0.35)',
-                                                                transition: 'all 0.15s ease'
+                                                                justifyContent: 'center'
                                                             }}
                                                         >
-                                                            <MessageCircle size={15} />
-                                                            <span>{isContacted ? 'Reenviar WhatsApp' : 'Recordar por WhatsApp'}</span>
+                                                            <ShoppingCart size={14} />
                                                         </button>
-
-                                                        {onNavigateToCreateOrder && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => onNavigateToCreateOrder(item.profile.id)}
-                                                                title="Montar pedido manualmente para este cliente"
-                                                                style={{
-                                                                    padding: '8px',
-                                                                    backgroundColor: '#F8FAFC',
-                                                                    border: '1px solid #CBD5E1',
-                                                                    borderRadius: '10px',
-                                                                    color: '#475569',
-                                                                    cursor: 'pointer'
-                                                                }}
-                                                            >
-                                                                <ShoppingCart size={15} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 )}
             </div>
         </section>
