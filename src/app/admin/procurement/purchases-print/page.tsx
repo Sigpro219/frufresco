@@ -470,11 +470,10 @@ export default function PurchasesPrintPage() {
                         // Paginación dinámica ponderada por altura visual:
                         // - Fila simple (sin variant_label): 1.0 unidad (~6 mm por fila a 8.5pt)
                         // - Fila con variant_label (tag de calibre, 2 líneas): 1.6 unidades (~9.6 mm)
-                        // Hoja oficio: 330 mm – márgenes (18 mm) – encabezado+banner (~55 mm) – pie (~15 mm)
-                        //   → área útil ≈ 242 mm → ~38 filas simples por página.
-                        // Última página reserva espacio para tfoot + firmas (~4 u).
-                        const MAX_ROW_UNITS = 38;
-                        const FOOTER_RESERVE = 4; // unidades reservadas para tfoot + firmas en última página
+                        // Paginación dinámica calibrada para hoja Oficio sin cabecera institucional
+                        // Área útil: ~280 mm → ~45 filas simples por página a ~6.0 mm
+                        const MAX_ROW_UNITS = 45;
+                        const FOOTER_RESERVE = 2.0; // unidades reservadas para tfoot y firmas simplificadas
                         const sublistPages: Array<{ items: PurchaseItem[]; usedUnits: number }> = [];
                         let currentPage: PurchaseItem[] = [];
                         let currentUnits = 0;
@@ -525,35 +524,33 @@ export default function PurchasesPrintPage() {
                                     className="page-break"
                                     paperSize="oficio"
                                     showWatermark={false}
+                                    showHeader={false}
+                                    showFooter={false}
                                 >
                                     {/* Sublist summary banner */}
                                     <div style={{
                                         display: 'flex',
-                                        justifyContent: 'space-between',
+                                        justifyContent: 'flex-end',
                                         alignItems: 'center',
                                         backgroundColor: '#F8FAFC',
                                         padding: '3px 8px',
                                         border: '1px solid #CBD5E1',
                                         borderRadius: '4px',
-                                        fontSize: '7pt',
+                                        fontSize: '7.2pt',
                                         marginBottom: '6px'
                                     }}>
-                                        <div>
-                                            <strong style={{ color: '#0F172A' }}>Instrucciones para Plaza:</strong> Negocie precio pactado por kilo/bulto y anote el número de puesto en Corabastos.
-                                        </div>
-                                        <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A', fontSize: '7.2pt' }}>
+                                        <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A' }}>
                                             {sublistItems.length} Productos &bull; Stock Bodega: {totalStockBodega.toLocaleString('es-CO')} &bull; Demanda Total: {totalKilosNetos.toLocaleString('es-CO')}
                                         </div>
                                     </div>
 
-                                    {/* Items Table (7 Columnas: #, Stock INV, UM, Producto / Calibre, Demanda, Precio, Proveedor) */}
+                                    {/* Items Table (6 Columnas: Stock INV, UM, Producto / Calibre, Demanda, Precio, Proveedor) */}
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr>
-                                                <th style={{ width: '3.5%', textAlign: 'center', fontSize: '8.2pt' }}>#</th>
                                                 <th style={{ width: '10%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#1E293B' }}>Stock INV</th>
                                                 <th style={{ width: '6.5%', textAlign: 'center', fontSize: '8.2pt' }}>UM</th>
-                                                <th style={{ width: '35%', fontSize: '8.2pt' }}>Producto / Calibre Especificado</th>
+                                                <th style={{ width: '38.5%', fontSize: '8.2pt' }}>Producto / Calibre Especificado</th>
                                                 <th style={{ width: '11%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#0D7A57' }}>Demanda</th>
                                                 <th style={{ width: '10%', textAlign: 'center', fontSize: '8.2pt' }}>Precio $/UM</th>
                                                 <th style={{ width: '24%', textAlign: 'center', fontSize: '8.2pt' }}>Puesto / Proveedor</th>
@@ -577,19 +574,12 @@ export default function PurchasesPrintPage() {
                                                 }
 
                                                 return pageItems.map((it, itemIdx) => {
-                                                    const prevPagesCount = sublistPages.slice(0, pageIdx).reduce((s, p) => s + p.items.length, 0);
-                                                    const globalIdx = prevPagesCount + itemIdx + 1;
                                                     const spanInfo = itemSpans[itemIdx];
                                                     const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
 
                                                     return (
                                                         <tr key={it.id || itemIdx} style={{ backgroundColor: bg }}>
-                                                            {/* 1. Indice Consecutivo */}
-                                                            <td style={{ textAlign: 'center', fontSize: '7.8pt', fontWeight: 'bold', color: '#64748B' }}>
-                                                                {globalIdx}
-                                                            </td>
-
-                                                            {/* 2 & 3. Stock INV y UM (Unificados verticalmente por SKU cuando hay variantes) */}
+                                                            {/* 1 & 2. Stock INV y UM (Unificados verticalmente por SKU cuando hay variantes) */}
                                                             {spanInfo.isFirst && (
                                                                 <>
                                                                     <td
@@ -603,7 +593,7 @@ export default function PurchasesPrintPage() {
                                                                             backgroundColor: spanInfo.span > 1 ? '#F8FAFC' : undefined,
                                                                             verticalAlign: 'middle',
                                                                             borderRight: spanInfo.span > 1 ? '1px solid #E2E8F0' : undefined,
-                                                                            padding: '2px 4px'
+                                                                            padding: '3px 4px'
                                                                         }}
                                                                     >
                                                                         {it.stock_bodega > 0 ? it.stock_bodega.toLocaleString('es-CO') : '-'}
@@ -618,7 +608,7 @@ export default function PurchasesPrintPage() {
                                                                             backgroundColor: spanInfo.span > 1 ? '#F8FAFC' : undefined,
                                                                             verticalAlign: 'middle',
                                                                             borderRight: spanInfo.span > 1 ? '1px solid #E2E8F0' : undefined,
-                                                                            padding: '2px 3px'
+                                                                            padding: '3px 3px'
                                                                         }}
                                                                     >
                                                                         {it.unit}
@@ -626,10 +616,10 @@ export default function PurchasesPrintPage() {
                                                                 </>
                                                             )}
 
-                                                            {/* 4. Producto / Calibre Especificado */}
-                                                            <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '6px' }}>
+                                                            {/* 3. Producto / Calibre Especificado */}
+                                                            <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: '3px 6px 3px 4px' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
-                                                                    <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '8.2pt', lineHeight: 1.2 }}>
+                                                                    <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '8.3pt', lineHeight: 1.25 }}>
                                                                         {it.product_name}
                                                                     </span>
                                                                     {it.accounting_id !== undefined && it.accounting_id !== null && (
@@ -654,8 +644,8 @@ export default function PurchasesPrintPage() {
                                                                 )}
                                                             </td>
 
-                                                            {/* 5. Demanda Neta */}
-                                                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                            {/* 4. Demanda Neta */}
+                                                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap', padding: '3px 4px' }}>
                                                                 <span style={{
                                                                     display: 'inline-block',
                                                                     backgroundColor: it.demanda_neta > 0 ? '#ECFDF5' : '#F8FAFC',
@@ -671,11 +661,11 @@ export default function PurchasesPrintPage() {
                                                                 </span>
                                                             </td>
 
-                                                            {/* 6. Precio Pactado ($/UM) */}
-                                                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
+                                                            {/* 5. Precio Pactado ($/UM) */}
+                                                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '3px 4px' }}>
                                                                 <div style={{
                                                                     borderBottom: '1px dashed #94A3B8',
-                                                                    height: '18px',
+                                                                    height: '20px',
                                                                     display: 'flex',
                                                                     alignItems: 'flex-end',
                                                                     justifyContent: 'flex-start',
@@ -688,11 +678,11 @@ export default function PurchasesPrintPage() {
                                                                 </div>
                                                             </td>
 
-                                                            {/* 7. Puesto / Proveedor */}
-                                                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 6px' }}>
+                                                            {/* 6. Puesto / Proveedor */}
+                                                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '3px 6px' }}>
                                                                 <div style={{
                                                                     borderBottom: '1px dashed #94A3B8',
-                                                                    height: '18px'
+                                                                    height: '20px'
                                                                 }}></div>
                                                             </td>
                                                         </tr>
@@ -703,9 +693,6 @@ export default function PurchasesPrintPage() {
                                         {isLastPage && (
                                             <tfoot>
                                                 <tr style={{ backgroundColor: '#F1F5F9', fontWeight: '900' }}>
-                                                    <td style={{ textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '7.8pt' }}>
-                                                        &Sigma;
-                                                    </td>
                                                     <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '8pt', fontVariantNumeric: 'tabular-nums' }}>
                                                         {totalStockBodega.toLocaleString('es-CO')}
                                                     </td>
@@ -726,32 +713,37 @@ export default function PurchasesPrintPage() {
                                         )}
                                     </table>
 
-                                    {/* Signatures footer on last page */}
-                                    {isLastPage && (
+                                    {/* Simplified Footer */}
+                                    {isLastPage ? (
                                         <div style={{
                                             marginTop: 'auto',
-                                            paddingTop: '8px',
+                                            paddingTop: '6px',
                                             borderTop: '1px solid #CBD5E1',
-                                            display: 'grid',
-                                            gridTemplateColumns: '1fr 1fr 1fr',
-                                            gap: '12px',
-                                            fontSize: '6.8pt'
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            fontSize: '6.8pt',
+                                            color: '#334155'
                                         }}>
-                                            <div>
-                                                <strong style={{ color: '#0F172A' }}>Comprador en Corabastos:</strong>
-                                                <div style={{ borderBottom: '1px solid #0F172A', height: '18px', width: '90%', marginTop: '4px' }}></div>
-                                                <div style={{ fontSize: '6pt', color: '#64748B', marginTop: '2px' }}>Firma y responsable de negociación</div>
+                                            <div style={{ display: 'flex', gap: '24px' }}>
+                                                <span><strong>Comprador Plaza:</strong> _____________________________</span>
+                                                <span><strong>Conductor / Cargue:</strong> _____________________________</span>
+                                                <span><strong>Recibido Bodega:</strong> _____________________________</span>
                                             </div>
-                                            <div>
-                                                <strong style={{ color: '#0F172A' }}>Conductor / Camión Recolector:</strong>
-                                                <div style={{ borderBottom: '1px solid #0F172A', height: '18px', width: '90%', marginTop: '4px' }}></div>
-                                                <div style={{ fontSize: '6pt', color: '#64748B', marginTop: '2px' }}>Cargue verificado en plaza</div>
+                                            <div style={{ fontSize: '6.2pt', color: '#94A3B8', fontWeight: '700' }}>
+                                                FruFresco &bull; Control Operativo
                                             </div>
-                                            <div>
-                                                <strong style={{ color: '#0F172A' }}>Recepción en Bodega Central:</strong>
-                                                <div style={{ borderBottom: '1px solid #0F172A', height: '18px', width: '90%', marginTop: '4px' }}></div>
-                                                <div style={{ fontSize: '6pt', color: '#64748B', marginTop: '2px' }}>Recibido y pesaje a ciegas</div>
-                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            marginTop: 'auto',
+                                            paddingTop: '4px',
+                                            textAlign: 'right',
+                                            fontSize: '6.5pt',
+                                            fontWeight: '700',
+                                            color: '#94A3B8'
+                                        }}>
+                                            Continúa en la siguiente hoja &bull; Pág. {pageIdx + 1} de {sublistPages.length}
                                         </div>
                                     )}
                                 </Letterhead>
