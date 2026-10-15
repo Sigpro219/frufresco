@@ -31,7 +31,8 @@ import {
     getPqrPhotos,
     getPqrAuthorInfo,
     getReplacementOrderUrl,
-    buildPqrWhatsAppMessage
+    buildPqrWhatsAppMessage,
+    buildCaseResolutionWhatsAppSummary
 } from './utils';
 
 import PqrAuditModal from './components/PqrAuditModal';
@@ -281,7 +282,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
         const totalPqrs = pqrs.length;
         const pendingCount = pqrs.filter(p => p.status === 'pending').length;
         const inProgressCount = pqrs.filter(p => p.status === 'in_progress').length;
-        const resolvedCount = pqrs.filter(p => p.status === 'resolved').length;
+        const resolvedCount = pqrs.filter(p => p.status === 'resolved' || p.status === 'rejected').length;
         const rejectedCount = pqrs.filter(p => p.status === 'rejected').length;
         const noveltiesCount = novelties.filter(n => n.status === 'pending_review').length;
 
@@ -342,7 +343,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
         } else if (activeTab === 'in_progress') {
             result = result.filter(p => p.status === 'in_progress');
         } else if (activeTab === 'resolved') {
-            result = result.filter(p => p.status === 'resolved');
+            result = result.filter(p => p.status === 'resolved' || p.status === 'rejected');
         } else if (activeTab === 'rejected') {
             result = result.filter(p => p.status === 'rejected');
         }
@@ -773,38 +774,6 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
                         <button
                             type="button"
-                            onClick={() => setActiveTab('in_progress')}
-                            style={{
-                                padding: '6px 12px',
-                                borderRadius: '7px',
-                                fontSize: '0.75rem',
-                                fontWeight: activeTab === 'in_progress' ? '800' : '600',
-                                border: 'none',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                backgroundColor: activeTab === 'in_progress' ? '#0D7A57' : 'transparent',
-                                color: activeTab === 'in_progress' ? '#FFFFFF' : '#475569',
-                                boxShadow: activeTab === 'in_progress' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
-                                transition: 'all 0.15s ease-in-out'
-                            }}
-                        >
-                            <span>En Auditoría</span>
-                            <span style={{
-                                fontSize: '0.68rem',
-                                fontWeight: '900',
-                                padding: '1px 6px',
-                                borderRadius: '10px',
-                                backgroundColor: activeTab === 'in_progress' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
-                                color: activeTab === 'in_progress' ? '#FFFFFF' : '#475569'
-                            }}>
-                                {kpiMetrics.inProgressCount}
-                            </span>
-                        </button>
-
-                        <button
-                            type="button"
                             onClick={() => setActiveTab('resolved')}
                             style={{
                                 padding: '6px 12px',
@@ -832,70 +801,6 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                 color: activeTab === 'resolved' ? '#FFFFFF' : '#475569'
                             }}>
                                 {kpiMetrics.resolvedCount}
-                            </span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('rejected')}
-                            style={{
-                                padding: '6px 12px',
-                                borderRadius: '7px',
-                                fontSize: '0.75rem',
-                                fontWeight: activeTab === 'rejected' ? '800' : '600',
-                                border: 'none',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                backgroundColor: activeTab === 'rejected' ? '#0D7A57' : 'transparent',
-                                color: activeTab === 'rejected' ? '#FFFFFF' : '#475569',
-                                boxShadow: activeTab === 'rejected' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
-                                transition: 'all 0.15s ease-in-out'
-                            }}
-                        >
-                            <span>Rechazados</span>
-                            <span style={{
-                                fontSize: '0.68rem',
-                                fontWeight: '900',
-                                padding: '1px 6px',
-                                borderRadius: '10px',
-                                backgroundColor: activeTab === 'rejected' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
-                                color: activeTab === 'rejected' ? '#FFFFFF' : '#475569'
-                            }}>
-                                {kpiMetrics.rejectedCount}
-                            </span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('novelties')}
-                            style={{
-                                padding: '6px 12px',
-                                borderRadius: '7px',
-                                fontSize: '0.75rem',
-                                fontWeight: activeTab === 'novelties' ? '800' : '600',
-                                border: 'none',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                backgroundColor: activeTab === 'novelties' ? '#0D7A57' : 'transparent',
-                                color: activeTab === 'novelties' ? '#FFFFFF' : '#475569',
-                                boxShadow: activeTab === 'novelties' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
-                                transition: 'all 0.15s ease-in-out'
-                            }}
-                        >
-                            <span>Novedades Línea</span>
-                            <span style={{
-                                fontSize: '0.68rem',
-                                fontWeight: '900',
-                                padding: '1px 6px',
-                                borderRadius: '10px',
-                                backgroundColor: activeTab === 'novelties' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
-                                color: activeTab === 'novelties' ? '#FFFFFF' : '#475569'
-                            }}>
-                                {kpiMetrics.noveltiesCount}
                             </span>
                         </button>
 
@@ -1228,6 +1133,55 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 {/* 8. Acciones */}
                                                 <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                                                        {author.phoneParsed.isValid ? (
+                                                            <a
+                                                                href={`https://wa.me/${author.phoneParsed.waNumber}?text=${encodeURIComponent(buildCaseResolutionWhatsAppSummary(pqr))}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                style={{
+                                                                    padding: '6px 10px',
+                                                                    backgroundColor: '#ECFDF5',
+                                                                    color: '#047857',
+                                                                    border: '1px solid #A7F3D0',
+                                                                    borderRadius: '8px',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '5px',
+                                                                    fontSize: '0.74rem',
+                                                                    fontWeight: '700',
+                                                                    textDecoration: 'none',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                                title={`Enviar respuesta corta al cliente por WhatsApp (${author.phoneParsed.display})`}
+                                                            >
+                                                                <MessageCircle size={13} style={{ color: '#059669' }} />
+                                                                <span>WhatsApp</span>
+                                                            </a>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => showToast('El cliente no tiene un teléfono celular válido registrado.', 'warning')}
+                                                                style={{
+                                                                    padding: '6px 10px',
+                                                                    backgroundColor: '#F8FAFC',
+                                                                    color: '#94A3B8',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    borderRadius: '8px',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '5px',
+                                                                    fontSize: '0.74rem',
+                                                                    fontWeight: '600',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                                title="Sin teléfono registrado (clic para ver aviso)"
+                                                            >
+                                                                <MessageCircle size={13} />
+                                                                <span>WhatsApp</span>
+                                                            </button>
+                                                        )}
+
                                                         <button
                                                             type="button"
                                                             onClick={() => handleOpenAuditModal(pqr)}

@@ -491,3 +491,68 @@ export const buildPqrWhatsAppMessage = (
             }
     }
 };
+
+/**
+ * Genera una respuesta ejecutiva y corta para el cliente por WhatsApp explicando exactamente lo sucedido con su caso.
+ */
+export const buildCaseResolutionWhatsAppSummary = (pqr: PQR): string => {
+    const author = getPqrAuthorInfo(pqr);
+    const clientName = author.clientContact && author.clientContact !== 'Ecónomo / Contacto en Sitio' 
+        ? author.clientContact 
+        : author.clientDisplayName;
+    
+    const company = author.companyName && author.companyName !== 'Empresa No Especificada' && author.companyName !== clientName
+        ? ` (${author.companyName})`
+        : '';
+        
+    const orderSeq = pqr.orders?.sequence_id ? `Pedido #${pqr.orders.sequence_id}` : 'tu pedido';
+    const subjectClean = (pqr.subject || '').replace(/^\[[^\]]+\]\s*/, '').trim() || 'Novedad reportada';
+    const notes = (pqr.resolution_notes || '').toLowerCase();
+
+    // 1. Escenario 1: Cerrado Conforme / Rechazo de solicitud sin impacto comercial
+    if (
+        pqr.status === 'rejected' ||
+        notes.includes('cerrado conforme') ||
+        notes.includes('rechazo de solicitud') ||
+        notes.includes('desestimado') ||
+        notes.includes('archivado sin costo')
+    ) {
+        return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nRevisamos tu caso sobre el *${orderSeq}* ("${subjectClean}"). Tras la validación de Calidad, te confirmamos que la entrega fue verificada conforme al estándar comercial pactado, por lo que el caso se da por concluido sin alteraciones en tu facturación.\n\n¡Agradecemos tu retroalimentación y seguimos atentos a apoyarte!`;
+    }
+
+    // 2. Escenario 2: Reposición D+1 ($0 COP)
+    if (
+        notes.includes('reponer d+1') ||
+        notes.includes('reposición') ||
+        notes.includes('reposicion') ||
+        notes.includes('folio #')
+    ) {
+        return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nSobre la novedad en tu *${orderSeq}* ("${subjectClean}"), te confirmamos que nuestro equipo de Calidad aprobó y programó la *reposición sin costo ($0 COP)* para ser entregada en tu próxima ruta de despacho.\n\n¡Gracias por tu confianza y seguimos a tu servicio!`;
+    }
+
+    // 3. Escenario 3: Nota Crédito
+    if (
+        notes.includes('nota crédito') ||
+        notes.includes('nota credito') ||
+        notes.includes('saldo a favor')
+    ) {
+        return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nSobre la novedad en tu *${orderSeq}* ("${subjectClean}"), te informamos que Calidad autorizó una *Nota Crédito / saldo a favor* en tu cuenta por el valor correspondiente. Tu estado de cuenta ya refleja este ajuste.\n\n¡Gracias por tu confianza!`;
+    }
+
+    // 4. Escenario 4: Ajuste de Factura
+    if (
+        notes.includes('ajuste de factura') ||
+        notes.includes('ajuste en factura')
+    ) {
+        return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nSobre la novedad en tu *${orderSeq}* ("${subjectClean}"), te confirmamos que realizamos el *ajuste directo en tu factura* descontando el valor de la novedad, para que tu cobro coincida exactamente con lo recibido.\n\n¡Gracias por tu comprensión!`;
+    }
+
+    // 5. Caso Resuelto Genérico
+    if (pqr.status === 'resolved') {
+        return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nTe confirmamos que la novedad sobre tu *${orderSeq}* ("${subjectClean}") fue gestionada y cerrada exitosamente por nuestro equipo de Calidad.\n\n¡Muchas gracias y seguimos a tu entera disposición!`;
+    }
+
+    // 6. Caso Pendiente / En Gestión
+    return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nRecibimos tu reporte sobre el *${orderSeq}* ("${subjectClean}"). Nuestro equipo de Calidad ya lo está gestionando para brindarte una solución oportuna.\n\n¡Te mantendremos informado!`;
+};
+

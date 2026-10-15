@@ -10048,7 +10048,30 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - La ruta `/admin/customer-service/rnc/[id]/print` adopta la envoltura canónica `<UniversalLetterhead>` con el preset de marca `INVESTMENTS_CORTES_BRAND`.
      - El documento estandariza 6 secciones de alta densidad: 1. Cliente & Despacho Logístico, 2. Causa Raíz (RCA) e Imputabilidad Nominal (incluyendo funcionario, cargo, % y deducción COP), 3. Novedades Declaradas y CoQ, 4. Evidencias Fotográficas, 5. Dictamen Técnico, Plan CAPA y Disposición Sanitaria In Situ (filtrada sin tags de sistema), 6. Triángulo de Firmas (Aseguramiento de Calidad, Imputado / Aceptación y Recibido Cliente).
 
+#### Escenario 215: Poda de Píldoras Redundantes y Botón Directo de WhatsApp con Respuesta Resolutiva Corta (SDD v1.9.183)
+- **Given** un analista de Calidad o agente SAC gestionando la consola de Atención al Cliente (`/admin/customer-service`).
+- **When** navega por los casos y requiere comunicar al cliente el resultado de su reclamación:
+- **Then**:
+  1. **Poda de Píldoras Redundantes en la Toolbar de Filtros:**
+     - Se eliminan de la barra segmentada las píldoras obsoletas o rezagadas: *«En Auditoría»*, *«Rechazados»* y *«Novedades Línea»*.
+     - Se consolida la barra en tres estados canónicos de alto contraste:
+       - **Pendientes:** Casos con estado `pending` por auditar y resolver.
+       - **Resueltos:** Casos con dictamen cerrado (`status === 'resolved' || status === 'rejected'`), unificando en un solo conteo e indicador los casos conformes, reposiciones, notas crédito y ajustes.
+       - **Todos:** Vista global omnicanal con el total acumulado de casos.
+  2. **Botón Directo de WhatsApp en Columna de Acciones:**
+     - Cada fila de caso en la tabla de PQRS incorpora un botón de acción rápida `[WhatsApp]` (con icono oficial y estilo verde esmeralda suave).
+     - Si el cliente posee un teléfono móvil válido colombiano (formato E.164 / 10 dígitos), el botón enlaza directamente a la API Web de WhatsApp (`https://wa.me/...`).
+     - Si el cliente carece de número válido, el botón advierte de forma no bloqueante con un toast explicativo.
+  3. **Generador Inteligente de Respuesta Resolutiva Corta (`buildCaseResolutionWhatsAppSummary`):**
+     - El mensaje preconfigurado adapta automáticamente su redacción al dictamen final del caso:
+       - **Escenario 1 (Cerrado Conforme / Sin Costo):** Notifica al cliente que Calidad verificó la entrega conforme al estándar comercial acordado, concluyendo el caso sin modificaciones en facturación.
+       - **Escenario 2 (Reposición D+1):** Informa que Calidad aprobó y programó la reposición sin costo ($0 COP) para la siguiente ruta de despacho.
+       - **Escenario 3 (Nota Crédito):** Informa la emisión del saldo a favor / Nota Crédito y la actualización de su estado de cuenta.
+       - **Escenario 4 (Ajuste de Factura):** Informa el ajuste directo en factura para que el pago coincida con lo efectivamente recibido.
+       - **Pendientes:** Informa que el caso está en trámite activo por Calidad con compromiso de pronta respuesta.
+
 ---
+
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
 
