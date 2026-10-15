@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.181 (Imputabilidad Formativa sin Deducción en Casos Rechazados/Conformes y Erradicación de Fallback CoQ Total — 76/76 Pantallas Certificadas) (Disposición Sanitaria In Situ por el Cliente Sin Retorno a Bodega, Erradicación de Truncamiento en Comboboxes y Poka-Yoke de Contaminación Cruzada — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.182 (Auditoría Retrospectiva de Casos Cerrados, Parser RCA Balanceado y Reporte RNC Golden Print Universal — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 213 Escenarios BDD Ininterrumpidos (1..212)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 214 Escenarios BDD Ininterrumpidos (1..214)
 
 ---
 
@@ -25,10 +25,10 @@
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 212 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 214 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **212 Escenarios Canónicos (1..212)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **214 Escenarios Canónicos (1..214)** | **🟢 100%** |
 
 ---
 
@@ -10027,6 +10027,26 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   3. **Erradicación del Fallback Ciego al Total de la Factura del Pedido:**
      - Se erradica de forma definitiva el fallback que asignaba el total completo de la orden (`pqr.orders.total`) ante la ausencia de novedades activas en `billing_returns`.
      - El impacto liquidable solo adopta el valor total del pedido si la reclamación indica de forma explícita un *«Rechazo Total de Pedido»* con devolución íntegra del furgón. En cualquier otro escenario sin novedades específicas de línea, `caseCoQ` evalúa a $0 COP.
+
+---
+
+#### Escenario 214: Auditoría Retrospectiva de Casos Cerrados, Robustez del Parser RCA y Reporte RNC Golden Print Universal (SDD v1.9.182)
+- **Given** un analista de Calidad, auditor SAC o supervisor revisando un caso histórico previamente cerrado o resuelto (ej. Caso `#bbadcd76`, Pedido #1088 de Jaime Liscano) en la consola de Atención al Cliente (`/admin/customer-service`) o generando el Reporte Oficial de No Conformidad (`/admin/customer-service/rnc/[id]/print`).
+- **When** ingresa al modal de auditoría técnica (`PqrAuditModal.tsx`) para inspeccionar o rectificar el dictamen, o accede a la vista de impresión del informe RNC:
+- **Then**:
+  1. **Auditoría Retrospectiva y Rectificación de Casos Resueltos/Cerrados:**
+     - La interfaz permite la apertura e inspección completa de casos en estado `resolved` o `rejected` sin vaciar los campos de RCA, novedades ni responsables imputados.
+     - En el Paso 3, se proyecta un banner informativo verde esmeralda: *«Modo Rectificación / Caso Resuelto: Este caso ya fue dictaminado y cerrado. Puedes auditar o rectificar la causa raíz, imputabilidad nominal y notas sin alterar estados de facturación ni generar duplicados de reposición»*.
+     - El botón de cierre en el Paso 3 transmuta a `[Guardar Cambios de Auditoría]` (ejecutando `handleSaveAuditUpdate`), permitiendo guardar correcciones retrospectivas sin re-disparar notas crédito ni reprogramación innecesaria de pedidos.
+  2. **Robustez del Parser de Metadatos RCA & Erradicación de Truncamiento Regex:**
+     - Se reemplaza la expresión regular no-codiciosa `/\[RCA_METADATA:\s*({.*?})\]/` por un motor de extracción balanceado por profundidad de llaves (`extractRcaJsonFromText`) con gestión de comillas y caracteres de escape.
+     - Este parser extrae con 100% de fidelidad estructuras complejas de metadatos con arrays anidados de entidades imputadas (`imputedEntities`), erradicando fallos silenciosos de `JSON.parse` que causaban la pérdida visual de la causa raíz y las imputaciones.
+     - Se implementa `cleanHumanResolutionNotes` para sanear recursivamente las notas de resolución, suprimiendo metadatos crudos de sistema y deduplicando bloques redundantes de disposición sanitaria.
+  3. **Visibilidad Incondicional de Novedades Declaradas:**
+     - Se suprime el filtro excluyente `&& n.status !== 'rejected'` en `caseReturns`. Los productos declarados en novedades de pedidos resueltos bajo Opción 1 (Sin Costo) permanecen visibles en la auditoría con su respectiva insignia `Sin Costo` y detalle de cantidad devuelta.
+  4. **Reporte Oficial RNC bajo Estándar Universal Golden Print:**
+     - La ruta `/admin/customer-service/rnc/[id]/print` adopta la envoltura canónica `<UniversalLetterhead>` con el preset de marca `INVESTMENTS_CORTES_BRAND`.
+     - El documento estandariza 6 secciones de alta densidad: 1. Cliente & Despacho Logístico, 2. Causa Raíz (RCA) e Imputabilidad Nominal (incluyendo funcionario, cargo, % y deducción COP), 3. Novedades Declaradas y CoQ, 4. Evidencias Fotográficas, 5. Dictamen Técnico, Plan CAPA y Disposición Sanitaria In Situ (filtrada sin tags de sistema), 6. Triángulo de Firmas (Aseguramiento de Calidad, Imputado / Aceptación y Recibido Cliente).
 
 ---
 

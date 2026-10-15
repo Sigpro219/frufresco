@@ -3065,6 +3065,31 @@ export default function PqrAuditModal({
                                 <span>Siguiente</span>
                                 <ChevronRight size={14} />
                             </button>
+                        ) : pqr.status === 'resolved' ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveAuditUpdate}
+                                    disabled={actionLoading}
+                                    style={{
+                                        padding: '8px 18px',
+                                        backgroundColor: '#059669',
+                                        color: 'white',
+                                        borderRadius: '10px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 6px rgba(5, 150, 105, 0.3)'
+                                    }}
+                                >
+                                    {actionLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />}
+                                    <span>Guardar Cambios de Auditoría</span>
+                                </button>
+                            </div>
                         ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <button
