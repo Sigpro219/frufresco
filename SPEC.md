@@ -10289,9 +10289,10 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        - **Horario Límite:** Hora de corte de recepción (4:00 p.m.).
        - **Badge de Estado de Gestión:** `🔴 Sin Contactar` (badge ambar/rojo de alerta) vs `🟢 Recordatorio Enviado` (badge esmeralda con hora exacta de envío, ej. *Hoy 2:04 p.m.*).
      - **Buscador Omnibox:** Permite filtrar instantáneamente por nombre de cliente, contacto, NIT o sede con insensibilidad a tildes (`normalizeSearchText`).
-  4. **Protocolo de Envío Asistido por WhatsApp (1-Clic Centralizado):**
-     - Botón de acción principal verde: **`[📲 Enviar Recordatorio WhatsApp]`**.
-     - Al hacer clic, genera y abre el enlace `https://wa.me/57{telefono}?text={mensaje}` con la plantilla oficial del Gemba:
+  4. **Protocolo Dual de Notificación Asistida (WhatsApp Directo + Copiado Rápido al Portapapeles en 1-Clic):**
+     - **Botón `[Recordar]` (WhatsApp Web):** Abre inmediatamente la conversación oficial en `https://wa.me/57{telefono}?text={mensaje}` con la plantilla personalizada.
+     - **Botón `[Copiar]` (Portapapeles en 1-Clic):** Copia directamente el texto personalizado al portapapeles (`navigator.clipboard.writeText`) para pegarlo velozmente en WhatsApp Desktop, Telegram o correo electrónico, transformándose visualmente en `[¡Copiado!]` con `<Check />` por 2.5 segundos.
+     - **Plantilla Oficial Gemba:**
        ```
        🍅 ¡Hola {contacto}!
        ¡Mañana salimos de ruta! 🚚
@@ -10299,7 +10300,7 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        ✉️ Esperamos tu pedido: pedidos@frufresco.com
        Quedamos atentos
        ```
-     - Al hacer clic, el sistema marca inmediatamente al cliente como `🟢 Recordatorio Enviado` en el estado de la sesión / persistencia local, registrando la hora exacta para prevenir duplicidades entre operadores.
+     - Al hacer clic en cualquiera de las dos acciones (`[Recordar]` o `[Copiar]`), el sistema marca automáticamente al cliente como `🟢 Recordatorio Enviado` en el estado de sesión / almacenamiento local con su marca de hora exacta para prevenir reprocesos entre operadores.
 
 ---
 

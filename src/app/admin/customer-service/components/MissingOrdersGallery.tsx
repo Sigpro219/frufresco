@@ -7,7 +7,7 @@ import {
     Bell, Truck, Calendar, MessageCircle, CheckCircle2, AlertTriangle,
     Clock, Building2, User, Phone, Search, RefreshCw, ExternalLink,
     Check, Sparkles, Filter, AlertCircle, ShoppingCart, ArrowRight,
-    Layers, ChevronRight, CheckCheck
+    Layers, ChevronRight, CheckCheck, Copy
 } from 'lucide-react';
 import { getBogotaNow, formatDateToYYYYMMDD, addDaysISO } from '@/lib/colombianHolidays';
 import { cleanColombianPhone } from '../utils';
@@ -91,6 +91,7 @@ export default function MissingOrdersGallery({
     // 4. Search and Status Filter
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [statusFilter, setStatusFilter] = useState<'missing_only' | 'all' | 'contacted' | 'uncontacted'>('missing_only');
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
     // 5. Contacted tracking stored locally by targetDate
     const storageKey = `cs_reminders_${targetDate}`;
@@ -273,10 +274,21 @@ export default function MissingOrdersGallery({
 
             if (allowedDays.length > 0) {
                 const mappedDays = allowedDays.map(d => (d === 7 ? 0 : d));
-                habitualDaysLabel = mappedDays
-                    .map(d => DAYS_NAMES_ES[d])
-                    .filter(Boolean)
-                    .join(' y ');
+                const sortedUnique = Array.from(new Set(mappedDays)).sort((a, b) => a - b);
+
+                // Friendly formatting for common business patterns
+                if (sortedUnique.length === 5 && [1, 2, 3, 4, 5].every(d => sortedUnique.includes(d))) {
+                    habitualDaysLabel = 'Lunes a Viernes';
+                } else if (sortedUnique.length === 6 && [1, 2, 3, 4, 5, 6].every(d => sortedUnique.includes(d))) {
+                    habitualDaysLabel = 'Lunes a Sábado';
+                } else if (sortedUnique.length === 7) {
+                    habitualDaysLabel = 'Todos los días';
+                } else {
+                    habitualDaysLabel = mappedDays
+                        .map(d => DAYS_NAMES_ES[d])
+                        .filter(Boolean)
+                        .join(' y ');
+                }
 
                 if (mappedDays.includes(targetDayIndex)) {
                     isHabitual = true;
@@ -377,7 +389,17 @@ export default function MissingOrdersGallery({
         return { habitualTotal, withOrder, missingCount, contactedCount };
     }, [allCompiledItems]);
 
-    // 11. Handler to Send WhatsApp Reminder (Gemba Template)
+    // 11. Helper to generate the Gemba reminder text
+    const buildMessageText = (item: MissingOrderItem) => {
+        const contactName = item.profile.contact_name?.trim() || item.profile.company_name?.trim() || 'Estimado Cliente';
+        return `🍅 ¡Hola ${contactName}!
+¡Mañana salimos de ruta! 🚚
+Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. 🕒
+✉️ Esperamos tu pedido: pedidos@frufresco.com
+Quedamos atentos`;
+    };
+
+    // 12. Handler to Send WhatsApp Reminder (Gemba Template)
     const handleSendWhatsApp = (item: MissingOrderItem) => {
         const phone = item.profile.contact_phone || item.profile.phone;
         const cleanPhone = cleanColombianPhone(phone);
@@ -386,20 +408,46 @@ export default function MissingOrdersGallery({
             return;
         }
 
-        const contactName = item.profile.contact_name?.trim() || item.profile.company_name?.trim() || 'Estimado Cliente';
-
-        // Official WhatsApp message template
-        const messageText = `🍅 ¡Hola ${contactName}!
-¡Mañana salimos de ruta! 🚚
-Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. 🕒
-✉️ Esperamos tu pedido: pedidos@frufresco.com
-Quedamos atentos`;
-
+        const messageText = buildMessageText(item);
         const encoded = encodeURIComponent(messageText);
         const waUrl = `https://wa.me/57${cleanPhone}?text=${encoded}`;
 
         markAsContacted(item.profile.id);
         window.open(waUrl, '_blank');
+    };
+
+    // 13. Handler to Copy Reminder Message to Clipboard (1-Clic)
+    const handleCopyMessage = async (item: MissingOrderItem) => {
+        const text = buildMessageText(item);
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedId(item.profile.id);
+            markAsContacted(item.profile.id);
+            setTimeout(() => {
+                setCopiedId(current => (current === item.profile.id ? null : current));
+            }, 2500);
+        } catch (err) {
+            console.error('Error copying text to clipboard:', err);
+            // Fallback for older contexts or permissions
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                setCopiedId(item.profile.id);
+                markAsContacted(item.profile.id);
+                setTimeout(() => {
+                    setCopiedId(current => (current === item.profile.id ? null : current));
+                }, 2500);
+            } catch (fallbackErr) {
+                alert('No se pudo copiar el mensaje automáticamente.');
+            }
+            document.body.removeChild(textArea);
+        }
     };
 
     return (
@@ -1090,11 +1138,13 @@ Quedamos atentos`;
                                                 </span>
                                             ) : (
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                                    {/* Botón WhatsApp */}
                                                     <button
                                                         type="button"
                                                         onClick={() => handleSendWhatsApp(item)}
+                                                        title="Abrir WhatsApp Web con mensaje listo"
                                                         style={{
-                                                            padding: '7px 13px',
+                                                            padding: '7px 12px',
                                                             backgroundColor: isContacted ? '#F1F5F9' : '#0D7A57',
                                                             color: isContacted ? '#475569' : '#FFFFFF',
                                                             border: isContacted ? '1px solid #CBD5E1' : 'none',
@@ -1110,7 +1160,40 @@ Quedamos atentos`;
                                                         }}
                                                     >
                                                         <MessageCircle size={14} />
-                                                        <span>{isContacted ? 'Reenviar WhatsApp' : 'Recordar por WhatsApp'}</span>
+                                                        <span>{isContacted ? 'Reenviar' : 'Recordar'}</span>
+                                                    </button>
+
+                                                    {/* Botón Copiar al Portapapeles (1-Clic) */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleCopyMessage(item)}
+                                                        title="Copiar texto del recordatorio al portapapeles en 1 clic"
+                                                        style={{
+                                                            padding: '7px 10px',
+                                                            backgroundColor: copiedId === item.profile.id ? '#DCFCE7' : '#F8FAFC',
+                                                            color: copiedId === item.profile.id ? '#15803D' : '#475569',
+                                                            border: copiedId === item.profile.id ? '1px solid #86EFAC' : '1px solid #CBD5E1',
+                                                            borderRadius: '9px',
+                                                            fontWeight: 700,
+                                                            fontSize: '0.72rem',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        {copiedId === item.profile.id ? (
+                                                            <>
+                                                                <Check size={13} style={{ color: '#16A34A' }} />
+                                                                <span>¡Copiado!</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Copy size={13} />
+                                                                <span>Copiar</span>
+                                                            </>
+                                                        )}
                                                     </button>
 
                                                     {onNavigateToCreateOrder && (
