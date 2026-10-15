@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.184 (Previsualización Unitaria y Blindaje de Hidratación en Remisiones Físicas — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.185 (Trazabilidad SAC en Facturación y Erradicación de Ruido en Especificaciones — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 216 Escenarios BDD Ininterrumpidos (1..216)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 217 Escenarios BDD Ininterrumpidos (1..217)
 
 ---
 
@@ -24,11 +24,11 @@
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 (§39.1 - §39.5) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217 (§39.1 - §39.5) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **216 Escenarios Canónicos (1..216)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **217 Escenarios Canónicos (1..217)** | **🟢 100%** |
 
 ---
 
@@ -10087,6 +10087,27 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - La barra de herramientas sticky superior detecta pedidos unitarios (`orders.length === 1`) y exhibe la insignia: `Pedido #[ID] (Original + Copia)` en lugar del conteo plural genérico.
      - La descarga PDF mediante `printViaNewWindow` nombra el archivo limpiamente como `Remision_[ID].pdf` (ej. `Remision_1410_1088.pdf`).
      - Si el pedido no es hallado, la interfaz despliega un estado vacío explicativo con el identificador buscado y enlaces directos para regresar o conmutar de fecha.
+
+#### Escenario 217: Trazabilidad SAC en Facturación (Visibilidad de Dictamen y Causa Raíz de Reclamaciones) y Erradicación de Ruido en Especificaciones de Pedido (SDD v1.9.185)
+- **Given** un analista de Facturación y Cartera revisando la auditoría de un pedido en el modal de inspección (`/admin/commercial/billing`).
+- **When** el pedido contiene novedades o reclamaciones reportadas por el cliente en muelle o entrega física (ej. pedido `#1410_1088` con queja de 6 Kg de Aguacate):
+- **Then**:
+  1. **Erradicación de Ruido Visual en la Tabla de Productos:**
+     - Se elimina la impresión del campo crudo `item.nickname` debajo del nombre del producto, suprimiendo cadenas redundantes o rezagos de OCR/Excel institucional (ej. `AGUACATE EXTRA INSTITUCIONAL 1000 G (extra institucional 1000 g)`).
+     - En la columna *«Especificación / Maduración»*, se elimina definitivamente el texto *«Estándar»*. Si el ítem carece de características estructuradas configuradas desde el módulo de pedidos, se despliega un guión limpio (`—`).
+  2. **Trazabilidad Activa de Reclamaciones y Novedades por Línea:**
+     - La consulta del modal recupera concurrentemente los registros de `customer_service_pqrs` y `billing_returns` asociados al pedido.
+     - Cada producto con novedad reportada despliega una insignia interactiva con código de color según la decisión de Calidad:
+       - **Escenario 1 (Cerrado Conforme / Sin Costo):** Verde esmeralda suave (`Reclamo [X] Kg: Cerrado Conforme • Facturar 100% Original`).
+       - **Escenario 2 (Reposición D+1):** Púrpura suave (`Reclamo [X] Kg: Reposición D+1 • Facturar 100% Original`).
+       - **Escenario 3 (Nota Crédito):** Azul corporativo (`Reclamo [X] Kg: NC Emitida • Facturar 100% Original`).
+       - **Escenario 4 (Ajuste en Factura):** Rojo suave (`Reclamo [X] Kg: Ajuste Autorizado • Descontar en Factura`).
+       - **Pendiente:** Ámbar de advertencia (`Reclamo [X] Kg: En Auditoría SAC • Pendiente Dictamen`).
+  3. **Drawer / Sub-Modal de Dictamen SAC & Directriz Contable:**
+     - Al pulsar *«Ver Dictamen →»* en la fila o en la cabecera de la tabla, se abre un panel enfocado que exhibe:
+       - **Directriz Inequívoca de Facturación:** Instrucción clara y no ambigua para el operador contable (ej. facturar los 30 Kg completos sin aplicar deducciones ni notas crédito).
+       - **Reporte del Cliente:** Cantidad afectada, valor en discusión, motivo y evidencia fotográfica con enlace de ampliación.
+       - **Evaluación Técnica & Disposición Sanitaria:** Concepto técnico de Calidad y disposición final del producto (ej. disposición en sitio por el cliente sin retorno a bodega).
 
 ---
 

@@ -50,6 +50,7 @@ import {
     Building2,
     HelpCircle,
     ShieldCheck,
+    ShieldAlert,
     X,
     Filter,
     Truck,
@@ -692,16 +693,167 @@ export default function BillingDashboard() {
     const [loadingOrderDetailItems, setLoadingOrderDetailItems] = useState(false);
     const [orderDetailItems, setOrderDetailItems] = useState<any[]>([]);
     const [orderDetailReturns, setOrderDetailReturns] = useState<any[]>([]);
+    const [orderDetailPqrs, setOrderDetailPqrs] = useState<any[]>([]);
+    const [selectedNoveltyDetail, setSelectedNoveltyDetail] = useState<any | null>(null);
+
+    const resolveItemNoveltyInfo = (
+        item: any,
+        returnsList: any[],
+        pqrsList: any[]
+    ) => {
+        const prodId = item.product_id || item.products?.id;
+        const prodName = (item.products?.name || item.nickname || '').toLowerCase().trim();
+
+        // 1. Check matching return
+        const matchedReturn = returnsList.find(r => 
+            (prodId && r.product_id === prodId) ||
+            (r.products?.name && r.products.name.toLowerCase().trim() === prodName) ||
+            (r.reason && r.reason.toLowerCase().includes(prodName))
+        );
+
+        // 2. Check matching PQR
+        const matchedPqr = pqrsList.find(p => 
+            (p.subject && p.subject.toLowerCase().includes(prodName)) ||
+            (p.description && p.description.toLowerCase().includes(prodName)) ||
+            (matchedReturn?.reason && p.id && matchedReturn.reason.includes(p.id.substring(0, 8)))
+        );
+
+        if (!matchedReturn && !matchedPqr) return null;
+
+        // Quantity returned / claimed
+        const qtyClaimed = Number(matchedReturn?.quantity_returned) || (() => {
+            const m = matchedPqr?.description?.match(/Cantidad:\s*(\d+(?:[.,]\d+)?)\s*(?:Kg|kg|und|Und)?/i);
+            return m ? parseFloat(m[1].replace(',', '.')) : null;
+        })() || 0;
+
+        const unit = item.unit || item.products?.unit_of_measure || 'Kg';
+        const notes = ((matchedPqr?.resolution_notes || '') + ' ' + (matchedReturn?.reason || '')).toLowerCase();
+        const pqrStatus = matchedPqr?.status || '';
+        const returnStatus = matchedReturn?.status || '';
+
+        // Determine Scenario
+        let scenarioType: 'sin_costo' | 'reposicion' | 'nota_credito' | 'ajuste_factura' | 'pendiente' = 'pendiente';
+        let badgeText = '';
+        let badgeBg = '#FEF3C7';
+        let badgeColor = '#92400E';
+        let badgeBorder = '#FDE68A';
+        let invoiceInstruction = '';
+        let resolutionTitle = '';
+
+        if (
+            returnStatus === 'rejected' ||
+            pqrStatus === 'rejected' ||
+            notes.includes('cerrado conforme') ||
+            notes.includes('rechazo de solicitud') ||
+            notes.includes('desestimado') ||
+            notes.includes('sin costo') ||
+            notes.includes('se factura 100%')
+        ) {
+            scenarioType = 'sin_costo';
+            resolutionTitle = 'Cerrado Conforme / Desestimado sin Costo';
+            badgeText = `Reclamo ${qtyClaimed} ${unit}: Cerrado Conforme • Facturar 100% Original`;
+            badgeBg = '#ECFDF5';
+            badgeColor = '#065F46';
+            badgeBorder = '#A7F3D0';
+            invoiceInstruction = `Calidad desestimó la afectación comercial por entrega conforme al estándar acordado. Facturar los ${item.quantity} ${unit} completos sin aplicar notas crédito ni deducciones.`;
+        } else if (
+            notes.includes('ajuste de factura') ||
+            notes.includes('ajuste en factura')
+        ) {
+            scenarioType = 'ajuste_factura';
+            resolutionTitle = 'Ajuste Directo en Factura Autorizado';
+            badgeText = `Reclamo ${qtyClaimed} ${unit}: Ajuste Autorizado • Descontar en Factura`;
+            badgeBg = '#FEF2F2';
+            badgeColor = '#991B1B';
+            badgeBorder = '#FECACA';
+            const remainingQty = Math.max(0, Number(item.quantity || 0) - qtyClaimed);
+            invoiceInstruction = `Calidad autorizó descontar ${qtyClaimed} ${unit} de este ítem en la factura. Facturar únicamente ${remainingQty} ${unit}.`;
+        } else if (
+            notes.includes('nota crédito') ||
+            notes.includes('nota credito') ||
+            notes.includes('saldo a favor')
+        ) {
+            scenarioType = 'nota_credito';
+            resolutionTitle = 'Nota Crédito / Saldo a Favor Emitido';
+            badgeText = `Reclamo ${qtyClaimed} ${unit}: NC Emitida • Facturar 100% Original`;
+            badgeBg = '#EFF6FF';
+            badgeColor = '#1E40AF';
+            badgeBorder = '#BFDBFE';
+            invoiceInstruction = `Calidad emitió Nota Crédito por separado para compensar los ${qtyClaimed} ${unit}. La factura actual debe emitirse por el 100% (${item.quantity} ${unit}).`;
+        } else if (
+            notes.includes('reposición') ||
+            notes.includes('reposicion') ||
+            notes.includes('reponer d+1')
+        ) {
+            scenarioType = 'reposicion';
+            resolutionTitle = 'Reposición Física D+1 Programada ($0 COP)';
+            badgeText = `Reclamo ${qtyClaimed} ${unit}: Reposición D+1 • Facturar 100% Original`;
+            badgeBg = '#FAF5FF';
+            badgeColor = '#6B21A8';
+            badgeBorder = '#E9D5FF';
+            invoiceInstruction = `Calidad programó la reposición física de ${qtyClaimed} ${unit} a costo $0 para la siguiente ruta. La factura actual debe cobrarse al 100% original (${item.quantity} ${unit}).`;
+        } else {
+            scenarioType = 'pendiente';
+            resolutionTitle = 'En Trámite de Auditoría por Calidad';
+            badgeText = `Reclamo ${qtyClaimed || ''} ${unit}: En Auditoría SAC • Pendiente Dictamen`;
+            badgeBg = '#FEF3C7';
+            badgeColor = '#92400E';
+            badgeBorder = '#FDE68A';
+            invoiceInstruction = `El reclamo se encuentra en gestión activa por el equipo de Calidad y SAC. Verificar antes de cerrar la factura definitiva.`;
+        }
+
+        // Photo evidence
+        const photoUrl = matchedReturn?.photo_url || matchedPqr?.primary_photo_url || (matchedPqr?.additional_photos && matchedPqr.additional_photos[0]) || null;
+
+        // Reason & Motive
+        const clientMotive = matchedPqr?.description || matchedReturn?.reason || 'Reclamación registrada por cliente en recepción de entrega.';
+
+        // Sanitary Disposition
+        const sanitaryDisposition = (() => {
+            const raw = matchedPqr?.resolution_notes || '';
+            const m = raw.match(/\[DISPOSICIÓN SANITARIA:\s*([^\]]+)\]/i);
+            return m ? m[1].trim() : 'Disposición estándar de Calidad';
+        })();
+
+        // Quality concept
+        const qualityConcept = (() => {
+            const raw = matchedPqr?.resolution_notes || '';
+            const m = raw.match(/\[CONCEPTO:\s*([^\]]+)\]/i);
+            return m ? m[1].trim() : (matchedReturn?.notes || 'Verificado por SAC');
+        })();
+
+        return {
+            productName: item.products?.name || item.nickname || 'Producto',
+            qtyClaimed,
+            totalQty: item.quantity,
+            unit,
+            unitPrice: item.unit_price,
+            scenarioType,
+            resolutionTitle,
+            badgeText,
+            badgeBg,
+            badgeColor,
+            badgeBorder,
+            invoiceInstruction,
+            clientMotive,
+            photoUrl,
+            sanitaryDisposition,
+            qualityConcept,
+            pqr: matchedPqr,
+            ret: matchedReturn
+        };
+    };
 
     const handleOpenOrderDetail = async (order: any) => {
         setSelectedOrderDetail(order);
         setLoadingOrderDetailItems(true);
+        setSelectedNoveltyDetail(null);
         try {
-            const [itemsRes, returnsRes] = await Promise.all([
+            const [itemsRes, returnsRes, pqrsRes] = await Promise.all([
                 supabase
                     .from('order_items')
                     .select(`
-                        id, quantity, unit_price, unit, variant_label, nickname, selected_options,
+                        id, product_id, quantity, unit_price, unit, variant_label, nickname, selected_options,
                         products (
                             id, name, sku, unit_of_measure, iva_rate
                         )
@@ -711,8 +863,16 @@ export default function BillingDashboard() {
                 supabase
                     .from('billing_returns')
                     .select(`
-                        id, quantity_returned, reason, status, photo_url, created_at,
-                        products (name, sku)
+                        id, product_id, quantity_returned, reason, status, photo_url, notes, created_at,
+                        products (id, name, sku)
+                    `)
+                    .eq('order_id', order.id),
+                supabase
+                    .from('customer_service_pqrs')
+                    .select(`
+                        id, client_id, order_id, type, category, subject, description,
+                        primary_photo_url, additional_photos, status, priority,
+                        created_at, resolved_at, resolution_notes
                     `)
                     .eq('order_id', order.id)
             ]);
@@ -720,6 +880,7 @@ export default function BillingDashboard() {
             if (itemsRes.error) throw itemsRes.error;
             setOrderDetailItems(itemsRes.data || []);
             setOrderDetailReturns(returnsRes.data || []);
+            setOrderDetailPqrs(pqrsRes.data || []);
         } catch (err) {
             console.error('Error fetching order detail items:', err);
         } finally {
@@ -5147,6 +5308,61 @@ export default function BillingDashboard() {
                     // Items metrics
                     const totalCalculatedItemsPrice = orderDetailItems.reduce((acc, it) => acc + (Number(it.quantity || 0) * Number(it.unit_price || 0)), 0);
 
+                    const orderNoveltiesSummary = (() => {
+                        if (!orderDetailItems || orderDetailItems.length === 0) return null;
+                        if (orderDetailReturns.length === 0 && orderDetailPqrs.length === 0) return null;
+
+                        const novelties: any[] = [];
+                        orderDetailItems.forEach(it => {
+                            const n = resolveItemNoveltyInfo(it, orderDetailReturns, orderDetailPqrs);
+                            if (n) novelties.push(n);
+                        });
+
+                        if (novelties.length === 0 && orderDetailReturns.length > 0) {
+                            return {
+                                summaryText: `${orderDetailReturns.length} devoluciones reportadas`,
+                                badgeBg: '#FEF2F2',
+                                badgeColor: '#991B1B',
+                                badgeBorder: '#FECACA',
+                                firstNovelty: null
+                            };
+                        }
+
+                        if (novelties.length === 0) return null;
+
+                        const first = novelties[0];
+                        const allResolvedSinCosto = novelties.every(n => n.scenarioType === 'sin_costo');
+                        const anyAjuste = novelties.some(n => n.scenarioType === 'ajuste_factura');
+
+                        if (allResolvedSinCosto) {
+                            return {
+                                summaryText: `${novelties.length} ${novelties.length === 1 ? 'Reclamación' : 'Reclamaciones'} SAC: Cerrado Conforme (Facturar 100%)`,
+                                badgeBg: '#ECFDF5',
+                                badgeColor: '#065F46',
+                                badgeBorder: '#A7F3D0',
+                                firstNovelty: first
+                            };
+                        }
+
+                        if (anyAjuste) {
+                            return {
+                                summaryText: `${novelties.length} ${novelties.length === 1 ? 'Reclamación' : 'Reclamaciones'} SAC: Ajuste Autorizado en Factura`,
+                                badgeBg: '#FEF2F2',
+                                badgeColor: '#991B1B',
+                                badgeBorder: '#FECACA',
+                                firstNovelty: first
+                            };
+                        }
+
+                        return {
+                            summaryText: `${novelties.length} ${novelties.length === 1 ? 'Reclamación' : 'Reclamaciones'} SAC Gestionadas`,
+                            badgeBg: first.badgeBg,
+                            badgeColor: first.badgeColor,
+                            badgeBorder: first.badgeBorder,
+                            firstNovelty: first
+                        };
+                    })();
+
                     return (
                         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '1rem' }}>
                             <div style={{ backgroundColor: 'white', borderRadius: '20px', border: `1px solid ${THEME.colors.border}`, maxWidth: '1180px', width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', position: 'relative', overflow: 'hidden' }}>
@@ -5356,9 +5572,39 @@ export default function BillingDashboard() {
                                                 {orderDetailItems.length} ítems
                                             </span>
                                         </div>
-                                        {orderDetailReturns.length > 0 && (
+                                        {orderNoveltiesSummary ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (orderNoveltiesSummary.firstNovelty) {
+                                                        setSelectedNoveltyDetail(orderNoveltiesSummary.firstNovelty);
+                                                    }
+                                                }}
+                                                style={{
+                                                    backgroundColor: orderNoveltiesSummary.badgeBg,
+                                                    color: orderNoveltiesSummary.badgeColor,
+                                                    border: `1px solid ${orderNoveltiesSummary.badgeBorder}`,
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '0.66rem',
+                                                    fontWeight: '800',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    cursor: orderNoveltiesSummary.firstNovelty ? 'pointer' : 'default',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                title="Ver dictamen de Calidad y SAC"
+                                            >
+                                                <ShieldAlert size={11} />
+                                                <span>{orderNoveltiesSummary.summaryText}</span>
+                                                {orderNoveltiesSummary.firstNovelty && (
+                                                    <span style={{ textDecoration: 'underline', marginLeft: '3px' }}>Ver Detalle</span>
+                                                )}
+                                            </button>
+                                        ) : (orderDetailReturns.length > 0 || orderDetailPqrs.length > 0) && (
                                             <span style={{ backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', padding: '2px 7px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                <AlertTriangle size={11} /> {orderDetailReturns.length} devoluciones reportadas
+                                                <AlertTriangle size={11} /> {orderDetailReturns.length || orderDetailPqrs.length} devoluciones reportadas
                                             </span>
                                         )}
                                     </div>
@@ -5390,6 +5636,7 @@ export default function BillingDashboard() {
                                                         const structuredSpec = formatStructuredSpecification(item);
                                                         const presentation = formatItemQuantityPresentation(item);
                                                         const isLast = idx === orderDetailItems.length - 1;
+                                                        const itemNovelty = resolveItemNoveltyInfo(item, orderDetailReturns, orderDetailPqrs);
 
                                                         return (
                                                             <tr 
@@ -5405,9 +5652,33 @@ export default function BillingDashboard() {
                                                                     <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
                                                                         {prodName}
                                                                     </div>
-                                                                    {item.nickname && item.nickname !== prodName && (
-                                                                        <div style={{ fontSize: '0.65rem', color: '#64748B', marginTop: '1px' }}>
-                                                                            {item.nickname}
+                                                                    {itemNovelty && (
+                                                                        <div style={{ marginTop: '4px' }}>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => { e.stopPropagation(); setSelectedNoveltyDetail(itemNovelty); }}
+                                                                                style={{
+                                                                                    backgroundColor: itemNovelty.badgeBg,
+                                                                                    color: itemNovelty.badgeColor,
+                                                                                    border: `1px solid ${itemNovelty.badgeBorder}`,
+                                                                                    padding: '2px 7px',
+                                                                                    borderRadius: '5px',
+                                                                                    fontSize: '0.64rem',
+                                                                                    fontWeight: '800',
+                                                                                    cursor: 'pointer',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '4px',
+                                                                                    transition: 'all 0.15s'
+                                                                                }}
+                                                                                onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                                                                                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                                                                                title="Ver dictamen de Calidad y directriz contable de facturación"
+                                                                            >
+                                                                                <ShieldAlert size={10} />
+                                                                                <span>{itemNovelty.badgeText}</span>
+                                                                                <span style={{ textDecoration: 'underline', marginLeft: '3px', fontWeight: '900' }}>Ver Dictamen →</span>
+                                                                            </button>
                                                                         </div>
                                                                     )}
                                                                 </td>
@@ -5425,7 +5696,7 @@ export default function BillingDashboard() {
                                                                             {structuredSpec}
                                                                         </span>
                                                                     ) : (
-                                                                        <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>Estándar</span>
+                                                                        <span style={{ fontSize: '0.70rem', color: '#CBD5E1' }}>—</span>
                                                                     )}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right' }}>
@@ -5506,6 +5777,178 @@ export default function BillingDashboard() {
                                         </button>
                                     </div>
                                 </div>
+
+                                {/* Sub-modal / Drawer de Dictamen SAC y Directriz de Facturación */}
+                                {selectedNoveltyDetail && (
+                                    <div 
+                                        style={{
+                                            position: 'fixed',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                                            backdropFilter: 'blur(4px)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            zIndex: 200,
+                                            padding: '1rem'
+                                        }}
+                                        onClick={() => setSelectedNoveltyDetail(null)}
+                                    >
+                                        <div 
+                                            style={{
+                                                backgroundColor: 'white',
+                                                borderRadius: '16px',
+                                                border: '1px solid #CBD5E1',
+                                                maxWidth: '680px',
+                                                width: '95vw',
+                                                maxHeight: '90vh',
+                                                overflowY: 'auto',
+                                                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                                                display: 'flex',
+                                                flexDirection: 'column'
+                                            }}
+                                            onClick={e => e.stopPropagation()}
+                                        >
+                                            {/* Header */}
+                                            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: selectedNoveltyDetail.badgeBg, border: `1px solid ${selectedNoveltyDetail.badgeBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <ShieldAlert size={18} color={selectedNoveltyDetail.badgeColor} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 style={{ margin: 0, fontSize: '0.94rem', fontWeight: '900', color: '#0F172A' }}>
+                                                            Dictamen SAC & Facturación — {selectedNoveltyDetail.productName}
+                                                        </h3>
+                                                        <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
+                                                            Pedido #{friendlyId} • {clientTitle}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedNoveltyDetail(null)}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#64748B', borderRadius: '6px' }}
+                                                >
+                                                    <X size={18} />
+                                                </button>
+                                            </div>
+
+                                            {/* Content Body */}
+                                            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                {/* 1. Directriz de Facturación Destacada */}
+                                                <div style={{
+                                                    backgroundColor: selectedNoveltyDetail.badgeBg,
+                                                    border: `1.5px solid ${selectedNoveltyDetail.badgeBorder}`,
+                                                    borderRadius: '10px',
+                                                    padding: '0.85rem 1rem'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                                        <ShieldCheck size={16} color={selectedNoveltyDetail.badgeColor} />
+                                                        <span style={{ fontSize: '0.78rem', fontWeight: '900', color: selectedNoveltyDetail.badgeColor, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                            {selectedNoveltyDetail.resolutionTitle}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.80rem', fontWeight: '700', color: '#0F172A', lineHeight: '1.4' }}>
+                                                        {selectedNoveltyDetail.invoiceInstruction}
+                                                    </div>
+                                                </div>
+
+                                                {/* 2. Grid de Información Dual (Cliente vs Calidad) */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
+                                                    {/* Tarjeta Reclamación del Cliente */}
+                                                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem 0.90rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                            1. Reporte del Cliente
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem' }}>
+                                                            <span style={{ color: '#64748B' }}>Cantidad Afectada:</span>
+                                                            <span style={{ fontWeight: '800', color: '#0F172A' }}>
+                                                                {selectedNoveltyDetail.qtyClaimed} {selectedNoveltyDetail.unit} <span style={{ color: '#64748B', fontWeight: '400' }}>(de {selectedNoveltyDetail.totalQty} {selectedNoveltyDetail.unit})</span>
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem' }}>
+                                                            <span style={{ color: '#64748B' }}>Valor en Discusión:</span>
+                                                            <span style={{ fontWeight: '800', color: '#0F172A' }}>
+                                                                {formatMoney((selectedNoveltyDetail.qtyClaimed || 0) * (selectedNoveltyDetail.unitPrice || 0))}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ marginTop: '4px', fontSize: '0.72rem', color: '#334155', backgroundColor: 'white', border: '1px solid #E2E8F0', padding: '6px 8px', borderRadius: '6px', lineHeight: '1.35', maxHeight: '100px', overflowY: 'auto' }}>
+                                                            {selectedNoveltyDetail.clientMotive}
+                                                        </div>
+                                                        {selectedNoveltyDetail.photoUrl && (
+                                                            <div style={{ marginTop: '4px' }}>
+                                                                <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748B', marginBottom: '3px' }}>
+                                                                    Evidencia Fotográfica:
+                                                                </div>
+                                                                <a 
+                                                                    href={selectedNoveltyDetail.photoUrl} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer"
+                                                                    style={{ display: 'inline-block', position: 'relative', borderRadius: '6px', overflow: 'hidden', border: '1px solid #CBD5E1' }}
+                                                                >
+                                                                    <img 
+                                                                        src={selectedNoveltyDetail.photoUrl} 
+                                                                        alt="Evidencia fotográfica" 
+                                                                        style={{ width: '90px', height: '65px', objectFit: 'cover', display: 'block' }}
+                                                                    />
+                                                                    <span style={{ position: 'absolute', bottom: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.65)', color: 'white', fontSize: '0.55rem', padding: '1px 3px', borderRadius: '3px' }}>
+                                                                        Zoom ↗
+                                                                    </span>
+                                                                </a>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Tarjeta Evaluación Técnica SAC */}
+                                                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem 0.90rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                            2. Dictamen de Calidad & Disposición
+                                                        </div>
+                                                        <div style={{ fontSize: '0.74rem' }}>
+                                                            <div style={{ color: '#64748B', fontSize: '0.64rem', marginBottom: '1px' }}>Concepto Técnico:</div>
+                                                            <div style={{ fontWeight: '800', color: '#0F172A', backgroundColor: 'white', border: '1px solid #E2E8F0', padding: '4px 6px', borderRadius: '4px' }}>
+                                                                {selectedNoveltyDetail.qualityConcept}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.74rem', marginTop: '2px' }}>
+                                                            <div style={{ color: '#64748B', fontSize: '0.64rem', marginBottom: '1px' }}>Disposición Sanitaria:</div>
+                                                            <div style={{ fontWeight: '700', color: '#065F46', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '4px 6px', borderRadius: '4px', fontSize: '0.70rem' }}>
+                                                                {selectedNoveltyDetail.sanitaryDisposition}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: 'auto', paddingTop: '6px', borderTop: '1px dashed #CBD5E1' }}>
+                                                            Auditoría cerrada con respaldo en Sistema de Gestión de Calidad (SGC).
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', justifyContent: 'flex-end', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedNoveltyDetail(null)}
+                                                    style={{
+                                                        backgroundColor: '#0D7A57',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        padding: '0.45rem 1.25rem',
+                                                        borderRadius: '8px',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.76rem',
+                                                        cursor: 'pointer',
+                                                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                                                    }}
+                                                >
+                                                    Entendido, Cerrar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                             </div>
                         </div>
