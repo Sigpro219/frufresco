@@ -426,7 +426,7 @@ export default function AlistamientoSabanaPrintPage() {
                 .from('orders')
                 .select(`
                     id, sequence_id, delivery_date, delivery_slot, shipping_address, warehouse_spaces, status, profile_id, type, logistics_data,
-                    profiles:profile_id(id, company_name, contact_name, address, role, logistics_data),
+                    profiles:profile_id(id, created_at, parent_id, company_name, contact_name, address, role, logistics_data),
                     order_items(
                         id, order_id, product_id, quantity, unit, nickname, variant_label, selected_options,
                         products(id, name, sku, accounting_id, unit_of_measure, buying_team, category, weight_kg, parent_id)
@@ -452,19 +452,19 @@ export default function AlistamientoSabanaPrintPage() {
 
             let attentionMap: Record<string, SpecialAttentionState> = {};
             if (clientProfileIds.length > 0) {
-                const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                const sixtyDaysAgoIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
                 const [{ data: histOrders }, { data: recentPqrs }] = await Promise.all([
                     supabase
                         .from('orders')
                         .select('id, profile_id, created_at, delivery_date, status, total, logistics_data')
                         .in('profile_id', clientProfileIds)
                         .neq('status', 'cancelled')
-                        .gte('created_at', thirtyDaysAgoIso),
+                        .gte('delivery_date', sixtyDaysAgoIso),
                     supabase
                         .from('customer_service_pqrs')
-                        .select('id, client_id, created_at, status, subject, order_id')
+                        .select('id, client_id, created_at, status, subject, order_id, primary_photo_url')
                         .in('client_id', clientProfileIds)
-                        .gte('created_at', thirtyDaysAgoIso)
+                        .gte('created_at', sixtyDaysAgoIso)
                 ]);
 
                 const profLookup: Record<string, any> = {};
@@ -1115,9 +1115,9 @@ export default function AlistamientoSabanaPrintPage() {
 
                                                     {/* Sucursal del Cliente (Estricto: solo nombre de sucursal + Sello Cuidado Especial) */}
                                                     <td style={{ textAlign: 'left', padding: '2.5px 6px', border: '1px solid #94A3B8', color: '#000000', maxWidth: '180px' }} title={ord.branch_name}>
-                                                        <div style={{ fontWeight: 800, fontSize: '7.1pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000', display: 'flex', alignItems: 'center' }}>
-                                                            <SpecialClientBadge state={ord.special_attention} variant="print-stamp" />
+                                                        <div style={{ fontWeight: 800, fontSize: '7.1pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3px' }}>
                                                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ord.branch_name}</span>
+                                                            <SpecialClientBadge state={ord.special_attention} variant="print-stamp" />
                                                         </div>
                                                     </td>
 

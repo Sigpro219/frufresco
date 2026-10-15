@@ -567,7 +567,7 @@ export default function CommercialUnifiedDashboard({
             // 1. Fetch Profiles (con georreferenciación GPS real)
             const { data: profilesData } = await supabase
                 .from('profiles')
-                .select('id, role, company_name, contact_name, nit, phone, city, address, municipality, department, latitude, longitude');
+                .select('id, created_at, parent_id, logistics_data, role, company_name, contact_name, nit, phone, city, address, municipality, department, latitude, longitude');
 
             const profileMap = new Map<string, any>();
             (profilesData || []).forEach(p => profileMap.set(p.id, p));
@@ -838,17 +838,18 @@ export default function CommercialUnifiedDashboard({
             const { data: recentPqrsData } = activeProfileIds.length > 0
                 ? await supabase
                     .from('customer_service_pqrs')
-                    .select('id, client_profile_id, created_at, status, stage')
-                    .in('client_profile_id', activeProfileIds)
+                    .select('id, client_id, order_id, subject, created_at, status, primary_photo_url')
+                    .in('client_id', activeProfileIds)
                     .gte('created_at', sixtyDaysAgo)
                 : { data: [] };
 
             const allEvaluatedOrders = [...currentOrders, ...prevOrders];
+            const profilesLookupObj = Object.fromEntries(profileMap.entries());
             const specialAttentionMap = buildSpecialAttentionByProfileMap(
                 activeProfileIds,
                 allEvaluatedOrders as any[],
                 (recentPqrsData || []) as any[],
-                {}
+                profilesLookupObj
             );
 
             const clientList: ClientConsumptionItem[] = [];

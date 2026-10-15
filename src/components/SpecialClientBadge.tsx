@@ -41,30 +41,60 @@ export default function SpecialClientBadge({
 
     if (!state || !state.active) return null;
 
+    // En documentos impresos (print-stamp), renderizar micro-etiqueta tipográfica ultra-compacta
+    // sin popover flotante que tape filas de la tabla en la vista previa de impresión.
+    if (variant === 'print-stamp') {
+        return (
+            <span
+                title={`${state.title} (${state.progressLabel}) — ${state.subtitle}`}
+                style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '2px',
+                    padding: '0.5px 3.5px',
+                    borderRadius: '2px',
+                    fontSize: '5.5pt',
+                    fontWeight: 900,
+                    backgroundColor: state.colors.bg,
+                    color: state.colors.text,
+                    border: `1px solid ${state.colors.border}`,
+                    letterSpacing: '0.03em',
+                    lineHeight: 1.05,
+                    marginLeft: '4px',
+                    verticalAlign: 'middle',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap'
+                }}
+            >
+                {state.printStamp}
+            </span>
+        );
+    }
+
     const bg = darkMode ? state.colors.darkBg : state.colors.bg;
     const border = darkMode ? state.colors.darkBorder : state.colors.border;
     const text = darkMode ? state.colors.darkText : state.colors.text;
 
-    const renderReasonIcon = (size = 12) => {
+    const renderReasonIcon = (size = 10) => {
         if (state.reason === 'recurring_pqr') {
-            return <ShieldAlert size={size} strokeWidth={2.2} style={{ flexShrink: 0 }} />;
+            return <ShieldAlert size={size} strokeWidth={2.4} style={{ flexShrink: 0 }} />;
         }
         if (state.reason === 'low_consumption') {
-            return <TrendingDown size={size} strokeWidth={2.2} style={{ flexShrink: 0 }} />;
+            return <TrendingDown size={size} strokeWidth={2.4} style={{ flexShrink: 0 }} />;
         }
-        return <Sparkles size={size} strokeWidth={2.2} style={{ flexShrink: 0 }} />;
+        return <Sparkles size={size} strokeWidth={2.4} style={{ flexShrink: 0 }} />;
     };
 
     const renderDirectiveIcon = (key: SpecialAttentionDirective['key']) => {
         switch (key) {
             case 'selection':
-                return <CheckCircle2 size={12} strokeWidth={2} color={state.colors.border} style={{ flexShrink: 0 }} />;
+                return <CheckCircle2 size={11} strokeWidth={2.2} color={state.colors.border} style={{ flexShrink: 0 }} />;
             case 'weight':
-                return <Scale size={12} strokeWidth={2} color={state.colors.border} style={{ flexShrink: 0 }} />;
+                return <Scale size={11} strokeWidth={2.2} color={state.colors.border} style={{ flexShrink: 0 }} />;
             case 'specs':
-                return <SlidersHorizontal size={12} strokeWidth={2} color={state.colors.border} style={{ flexShrink: 0 }} />;
+                return <SlidersHorizontal size={11} strokeWidth={2.2} color={state.colors.border} style={{ flexShrink: 0 }} />;
             case 'crates':
-                return <PackageCheck size={12} strokeWidth={2} color={state.colors.border} style={{ flexShrink: 0 }} />;
+                return <PackageCheck size={11} strokeWidth={2.2} color={state.colors.border} style={{ flexShrink: 0 }} />;
         }
     };
 
@@ -83,70 +113,51 @@ export default function SpecialClientBadge({
                 alignItems: 'center',
                 verticalAlign: 'middle',
                 cursor: 'pointer',
-                userSelect: 'none'
+                userSelect: 'none',
+                flexShrink: 0
             }}
         >
-            {variant === 'print-stamp' ? (
-                <span
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '2px',
-                        padding: '0.5px 4px',
-                        borderRadius: '3px',
-                        fontSize: '6.2pt',
-                        fontWeight: 900,
-                        backgroundColor: state.colors.bg,
-                        color: state.colors.text,
-                        border: `1.2px solid ${state.colors.border}`,
-                        letterSpacing: '0.02em',
-                        lineHeight: 1.1,
-                        marginRight: '4px',
-                        flexShrink: 0
-                    }}
-                >
-                    [{state.printStamp}]
-                </span>
-            ) : (
-                <span
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: compact ? '2px 6px' : '2px 8px',
-                        borderRadius: '999px',
-                        fontSize: compact ? '0.66rem' : '0.70rem',
-                        fontWeight: 800,
-                        backgroundColor: bg,
-                        color: text,
-                        border: `1px solid ${border}`,
-                        lineHeight: 1.2,
-                        whiteSpace: 'nowrap',
-                        transition: 'transform 0.12s ease, box-shadow 0.12s ease',
-                        boxShadow: open ? `0 0 0 2px ${border}33` : 'none'
-                    }}
-                >
-                    {renderReasonIcon(compact ? 11 : 12)}
-                    <span>{compact ? state.progressLabel : `${state.shortTag} · ${state.progressLabel}`}</span>
-                </span>
-            )}
+            <span
+                style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    height: '17px',
+                    padding: compact ? '0 4px' : '0 5px',
+                    borderRadius: '4px',
+                    fontSize: '0.62rem',
+                    fontWeight: 800,
+                    fontVariantNumeric: 'tabular-nums',
+                    letterSpacing: '0.02em',
+                    backgroundColor: bg,
+                    color: text,
+                    border: `1px solid ${border}`,
+                    lineHeight: 1,
+                    whiteSpace: 'nowrap',
+                    transition: 'box-shadow 0.12s ease',
+                    boxShadow: open ? `0 0 0 2px ${border}33` : 'none'
+                }}
+            >
+                {renderReasonIcon(10)}
+                <span>{compact ? state.progressLabel : `${state.shortTag} ${state.progressLabel}`}</span>
+            </span>
 
-            {/* Floating Tooltip / Popover (Hidden when printing) */}
+            {/* Compact Swiss-Precision Tooltip (Hidden when printing) */}
             {open && (
                 <div
                     className="no-print"
                     onClick={(e) => e.stopPropagation()}
                     style={{
                         position: 'absolute',
-                        top: 'calc(100% + 6px)',
+                        bottom: 'calc(100% + 5px)',
                         left: 0,
                         zIndex: 9999,
-                        width: '270px',
+                        width: '220px',
                         backgroundColor: '#0F172A',
                         color: '#F8FAFC',
-                        borderRadius: '10px',
-                        padding: '10px 12px',
-                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.45), 0 4px 10px -2px rgba(0, 0, 0, 0.3)',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        boxShadow: '0 8px 20px -4px rgba(0, 0, 0, 0.45)',
                         border: `1px solid ${state.colors.border}`,
                         textAlign: 'left',
                         fontWeight: 'normal',
@@ -159,84 +170,73 @@ export default function SpecialClientBadge({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: '6px',
-                        marginBottom: '4px'
+                        gap: '4px',
+                        marginBottom: '3px'
                     }}>
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '5px',
-                            fontSize: '0.74rem',
+                            gap: '4px',
+                            fontSize: '0.69rem',
                             fontWeight: 800,
                             color: state.colors.darkText
                         }}>
-                            {renderReasonIcon(13)}
+                            {renderReasonIcon(11)}
                             <span>{state.title}</span>
                         </div>
                         <span style={{
-                            fontSize: '0.64rem',
+                            fontSize: '0.60rem',
                             fontWeight: 800,
-                            padding: '1px 6px',
-                            borderRadius: '999px',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
                             backgroundColor: state.colors.darkBg,
                             color: state.colors.darkText,
-                            border: `1px solid ${state.colors.border}`
+                            border: `1px solid ${state.colors.border}`,
+                            whiteSpace: 'nowrap'
                         }}>
-                            Ciclo {state.progressLabel}
+                            {state.progressLabel}
                         </span>
                     </div>
 
                     {/* Subtitle / Reason */}
                     <div style={{
-                        fontSize: '0.68rem',
+                        fontSize: '0.63rem',
                         color: '#CBD5E1',
-                        lineHeight: 1.35,
-                        marginBottom: '8px'
+                        lineHeight: 1.3,
+                        marginBottom: '6px'
                     }}>
                         {state.subtitle}
                     </div>
 
-                    {/* 4 Operational Care Directives */}
+                    {/* 4 Operational Care Directives (Compact 2x2 Grid) */}
                     <div style={{
                         borderTop: '1px solid rgba(255, 255, 255, 0.12)',
-                        paddingTop: '6px'
+                        paddingTop: '5px',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '4px'
                     }}>
-                        <div style={{
-                            fontSize: '0.60rem',
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                            color: '#94A3B8',
-                            marginBottom: '5px'
-                        }}>
-                            Especial cuidado en operación:
-                        </div>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '5px'
-                        }}>
-                            {state.directives.map((d) => (
-                                <div
-                                    key={d.key}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '5px',
-                                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                        padding: '4px 6px',
-                                        borderRadius: '6px',
-                                        fontSize: '0.65rem',
-                                        fontWeight: 700,
-                                        color: '#F1F5F9'
-                                    }}
-                                    title={d.detail}
-                                >
-                                    {renderDirectiveIcon(d.key)}
-                                    <span>{d.label}</span>
-                                </div>
-                            ))}
-                        </div>
+                        {state.directives.map((d) => (
+                            <div
+                                key={d.key}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                    padding: '2.5px 5px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.60rem',
+                                    fontWeight: 700,
+                                    color: '#F1F5F9',
+                                    whiteSpace: 'nowrap'
+                                }}
+                                title={d.detail}
+                            >
+                                {renderDirectiveIcon(d.key)}
+                                <span>{d.label}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}

@@ -1344,7 +1344,7 @@ function OrderLoadingContent() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions), order_items(id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
+                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions), order_items(id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
 
 
 
@@ -1380,15 +1380,21 @@ function OrderLoadingContent() {
                             ? supabase.from('orders').select('id, profile_id, status, delivery_date, created_at, total, subtotal').in('profile_id', profileIds).gte('delivery_date', sixtyDaysAgo)
                             : Promise.resolve({ data: [] }),
                         profileIds.length > 0
-                            ? supabase.from('customer_service_pqrs').select('id, client_profile_id, created_at, status, stage').in('client_profile_id', profileIds).gte('created_at', sixtyDaysAgo)
+                            ? supabase.from('customer_service_pqrs').select('id, client_id, order_id, subject, created_at, status, primary_photo_url').in('client_id', profileIds).gte('created_at', sixtyDaysAgo)
                             : Promise.resolve({ data: [] })
                     ]);
 
-                    const overridesByProfile: Record<string, any> = {};
+                    const profilesByProfileId: Record<string, any> = {};
                     (data || []).forEach((o: any) => {
                         const pid = o.profile_id || o.profiles?.id;
-                        if (pid && (o.profiles?.logistics_data?.special_attention || o.logistics_data?.special_attention)) {
-                            overridesByProfile[pid] = o.profiles?.logistics_data?.special_attention || o.logistics_data?.special_attention;
+                        if (pid && o.profiles) {
+                            profilesByProfileId[pid] = {
+                                ...o.profiles,
+                                logistics_data: {
+                                    ...(o.profiles?.logistics_data || {}),
+                                    ...(o.logistics_data?.special_attention ? { special_attention: o.logistics_data.special_attention } : {})
+                                }
+                            };
                         }
                     });
 
@@ -1396,7 +1402,7 @@ function OrderLoadingContent() {
                         profileIds as string[],
                         (histOrdersRes.data || []) as any[],
                         (histPqrsRes.data || []) as any[],
-                        overridesByProfile
+                        profilesByProfileId
                     );
 
                     const processedData = (data || []).map(order => {
@@ -5502,8 +5508,8 @@ function OrderLoadingContent() {
                                                         <FileText size={13} /> # ORDEN DE COMPRA (OC)
                                                     </label>
                                                     {isSelectedOrderColsubsidio && (
-                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '1px 8px', borderRadius: '10px', fontWeight: '800', border: '1px solid #BFDBFE' }}>
-                                                            🏢 Regla Colsubsidio
+                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '1px 8px', borderRadius: '10px', fontWeight: '800', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Building2 size={11} strokeWidth={2.5} /> Regla Colsubsidio
                                                         </span>
                                                     )}
                                                 </div>
@@ -5524,9 +5530,9 @@ function OrderLoadingContent() {
                                                         outline: 'none'
                                                     }}
                                                 />
-                                                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '#DC2626' : '#64748B', fontWeight: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '700' : 'normal' }}>
+                                                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '#DC2626' : '#64748B', fontWeight: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '700' : 'normal', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     {isSelectedOrderColsubsidio 
-                                                        ? (!editPurchaseOrder.trim() && !editSolped.trim() ? '⚠️ Obligatorio ingresar OC o SOLPED para Colsubsidio' : 'Número oficial de OC. Se imprime en remisión y factura.')
+                                                        ? (!editPurchaseOrder.trim() && !editSolped.trim() ? <><AlertTriangle size={12} strokeWidth={2.5} /> Obligatorio ingresar OC o SOLPED para Colsubsidio</> : 'Número oficial de OC. Se imprime en remisión y factura.')
                                                         : 'Número de orden de compra oficial del cliente (opcional).'}
                                                 </p>
                                             </div>
@@ -7618,9 +7624,13 @@ function OrderLoadingContent() {
                                     fontSize: '0.76rem',
                                     color: '#92400E',
                                     lineHeight: 1.4,
-                                    fontWeight: '600'
+                                    fontWeight: '600',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '8px'
                                 }}>
-                                    ℹ️ <strong>Protocolo Colsubsidio:</strong> Este pedido fue creado provisionalmente con SOLPED. Ingrese el número de Orden de Compra (OC) definitivo expedido por el cliente para formalizarlo y habilitar la radicación de la factura electrónica.
+                                    <Info size={16} strokeWidth={2.5} style={{ flexShrink: 0, marginTop: '1px', color: '#D97706' }} />
+                                    <span><strong>Protocolo Colsubsidio:</strong> Este pedido fue creado provisionalmente con SOLPED. Ingrese el número de Orden de Compra (OC) definitivo expedido por el cliente para formalizarlo y habilitar la radicación de la factura electrónica.</span>
                                 </div>
 
                                 <div>

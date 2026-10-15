@@ -135,7 +135,7 @@ export default function BulkOrderPrintLabelsPage() {
                     .select(`
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, total_weight_kg, 
                         shipping_address, warehouse_spaces, profile_id, logistics_data,
-                        profiles:profile_id(id, company_name, contact_name, nit, address, phone, contact_phone, logistics_data)
+                        profiles:profile_id(id, created_at, parent_id, company_name, contact_name, nit, address, phone, contact_phone, logistics_data)
                     `)
                     .order('created_at', { ascending: true });
 
@@ -179,7 +179,7 @@ export default function BulkOrderPrintLabelsPage() {
                         ? supabase.from('orders').select('id, profile_id, status, delivery_date, created_at, total, subtotal').in('profile_id', profileIds).gte('delivery_date', sixtyDaysAgo)
                         : Promise.resolve({ data: [] }),
                     profileIds.length > 0
-                        ? supabase.from('customer_service_pqrs').select('id, client_profile_id, created_at, status, stage').in('client_profile_id', profileIds).gte('created_at', sixtyDaysAgo)
+                        ? supabase.from('customer_service_pqrs').select('id, client_id, order_id, subject, created_at, status, primary_photo_url').in('client_id', profileIds).gte('created_at', sixtyDaysAgo)
                         : Promise.resolve({ data: [] })
                 ]);
 
@@ -187,12 +187,18 @@ export default function BulkOrderPrintLabelsPage() {
                     console.error('Error fetching order items for labels:', itemsRes.error);
                 }
 
-                const overridesByProfile: Record<string, any> = {};
+                const profilesByProfileId: Record<string, any> = {};
                 (ordersData || []).forEach((o: any) => {
                     const prof = Array.isArray(o.profiles) ? o.profiles[0] : o.profiles;
                     const pid = o.profile_id || prof?.id;
-                    if (pid && (prof?.logistics_data?.special_attention || o.logistics_data?.special_attention)) {
-                        overridesByProfile[pid] = prof?.logistics_data?.special_attention || o.logistics_data?.special_attention;
+                    if (pid && prof) {
+                        profilesByProfileId[pid] = {
+                            ...prof,
+                            logistics_data: {
+                                ...(prof?.logistics_data || {}),
+                                ...(o.logistics_data?.special_attention ? { special_attention: o.logistics_data.special_attention } : {})
+                            }
+                        };
                     }
                 });
 
@@ -200,7 +206,7 @@ export default function BulkOrderPrintLabelsPage() {
                     profileIds as string[],
                     (histOrdersRes.data || []) as any[],
                     (histPqrsRes.data || []) as any[],
-                    overridesByProfile
+                    profilesByProfileId
                 );
 
                 const itemsByOrder: Record<string, OrderItemData[]> = {};
@@ -562,33 +568,32 @@ export default function BulkOrderPrintLabelsPage() {
                                 {/* Left Section: Dispatch Information (70mm) */}
                                 <div style={{ width: '71mm', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '1.5mm' }}>
                                     {/* Brand Header & Slot */}
-                                    <div style={{ borderBottom: '1px solid #000000', paddingBottom: '1mm', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <div style={{ fontSize: '7.2pt', fontWeight: '900', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                                            FRUFRESCO LOGÍSTICA &bull; DESPACHO
+                                    <div style={{ borderBottom: '1px solid #000000', paddingBottom: '1mm', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                        <div style={{ fontSize: '7pt', fontWeight: '900', letterSpacing: '0.02em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <span>FRUFRESCO &bull; DESPACHO</span>
+                                            {lbl.specialAttention?.isActive && (
+                                                <span style={{
+                                                    fontSize: '5.8pt',
+                                                    fontWeight: '900',
+                                                    border: '1.2px solid #000000',
+                                                    padding: '0 3px',
+                                                    borderRadius: '2px',
+                                                    letterSpacing: '0.02em',
+                                                    lineHeight: 1.1
+                                                }}>
+                                                    ★ {lbl.specialAttention.printCode} CANASTA 1A
+                                                </span>
+                                            )}
                                         </div>
-                                        <div style={{ fontSize: '7pt', fontWeight: '800' }}>
+                                        <div style={{ fontSize: '7pt', fontWeight: '800', whiteSpace: 'nowrap' }}>
                                             {lbl.deliveryDate} &bull; <span style={{ textDecoration: 'underline' }}>{lbl.deliverySlot}</span>
                                         </div>
                                     </div>
 
                                     {/* Client & Branch (High Visibility in Dark Warehouses) */}
                                     <div style={{ marginTop: '0.8mm' }}>
-                                        {lbl.specialAttention?.isActive && (
-                                            <div style={{
-                                                display: 'inline-block',
-                                                fontSize: '6.3pt',
-                                                fontWeight: '900',
-                                                border: '1.5px solid #000000',
-                                                padding: '0.5px 4px',
-                                                borderRadius: '2px',
-                                                marginBottom: '0.8mm',
-                                                letterSpacing: '0.03em'
-                                            }}>
-                                                [CUIDADO ESPECIAL &bull; CANASTA LIMPIA]
-                                            </div>
-                                        )}
                                         <div style={{ 
-                                            fontSize: lbl.specialAttention?.isActive ? '10.5pt' : '11.5pt', 
+                                            fontSize: '11.5pt', 
                                             fontWeight: '900', 
                                             lineHeight: '1.12', 
                                             color: '#000000',

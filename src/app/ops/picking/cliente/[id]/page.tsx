@@ -57,7 +57,7 @@ function PickingClientContent() {
                 .select(`
                     id, profile_id, created_at, delivery_date, status, total, logistics_data,
                     profiles:profile_id (
-                        id, company_name, contact_name, role, logistics_data
+                        id, created_at, parent_id, company_name, contact_name, role, logistics_data
                     ),
                     order_items (
                         id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
@@ -90,7 +90,7 @@ function PickingClientContent() {
                         .limit(20),
                     supabase
                         .from('customer_service_pqrs')
-                        .select('id, created_at, status, subject, order_id')
+                        .select('id, created_at, status, subject, order_id, primary_photo_url')
                         .eq('client_id', clientId)
                         .order('created_at', { ascending: false })
                         .limit(10)
