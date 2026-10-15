@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruction, getOrderProcurementReferences } from '@/lib/orderUtils';
-import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet } from 'lucide-react';
+import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, Gift, CheckSquare } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
@@ -492,7 +492,7 @@ function ContingencyPrintContent() {
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, profile_id,
                         total_weight_kg, crates_count, is_manual_delivery, manual_delivery_time, manual_delivery_margin, manual_delivery_note, logistics_data,
                         latitude, longitude, shipping_address, admin_notes, special_notes, warehouse_spaces,
-                        profiles:profiles(id, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, document_type, remission_with_prices, needs_crates, crate_balance, parent:parent_id(id, company_name, document_type, remission_with_prices)),
+                        profiles:profiles(id, created_at, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, document_type, remission_with_prices, needs_crates, crate_balance, parent:parent_id(id, company_name, document_type, remission_with_prices)),
                         order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, parent_id, min_inventory_level, iva_rate))
                     `);
 
@@ -568,15 +568,21 @@ function ContingencyPrintContent() {
                             ? supabase.from('orders').select('id, profile_id, status, delivery_date, created_at, total, subtotal').in('profile_id', profileIds).gte('delivery_date', sixtyDaysAgo)
                             : Promise.resolve({ data: [] }),
                         profileIds.length > 0
-                            ? supabase.from('customer_service_pqrs').select('id, client_profile_id, created_at, status, stage').in('client_profile_id', profileIds).gte('created_at', sixtyDaysAgo)
+                            ? supabase.from('customer_service_pqrs').select('id, client_id, order_id, subject, created_at, status, primary_photo_url').in('client_id', profileIds).gte('created_at', sixtyDaysAgo)
                             : Promise.resolve({ data: [] })
                     ]);
 
-                    const overridesByProfile: Record<string, any> = {};
+                    const profilesByProfileId: Record<string, any> = {};
                     rawOrders.forEach(o => {
                         const pid = o.profile_id || o.profiles?.id;
-                        if (pid && (o.profiles?.logistics_data?.special_attention || o.logistics_data?.special_attention)) {
-                            overridesByProfile[pid] = o.profiles?.logistics_data?.special_attention || o.logistics_data?.special_attention;
+                        if (pid && o.profiles) {
+                            profilesByProfileId[pid] = {
+                                ...o.profiles,
+                                logistics_data: {
+                                    ...(o.profiles?.logistics_data || {}),
+                                    ...(o.logistics_data?.special_attention ? { special_attention: o.logistics_data.special_attention } : {})
+                                }
+                            };
                         }
                     });
 
@@ -584,7 +590,7 @@ function ContingencyPrintContent() {
                         profileIds as string[],
                         (histOrdersRes.data || []) as any[],
                         (histPqrsRes.data || []) as any[],
-                        overridesByProfile
+                        profilesByProfileId
                     );
 
                     const enrichedOrders = rawOrders.map(o => {
@@ -1276,7 +1282,10 @@ function ContingencyPrintContent() {
                                     {/* Banner Amable de Entrega para Remisión Obsequio */}
                                     {isObsequio && (
                                         <div style={{ backgroundColor: '#FAF5FF', border: '1.2px solid #A855F7', padding: '4px 9px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.9pt', color: '#581C87', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                                            <span><strong>DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).</span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                                <Gift size={12} color="#6B21A8" style={{ flexShrink: 0 }} />
+                                                <span><strong>DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).</span>
+                                            </span>
                                             <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', border: '1px solid #D8B4FE', padding: '1px 6px', borderRadius: '3px', fontWeight: 800, fontSize: '6.2pt', whiteSpace: 'nowrap' }}>CORTESÍA $0</span>
                                         </div>
                                     )}
@@ -1603,9 +1612,9 @@ function ContingencyPrintContent() {
                                                         )}
                                                     </td>
                                                     <td>
-                                                        <strong style={{ fontSize: '8.2pt', color: '#0F172A', display: 'flex', alignItems: 'center', lineHeight: 1.2 }}>
-                                                            <SpecialClientBadge state={order.special_attention} variant="print-stamp" />
+                                                        <strong style={{ fontSize: '8.2pt', color: '#0F172A', lineHeight: 1.2 }}>
                                                             <span>{branchName}</span>
+                                                            <SpecialClientBadge state={order.special_attention} variant="print-stamp" />
                                                         </strong>
                                                     </td>
                                                     <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '8px' }}>

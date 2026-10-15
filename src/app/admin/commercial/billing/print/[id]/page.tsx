@@ -13,7 +13,8 @@ import {
     DollarSign, 
     Layers,
     CheckCircle2,
-    SlidersHorizontal
+    SlidersHorizontal,
+    Gift
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -456,8 +457,11 @@ export default function BillingPrintPage() {
                                             alignItems: 'center',
                                             gap: '10px'
                                         }}>
-                                            <span>
-                                                <strong>🎁 DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                <Gift size={13} color="#6B21A8" style={{ flexShrink: 0 }} />
+                                                <span>
+                                                    <strong>DETALLE ESPECIAL FRUFRESCO:</strong> Disfrute de la frescura del campo seleccionada especialmente para usted. Esta entrega es un obsequio de cortesía de Investments Cortés S.A.S. y no genera ningún cobro ($0 COP).
+                                                </span>
                                             </span>
                                             <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', border: '1px solid #D8B4FE', padding: '2px 7px', borderRadius: '4px', fontWeight: 800, fontSize: '0.60rem', whiteSpace: 'nowrap' }}>
                                                 CORTESÍA $0

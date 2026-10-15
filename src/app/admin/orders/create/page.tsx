@@ -58,7 +58,8 @@ import {
     Truck,
     Eye,
     ExternalLink,
-    Link2
+    Link2,
+    Gift
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
@@ -8781,7 +8782,7 @@ function CreateOrderContent() {
                                                             </span>
                                                         ) : isGiftRemissionClient ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#FAF5FF', border: '1px solid #D8B4FE', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                🎁 Obsequio $0
+                                                                <Gift size={10} color="#6D28D9" /> Obsequio $0
                                                             </span>
                                                         ) : isZeroPrice ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
