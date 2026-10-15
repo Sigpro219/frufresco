@@ -262,26 +262,114 @@ export function extractRcaJsonFromText(text: string): any {
     return withEntities || found[found.length - 1];
 }
 
+export function stripRcaMetadataTags(text: string): string {
+    if (!text) return '';
+    let res = '';
+    let i = 0;
+    while (i < text.length) {
+        const start = text.indexOf('[RCA_METADATA:', i);
+        if (start === -1) {
+            res += text.slice(i);
+            break;
+        }
+        res += text.slice(i, start);
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        let tagEnd = -1;
+        for (let j = start; j < text.length; j++) {
+            const c = text[j];
+            if (escape) { escape = false; continue; }
+            if (c === '\\') { escape = true; continue; }
+            if (c === '"') { inString = !inString; continue; }
+            if (!inString) {
+                if (c === '[') depth++;
+                else if (c === ']') {
+                    depth--;
+                    if (depth === 0) {
+                        tagEnd = j + 1;
+                        break;
+                    }
+                }
+            }
+        }
+        if (tagEnd !== -1) {
+            i = tagEnd;
+        } else {
+            i = text.length;
+        }
+    }
+    return res;
+}
+
 export function cleanHumanResolutionNotes(text: string): string {
     if (!text) return '';
-    let cleaned = text;
-    // Strip from [RCA_METADATA: to the end of that block
-    cleaned = cleaned.replace(/\[RCA_METADATA:[\s\S]*?(?:\[RESPONSABLE IMPUTADO:[^\n]+\]|(?=\[DISPOSICIÓN)|$)/g, '');
-    cleaned = cleaned.replace(/\[RESPONSABLE IMPUTADO:[^\n]+\]/g, '');
-    cleaned = cleaned.replace(/\[CONCEPTO:[^\n]+\]/g, '');
-    cleaned = cleaned.replace(/,?\\?"?imputedEntityId[\s\S]*?(?:\n|$)/g, '');
+    let cleaned = stripRcaMetadataTags(text);
+    cleaned = cleaned.replace(/\[RESPONSABLE IMPUTADO:[^\n]+\]/gi, '');
+    cleaned = cleaned.replace(/\[CONCEPTO:[^\n]+\]/gi, '');
+    cleaned = cleaned.replace(/\{"categoryL1"[\s\S]*?\}/gi, '');
+    cleaned = cleaned.replace(/,?\\?"?imputedEntityId[\s\S]*?(?:\n|$)/gi, '');
     cleaned = cleaned.replace(/\\n/g, '\n');
     cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
 
     // Deduplicate identical sanitary disposal blocks if repeated
-    const dispRegex = /(\[DISPOSICIÓN SANITARIA:[\s\S]*?)(?=\n\s*\[DISPOSICIÓN SANITARIA:|$)/g;
+    const dispRegex = /(\[DISPOSICIÓN SANITARIA:[\s\S]*?)(?=\n\s*\[DISPOSICIÓN SANITARIA:|$)/gi;
     const blocks = cleaned.match(dispRegex);
     if (blocks && blocks.length > 1) {
         const unique = blocks[0];
-        cleaned = cleaned.replace(/\[DISPOSICIÓN SANITARIA:[\s\S]*$/g, unique.trim());
+        cleaned = cleaned.replace(/\[DISPOSICIÓN SANITARIA:[\s\S]*$/gi, unique.trim());
     }
 
     return cleaned.trim();
+}
+
+export interface ParsedSanitaryAndHumanNotes {
+    sanitaryTitle: string;
+    sanitaryDetails: string[];
+    commercialConcept: string;
+    humanNotes: string;
+}
+
+export function parseSanitaryAndHumanNotes(text: string, rcaNotes?: string): ParsedSanitaryAndHumanNotes {
+    let sanitaryTitle = '';
+    let sanitaryDetails: string[] = [];
+    let commercialConcept = '';
+    let humanNotes = '';
+
+    if (!text) return { sanitaryTitle, sanitaryDetails, commercialConcept, humanNotes };
+
+    // 1. Extract Concept
+    const conceptMatch = text.match(/\[CONCEPTO:\s*([^\]]+)\]/i);
+    if (conceptMatch) {
+        commercialConcept = conceptMatch[1].trim();
+    }
+
+    // 2. Extract Sanitary Disposal
+    const dispMatch = text.match(/\[DISPOSICIÓN SANITARIA:\s*([^\]]+)\]([\s\S]*?)(?=\n\s*\[|$)/i);
+    if (dispMatch) {
+        sanitaryTitle = dispMatch[1].trim();
+        const body = dispMatch[2].trim();
+        sanitaryDetails = body.split('\n')
+            .map(line => line.replace(/^[-*•]\s*/, '').trim())
+            .filter(Boolean);
+    }
+
+    // 3. Extract remaining human notes outside of tags
+    let cleaned = stripRcaMetadataTags(text);
+    cleaned = cleaned.replace(/\[RESPONSABLE IMPUTADO:[^\n]+\]/gi, '');
+    cleaned = cleaned.replace(/\[CONCEPTO:[^\n]+\]/gi, '');
+    cleaned = cleaned.replace(/\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\s*\[|\n\n|$)/gi, '');
+    cleaned = cleaned.replace(/\{"categoryL1"[\s\S]*?\}/gi, '');
+    cleaned = cleaned.replace(/,?\\?"?imputedEntityId[\s\S]*?(?:\n|$)/gi, '');
+    cleaned = cleaned.replace(/\\n/g, '\n');
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+
+    humanNotes = cleaned;
+    if (!humanNotes && rcaNotes && !rcaNotes.includes('[RCA_METADATA:') && !rcaNotes.includes('[DISPOSICIÓN')) {
+        humanNotes = rcaNotes.trim();
+    }
+
+    return { sanitaryTitle, sanitaryDetails, commercialConcept, humanNotes };
 }
 
 // Helpers to encode & decode RCA metadata from resolution notes/descriptions
@@ -439,11 +527,18 @@ export function buildRcaMetadataTag(data: {
     imputedEvidenceNotes?: string;
     deductionAmount?: number;
 }): string {
+    const cleanNotes = (data.notes || '')
+        .replace(/\[RCA_METADATA:[\s\S]*$/gi, '')
+        .replace(/\[DISPOSICIÓN SANITARIA:[\s\S]*$/gi, '')
+        .replace(/\[RESPONSABLE IMPUTADO:[^\n]+\]/gi, '')
+        .replace(/\[CONCEPTO:[^\n]+\]/gi, '')
+        .trim();
+
     const json = JSON.stringify({
         categoryL1: data.categoryL1,
         subtypeL2: data.subtypeL2,
         responsible: data.responsible,
-        notes: data.notes || '',
+        notes: cleanNotes,
         isReplacementRejection: Boolean(data.isReplacementRejection),
         imputedTargetType: data.imputedTargetType || 'none',
         imputedEntities: data.imputedEntities || [],
