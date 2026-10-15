@@ -10,6 +10,7 @@ export default function UniversalLetterhead({
     meta,
     paperSize = 'letter',
     showWatermark = true,
+    showHeader = true,
     showFooter = true,
     footerCustomText,
     className = '',
@@ -69,63 +70,65 @@ export default function UniversalLetterhead({
             )}
 
             {/* Executive Corporate Header */}
-            <header className="letterhead-header">
-                <div className="letterhead-logo-wrap">
-                    <img 
-                        src={brand.logoUrl} 
-                        alt={brand.companyName} 
-                        style={{ height: logoHeight, width: 'auto', objectFit: 'contain', flexShrink: 0 }}
-                    />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <div className="letterhead-company-name">{brand.companyName}</div>
-                        <div className="letterhead-company-nit">
-                            {brand.legalId} {brand.taxRegime ? `• ${brand.taxRegime}` : ''}
+            {showHeader && (
+                <header className="letterhead-header">
+                    <div className="letterhead-logo-wrap">
+                        <img 
+                            src={brand.logoUrl} 
+                            alt={brand.companyName} 
+                            style={{ height: logoHeight, width: 'auto', objectFit: 'contain', flexShrink: 0 }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div className="letterhead-company-name">{brand.companyName}</div>
+                            <div className="letterhead-company-nit">
+                                {brand.legalId} {brand.taxRegime ? `• ${brand.taxRegime}` : ''}
+                            </div>
+                            {brand.businessLine && (
+                                <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                    {brand.businessLine}
+                                </div>
+                            )}
                         </div>
-                        {brand.businessLine && (
-                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                {brand.businessLine}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {meta?.operationalTag && (
+                            <div style={{
+                                border: `1.8px solid ${primaryColor}`,
+                                backgroundColor: '#F8FAFC',
+                                borderRadius: '5px',
+                                padding: '3px 8px',
+                                textAlign: 'center',
+                                minWidth: '82px',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                flexShrink: 0
+                            }}>
+                                <div style={{ fontSize: '0.50rem', fontWeight: 800, textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.06em' }}>
+                                    {meta.operationalTag.label}
+                                </div>
+                                <div style={{ fontSize: '0.96rem', fontWeight: 900, color: primaryColor, letterSpacing: '0.01em', lineHeight: 1.1 }}>
+                                    {meta.operationalTag.value}
+                                </div>
+                            </div>
+                        )}
+
+                        {brand.headquarters && (
+                            <div className="letterhead-company-info" suppressHydrationWarning>
+                                {brand.headquarters.label && (
+                                    <div style={{ fontWeight: 800, color: '#1E293B' }}>{brand.headquarters.label}</div>
+                                )}
+                                {brand.headquarters.address && <div>{brand.headquarters.address}</div>}
+                                {brand.headquarters.pbx && <div>{brand.headquarters.pbx}</div>}
+                                {brand.headquarters.mobile && <div>{brand.headquarters.mobile}</div>}
+                                {brand.headquarters.email && <div>{brand.headquarters.email}</div>}
+                                {brand.headquarters.website && (
+                                    <div style={{ color: accentColor, fontWeight: 700 }}>{brand.headquarters.website}</div>
+                                )}
                             </div>
                         )}
                     </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {meta?.operationalTag && (
-                        <div style={{
-                            border: `1.8px solid ${primaryColor}`,
-                            backgroundColor: '#F8FAFC',
-                            borderRadius: '5px',
-                            padding: '3px 8px',
-                            textAlign: 'center',
-                            minWidth: '82px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                            flexShrink: 0
-                        }}>
-                            <div style={{ fontSize: '0.50rem', fontWeight: 800, textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.06em' }}>
-                                {meta.operationalTag.label}
-                            </div>
-                            <div style={{ fontSize: '0.96rem', fontWeight: 900, color: primaryColor, letterSpacing: '0.01em', lineHeight: 1.1 }}>
-                                {meta.operationalTag.value}
-                            </div>
-                        </div>
-                    )}
-
-                    {brand.headquarters && (
-                        <div className="letterhead-company-info" suppressHydrationWarning>
-                            {brand.headquarters.label && (
-                                <div style={{ fontWeight: 800, color: '#1E293B' }}>{brand.headquarters.label}</div>
-                            )}
-                            {brand.headquarters.address && <div>{brand.headquarters.address}</div>}
-                            {brand.headquarters.pbx && <div>{brand.headquarters.pbx}</div>}
-                            {brand.headquarters.mobile && <div>{brand.headquarters.mobile}</div>}
-                            {brand.headquarters.email && <div>{brand.headquarters.email}</div>}
-                            {brand.headquarters.website && (
-                                <div style={{ color: accentColor, fontWeight: 700 }}>{brand.headquarters.website}</div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </header>
+                </header>
+            )}
 
             {/* Document Title / Meta Strip */}
             {(meta?.title || meta?.subtitle || meta?.date || meta?.reference || meta?.badge) && (

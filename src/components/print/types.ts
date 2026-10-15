@@ -45,6 +45,7 @@ export interface UniversalLetterheadProps {
     meta?: DocumentMetaConfig;
     paperSize?: PaperSize;          // Default: 'letter'
     showWatermark?: boolean;        // Default: true
+    showHeader?: boolean;           // Default: true
     showFooter?: boolean;           // Default: true
     footerCustomText?: React.ReactNode;
     className?: string;

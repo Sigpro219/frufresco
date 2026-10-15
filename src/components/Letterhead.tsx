@@ -13,6 +13,7 @@ interface LetterheadProps {
     badgeVariant?: 'dark' | 'light' | 'emerald' | 'amber';
     espacioNum?: string | number;
     showWatermark?: boolean;
+    showHeader?: boolean;
     showFooter?: boolean;
     footerText?: React.ReactNode;
     className?: string;
@@ -34,6 +35,7 @@ export default function Letterhead({
     badgeVariant = 'dark',
     espacioNum,
     showWatermark = true,
+    showHeader = true,
     showFooter = true,
     footerText,
     className = '',
@@ -59,6 +61,7 @@ export default function Letterhead({
             meta={meta}
             paperSize={paperSize}
             showWatermark={showWatermark}
+            showHeader={showHeader}
             showFooter={showFooter}
             footerCustomText={footerText}
             className={className}

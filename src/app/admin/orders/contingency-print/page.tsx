@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruction, getOrderProcurementReferences } from '@/lib/orderUtils';
-import { Printer, ShieldAlert, ArrowLeft, Download, Truck } from 'lucide-react';
+import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
@@ -573,6 +574,66 @@ export default function ContingencyPrintPage() {
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount || 0);
     };
 
+    const handleExportExcel = () => {
+        if (!orders || orders.length === 0) return;
+
+        const data = orders.map((order, idx) => {
+            const orderNum = getFriendlyOrderId(order);
+            const branchName = extractBranchOnly(order);
+            const { parentName } = extractParentAndBranch(order);
+            const { weightKg, crates } = getOrderWeightAndCrates(order);
+            const slotInfo = resolveDeliverySlotInfo(order);
+            const locInfo = resolveLocalityAndCity(order);
+            const addressClean = cleanAddress(order.shipping_address || order.profiles?.address);
+            const phone = cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone);
+            const bay = order.warehouse_spaces && order.warehouse_spaces.length > 0 
+                ? `Bahía ${formatSpaceLabel(order.warehouse_spaces)}` 
+                : '';
+
+            return {
+                '#': idx + 1,
+                'Pedido': `#${orderNum}`,
+                'Bahía': bay,
+                'Razón Social Matriz': parentName,
+                'Sucursal / Punto de Entrega': branchName,
+                'Dirección': addressClean,
+                'Localidad': locInfo.locality || locInfo.fullLocationText,
+                'Municipio': locInfo.municipality || 'Bogotá D.C.',
+                'Teléfono Contacto': phone,
+                'Canastillas': crates,
+                'Peso Total (Kg)': Number(weightKg.toFixed(1)),
+                'Franja Horaria': slotInfo.slot,
+                'Tipo de Franja': slotInfo.isExceptional ? 'Excepcional' : 'Estándar',
+                'Notas de Horario': slotInfo.note || '',
+                'Notas de Ruta / Pedido': order.special_notes || ''
+            };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        worksheet['!cols'] = [
+            { wch: 5 },  // #
+            { wch: 14 }, // Pedido
+            { wch: 12 }, // Bahía
+            { wch: 30 }, // Razón Social
+            { wch: 32 }, // Sucursal
+            { wch: 38 }, // Dirección
+            { wch: 18 }, // Localidad
+            { wch: 18 }, // Municipio
+            { wch: 16 }, // Teléfono
+            { wch: 13 }, // Canastillas
+            { wch: 15 }, // Peso Total (Kg)
+            { wch: 16 }, // Franja Horaria
+            { wch: 14 }, // Tipo de Franja
+            { wch: 22 }, // Notas Horario
+            { wch: 35 }  // Notas Ruta
+        ];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Manifiesto de Ruta');
+        const fileDate = orders[0]?.delivery_date || selectedDate || new Date().toISOString().split('T')[0];
+        XLSX.writeFile(workbook, `Manifiesto_Ruta_${fileDate}.xlsx`);
+    };
+
     if (loading) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif' }}>
@@ -736,6 +797,31 @@ export default function ContingencyPrintPage() {
                         }}
                         orderIds={rawOrderIds || undefined}
                     />
+
+                    {/* Botón Descargar Excel (Visible en modo Manifiesto o Todo) */}
+                    {(mode === 'dispatch' || mode === 'all') && (
+                        <button
+                            onClick={handleExportExcel}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '4px 10px',
+                                backgroundColor: '#FFFFFF',
+                                color: '#059669',
+                                border: '1px solid #10B981',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '0.76rem',
+                                fontWeight: '800',
+                                boxShadow: '0 1px 3px rgba(16, 185, 129, 0.1)',
+                                whiteSpace: 'nowrap'
+                            }}
+                            title="Descargar manifiesto de ruta en formato Excel (XLSX)"
+                        >
+                            <FileSpreadsheet size={14} /> Excel
+                        </button>
+                    )}
 
                     {/* Botón Descargar PDF */}
                     <button
@@ -1324,15 +1410,18 @@ export default function ContingencyPrintPage() {
                 {/* 4. MANIFIESTO DE RUTA & CONTROL DE CANASTILLAS            */}
                 {/* ========================================================= */}
                 {showDispatch && (() => {
-                    const CHUNK_SIZE = 18;
+                    const MAX_CHUNK = 26;
+                    const pageCount = Math.max(1, Math.ceil(orders.length / MAX_CHUNK));
+                    const chunkSize = Math.ceil(orders.length / pageCount);
                     const manifestPages: OrderData[][] = [];
-                    for (let i = 0; i < orders.length; i += CHUNK_SIZE) {
-                        manifestPages.push(orders.slice(i, i + CHUNK_SIZE));
+                    for (let i = 0; i < orders.length; i += chunkSize) {
+                        manifestPages.push(orders.slice(i, i + chunkSize));
                     }
                     if (manifestPages.length === 0) manifestPages.push([]);
 
                     return manifestPages.map((pageOrders, pageIdx) => {
                         const isLastPage = pageIdx === manifestPages.length - 1;
+                        const previousOffset = manifestPages.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
                         return (
                             <Letterhead
                                 key={`manifest-page-${pageIdx}`}
@@ -1345,6 +1434,8 @@ export default function ContingencyPrintPage() {
                                 className="page-break"
                                 paperSize="oficio"
                                 showWatermark={false}
+                                showHeader={false}
+                                showFooter={false}
                             >
                                 <table>
                                     <thead>
@@ -1360,7 +1451,7 @@ export default function ContingencyPrintPage() {
                                     </thead>
                                     <tbody>
                                         {pageOrders.map((order, orderIdx) => {
-                                            const globalIdx = pageIdx * CHUNK_SIZE + orderIdx + 1;
+                                            const globalIdx = previousOffset + orderIdx + 1;
                                             const branchName = extractBranchOnly(order);
                                             const orderNum = getFriendlyOrderId(order);
                                             const { weightKg, crates } = getOrderWeightAndCrates(order);
