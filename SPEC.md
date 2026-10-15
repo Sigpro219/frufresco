@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.176 (Resolutivo Gemba Integral: Sincronización Realtime Silenciosa en Facturación y SAC, Desbloqueo de Tandas Operativas D+1..D+7 y Pre-Liquidación Automática de Devoluciones illing_returns en FinancialAdjustmentModal — 76/76 Pantallas Certificadas)  
-> **Fecha:** 14 de Octubre, 2026  
+> **Versión:** 1.9.179 (Gobernanza Monetaria COP-First en Imputabilidad PQR, Reparto Equitativo al Peso sin Truncamiento y Desbloqueo Comercial en Facturación — 76/76 Pantallas Certificadas)  
+> **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 208 Escenarios BDD Ininterrumpidos (1..208)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 211 Escenarios BDD Ininterrumpidos (1..211)
 
 ---
 
@@ -9956,6 +9956,27 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   3. Los únicos estados de maduración seleccionables permitidos corresponden a desviaciones agronómicas expresas solicitadas por la cocina del cliente: **«Pintón»** (mayor vida útil en bodega) y **«Verde»** (requerimiento técnico de cocción/fritura).
   4. Si el pedido no especifica una desviación («Pintón» o «Verde»), el insumo se procesa sin badge superfluo de maduración, asumiendo el equipo de alistamiento en bodega de Corabastos la entrega física en punto óptimo comercial (*Maduro*).
   5. Los borradores de correo y pedidos preexistentes con notas históricas purgan automáticamente cualquier valor residual de *«Maduro»*, impidiendo que se persista en la base de datos como una variante explícita.
+
+---
+
+#### Escenario 210: Blindaje de Esquema en Novedades de Línea (`billing_returns`) y Arquitectura Dual-Panel en Auditoría Técnica PQR (SDD v1.9.178)
+- **Given** un analista de Calidad, auditor SAC o supervisor de operaciones auditando una reclamación en la consola de Atención al Cliente (`/admin/customer-service`) e interactuando con el modal de auditoría técnica (`PqrAuditModal.tsx`).
+- **When** inspecciona los hechos, declara o modifica novedades sobre ítems del pedido (faltantes en báscula, averías o mermas) y gestiona la comunicación oficial con el cliente:
+- **Then**:
+  1. **Gobernanza de Esquema & Resiliencia PostgREST (`billing_returns`):**
+     - La tabla física `billing_returns` no posee ni admite la columna `has_physical_return`.
+     - Toda mutación (`insert` y `update`) tiene terminantemente prohibido inyectar dicha columna en el payload de Supabase, erradicando fallos de caché de esquema (`Could not find the 'has_physical_return' column of 'billing_returns' in the schema cache`).
+     - La condición de retorno físico hacia patio/cuarentena se serializa canónicamente dentro del campo estructurado `notes` con el formato inmutable `[RETORNO_FISICO: SI]` o `[RETORNO_FISICO: NO]`.
+     - El cliente frontend y las consolas de despacho leen de forma retrocompatible: `ret.has_physical_return || (ret.notes || '').includes('RETORNO_FISICO: SI')`.
+  2. **Arquitectura de Interfaz Dual-Panel y Ergonomía de Pantalla (Paso 1: Hecho & Evidencias):**
+     - El modal ajusta sus dimensiones máximas a `maxWidth: 1080px` y `maxHeight: 94vh` para garantizar visibilidad total del flujo y la barra de acciones inferior (`Siguiente >`) en pantallas portátiles (1366x768 a 1080p).
+     - **Cabecera de Contexto (2 Columnas Equilibradas):** Se disponen en paralelo la *Radicación & Asunto* (fecha, asunto, descripción, funcionario) y el *Pedido Asociado* (folio `#sequence_id`, total en COP, dirección, conductor de ruta, desvinculación y selector de recientes).
+     - **Panel Izquierdo (~40% / minmax 360px):** Integra la *Evidencia Fotográfica* compacta (`maxHeight: 160px` con botón flotante `[Ampliar]`, miniaturas horizontales y selector de archivos) junto con el módulo de *Contacto Comercial & WhatsApp SAC* (datos del cliente, selector de plantillas en píldoras, vista previa reactiva del texto, botón directo de WhatsApp y botón de copiado).
+     - **Panel Derecho (~60% / minmax 360px):** Aloja la *Declaración de Novedades de Línea* (formulario estructurado con `SearchableSelect` de productos, botones segmentados de Tipo de Novedad, control de cantidad afectada y checkbox de retorno físico) y la **Tabla de Novedades Declaradas al 100% de Ancho**, erradicando el aplastamiento horizontal en celdas de CSS Grid y proyectando claramente el impacto económico total consolidado (`caseCoQ`).
+  3. **Erradicación de Selectores Crudos & Persistencia de Borradores:**
+     - El 100% de los menús desplegables nativos (`<select>`) en la auditoría PQR son sustituidos por comboboxes con superbuscador (`SearchableSelect`).
+     - Quedan erradicados los emojis de texto en títulos y botones, sustituyéndose por iconos SVG canónicos de Lucide (`ShieldAlert`, `Sparkles`, `Package`, `PackageX`, `AlertTriangle`, `Trash2`, etc.).
+     - Las modificaciones del formulario de auditoría se persisten reactivamente en `localStorage` ante cierres accidentales de ventana, con indicador de "Borrador activo" y opción de descarte.
 
 ---
 

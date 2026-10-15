@@ -751,6 +751,35 @@ export default function PqrAuditModal({
         }
     };
 
+
+
+    const calculateEqualSplit = (entities: ImputedEntity[], totalAmount: number): ImputedEntity[] => {
+        if (!entities || entities.length === 0) return [];
+        const count = entities.length;
+        if (count === 1) {
+            return [{
+                ...entities[0],
+                sharePercent: 100,
+                deductionAmount: totalAmount
+            }];
+        }
+
+        const baseAmount = Math.floor(totalAmount / count);
+        const remainder = totalAmount - (baseAmount * count);
+
+        return entities.map((item, idx) => {
+            const amount = idx === 0 ? (baseAmount + remainder) : baseAmount;
+            const pct = totalAmount > 0 
+                ? Number(((amount / totalAmount) * 100).toFixed(2))
+                : Number((100 / count).toFixed(2));
+            return {
+                ...item,
+                sharePercent: pct,
+                deductionAmount: amount
+            };
+        });
+    };
+
     const handleAddImputedEntity = (entityId: string) => {
         if (!entityId) return;
         let newEntity: ImputedEntity | null = null;
@@ -763,7 +792,8 @@ export default function PqrAuditModal({
                     documentId: prov.nit,
                     role: 'proveedor',
                     entityType: 'provider',
-                    sharePercent: 100
+                    sharePercent: 100,
+                    deductionAmount: 0
                 };
             }
         } else {
@@ -774,7 +804,8 @@ export default function PqrAuditModal({
                     name: colab.contact_name,
                     role: colab.role || rcaResponsible,
                     entityType: rcaResponsible === 'transporte' ? 'driver' : rcaResponsible === 'comercial' ? 'sales_rep' : 'employee',
-                    sharePercent: 100
+                    sharePercent: 100,
+                    deductionAmount: 0
                 };
             }
         }
@@ -786,16 +817,7 @@ export default function PqrAuditModal({
         }
 
         const updated = [...imputedEntities, newEntity];
-        const equalShare = Math.floor(100 / updated.length);
-        const remainder = 100 - (equalShare * updated.length);
-        const finalized = updated.map((item, idx) => {
-            const pct = idx === 0 ? equalShare + remainder : equalShare;
-            return {
-                ...item,
-                sharePercent: pct,
-                deductionAmount: Math.round((caseCoQ * pct) / 100)
-            };
-        });
+        const finalized = calculateEqualSplit(updated, caseCoQ);
 
         setImputedEntities(finalized);
         setSelectedImputedToAdd('');
@@ -807,17 +829,15 @@ export default function PqrAuditModal({
             setImputedEntities([]);
             return;
         }
-        const equalShare = Math.floor(100 / remaining.length);
-        const remainder = 100 - (equalShare * remaining.length);
-        const finalized = remaining.map((item, idx) => {
-            const pct = idx === 0 ? equalShare + remainder : equalShare;
-            return {
-                ...item,
-                sharePercent: pct,
-                deductionAmount: Math.round((caseCoQ * pct) / 100)
-            };
-        });
+        const finalized = calculateEqualSplit(remaining, caseCoQ);
         setImputedEntities(finalized);
+    };
+
+    const handleResetEqualSplit = () => {
+        if (imputedEntities.length === 0) return;
+        const finalized = calculateEqualSplit(imputedEntities, caseCoQ);
+        setImputedEntities(finalized);
+        showToast('Reparto equitativo aplicado: cada responsable asume exactamente el mismo valor en COP.', 'success');
     };
 
     const handleUpdateEntityPercent = (entityId: string, newPercent: number) => {
@@ -834,13 +854,15 @@ export default function PqrAuditModal({
 
         if (imputedEntities.length === 2) {
             const clamped = Math.max(0, Math.min(100, newPercent));
-            const otherPercent = 100 - clamped;
+            const otherPercent = Number((100 - clamped).toFixed(2));
+            const amountA = Math.round((caseCoQ * clamped) / 100);
+            const amountB = caseCoQ - amountA; // Sum of COP always equals caseCoQ
             const updated = imputedEntities.map(e => {
-                const pct = e.id === entityId ? clamped : otherPercent;
+                const isTarget = e.id === entityId;
                 return {
                     ...e,
-                    sharePercent: pct,
-                    deductionAmount: Math.round((caseCoQ * pct) / 100)
+                    sharePercent: isTarget ? clamped : otherPercent,
+                    deductionAmount: isTarget ? amountA : amountB
                 };
             });
             setImputedEntities(updated);
@@ -851,7 +873,7 @@ export default function PqrAuditModal({
         const otherEntitiesSum = imputedEntities
             .filter(e => e.id !== entityId)
             .reduce((sum, e) => sum + (e.sharePercent || 0), 0);
-        const maxAllowed = Math.max(0, 100 - otherEntitiesSum);
+        const maxAllowed = Math.max(0, Number((100 - otherEntitiesSum).toFixed(2)));
         const clamped = Math.max(0, Math.min(maxAllowed, newPercent));
 
         const updated = imputedEntities.map(e => {
@@ -1057,8 +1079,8 @@ export default function PqrAuditModal({
             return;
         }
 
-        const totalImputedPercent = imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0);
-        if (imputedEntities.length > 0 && totalImputedPercent > 100) {
+        const totalImputedPercent = Number(imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0).toFixed(1));
+        if (imputedEntities.length > 0 && totalImputedPercent > 100.1) {
             showToast('El total imputado supera el 100%. Ajusta los porcentajes antes de resolver.', 'error');
             return;
         }
@@ -2431,9 +2453,9 @@ export default function PqrAuditModal({
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                         {imputedEntities.length > 0 && (() => {
-                                            const totalPct = imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0);
-                                            const isComplete = totalPct === 100;
-                                            const isOver = totalPct > 100;
+                                            const totalPct = Number(imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0).toFixed(1));
+                                            const isComplete = totalPct >= 99.9 && totalPct <= 100.1;
+                                            const isOver = totalPct > 100.1;
                                             return (
                                                 <div style={{
                                                     display: 'flex',
@@ -2447,13 +2469,13 @@ export default function PqrAuditModal({
                                                     fontWeight: '800',
                                                     color: isComplete ? '#065F46' : isOver ? '#991B1B' : '#92400E'
                                                 }}>
-                                                    <span>Total Imputado: {totalPct}%</span>
+                                                    <span>Total Imputado: {isComplete ? '100%' : `${totalPct}%`}</span>
                                                     {isComplete ? (
                                                         <Check size={13} style={{ color: '#059669' }} />
                                                     ) : isOver ? (
                                                         <AlertTriangle size={13} style={{ color: '#DC2626' }} />
                                                     ) : (
-                                                        <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Resta {100 - totalPct}%)</span>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Resta {Number((100 - totalPct).toFixed(1))}%)</span>
                                                     )}
                                                 </div>
                                             );
@@ -2506,6 +2528,31 @@ export default function PqrAuditModal({
                                 {/* Imputed Entities List with % Split Sliders */}
                                 {imputedEntities.length > 0 ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {imputedEntities.length > 1 && (
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '2px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleResetEqualSplit}
+                                                    style={{
+                                                        padding: '4px 10px',
+                                                        backgroundColor: '#ECFDF5',
+                                                        border: '1px solid #A7F3D0',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '700',
+                                                        color: '#065F46',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                    title="Dividir el dinero y porcentaje en partes iguales exactas"
+                                                >
+                                                    <RotateCcw size={11} />
+                                                    <span>Dividir en Partes Iguales ({imputedEntities.length})</span>
+                                                </button>
+                                            </div>
+                                        )}
                                         {imputedEntities.map(entity => (
                                             <div
                                                 key={entity.id}
@@ -2538,21 +2585,21 @@ export default function PqrAuditModal({
                                                             type="range"
                                                             min="0"
                                                             max="100"
-                                                            step="5"
+                                                            step="0.5"
                                                             value={entity.sharePercent || 0}
-                                                            onChange={e => handleUpdateEntityPercent(entity.id, parseInt(e.target.value))}
+                                                            onChange={e => handleUpdateEntityPercent(entity.id, parseFloat(e.target.value))}
                                                             style={{ width: '90px', accentColor: '#0D7A57', cursor: 'pointer' }}
                                                         />
-                                                        <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.75rem', color: '#334155', width: '35px', textAlign: 'right' }}>
-                                                            {entity.sharePercent || 0}%
+                                                        <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.75rem', color: '#334155', minWidth: '42px', textAlign: 'right' }}>
+                                                            {Number(entity.sharePercent || 0).toFixed(1)}%
                                                         </span>
                                                     </div>
 
                                                     {/* Calculated COP Deduction */}
-                                                    <div style={{ textAlign: 'right', minWidth: '90px' }}>
+                                                    <div style={{ textAlign: 'right', minWidth: '95px' }}>
                                                         <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Deducción COP</span>
-                                                        <strong style={{ fontSize: '0.78rem', color: '#BE123C' }}>
-                                                            {formatMoney(entity.deductionAmount || Math.round((caseCoQ * (entity.sharePercent || 0)) / 100))}
+                                                        <strong style={{ fontSize: '0.82rem', color: '#BE123C' }}>
+                                                            {formatMoney(entity.deductionAmount !== undefined ? entity.deductionAmount : Math.round((caseCoQ * (entity.sharePercent || 0)) / 100))}
                                                         </strong>
                                                     </div>
 
