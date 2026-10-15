@@ -9,8 +9,9 @@ import {
     ChevronRight, ChevronLeft, Sparkles, Phone, MessageCircle, Link2,
     Unlink, Plus, Trash2, Loader2, Maximize2, DollarSign, Percent,
     PackageMinus, AlertCircle, Edit2, RotateCcw, ExternalLink, Copy,
-    Clock, ArrowRight, PackageX, ShoppingBag, Package
+    Clock, ArrowRight, PackageX, ShoppingBag, Package, Save
 } from 'lucide-react';
+import SearchableSelect from '@/components/common/SearchableSelect';
 import {
     RCA_CATEGORIES_L1,
     RESPONSIBLE_PARTIES,
@@ -122,21 +123,69 @@ export default function PqrAuditModal({
     // Sanitary Disposal Template State
     const [sanitaryKey, setSanitaryKey] = useState<string>('destruccion_en_sitio');
 
+    // Draft Persistence State
+    const [isDraftRestored, setIsDraftRestored] = useState(false);
+    const [lastSavedDraftTime, setLastSavedDraftTime] = useState<string | null>(null);
+    const isRestoringDraftRef = useRef(false);
+
+    const caseReturns = useMemo(() => {
+        if (!pqr?.order_id) return [];
+        return novelties.filter(n => n.order_id === pqr.order_id && n.status !== 'rejected');
+    }, [pqr?.order_id, novelties]);
+
     // Calculate CoQ for this case
     const caseCoQ = useMemo(() => {
         if (!pqr) return 0;
-        if (pqr.order_id) {
-            const caseReturns = novelties.filter(n => n.order_id === pqr.order_id);
-            if (caseReturns.length > 0) {
-                return caseReturns.reduce((sum, item) => {
-                    const oi = item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
-                    const price = Number(oi?.unit_price || item.unit_price || 0);
-                    return sum + (price * (Number(item.quantity_returned) || 0));
-                }, 0);
-            }
+        if (pqr.order_id && caseReturns.length > 0) {
+            return caseReturns.reduce((sum, item) => {
+                const oi = orderItems.find(o => o.product_id === item.product_id) || 
+                           item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
+                const price = Number(oi?.unit_price || item.unit_price || 0);
+                return sum + (price * (Number(item.quantity_returned) || 0));
+            }, 0);
         }
         return pqr.orders?.total ? Number(pqr.orders.total) : 0;
-    }, [pqr, novelties]);
+    }, [pqr, caseReturns, orderItems]);
+
+    // Clear saved case draft helper
+    const clearCaseDraft = (pqrId: string) => {
+        if (!pqrId) return;
+        try {
+            localStorage.removeItem(`pqr_audit_draft_${pqrId}`);
+        } catch (e) {
+            console.error('Error clearing draft:', e);
+        }
+        setIsDraftRestored(false);
+        setLastSavedDraftTime(null);
+    };
+
+    // Discard draft and revert to DB values
+    const handleDiscardDraft = () => {
+        if (!pqr?.id) return;
+        clearCaseDraft(pqr.id);
+
+        setCurrentStep(1);
+        setResolutionNotes(pqr.resolution_notes || '');
+        setSelectedItemId('');
+        setNoveltyQty(0);
+        setNoveltyReason('');
+        setHasPhysicalReturn(false);
+        setLinkingOrderId('');
+
+        const rca = parseRcaFromRecord(pqr);
+        setRcaCategoryL1(rca.categoryL1 || 'dano_mecanico');
+        setRcaSubtypeL2(rca.subtypeL2 || '');
+        const currentResp = (rca.responsible !== 'no_definido' ? rca.responsible : 'transporte') as any;
+        setRcaResponsible(currentResp);
+        setRcaEvidenceNotes(rca.notes || '');
+        setImputedTargetType(rca.imputedTargetType || (currentResp === 'proveedor' ? 'provider' : currentResp === 'transporte' ? 'driver' : 'employee'));
+        if (rca.imputedEntities && rca.imputedEntities.length > 0) {
+            setImputedEntities(rca.imputedEntities);
+        } else {
+            setImputedEntities([]);
+        }
+        showToast('Borrador descartado. Se restauraron los datos originales del caso.', 'warning');
+    };
 
     // Initialize modal when PQR changes
     useEffect(() => {
@@ -172,6 +221,54 @@ export default function PqrAuditModal({
 
         setResolutionOption(isReplacement ? 'opt3' : (pqr.status === 'resolved' ? 'opt1' : 'opt1'));
 
+        // Check for progressive draft saved in localStorage
+        const draftKey = `pqr_audit_draft_${pqr.id}`;
+        let restoredFromDraft = false;
+        try {
+            const rawDraft = localStorage.getItem(draftKey);
+            if (rawDraft) {
+                const draft = JSON.parse(rawDraft);
+                if (draft && typeof draft === 'object') {
+                    isRestoringDraftRef.current = true;
+                    if (draft.currentStep) setCurrentStep(draft.currentStep);
+                    if (draft.resolutionNotes !== undefined) setResolutionNotes(draft.resolutionNotes);
+                    if (draft.resolutionOption) setResolutionOption(draft.resolutionOption);
+                    if (draft.rcaCategoryL1) setRcaCategoryL1(draft.rcaCategoryL1);
+                    if (draft.rcaSubtypeL2 !== undefined) setRcaSubtypeL2(draft.rcaSubtypeL2);
+                    if (draft.rcaResponsible) setRcaResponsible(draft.rcaResponsible);
+                    if (draft.rcaEvidenceNotes !== undefined) setRcaEvidenceNotes(draft.rcaEvidenceNotes);
+                    if (draft.imputedTargetType) setImputedTargetType(draft.imputedTargetType);
+                    if (Array.isArray(draft.imputedEntities)) setImputedEntities(draft.imputedEntities);
+                    if (draft.sanitaryKey) setSanitaryKey(draft.sanitaryKey);
+                    if (draft.selectedItemId) setSelectedItemId(draft.selectedItemId);
+                    if (draft.noveltyQty !== undefined) setNoveltyQty(draft.noveltyQty);
+                    if (draft.noveltyType) setNoveltyType(draft.noveltyType);
+                    if (draft.noveltyReason !== undefined) setNoveltyReason(draft.noveltyReason);
+                    if (draft.hasPhysicalReturn !== undefined) setHasPhysicalReturn(draft.hasPhysicalReturn);
+                    if (draft.linkingOrderId) setLinkingOrderId(draft.linkingOrderId);
+                    if (draft.selectedSubstituteProductId) setSelectedSubstituteProductId(draft.selectedSubstituteProductId);
+                    if (draft.substituteTargetItemId) setSubstituteTargetItemId(draft.substituteTargetItemId);
+
+                    restoredFromDraft = true;
+                    setIsDraftRestored(true);
+                    if (draft.updatedAt) {
+                        setLastSavedDraftTime(new Date(draft.updatedAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }));
+                    }
+                    setTimeout(() => {
+                        isRestoringDraftRef.current = false;
+                    }, 400);
+                }
+            }
+        } catch (e) {
+            console.error('Error restoring draft:', e);
+            isRestoringDraftRef.current = false;
+        }
+
+        if (!restoredFromDraft) {
+            setIsDraftRestored(false);
+            setLastSavedDraftTime(null);
+        }
+
         if (pqr.order_id) {
             setLoadingItems(true);
             (async () => {
@@ -197,7 +294,7 @@ export default function PqrAuditModal({
                         };
                         setAssignedRouteDriver(foundDriver);
 
-                        if ((!rca.imputedEntities || rca.imputedEntities.length === 0) && currentResp === 'transporte') {
+                        if (!restoredFromDraft && (!rca.imputedEntities || rca.imputedEntities.length === 0) && currentResp === 'transporte') {
                             setImputedEntities([{
                                 id: foundDriver.id || 'driver-route',
                                 name: `${foundDriver.name} (${foundDriver.plate || 'Furgón'})`,
@@ -218,7 +315,7 @@ export default function PqrAuditModal({
             setOrderItems([]);
         }
 
-        setLinkingOrderId('');
+        if (!restoredFromDraft) setLinkingOrderId('');
         if (pqr.client_id) {
             setLoadingRecentOrders(true);
             (async () => {
@@ -240,6 +337,64 @@ export default function PqrAuditModal({
             setClientRecentOrders([]);
         }
     }, [pqr, caseCoQ]);
+
+    // Progressive Auto-Save Draft to LocalStorage (Debounced 400ms)
+    useEffect(() => {
+        if (!pqr?.id || !isOpen || isRestoringDraftRef.current) return;
+
+        const timer = setTimeout(() => {
+            try {
+                const draftData = {
+                    currentStep,
+                    resolutionNotes,
+                    resolutionOption,
+                    rcaCategoryL1,
+                    rcaSubtypeL2,
+                    rcaResponsible,
+                    rcaEvidenceNotes,
+                    imputedTargetType,
+                    imputedEntities,
+                    sanitaryKey,
+                    selectedItemId,
+                    noveltyQty,
+                    noveltyType,
+                    noveltyReason,
+                    hasPhysicalReturn,
+                    linkingOrderId,
+                    selectedSubstituteProductId,
+                    substituteTargetItemId,
+                    updatedAt: new Date().toISOString()
+                };
+                localStorage.setItem(`pqr_audit_draft_${pqr.id}`, JSON.stringify(draftData));
+                setLastSavedDraftTime(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }));
+            } catch (err) {
+                console.error('Error auto-saving PQR draft:', err);
+            }
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [
+        pqr?.id,
+        isOpen,
+        currentStep,
+        resolutionNotes,
+        resolutionOption,
+        rcaCategoryL1,
+        rcaSubtypeL2,
+        rcaResponsible,
+        rcaEvidenceNotes,
+        imputedTargetType,
+        imputedEntities,
+        sanitaryKey,
+        selectedItemId,
+        noveltyQty,
+        noveltyType,
+        noveltyReason,
+        hasPhysicalReturn,
+        linkingOrderId,
+        selectedSubstituteProductId,
+        substituteTargetItemId
+    ]);
 
     // Shortage live countdown timer and template auto-selection
     useEffect(() => {
@@ -315,7 +470,7 @@ export default function PqrAuditModal({
                 imputedTargetType: 'provider'
             });
 
-            const finalNotes = `[🚨 SUSTITUCIÓN HORECA EN BODEGA ACEPTADA POR CLIENTE]\n- Producto Original: ${targetItem?.products?.name || pqr.subject || 'N/A'}\n- Producto Sustituto: ${substituteProduct.name}\n- Alistamiento: Autorizado y empacado de inmediato en muelle para salida en ruta.\n\n${rcaTag}`;
+            const finalNotes = `[SUSTITUCIÓN HORECA EN BODEGA ACEPTADA POR CLIENTE]\n- Producto Original: ${targetItem?.products?.name || pqr.subject || 'N/A'}\n- Producto Sustituto: ${substituteProduct.name}\n- Alistamiento: Autorizado y empacado de inmediato en muelle para salida en ruta.\n\n${rcaTag}`;
 
             await supabase
                 .from('customer_service_pqrs')
@@ -329,7 +484,8 @@ export default function PqrAuditModal({
                 })
                 .eq('id', pqr.id);
 
-            showToast(`✅ Sustitución por "${substituteProduct.name}" aplicada con éxito.`, 'success');
+            clearCaseDraft(pqr.id);
+            showToast(`Sustitución por "${substituteProduct.name}" aplicada con éxito.`, 'success');
             setSubstituteModalOpen(false);
             onResolved();
             onClose();
@@ -382,8 +538,8 @@ export default function PqrAuditModal({
             });
 
             const finalNotes = isAutoRelease 
-                ? `[⏱️ AUTO-LIBERACIÓN POKA-YOKE POR TIMEOUT DE SALIDA DE RUTA]\n- Acción: Producto escaso retirado sin cobro de la remisión.\n- Inventario: Asentado en Columna K (Escasez).\n- Logística: Pedido liberado en muelle para proteger franja de entrega.\n\n${rcaTag}`
-                : `[📦 RETIRO LIMPIO POR DESABASTECIMIENTO EN PLAZA]\n- Acción: Excluido de la remisión sin cobro.\n- Inventario: Asentado en Columna K.\n\n${rcaTag}`;
+                ? `[AUTO-LIBERACIÓN POKA-YOKE POR TIMEOUT DE SALIDA DE RUTA]\n- Acción: Producto escaso retirado sin cobro de la remisión.\n- Inventario: Asentado en Columna K (Escasez).\n- Logística: Pedido liberado en muelle para proteger franja de entrega.\n\n${rcaTag}`
+                : `[RETIRO LIMPIO POR DESABASTECIMIENTO EN PLAZA]\n- Acción: Excluido de la remisión sin cobro.\n- Inventario: Asentado en Columna K.\n\n${rcaTag}`;
 
             await supabase
                 .from('customer_service_pqrs')
@@ -397,7 +553,8 @@ export default function PqrAuditModal({
                 })
                 .eq('id', pqr.id);
 
-            showToast(isAutoRelease ? '⚡ Auto-liberación Poka-Yoke ejecutada. Pedido liberado para ruta.' : '✅ Retiro limpio aplicado (Columna K). Factura depurada.', 'success');
+            clearCaseDraft(pqr.id);
+            showToast(isAutoRelease ? 'Auto-liberación Poka-Yoke ejecutada. Pedido liberado para ruta.' : 'Retiro limpio aplicado (Columna K). Factura depurada.', 'success');
             onResolved();
             onClose();
         } catch (e: any) {
@@ -495,7 +652,7 @@ export default function PqrAuditModal({
                 imputedTargetType: 'provider'
             });
 
-            const finalNotes = `[📅 ANEXADO AL SIGUIENTE PEDIDO HABITUAL D+1]\n- Destino: Pedido ${destOrderSeq}\n- Regla: CERO desvíos vehiculares ni fletes aislados de micro-cantidades.\n- Remisión de Hoy: Depurada sin cobro.\n\n${rcaTag}`;
+            const finalNotes = `[ANEXADO AL SIGUIENTE PEDIDO HABITUAL D+1]\n- Destino: Pedido ${destOrderSeq}\n- Regla: CERO desvíos vehiculares ni fletes aislados de micro-cantidades.\n- Remisión de Hoy: Depurada sin cobro.\n\n${rcaTag}`;
 
             await supabase
                 .from('customer_service_pqrs')
@@ -509,7 +666,8 @@ export default function PqrAuditModal({
                 })
                 .eq('id', pqr.id);
 
-            showToast(`✅ Producto anexado exitosamente al pedido ${destOrderSeq}. Sin desvíos de ruta.`, 'success');
+            clearCaseDraft(pqr.id);
+            showToast(`Producto anexado exitosamente al pedido ${destOrderSeq}. Sin desvíos de ruta.`, 'success');
             onResolved();
             onClose();
         } catch (e: any) {
@@ -628,9 +786,10 @@ export default function PqrAuditModal({
         }
 
         const updated = [...imputedEntities, newEntity];
-        const equalShare = Math.round(100 / updated.length);
+        const equalShare = Math.floor(100 / updated.length);
+        const remainder = 100 - (equalShare * updated.length);
         const finalized = updated.map((item, idx) => {
-            const pct = idx === updated.length - 1 ? (100 - (equalShare * (updated.length - 1))) : equalShare;
+            const pct = idx === 0 ? equalShare + remainder : equalShare;
             return {
                 ...item,
                 sharePercent: pct,
@@ -648,9 +807,10 @@ export default function PqrAuditModal({
             setImputedEntities([]);
             return;
         }
-        const equalShare = Math.round(100 / remaining.length);
+        const equalShare = Math.floor(100 / remaining.length);
+        const remainder = 100 - (equalShare * remaining.length);
         const finalized = remaining.map((item, idx) => {
-            const pct = idx === remaining.length - 1 ? (100 - (equalShare * (remaining.length - 1))) : equalShare;
+            const pct = idx === 0 ? equalShare + remainder : equalShare;
             return {
                 ...item,
                 sharePercent: pct,
@@ -661,7 +821,39 @@ export default function PqrAuditModal({
     };
 
     const handleUpdateEntityPercent = (entityId: string, newPercent: number) => {
-        const clamped = Math.max(0, Math.min(100, newPercent));
+        if (imputedEntities.length <= 1) {
+            const clamped = Math.max(0, Math.min(100, newPercent));
+            const updated = imputedEntities.map(e => ({
+                ...e,
+                sharePercent: clamped,
+                deductionAmount: Math.round((caseCoQ * clamped) / 100)
+            }));
+            setImputedEntities(updated);
+            return;
+        }
+
+        if (imputedEntities.length === 2) {
+            const clamped = Math.max(0, Math.min(100, newPercent));
+            const otherPercent = 100 - clamped;
+            const updated = imputedEntities.map(e => {
+                const pct = e.id === entityId ? clamped : otherPercent;
+                return {
+                    ...e,
+                    sharePercent: pct,
+                    deductionAmount: Math.round((caseCoQ * pct) / 100)
+                };
+            });
+            setImputedEntities(updated);
+            return;
+        }
+
+        // 3+ entities: clamp to 100 - otherEntitiesSum
+        const otherEntitiesSum = imputedEntities
+            .filter(e => e.id !== entityId)
+            .reduce((sum, e) => sum + (e.sharePercent || 0), 0);
+        const maxAllowed = Math.max(0, 100 - otherEntitiesSum);
+        const clamped = Math.max(0, Math.min(maxAllowed, newPercent));
+
         const updated = imputedEntities.map(e => {
             if (e.id === entityId) {
                 return {
@@ -798,25 +990,43 @@ export default function PqrAuditModal({
         setActionLoading(true);
         try {
             const compositeNotes = `[RETORNO_FISICO: ${hasPhysicalReturn ? 'SI' : 'NO'}] ${rcaEvidenceNotes || ''}`.trim();
-            const payload: any = {
-                order_id: pqr.order_id,
-                product_id: selItem.product_id,
-                quantity_returned: noveltyQty,
-                reason: `${noveltyType === 'faltante' ? 'Faltante en Báscula' : 'Avería / Calidad'}: ${noveltyReason || pqr.subject || 'Declarado desde PQR'}`,
-                status: 'pending_review',
-                notes: compositeNotes,
-                has_physical_return: hasPhysicalReturn
-            };
+            const reasonText = `${noveltyType === 'faltante' ? 'Faltante en Báscula' : 'Avería / Calidad'}: ${noveltyReason || pqr.subject || 'Declarado desde PQR'}`;
 
-            // Intentar inserción con has_physical_return, con fallback resiliente a notes si la columna aún no está en PostgREST
-            let insertRes = await supabase.from('billing_returns').insert([payload]);
-            if (insertRes.error && insertRes.error.message?.includes('has_physical_return')) {
-                delete payload.has_physical_return;
-                insertRes = await supabase.from('billing_returns').insert([payload]);
+            // Check if there is already a return for this order and product in pending_review
+            const existingReturn = caseReturns.find(r => r.product_id === selItem.product_id && r.status === 'pending_review');
+
+            if (existingReturn) {
+                const { error: updErr } = await supabase
+                    .from('billing_returns')
+                    .update({
+                        quantity_returned: noveltyQty,
+                        reason: reasonText,
+                        notes: compositeNotes,
+                        has_physical_return: hasPhysicalReturn
+                    })
+                    .eq('id', existingReturn.id);
+                if (updErr) throw updErr;
+                showToast(`Novedad actualizada a ${noveltyQty} ${selItem.products?.unit_of_measure || 'Kg'}.`, 'success');
+            } else {
+                const payload: any = {
+                    order_id: pqr.order_id,
+                    product_id: selItem.product_id,
+                    quantity_returned: noveltyQty,
+                    reason: reasonText,
+                    status: 'pending_review',
+                    notes: compositeNotes,
+                    has_physical_return: hasPhysicalReturn
+                };
+
+                let insertRes = await supabase.from('billing_returns').insert([payload]);
+                if (insertRes.error && insertRes.error.message?.includes('has_physical_return')) {
+                    delete payload.has_physical_return;
+                    insertRes = await supabase.from('billing_returns').insert([payload]);
+                }
+                if (insertRes.error) throw insertRes.error;
+                showToast('Novedad de producto registrada con éxito.', 'success');
             }
-            if (insertRes.error) throw insertRes.error;
 
-            showToast('Novedad de producto registrada con éxito.', 'success');
             setSelectedItemId('');
             setNoveltyQty(0);
             setNoveltyReason('');
@@ -829,9 +1039,33 @@ export default function PqrAuditModal({
         }
     };
 
+    const handleDeleteNovelty = async (returnId: string) => {
+        if (!confirm('¿Deseas eliminar esta novedad registrada del pedido?')) return;
+        setActionLoading(true);
+        try {
+            const { error } = await supabase
+                .from('billing_returns')
+                .delete()
+                .eq('id', returnId);
+            if (error) throw error;
+            showToast('Novedad eliminada.', 'success');
+            onResolved();
+        } catch (e: any) {
+            showToast('Error al eliminar novedad: ' + e.message, 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     const handleResolvePqr = async (status: 'resolved' | 'rejected') => {
         if (!resolutionNotes.trim()) {
             showToast('Ingresa una nota de resolución antes de continuar.', 'warning');
+            return;
+        }
+
+        const totalImputedPercent = imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0);
+        if (imputedEntities.length > 0 && totalImputedPercent > 100) {
+            showToast('El total imputado supera el 100%. Ajusta los porcentajes antes de resolver.', 'error');
             return;
         }
 
@@ -841,7 +1075,7 @@ export default function PqrAuditModal({
             (pqr.description || '').includes('ALERTA CORTE DE BUCLE');
 
         if (status === 'resolved' && resolutionOption === 'opt2' && isReplacementRejection) {
-            showToast('⚠️ BLOQUEADO POR REGLA ANTI PING-PONG: Usa Nota Crédito o Ajuste.', 'error');
+            showToast('BLOQUEADO POR REGLA ANTI PING-PONG: Usa Nota Crédito o Ajuste.', 'error');
             return;
         }
 
@@ -853,6 +1087,17 @@ export default function PqrAuditModal({
             if (status === 'resolved') {
                 if (resolutionOption === 'opt1') {
                     finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Cerrado conforme sin impacto económico]`;
+                    if (pqr.order_id) {
+                        await supabase
+                            .from('billing_returns')
+                            .update({
+                                status: 'rejected',
+                                reason: `[CERRADO CONFORME - SIN COSTO] Reclamo aclarado con cliente / desestimado en PQR #${pqr.id.substring(0, 8)}. Se factura 100% original.`,
+                                notes: `Desestimado sin costo comercial. PQR #${pqr.id.substring(0, 8)}`
+                            })
+                            .eq('order_id', pqr.order_id)
+                            .eq('status', 'pending_review');
+                    }
                 } else if (resolutionOption === 'opt2') {
                     if (!pqr.order_id) {
                         showToast('Esta PQR no tiene un pedido asociado para reposición.', 'warning');
@@ -903,7 +1148,7 @@ export default function PqrAuditModal({
 
                     if (itemsToReprogram.length === 0) {
                         const confirmTotal = window.confirm(
-                            '⚠️ ATENCIÓN: No hay productos específicos devueltos.\n\n¿Deseas reprogramar el 100% de TODOS los productos del pedido original como reposición de garantía ($0 COP)?'
+                            'ATENCIÓN: No hay productos específicos devueltos.\n\n¿Deseas reprogramar el 100% de TODOS los productos del pedido original como reposición de garantía ($0 COP)?'
                         );
                         if (!confirmTotal) {
                             setActionLoading(false);
@@ -970,6 +1215,17 @@ export default function PqrAuditModal({
                 }
             } else {
                 finalNotes = `${resolutionNotes}\n\n[CASO RECHAZADO / ARCHIVADO SIN COSTO]`;
+                if (pqr.order_id) {
+                    await supabase
+                        .from('billing_returns')
+                        .update({
+                            status: 'rejected',
+                            reason: `[RECLAMO RECHAZADO] Caso archivado sin costo en PQR #${pqr.id.substring(0, 8)}. Se factura 100% original.`,
+                            notes: `Rechazado por Calidad. PQR #${pqr.id.substring(0, 8)}`
+                        })
+                        .eq('order_id', pqr.order_id)
+                        .eq('status', 'pending_review');
+                }
             }
 
             const rcaTag = buildRcaMetadataTag({
@@ -995,7 +1251,8 @@ export default function PqrAuditModal({
 
             if (error) throw error;
 
-            showToast(`✅ Caso cerrado exitosamente como ${status === 'resolved' ? 'Resuelto' : 'Rechazado'}.`, 'success');
+            clearCaseDraft(pqr.id);
+            showToast(`Caso cerrado exitosamente como ${status === 'resolved' ? 'Resuelto' : 'Rechazado'}.`, 'success');
             onResolved();
             onClose();
 
@@ -1089,20 +1346,72 @@ export default function PqrAuditModal({
                         </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        style={{
-                            padding: '6px',
-                            color: '#94A3B8',
-                            backgroundColor: 'transparent',
-                            border: 'none',
-                            cursor: 'pointer',
-                            borderRadius: '6px'
-                        }}
-                    >
-                        <X size={20} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {isDraftRestored ? (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '3px 9px',
+                                borderRadius: '6px',
+                                backgroundColor: '#78350F',
+                                border: '1px solid #B45309',
+                                color: '#FDE68A',
+                                fontSize: '0.68rem',
+                                fontWeight: '700'
+                            }}>
+                                <Save size={11} />
+                                <span>Borrador activo {lastSavedDraftTime ? `(${lastSavedDraftTime})` : ''}</span>
+                                <button
+                                    type="button"
+                                    onClick={handleDiscardDraft}
+                                    style={{
+                                        marginLeft: '4px',
+                                        color: '#FCA5A5',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: '0.65rem',
+                                        textDecoration: 'underline',
+                                        fontWeight: '800'
+                                    }}
+                                    title="Descartar borrador local y restaurar valores de la base de datos"
+                                >
+                                    Descartar
+                                </button>
+                            </div>
+                        ) : lastSavedDraftTime ? (
+                            <span style={{
+                                fontSize: '0.65rem',
+                                color: '#94A3B8',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                backgroundColor: '#1E293B',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid #334155'
+                            }}>
+                                <Check size={11} style={{ color: '#10B981' }} />
+                                <span>Autoguardado {lastSavedDraftTime}</span>
+                            </span>
+                        ) : null}
+
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            style={{
+                                padding: '6px',
+                                color: '#94A3B8',
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                borderRadius: '6px'
+                            }}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* 2. Stepper Tabs Header */}
@@ -1625,20 +1934,23 @@ export default function PqrAuditModal({
                                         <div style={{ fontSize: '0.72rem', color: '#64748B', flex: 1, minWidth: '220px' }}>
                                             Este caso no tiene un pedido enlazado. Selecciona un pedido reciente del cliente para habilitar reposiciones:
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <select
-                                                value={linkingOrderId}
-                                                onChange={e => setLinkingOrderId(e.target.value)}
-                                                disabled={loadingRecentOrders || isLinkingOrder}
-                                                style={{ padding: '6px 10px', fontSize: '0.72rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px' }}
-                                            >
-                                                <option value="">-- Seleccionar Pedido --</option>
-                                                {clientRecentOrders.map(o => (
-                                                    <option key={o.id} value={o.id}>
-                                                        #{o.sequence_id} - {formatMoney(o.total || 0)} ({new Date(o.created_at).toLocaleDateString('es-CO')})
-                                                    </option>
-                                                ))}
-                                            </select>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '280px', flex: 1, justifyContent: 'flex-end' }}>
+                                            <div style={{ flex: 1, minWidth: '220px' }}>
+                                                <SearchableSelect
+                                                    value={linkingOrderId}
+                                                    onChange={setLinkingOrderId}
+                                                    disabled={loadingRecentOrders || isLinkingOrder}
+                                                    placeholder="-- Seleccionar Pedido Reciente --"
+                                                    searchPlaceholder="Buscar por #pedido, fecha o valor..."
+                                                    clearable
+                                                    options={clientRecentOrders.map(o => ({
+                                                        value: o.id,
+                                                        label: `Pedido #${o.sequence_id}`,
+                                                        sublabel: `${new Date(o.created_at).toLocaleDateString('es-CO')} • ${o.shipping_address || 'Sede'}`,
+                                                        badge: formatMoney(o.total || 0)
+                                                    }))}
+                                                />
+                                            </div>
                                             <button
                                                 type="button"
                                                 onClick={() => handleLinkOrder(linkingOrderId)}
@@ -1779,30 +2091,65 @@ export default function PqrAuditModal({
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                         <div style={{ gridColumn: 'span 2' }}>
                                             <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Producto del Pedido</label>
-                                            <select
+                                            <SearchableSelect
                                                 value={selectedItemId}
-                                                onChange={e => setSelectedItemId(e.target.value)}
-                                                style={{ width: '100%', padding: '6px 8px', fontSize: '0.72rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px' }}
-                                            >
-                                                <option value="">-- Seleccionar Producto --</option>
-                                                {orderItems.map(item => (
-                                                    <option key={item.id} value={item.id}>
-                                                        {item.products?.name} ({item.quantity} {item.products?.unit_of_measure}) - {formatMoney(item.unit_price)}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                onChange={setSelectedItemId}
+                                                placeholder="-- Seleccionar Producto del Pedido --"
+                                                searchPlaceholder="Buscar producto por nombre o SKU..."
+                                                clearable
+                                                options={orderItems.map(item => ({
+                                                    value: item.id,
+                                                    label: item.products?.name || item.nickname || 'Ítem sin nombre',
+                                                    sublabel: `Pedido: ${item.quantity} ${item.products?.unit_of_measure || 'ud'} • Precio: ${formatMoney(item.unit_price)}`,
+                                                    badge: item.products?.sku || `${item.quantity} ${item.products?.unit_of_measure || 'ud'}`
+                                                }))}
+                                            />
                                         </div>
 
                                         <div>
-                                            <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Tipo</label>
-                                            <select
-                                                value={noveltyType}
-                                                onChange={e => setNoveltyType(e.target.value as any)}
-                                                style={{ width: '100%', padding: '6px 8px', fontSize: '0.72rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px' }}
-                                            >
-                                                <option value="faltante">Faltante</option>
-                                                <option value="averia">Avería / Calidad</option>
-                                            </select>
+                                            <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Tipo de Novedad</label>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', height: '32px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNoveltyType('faltante')}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '4px',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: '700',
+                                                        borderRadius: '6px',
+                                                        border: noveltyType === 'faltante' ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                                                        backgroundColor: noveltyType === 'faltante' ? '#ECFDF5' : '#FFFFFF',
+                                                        color: noveltyType === 'faltante' ? '#065F46' : '#64748B',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    <PackageX size={13} />
+                                                    <span>Faltante</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNoveltyType('averia')}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '4px',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: '700',
+                                                        borderRadius: '6px',
+                                                        border: noveltyType === 'averia' ? '1px solid #B45309' : '1px solid #CBD5E1',
+                                                        backgroundColor: noveltyType === 'averia' ? '#FFFBEB' : '#FFFFFF',
+                                                        color: noveltyType === 'averia' ? '#B45309' : '#64748B',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    <AlertTriangle size={13} />
+                                                    <span>Avería</span>
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <div>
@@ -1839,6 +2186,115 @@ export default function PqrAuditModal({
                                                 <span>¿Retorna físicamente en el camión a bodega? (Ingresa a Cuarentena de Patio)</span>
                                             </label>
                                         </div>
+
+                                        {/* Registered Novelties Table / List */}
+                                        {caseReturns.length > 0 && (
+                                            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '4px', borderBottom: '1px solid #E2E8F0' }}>
+                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#0D7A57' }}>
+                                                        Novedades Declaradas en este Pedido ({caseReturns.length})
+                                                    </span>
+                                                    <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#047857' }}>
+                                                        Impacto Total: {formatMoney(caseCoQ)}
+                                                    </span>
+                                                </div>
+
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    {caseReturns.map((ret: any) => {
+                                                        const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                                                                   ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                                                        const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                                                        const subtotal = unitPrice * (Number(ret.quantity_returned) || 0);
+                                                        const pName = ret.products?.name || oi?.products?.name || 'Producto';
+                                                        const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+                                                        const isPhysical = ret.has_physical_return || (ret.notes || '').includes('RETORNO_FISICO: SI');
+                                                        const isFaltante = (ret.reason || '').toLowerCase().includes('faltante');
+
+                                                        return (
+                                                            <div
+                                                                key={ret.id}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'space-between',
+                                                                    backgroundColor: '#FFFFFF',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    borderRadius: '8px',
+                                                                    padding: '8px 12px',
+                                                                    fontSize: '0.72rem'
+                                                                }}
+                                                            >
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                    <div style={{
+                                                                        width: '24px',
+                                                                        height: '24px',
+                                                                        borderRadius: '50%',
+                                                                        backgroundColor: isFaltante ? '#ECFDF5' : '#FFFBEB',
+                                                                        color: isFaltante ? '#065F46' : '#B45309',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        flexShrink: 0
+                                                                    }}>
+                                                                        {isFaltante ? <PackageX size={13} /> : <AlertTriangle size={13} />}
+                                                                    </div>
+                                                                    <div>
+                                                                        <strong style={{ color: '#0F172A', display: 'block' }}>{pName}</strong>
+                                                                        <div style={{ fontSize: '0.66rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                            <span><strong>{ret.quantity_returned} {uom}</strong> @ {formatMoney(unitPrice)}/{uom}</span>
+                                                                            <span style={{
+                                                                                fontSize: '0.62rem',
+                                                                                fontWeight: '700',
+                                                                                padding: '1px 6px',
+                                                                                borderRadius: '4px',
+                                                                                backgroundColor: isFaltante ? '#D1FAE5' : '#FEF3C7',
+                                                                                color: isFaltante ? '#065F46' : '#92400E'
+                                                                            }}>
+                                                                                {isFaltante ? 'Faltante' : 'Avería'}
+                                                                            </span>
+                                                                            {isPhysical && (
+                                                                                <span style={{
+                                                                                    fontSize: '0.62rem',
+                                                                                    fontWeight: '700',
+                                                                                    padding: '1px 6px',
+                                                                                    borderRadius: '4px',
+                                                                                    backgroundColor: '#E0E7FF',
+                                                                                    color: '#3730A3'
+                                                                                }}>
+                                                                                    Retorno Físico (Cuarentena)
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                    <strong style={{ color: '#047857', fontSize: '0.78rem' }}>
+                                                                        {formatMoney(subtotal)}
+                                                                    </strong>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteNovelty(ret.id)}
+                                                                        disabled={actionLoading}
+                                                                        style={{
+                                                                            border: 'none',
+                                                                            background: 'transparent',
+                                                                            color: '#DC2626',
+                                                                            cursor: 'pointer',
+                                                                            padding: '4px',
+                                                                            borderRadius: '4px'
+                                                                        }}
+                                                                        title="Eliminar esta novedad"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -1868,10 +2324,9 @@ export default function PqrAuditModal({
                                         <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
                                             Macrocausa (Nivel 1)
                                         </label>
-                                        <select
+                                        <SearchableSelect
                                             value={rcaCategoryL1}
-                                            onChange={e => {
-                                                const catCode = e.target.value;
+                                            onChange={catCode => {
                                                 setRcaCategoryL1(catCode);
                                                 const found = customTaxonomy.find(c => c.code === catCode);
                                                 if (found && found.subtypes.length > 0) {
@@ -1879,38 +2334,37 @@ export default function PqrAuditModal({
                                                     handleResponsibleAreaChange(found.subtypes[0].typicalResponsible);
                                                 }
                                             }}
-                                            style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', fontWeight: '600' }}
-                                        >
-                                            {customTaxonomy.map(cat => (
-                                                <option key={cat.code} value={cat.code}>
-                                                    {cat.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            placeholder="Seleccionar Macrocausa (L1)..."
+                                            searchPlaceholder="Buscar macrocausa..."
+                                            options={customTaxonomy.map(cat => ({
+                                                value: cat.code,
+                                                label: cat.label,
+                                                badge: `${cat.subtypes.length} subtipos`
+                                            }))}
+                                        />
                                     </div>
 
                                     <div>
                                         <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
                                             Subtipo Específico (Nivel 2)
                                         </label>
-                                        <select
+                                        <SearchableSelect
                                             value={rcaSubtypeL2}
-                                            onChange={e => {
-                                                const subCode = e.target.value;
+                                            onChange={subCode => {
                                                 setRcaSubtypeL2(subCode);
                                                 const subObj = availableSubtypes.find(s => s.code === subCode);
                                                 if (subObj) {
                                                     handleResponsibleAreaChange(subObj.typicalResponsible);
                                                 }
                                             }}
-                                            style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', fontWeight: '600' }}
-                                        >
-                                            {availableSubtypes.map(sub => (
-                                                <option key={sub.code} value={sub.code}>
-                                                    {sub.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            placeholder="Seleccionar Subtipo (L2)..."
+                                            searchPlaceholder="Buscar subtipo o falla específica..."
+                                            options={availableSubtypes.map(sub => ({
+                                                value: sub.code,
+                                                label: sub.label,
+                                                badge: sub.typicalResponsible ? `Área: ${sub.typicalResponsible}` : undefined
+                                            }))}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -1961,39 +2415,74 @@ export default function PqrAuditModal({
                                         </p>
                                     </div>
 
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ECFDF5', padding: '6px 12px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
-                                        <span style={{ fontSize: '0.7rem', color: '#065F46', fontWeight: '600' }}>Impacto Liquidable:</span>
-                                        <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#047857' }}>{formatMoney(caseCoQ)}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        {imputedEntities.length > 0 && (() => {
+                                            const totalPct = imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0);
+                                            const isComplete = totalPct === 100;
+                                            const isOver = totalPct > 100;
+                                            return (
+                                                <div style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    padding: '6px 12px',
+                                                    borderRadius: '8px',
+                                                    border: isComplete ? '1px solid #A7F3D0' : isOver ? '1px solid #FECACA' : '1px solid #FDE68A',
+                                                    backgroundColor: isComplete ? '#ECFDF5' : isOver ? '#FEF2F2' : '#FFFBEB',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
+                                                    color: isComplete ? '#065F46' : isOver ? '#991B1B' : '#92400E'
+                                                }}>
+                                                    <span>Total Imputado: {totalPct}%</span>
+                                                    {isComplete ? (
+                                                        <Check size={13} style={{ color: '#059669' }} />
+                                                    ) : isOver ? (
+                                                        <AlertTriangle size={13} style={{ color: '#DC2626' }} />
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Resta {100 - totalPct}%)</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ECFDF5', padding: '6px 12px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
+                                            <span style={{ fontSize: '0.7rem', color: '#065F46', fontWeight: '600' }}>Impacto Liquidable:</span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#047857' }}>{formatMoney(caseCoQ)}</span>
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Selector to Add Entity */}
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <select
-                                        value={selectedImputedToAdd}
-                                        onChange={e => setSelectedImputedToAdd(e.target.value)}
-                                        style={{ flex: '1', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px' }}
-                                    >
-                                        <option value="">-- Seleccionar {rcaResponsible === 'proveedor' ? 'Proveedor' : 'Funcionario'} para Imputar --</option>
-                                        {rcaResponsible === 'proveedor' ? (
-                                            providersList.map(prov => (
-                                                <option key={prov.id} value={prov.id}>
-                                                    {prov.name} {prov.nit ? `(NIT: ${prov.nit})` : ''}
-                                                </option>
-                                            ))
-                                        ) : (
-                                            collaboratorsList.map(colab => (
-                                                <option key={colab.id} value={colab.id}>
-                                                    {colab.contact_name} ({colab.role || 'Operativo'})
-                                                </option>
-                                            ))
-                                        )}
-                                    </select>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <div style={{ flex: '1', minWidth: 0 }}>
+                                        <SearchableSelect
+                                            value={selectedImputedToAdd}
+                                            onChange={setSelectedImputedToAdd}
+                                            placeholder={`-- Seleccionar ${rcaResponsible === 'proveedor' ? 'Proveedor' : 'Funcionario'} para Imputar --`}
+                                            searchPlaceholder={rcaResponsible === 'proveedor' ? "Buscar proveedor por nombre o NIT..." : "Buscar funcionario por nombre o cargo..."}
+                                            clearable
+                                            options={rcaResponsible === 'proveedor' ? (
+                                                providersList.map(prov => ({
+                                                    value: prov.id,
+                                                    label: prov.name,
+                                                    sublabel: prov.nit ? `NIT: ${prov.nit}` : undefined,
+                                                    badge: 'Proveedor'
+                                                }))
+                                            ) : (
+                                                collaboratorsList.map(colab => ({
+                                                    value: colab.id,
+                                                    label: colab.contact_name,
+                                                    sublabel: colab.phone || undefined,
+                                                    badge: colab.role || 'Operativo'
+                                                }))
+                                            )}
+                                        />
+                                    </div>
                                     <button
                                         type="button"
                                         onClick={() => handleAddImputedEntity(selectedImputedToAdd)}
                                         disabled={!selectedImputedToAdd}
-                                        style={{ padding: '8px 14px', backgroundColor: '#0F172A', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                        style={{ padding: '8px 14px', backgroundColor: '#0F172A', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0, height: '34px' }}
                                     >
                                         <Plus size={13} />
                                         <span>Agregar</span>
@@ -2192,23 +2681,23 @@ export default function PqrAuditModal({
                                 <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
                                     2. Protocolo de Disposición Sanitaria (Invima Res. 2674/2013)
                                 </label>
-                                <select
+                                <SearchableSelect
                                     value={sanitaryKey}
-                                    onChange={e => {
-                                        setSanitaryKey(e.target.value);
-                                        const tmpl = (DISPOSICION_SANITARIA_TEMPLATES as any)[e.target.value];
+                                    onChange={k => {
+                                        setSanitaryKey(k);
+                                        const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === k);
                                         if (tmpl) {
-                                            setResolutionNotes(prev => prev ? `${prev}\n\n[DISPOSICIÓN SANITARIA: ${tmpl.title}]\n${tmpl.text}` : `[DISPOSICIÓN SANITARIA: ${tmpl.title}]\n${tmpl.text}`);
+                                            setResolutionNotes(prev => prev ? `${prev}\n\n${tmpl.textTemplate}` : tmpl.textTemplate);
                                         }
                                     }}
-                                    style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px' }}
-                                >
-                                    {Object.entries(DISPOSICION_SANITARIA_TEMPLATES).map(([k, v]) => (
-                                        <option key={k} value={k}>
-                                            {v.title}
-                                        </option>
-                                    ))}
-                                </select>
+                                    placeholder="Seleccionar Protocolo Invima..."
+                                    searchPlaceholder="Buscar protocolo sanitario..."
+                                    options={DISPOSICION_SANITARIA_TEMPLATES.map(tmpl => ({
+                                        value: tmpl.id,
+                                        label: tmpl.title,
+                                        sublabel: tmpl.textTemplate.substring(0, 80) + '...'
+                                    }))}
+                                />
                             </div>
 
                             {/* Final Resolution Notes Textarea */}
@@ -2392,36 +2881,40 @@ export default function PqrAuditModal({
                                 <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>
                                     Producto a Reemplazar en Pedido #{pqr.orders?.sequence_id || ''}
                                 </label>
-                                <select
+                                <SearchableSelect
                                     value={substituteTargetItemId}
-                                    onChange={e => setSubstituteTargetItemId(e.target.value)}
-                                    style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', fontWeight: '600' }}
-                                >
-                                    <option value="">-- Todos los productos / Primer ítem del pedido --</option>
-                                    {orderItems.map(item => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.products?.name || item.nickname} ({item.quantity} {item.products?.unit_of_measure || 'kg'})
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={setSubstituteTargetItemId}
+                                    placeholder="-- Todos los productos / Primer ítem del pedido --"
+                                    searchPlaceholder="Buscar ítem del pedido..."
+                                    clearable
+                                    options={[
+                                        { value: '', label: 'Todos los productos / Primer ítem del pedido' },
+                                        ...orderItems.map(item => ({
+                                            value: item.id,
+                                            label: item.products?.name || item.nickname || 'Ítem',
+                                            badge: `${item.quantity} ${item.products?.unit_of_measure || 'kg'}`
+                                        }))
+                                    ]}
+                                />
                             </div>
 
                             <div>
                                 <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>
                                     SKU Sustituto Disponible en Catálogo
                                 </label>
-                                <select
+                                <SearchableSelect
                                     value={selectedSubstituteProductId}
-                                    onChange={e => setSelectedSubstituteProductId(e.target.value)}
-                                    style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', fontWeight: '600' }}
-                                >
-                                    <option value="">-- Selecciona el producto equivalente disponible --</option>
-                                    {availableCatalogProducts.map(prod => (
-                                        <option key={prod.id} value={prod.id}>
-                                            {prod.name} ({prod.unit_of_measure || 'kg'}) {prod.sku ? `[${prod.sku}]` : ''}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={setSelectedSubstituteProductId}
+                                    placeholder="-- Selecciona el producto equivalente disponible --"
+                                    searchPlaceholder="Buscar SKU o nombre en catálogo..."
+                                    clearable
+                                    options={availableCatalogProducts.map(prod => ({
+                                        value: prod.id,
+                                        label: prod.name,
+                                        sublabel: prod.sku ? `SKU: ${prod.sku}` : undefined,
+                                        badge: prod.unit_of_measure || 'kg'
+                                    }))}
+                                />
                             </div>
 
                             <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: '#64748B', margin: 0, backgroundColor: '#F0FDF4', padding: '8px 10px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>

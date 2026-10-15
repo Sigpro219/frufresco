@@ -354,12 +354,12 @@ export const WHATSAPP_PQR_TEMPLATES: WhatsAppTemplateOption[] = [
     },
     {
         id: 'shortage_substitution',
-        label: '🚨 Propuesta Sustitución HORECA (Quiebre Plaza)',
+        label: 'Propuesta Sustitución HORECA (Quiebre Plaza)',
         description: 'Notificación ágil al chef proponiendo un SKU sustituto o retiro antes del despacho.'
     },
     {
         id: 'shortage_autorelease',
-        label: '⏱️ Aviso Despacho Puntual (Auto-Retiro)',
+        label: 'Aviso Despacho Puntual (Auto-Retiro)',
         description: 'Aviso de salida en ruta protegiendo la puntualidad con remisión depurada.'
     },
     {
