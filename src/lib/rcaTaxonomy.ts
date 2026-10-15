@@ -428,15 +428,29 @@ export interface SanitaryDisposalTemplate {
     title: string;
     icon: string;
     category: 'destruccion' | 'transformacion' | 'donacion' | 'compostaje';
+    summary?: string;
     textTemplate: string;
 }
 
 export const DISPOSICION_SANITARIA_TEMPLATES: SanitaryDisposalTemplate[] = [
     {
+        id: 'disposicion_cliente_sin_retorno',
+        title: 'Disposición en Sitio por el Cliente (Sin Retorno a Bodega)',
+        icon: 'Store',
+        category: 'destruccion',
+        summary: 'El cliente realiza la baja física en sus instalaciones. Prohibido retorno en camión para prevenir contaminación cruzada.',
+        textTemplate: `[DISPOSICIÓN SANITARIA: DISPOSICIÓN EN SITIO POR EL CLIENTE (SIN RETORNO A BODEGA)]
+- Dictamen: Producto afectado descartado directamente en las instalaciones del cliente.
+- Acción: El cliente asume la disposición/destrucción física en su cocina o mermas. Prohibido reingreso al vehículo para evitar contaminación cruzada en ruta de alimentos limpios.
+- Destino final: Disposición final de residuos a cargo del cliente en su sede.
+- Responsable: Jefe de Cocina / Administrador del Cliente, validado fotográficamente por SAC FruFresco.`
+    },
+    {
         id: 'destruccion_biologica',
-        title: 'Baja Total / Destrucción Física (Contaminación / Moho)',
+        title: 'Baja Total / Destrucción Física en Bodega (Contaminación / Moho)',
         icon: 'Trash2',
         category: 'destruccion',
+        summary: 'Invasión fúngica o putrefacción avanzada no apta para consumo. Segregación en merma no recuperable en cuarentena.',
         textTemplate: `[DISPOSICIÓN SANITARIA: BAJA TOTAL POR DESCOMPOSICIÓN / NULIDAD BIOLÓGICA]
 - Dictamen: Producto con invasión fúngica / putrefacción avanzada no apto para consumo humano ni animal.
 - Acción: Segregación inmediata en contenedor de merma no recuperable en zona de cuarentena.
@@ -448,6 +462,7 @@ export const DISPOSICION_SANITARIA_TEMPLATES: SanitaryDisposalTemplate[] = [
         title: 'Reclasificación para Transformación Secundaria (Pulpas / Salsas)',
         icon: 'Layers',
         category: 'transformacion',
+        summary: 'Producto inocuo con defecto estético o golpe. Traslado a cámara de reproceso para despulpado o cocción.',
         textTemplate: `[DISPOSICIÓN SANITARIA: RECLASIFICACIÓN PARA TRANSFORMACIÓN INDUSTRIAL]
 - Dictamen: Producto inocuo microbiológicamente pero con defecto estético, maduración avanzada o golpe mecánico.
 - Acción: Traslado de canastillas a cámara de reproceso para canal de despulpado / cocción.
@@ -459,6 +474,7 @@ export const DISPOSICION_SANITARIA_TEMPLATES: SanitaryDisposalTemplate[] = [
         title: 'Donación a Banco de Alimentos (Inocuo / Calibre No Comercial)',
         icon: 'HeartHandshake',
         category: 'donacion',
+        summary: 'Producto fresco con desviación de calibre o fecha límite HORECA. Entrega al Banco de Alimentos con acta social.',
         textTemplate: `[DISPOSICIÓN SANITARIA: ENTREGA EN DONACIÓN A BANCO DE ALIMENTOS]
 - Dictamen: Producto 100% inocuo y fresco con desviación exclusiva en calibre o fecha límite comercial HORECA.
 - Acción: Embalaje en canastillas de donación con acta de entrega social.
@@ -470,6 +486,7 @@ export const DISPOSICION_SANITARIA_TEMPLATES: SanitaryDisposalTemplate[] = [
         title: 'Compostaje Agroecológico / Enmienda de Suelos',
         icon: 'Sparkles',
         category: 'compostaje',
+        summary: 'Merma vegetal limpia no apta para consumo. Trituración y biodegradación en compost orgánico y lombricultura.',
         textTemplate: `[DISPOSICIÓN SANITARIA: APROVECHAMIENTO AGROECOLÓGICO / COMPOSTAJE]
 - Dictamen: Merma vegetal vegetal limpia no apta para consumo, apta para reincorporación al ciclo de nutrientes.
 - Acción: Trituración y almacenamiento en tolva de biodegradación.

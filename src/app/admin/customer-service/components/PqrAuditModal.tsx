@@ -9,7 +9,7 @@ import {
     ChevronRight, ChevronLeft, Sparkles, Phone, MessageCircle, Link2,
     Unlink, Plus, Trash2, Loader2, Maximize2, DollarSign, Percent,
     PackageMinus, AlertCircle, Edit2, RotateCcw, ExternalLink, Copy,
-    Clock, ArrowRight, PackageX, ShoppingBag, Package, Save
+    Clock, ArrowRight, PackageX, ShoppingBag, Package, Save, HeartHandshake
 } from 'lucide-react';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import {
@@ -2738,27 +2738,69 @@ export default function PqrAuditModal({
                             </div>
 
                             {/* Sanitary Disposal Template */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                    2. Protocolo de Disposición Sanitaria (Invima Res. 2674/2013)
-                                </label>
+                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                                    <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                        2. Protocolo de Disposición Sanitaria (Invima Res. 2674/2013)
+                                    </label>
+                                    {sanitaryKey === 'disposicion_cliente_sin_retorno' && (
+                                        <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#047857', backgroundColor: '#D1FAE5', padding: '2px 8px', borderRadius: '4px', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <Store size={12} />
+                                            <span>Baja en Sitio por el Cliente (Sin Retorno a Bodega)</span>
+                                        </span>
+                                    )}
+                                </div>
                                 <SearchableSelect
                                     value={sanitaryKey}
                                     onChange={k => {
                                         setSanitaryKey(k);
                                         const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === k);
                                         if (tmpl) {
-                                            setResolutionNotes(prev => prev ? `${prev}\n\n${tmpl.textTemplate}` : tmpl.textTemplate);
+                                            setResolutionNotes(prev => {
+                                                const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
+                                                if (regex.test(prev)) {
+                                                    return prev.replace(regex, tmpl.textTemplate).trim();
+                                                }
+                                                return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
+                                            });
                                         }
                                     }}
+                                    wrapOptions={true}
                                     placeholder="Seleccionar Protocolo Invima..."
                                     searchPlaceholder="Buscar protocolo sanitario..."
-                                    options={DISPOSICION_SANITARIA_TEMPLATES.map(tmpl => ({
-                                        value: tmpl.id,
-                                        label: tmpl.title,
-                                        sublabel: tmpl.textTemplate.substring(0, 80) + '...'
-                                    }))}
+                                    options={DISPOSICION_SANITARIA_TEMPLATES.map(tmpl => {
+                                        const IconComp = tmpl.id === 'disposicion_cliente_sin_retorno' ? Store :
+                                                         tmpl.id === 'destruccion_biologica' ? Trash2 :
+                                                         tmpl.id === 'transformacion_industrial' ? Layers :
+                                                         tmpl.id === 'donacion_banco_alimentos' ? HeartHandshake : Sparkles;
+                                        return {
+                                            value: tmpl.id,
+                                            label: tmpl.title,
+                                            sublabel: tmpl.summary || tmpl.textTemplate,
+                                            badge: tmpl.id === 'disposicion_cliente_sin_retorno' ? 'Sin Retorno' : undefined,
+                                            icon: <IconComp size={15} style={{ color: tmpl.id === 'disposicion_cliente_sin_retorno' ? '#0D7A57' : '#64748B' }} />
+                                        };
+                                    })}
                                 />
+
+                                {sanitaryKey === 'disposicion_cliente_sin_retorno' && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '8px 12px',
+                                        backgroundColor: '#ECFDF5',
+                                        border: '1px solid #A7F3D0',
+                                        borderRadius: '8px',
+                                        fontSize: '0.72rem',
+                                        color: '#065F46'
+                                    }}>
+                                        <Check size={14} style={{ color: '#059669', flexShrink: 0 }} />
+                                        <span>
+                                            <strong>Disposición In Situ Confirmada:</strong> El cliente asume la destrucción en su cocina. Prohibido reingresar el producto afectado al camión para blindar la ruta contra contaminación cruzada de alimentos frescos.
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Final Resolution Notes Textarea */}

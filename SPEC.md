@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.179 (Gobernanza Monetaria COP-First en Imputabilidad PQR, Reparto Equitativo al Peso sin Truncamiento y Desbloqueo Comercial en Facturación — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.180 (Disposición Sanitaria In Situ por el Cliente Sin Retorno a Bodega, Erradicación de Truncamiento en Comboboxes y Poka-Yoke de Contaminación Cruzada — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 211 Escenarios BDD Ininterrumpidos (1..211)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 212 Escenarios BDD Ininterrumpidos (1..212)
 
 ---
 
@@ -25,10 +25,10 @@
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 212 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **208 Escenarios Canónicos (1..208)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **212 Escenarios Canónicos (1..212)** | **🟢 100%** |
 
 ---
 
@@ -9994,6 +9994,22 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Para 2 responsables, el deslizamiento de uno recalcula automáticamente el saldo del otro manteniendo la suma monetaria idéntica a `caseCoQ`.
      - Se dota la interfaz de un botón de acción rápida *"Dividir en Partes Iguales"* para restaurar el reparto equitativo simétrico con 1 solo clic.
      - La cabecera proyecta en tiempo real el chip de verificación `Total Imputado: 100%` con tolerancia de punto flotante.
+
+#### Escenario 212: Disposición Sanitaria In Situ por el Cliente (Sin Retorno a Bodega) y Erradicación de Truncamiento en Comboboxes (SDD v1.9.180)
+- **Given** un analista de Calidad, auditor SAC o supervisor gestionando la Resolución Comercial (Paso 3) en el modal de auditoría técnica (`PqrAuditModal.tsx`).
+- **When** define el destino y tratamiento bromatológico/sanitario de los alimentos perecederos reclamados (frutas, verduras o tubérculos con descomposición, moho o daño mecánico):
+- **Then**:
+  1. **Poka-Yoke Bromatológico y Protección de Inocuidad (Cero Retorno a Vehículo):**
+     - Se incorpora como opción prioritaria y canónica la plantilla `disposicion_cliente_sin_retorno` (*«Disposición en Sitio por el Cliente (Sin Retorno a Bodega)»*).
+     - Queda terminantemente prohibido exigir o autorizar el reingreso físico de producto descompuesto o enmohecido a los camiones refrigerados en ruta para prevenir contaminación cruzada de alimentos frescos destinados a clientes posteriores.
+     - El dictamen transfiere formalmente la destrucción/baja física a la cocina o cuarto de mermas del cliente institucional, validado mediante evidencia fotográfica previa analizada por el equipo SAC de FruFresco.
+     - Al seleccionar este protocolo, la interfaz proyecta un banner verde esmeralda destacando el blindaje higiénico-sanitario: *«Disposición In Situ Confirmada: El cliente asume la destrucción en su cocina. Prohibido reingresar el producto afectado al camión para blindar la ruta contra contaminación cruzada de alimentos frescos»*.
+  2. **Erradicación de Truncamiento de Texto y Despliegue Multilínea (`SearchableSelect`):**
+     - Se dota al componente atómico `SearchableSelect` de la propiedad opcional `wrapOptions?: boolean`.
+     - Cuando `wrapOptions={true}`, se erradica el truncamiento rígido con puntos suspensivos (`textOverflow: 'ellipsis'`, `whiteSpace: 'nowrap'`), permitiendo el ajuste fluido multilínea de etiquetas y descripciones normativas (`whiteSpace: 'normal'`, `lineHeight: '1.35'`).
+     - Se dota a cada plantilla sanitaria de un campo `summary` conciso y de alta legibilidad que acompaña al título con sangría alineada e icono de categoría (tienda, destrucción, transformación, donación, compostaje).
+  3. **Idempotencia y Reemplazo Limpio de Dictamen en Notas de Resolución:**
+     - Al alternar entre diferentes protocolos sanitarios en el desplegable, el sistema ejecuta un reemplazo regex idempotente sobre el bloque preexistente `[DISPOSICIÓN SANITARIA: ...]`, evitando la concatenación repetitiva de plantillas en el campo de observaciones finales.
 
 ---
 

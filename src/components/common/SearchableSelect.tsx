@@ -24,6 +24,7 @@ export interface SearchableSelectProps {
     buttonStyle?: React.CSSProperties;
     dropdownStyle?: React.CSSProperties;
     size?: 'sm' | 'md';
+    wrapOptions?: boolean;
 }
 
 function normalizeStr(text: string): string {
@@ -46,7 +47,8 @@ export default function SearchableSelect({
     style,
     buttonStyle,
     dropdownStyle,
-    size = 'sm'
+    size = 'sm',
+    wrapOptions = false
 }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -273,7 +275,7 @@ export default function SearchableSelect({
 
                     {/* Options List */}
                     <div style={{
-                        maxHeight: '200px',
+                        maxHeight: wrapOptions ? '280px' : '200px',
                         overflowY: 'auto',
                         padding: '4px'
                     }}>
@@ -299,10 +301,10 @@ export default function SearchableSelect({
                                         }}
                                         style={{
                                             display: 'flex',
-                                            alignItems: 'center',
+                                            alignItems: wrapOptions ? 'flex-start' : 'center',
                                             justifyContent: 'space-between',
                                             gap: '8px',
-                                            padding: '7px 9px',
+                                            padding: wrapOptions ? '8px 10px' : '7px 9px',
                                             borderRadius: '6px',
                                             fontSize: '0.73rem',
                                             cursor: 'pointer',
@@ -319,27 +321,31 @@ export default function SearchableSelect({
                                         }}
                                     >
                                         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                                                 {opt.icon && (
-                                                    <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+                                                    <span style={{ display: 'inline-flex', flexShrink: 0, marginTop: '1px' }}>
                                                         {opt.icon}
                                                     </span>
                                                 )}
                                                 <span style={{
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap'
+                                                    overflow: wrapOptions ? 'visible' : 'hidden',
+                                                    textOverflow: wrapOptions ? 'clip' : 'ellipsis',
+                                                    whiteSpace: wrapOptions ? 'normal' : 'nowrap',
+                                                    lineHeight: '1.3'
                                                 }}>
                                                     {opt.label}
                                                 </span>
                                             </div>
                                             {opt.sublabel && (
                                                 <span style={{
-                                                    fontSize: '0.65rem',
+                                                    fontSize: '0.66rem',
                                                     color: isSelected ? '#047857' : '#64748B',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap'
+                                                    overflow: wrapOptions ? 'visible' : 'hidden',
+                                                    textOverflow: wrapOptions ? 'clip' : 'ellipsis',
+                                                    whiteSpace: wrapOptions ? 'normal' : 'nowrap',
+                                                    lineHeight: '1.35',
+                                                    marginTop: '3px',
+                                                    paddingLeft: (wrapOptions && opt.icon) ? '20px' : '0'
                                                 }}>
                                                     {opt.sublabel}
                                                 </span>
