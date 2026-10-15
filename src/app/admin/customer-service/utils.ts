@@ -447,7 +447,7 @@ export const buildShortageWhatsAppMessage = (
         
     const orderSeq = pqr.orders?.sequence_id ? `Pedido #${pqr.orders.sequence_id}` : 'tu pedido de hoy';
 
-    return `Hola *${clientName}*${company} 👋, te saludamos de *Control de Calidad FruFresco* 🌿.\n\nDurante nuestro abastecimiento de la madrugada en Corabastos, nos informan que *${originalProduct}* no cumplió el estándar de calidad y no hubo disponibilidad óptima en plaza.\n\nPara no afectar tu operación matutina te proponemos:\n\n1️⃣ *Sustitución recomendada:* Enviarte *${suggestedSubstitute}* alistado de inmediato en bodega.\n2️⃣ *Retiro limpio:* Excluir el ítem de la remisión (cero cobro en tu factura).\n3️⃣ *Anexar a tu próximo pedido:* Enviártelo consolidado en tu siguiente entrega programada.\n\n⏳ Agradecemos tu confirmación en los próximos *${timeoutMinutes} minutos* para no retrasar la salida del furgón a tu sede.\n\n¡Quedamos atentos a tu indicación!`;
+    return `Hola *${clientName}*${company}, te saludamos de *Control de Calidad FruFresco*.\n\nDurante nuestro abastecimiento de la madrugada en Corabastos, nos informan que *${originalProduct}* no cumplió el estándar de calidad y no hubo disponibilidad óptima en plaza.\n\nPara no afectar tu operación matutina te proponemos:\n\n1. *Sustitución recomendada:* Enviarte *${suggestedSubstitute}* alistado de inmediato en bodega.\n2. *Retiro limpio:* Excluir el ítem de la remisión (cero cobro en tu factura).\n3. *Anexar a tu próximo pedido:* Enviártelo consolidado en tu siguiente entrega programada.\n\n• Agradecemos tu confirmación en los próximos *${timeoutMinutes} minutos* para no retrasar la salida del furgón a tu sede.\n\n¡Quedamos atentos a tu indicación!`;
 };
 
 export const buildPqrWhatsAppMessage = (
@@ -471,23 +471,23 @@ export const buildPqrWhatsAppMessage = (
             return buildShortageWhatsAppMessage(pqr, subjectClean, 'variedad sustituta de primera calidad', 30);
 
         case 'shortage_autorelease':
-            return `Hola *${clientName}*${company} 👋, te saludamos de *FruFresco* 🌿.\n\nPara garantizar que tu *${orderSeq}* llegue dentro de la franja horaria pactada en tu cocina, despachamos tu furgón a tiempo retirando el producto escaso de la remisión.\n\n✅ Tu factura neta refleja únicamente lo efectivamente entregado sin cobros adicionales.\n\n¡Gracias por tu confianza y que tengas un excelente servicio!`;
+            return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nPara garantizar que tu *${orderSeq}* llegue dentro de la franja horaria pactada en tu cocina, despachamos tu furgón a tiempo retirando el producto escaso de la remisión.\n\n• Tu factura neta refleja únicamente lo efectivamente entregado sin cobros adicionales.\n\n¡Gracias por tu confianza y que tengas un excelente servicio!`;
 
         case 'replacement':
-            return `Hola *${clientName}*${company} 👋, te saludamos de *FruFresco* 🌿.\n\nTe confirmamos que ya dejamos programada la *reposición sin costo ($0 COP)* correspondiente a tu *${orderSeq}* ("${subjectClean}") para tu próxima entrega en ruta.\n\n¡Seguimos atentos para apoyarte en lo que necesites!`;
+            return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nTe confirmamos que ya dejamos programada la *reposición sin costo ($0 COP)* correspondiente a tu *${orderSeq}* ("${subjectClean}") para tu próxima entrega en ruta.\n\n¡Seguimos atentos para apoyarte en lo que necesites!`;
 
         case 'credit_note':
-            return `Hola *${clientName}*${company} 👋, te saludamos de *FruFresco* 🌿.\n\nTe confirmamos que ya aplicamos el *ajuste financiero / Nota Crédito* por la novedad en tu *${orderSeq}* ("${subjectClean}") a tu estado de cuenta.\n\n¡Cualquier duda adicional, con gusto te atendemos por aquí!`;
+            return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nTe confirmamos que ya aplicamos el *ajuste financiero / Nota Crédito* por la novedad en tu *${orderSeq}* ("${subjectClean}") a tu estado de cuenta.\n\n¡Cualquier duda adicional, con gusto te atendemos por aquí!`;
 
         case 'closing':
-            return `Hola *${clientName}*${company} 👋, te saludamos de *FruFresco* 🌿.\n\nTe confirmamos que tu caso sobre el *${orderSeq}* ("${subjectClean}") ya quedó resuelto con éxito.\n\n¡Muchas gracias por tu confianza y que tengas un excelente día!`;
+            return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nTe confirmamos que tu caso sobre el *${orderSeq}* ("${subjectClean}") ya quedó resuelto con éxito.\n\n¡Muchas gracias por tu confianza y que tengas un excelente día!`;
 
         case 'initial':
         default:
             if (pqr.orders?.sequence_id) {
-                return `Hola *${clientName}*${company} 👋, te saludamos de *FruFresco* 🌿.\n\nYa tenemos tu caso sobre el *${orderSeq}* ("${subjectClean}") y estamos trabajando en darte una solución lo más pronto posible.\n\nTe mantendremos informado por este medio. ¡Muchas gracias por tu paciencia!`;
+                return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nYa tenemos tu caso sobre el *${orderSeq}* ("${subjectClean}") y estamos trabajando en darte una solución lo más pronto posible.\n\nTe mantendremos informado por este medio. ¡Muchas gracias por tu paciencia!`;
             } else {
-                return `Hola *${clientName}*${company} 👋, te saludamos de *FruFresco* 🌿.\n\nYa tenemos tu caso ("${subjectClean}") y estamos trabajando en solucionarlo lo antes posible.\n\nTe mantendremos informado por este medio. ¡Muchas gracias por tu paciencia!`;
+                return `Hola *${clientName}*${company}, te saludamos de *FruFresco*.\n\nYa tenemos tu caso ("${subjectClean}") y estamos trabajando en solucionarlo lo antes posible.\n\nTe mantendremos informado por este medio. ¡Muchas gracias por tu paciencia!`;
             }
     }
 };
