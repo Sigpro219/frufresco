@@ -64,7 +64,7 @@ import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
-import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
+import { getNextValidDeliveryDate, isValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow } from '@/lib/colombianHolidays';
 import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 export const normalizeDocUnit = (unitStr: string): string => {
@@ -705,15 +705,10 @@ function CreateOrderContent() {
     const [productSearch, setProductSearch] = useState('');
 
     const [originSource, setOriginSource] = useState(searchParams.get('source') || 'phone'); // phone, whatsapp, email
+    const [allowSundaysDelivery, setAllowSundaysDelivery] = useState(false);
+    const [allowHolidaysDelivery, setAllowHolidaysDelivery] = useState(false);
     const [minDeliveryDate, setMinDeliveryDate] = useState(() => {
-        const now = new Date();
-        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const bogotaNow = new Date(utc + (3600000 * -5));
-        const currentHour = bogotaNow.getHours();
-        const daysToAdd = currentHour >= 20 ? 2 : 1;
-        const result = new Date(bogotaNow);
-        result.setDate(bogotaNow.getDate() + daysToAdd);
-        return getNextValidDeliveryDate(result, false, false).toISOString().split('T')[0];
+        return calculateStandardMinDeliveryDate(true, 20, false, false);
     });
     const [deliveryDate, setDeliveryDate] = useState(minDeliveryDate);
 
@@ -736,17 +731,10 @@ function CreateOrderContent() {
                     if (!isNaN(parsed) && parsed > 0) setMaxOrderHogarCod(parsed);
                 }
 
-                const now = new Date();
-                const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-                const bogotaNow = new Date(utc + (3600000 * -5));
-                const currentHour = bogotaNow.getHours();
-                const daysToAdd = (cutoffEnabled && currentHour >= cutoffHourAdmin) ? 2 : 1;
+                setAllowSundaysDelivery(allowSundays);
+                setAllowHolidaysDelivery(allowHolidays);
 
-                const baseTarget = new Date(bogotaNow);
-                baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
-
-                const validDate = getNextValidDeliveryDate(baseTarget, allowSundays, allowHolidays);
-                const dateStr = validDate.toISOString().split('T')[0];
+                const dateStr = calculateStandardMinDeliveryDate(cutoffEnabled, cutoffHourAdmin, allowSundays, allowHolidays);
 
                 setMinDeliveryDate(dateStr);
                 setDeliveryDate(dateStr);
@@ -1393,7 +1381,15 @@ function CreateOrderContent() {
                     const items = draft.extracted_items || [];
                     const metadataItem = items.find((i: any) => i.isMetadata);
                     if (metadataItem?.deliveryDate) {
-                        setDeliveryDate(metadataItem.deliveryDate);
+                        const rawD = String(metadataItem.deliveryDate).split('T')[0];
+                        const check = isValidDeliveryDate(rawD, allowSundaysDelivery, allowHolidaysDelivery);
+                        if (rawD < minDeliveryDate || !check.valid) {
+                            const target = rawD < minDeliveryDate ? minDeliveryDate : rawD;
+                            const nextV = getNextValidDeliveryDate(target, allowSundaysDelivery, allowHolidaysDelivery);
+                            setDeliveryDate(formatDateToYYYYMMDD(nextV));
+                        } else {
+                            setDeliveryDate(rawD);
+                        }
                     }
                     if (draft.purchase_order || metadataItem?.poNumber) {
                         setPurchaseOrderNumber(draft.purchase_order || metadataItem?.poNumber);
@@ -3172,8 +3168,24 @@ function CreateOrderContent() {
                     }
 
                     if (parsedDelivery) {
-                        setDeliveryDate(parsedDelivery);
-                        showToast(`📅 Fecha de entrega detectada en el documento: ${parsedDelivery}`, 'success');
+                        // POKA-YOKE SDD ESCENARIO 219: Prohibir fechas pasadas, domingos o festivos cerrados
+                        const holidayCheck = isValidDeliveryDate(parsedDelivery, allowSundaysDelivery, allowHolidaysDelivery);
+                        const isPastDate = parsedDelivery < minDeliveryDate;
+
+                        if (isPastDate || !holidayCheck.valid) {
+                            const targetBase = isPastDate ? minDeliveryDate : parsedDelivery;
+                            const nextValid = getNextValidDeliveryDate(targetBase, allowSundaysDelivery, allowHolidaysDelivery);
+                            const nextValidStr = formatDateToYYYYMMDD(nextValid);
+
+                            setDeliveryDate(nextValidStr);
+                            const reasonMsg = isPastDate
+                                ? `fecha anterior a la ventana mínima de despacho (${minDeliveryDate})`
+                                : (holidayCheck.reason || 'día no hábil');
+                            showToast(`⚠️ Fecha del documento (${parsedDelivery}) ajustada a ${nextValidStr} por ${reasonMsg}.`, 'info');
+                        } else {
+                            setDeliveryDate(parsedDelivery);
+                            showToast(`📅 Fecha de entrega detectada en el documento: ${parsedDelivery}`, 'success');
+                        }
                     }
                 } catch (dateErr) {
                     console.warn('[AI Extract] Advertencia normalizando fecha de entrega:', dateErr);
@@ -4318,6 +4330,19 @@ function CreateOrderContent() {
 
 
     const handleSubmit = async () => {
+        // POKA-YOKE SDD ESCENARIO 219: Blindaje Integral de Fecha de Despacho
+        if (!deliveryDate) {
+            return showToast('❌ Debe seleccionar una fecha de entrega válida.', 'error');
+        }
+        const deliveryOnly = deliveryDate.split('T')[0];
+        if (deliveryOnly < minDeliveryDate) {
+            return showToast(`❌ Fecha no permitida: La fecha de despacho (${deliveryOnly}) no puede ser anterior a la ventana mínima operativa (${minDeliveryDate}).`, 'error');
+        }
+        const dateCheck = isValidDeliveryDate(deliveryOnly, allowSundaysDelivery, allowHolidaysDelivery);
+        if (!dateCheck.valid) {
+            return showToast(`❌ Fecha de despacho rechazada: ${dateCheck.reason || 'Día no habilitado según políticas de entrega.'}`, 'error');
+        }
+
         if (clientType === 'B2B' && !selectedClient) return showToast('Debes seleccionar un cliente Institucional.');
         
         // B2C Validation
@@ -8965,14 +8990,24 @@ function CreateOrderContent() {
                                         <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Fecha Entrega</label>
                                         <input
                                             type="date"
+                                            min={minDeliveryDate}
                                             value={deliveryDate}
                                             onChange={e => {
                                                 const newDate = e.target.value;
                                                 if (newDate) {
-                                                    setDeliveryDate(newDate);
                                                     if (newDate < minDeliveryDate) {
-                                                        showToast(`ℹ️ Fecha de despacho urgente / anterior a la ventana estándar (${minDeliveryDate}).`, 'info');
+                                                        showToast(`⛔ Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
+                                                        setDeliveryDate(minDeliveryDate);
+                                                        return;
                                                     }
+                                                    const check = isValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery);
+                                                    if (!check.valid) {
+                                                        showToast(`⛔ ${check.reason || 'Día no habilitado para entregas.'}`, 'error');
+                                                        const nextValid = getNextValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery);
+                                                        setDeliveryDate(formatDateToYYYYMMDD(nextValid));
+                                                        return;
+                                                    }
+                                                    setDeliveryDate(newDate);
                                                 }
                                             }}
                                             style={{ width: '100%', height: '36px', padding: '0 0.5rem', borderRadius: '6px', border: !deliveryRestrictionStatus.isValid ? '1.5px solid #F87171' : '1px solid #CBD5E1', backgroundColor: !deliveryRestrictionStatus.isValid ? '#FEF2F2' : 'white', fontSize: '0.82rem', outline: 'none' }}

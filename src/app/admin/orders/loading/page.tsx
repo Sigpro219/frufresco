@@ -14,6 +14,7 @@ import VariantModal from '@/components/VariantModal';
 import ManualDispatchWizardModal from '@/components/ManualDispatchWizardModal';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
+import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD } from '@/lib/colombianHolidays';
 import { 
     MessageSquare, 
     Phone, 
@@ -375,21 +376,34 @@ function OrderLoadingContent() {
 
 
     useEffect(() => {
-        const fetchScarcity = async () => {
+        const fetchSettings = async () => {
             try {
                 const { data } = await supabase
                     .from('app_settings')
-                    .select('value')
-                    .eq('key', 'scarcity_locked_skus')
-                    .limit(1);
-                if (data && data.length > 0 && data[0].value) {
-                    setScarcityLockedMap(JSON.parse(data[0].value));
+                    .select('key, value')
+                    .in('key', ['scarcity_locked_skus', 'enable_cutoff_rules', 'cutoff_hour_admin', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
+
+                if (data && data.length > 0) {
+                    const scarcityItem = data.find(s => s.key === 'scarcity_locked_skus');
+                    if (scarcityItem?.value) {
+                        try { setScarcityLockedMap(JSON.parse(scarcityItem.value)); } catch {}
+                    }
+
+                    const cutoffEnabled = data.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
+                    const cutoffHourAdminSetting = data.find(s => s.key === 'cutoff_hour_admin')?.value;
+                    const cutoffHour = cutoffHourAdminSetting ? parseInt(cutoffHourAdminSetting, 10) : 20;
+                    const allowSundays = data.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
+                    const allowHolidays = data.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+
+                    setAllowSundaysSetting(allowSundays);
+                    setAllowHolidaysSetting(allowHolidays);
+                    setMinDeliveryDate(calculateStandardMinDeliveryDate(cutoffEnabled, cutoffHour, allowSundays, allowHolidays));
                 }
             } catch (e) {
-                console.error('Error fetching scarcity in loading page:', e);
+                console.error('Error fetching settings in loading page:', e);
             }
         };
-        fetchScarcity();
+        fetchSettings();
     }, []);
 
     const [selectedChannel, setSelectedChannel] = useState('');
@@ -451,6 +465,9 @@ function OrderLoadingContent() {
     // Edit Fields
     const [editStatus, setEditStatus] = useState('');
     const [editDeliveryDate, setEditDeliveryDate] = useState('');
+    const [allowSundaysSetting, setAllowSundaysSetting] = useState(false);
+    const [allowHolidaysSetting, setAllowHolidaysSetting] = useState(false);
+    const [minDeliveryDate, setMinDeliveryDate] = useState(() => calculateStandardMinDeliveryDate(true, 20, false, false));
     const [editShippingAddress, setEditShippingAddress] = useState('');
     const [editLatitude, setEditLatitude] = useState<number | null>(null);
     const [editLongitude, setEditLongitude] = useState<number | null>(null);
@@ -2420,6 +2437,23 @@ function OrderLoadingContent() {
         if (zeroQtyItem) {
             alert(`❌ No se puede guardar: El producto "${zeroQtyItem.products?.name || 'Item'}" tiene cantidad menor o igual a 0. Si desea eliminarlo, use el icono de la papelera.`);
             return;
+        }
+
+        // POKA-YOKE SDD ESCENARIO 219: Blindaje Integral de Fecha de Despacho
+        if (editDeliveryDate) {
+            const deliveryOnly = editDeliveryDate.split('T')[0];
+            const originalDeliveryOnly = (selectedOrder.delivery_date || '').split('T')[0];
+            if (deliveryOnly !== originalDeliveryOnly) {
+                if (deliveryOnly < minDeliveryDate) {
+                    alert(`❌ Fecha no permitida: La nueva fecha de entrega (${deliveryOnly}) no puede ser anterior a la fecha mínima operativa permitida (${minDeliveryDate}).`);
+                    return;
+                }
+                const holidayCheck = isValidDeliveryDate(deliveryOnly, allowSundaysSetting, allowHolidaysSetting);
+                if (!holidayCheck.valid) {
+                    alert(`❌ Fecha de despacho rechazada: ${holidayCheck.reason || 'Día no habilitado según políticas de entrega (domingos/festivos desactivados).'}`);
+                    return;
+                }
+            }
         }
 
         // Check Delivery Day Restriction Warning (Allows exceptional bypass upon user confirmation)
@@ -5293,8 +5327,25 @@ function OrderLoadingContent() {
                                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#065F46', marginBottom: '6px' }}>FECHA DE ENTREGA</label>
                                                 <input 
                                                     type="date"
+                                                    min={minDeliveryDate}
                                                     value={editDeliveryDate}
-                                                    onChange={(e) => setEditDeliveryDate(e.target.value)}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val) {
+                                                            if (val < minDeliveryDate) {
+                                                                alert(`⛔ Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`);
+                                                                return;
+                                                            }
+                                                            const check = isValidDeliveryDate(val, allowSundaysSetting, allowHolidaysSetting);
+                                                            if (!check.valid) {
+                                                                alert(`⛔ ${check.reason || 'Día no habilitado para entregas.'}`);
+                                                                const nextV = getNextValidDeliveryDate(val, allowSundaysSetting, allowHolidaysSetting);
+                                                                setEditDeliveryDate(formatDateToYYYYMMDD(nextV));
+                                                                return;
+                                                            }
+                                                            setEditDeliveryDate(val);
+                                                        }
+                                                    }}
                                                     onClick={(e) => (e.target as any).showPicker?.()}
                                                     style={{
                                                         width: '100%',

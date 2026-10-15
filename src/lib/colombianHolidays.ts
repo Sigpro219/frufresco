@@ -206,3 +206,39 @@ export function getNextValidDeliveryDate(
     }
     return current;
 }
+
+/**
+ * Obtiene la fecha y hora actual en la zona horaria de Bogotá (UTC-5).
+ */
+export function getBogotaNow(): Date {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    return new Date(utc + (3600000 * -5));
+}
+
+export function formatDateToYYYYMMDD(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+/**
+ * Calcula la fecha mínima válida de despacho (YYYY-MM-DD) para un pedido nuevo,
+ * respetando la hora de corte de Bogotá, domingos y festivos de Colombia.
+ */
+export function calculateStandardMinDeliveryDate(
+    cutoffEnabled: boolean = true,
+    cutoffHour: number = 20,
+    allowSundays: boolean = false,
+    allowHolidays: boolean = false
+): string {
+    const bogotaNow = getBogotaNow();
+    const currentHour = bogotaNow.getHours();
+    const daysToAdd = (cutoffEnabled && currentHour >= cutoffHour) ? 2 : 1;
+    const baseTarget = new Date(bogotaNow);
+    baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
+    const valid = getNextValidDeliveryDate(baseTarget, allowSundays, allowHolidays);
+    return formatDateToYYYYMMDD(valid);
+}
+

@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.186 (Sistema Autónomo de Atención Especial Operativa por Ciclo de Vida y Estándar Carta RNC — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.187 (Blindaje Poka-Yoke Integral de Fechas de Entrega, Prohibición Retroactiva y Gobernanza de Domingos/Festivos en Ciclo de Vida de Pedidos — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 218 Escenarios BDD Ininterrumpidos (1..218)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 219 Escenarios BDD Ininterrumpidos (1..219)
 
 ---
 
@@ -16,10 +16,10 @@
 ### Mapa de Cobertura por Dominios Operativos (76 / 76 Pantallas Físicas Certificadas)
 
 | Dominio | Nombre del Dominio | Pantallas | Capítulos SDD | Rango de Escenarios BDD | Cobertura |
-| :---: | :--- | :---: | :---: | :---: | :---: |
+| :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 219 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **217 Escenarios Canónicos (1..217)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **219 Escenarios Canónicos (1..219)** | **🟢 100%** |
 
 ---
 
@@ -10130,6 +10130,31 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - **Sábana de Alistamiento por Célula (`/admin/orders/alistamiento-print`):** En la celda de `SUCURSAL / CLIENTE` se antepone el micro-sello compacto en recuadro de alto contraste (`[NUE]`, `[PQR]` o `[SEG]`) sin truncar el nombre de la sede, acompañado de una nota de pie de página de 1 línea: `[NUE / PQR / SEG] Cuidado Especial: Verificar Selección · Peso Exacto · Calibre · Canastilla Limpia`.
      - **Rótulos de Canastilla (`/admin/orders/print-labels`):** Incorpora el distintivo compacto `[CUIDADO ESPECIAL · CANASTA LIMPIA]` en los stickers de canastillas de clientes marcados.
      - **Remisiones de Contingencia (`/admin/orders/contingency-print`):** Regla estricta de confidencialidad comercial: el distintivo de cuidado especial se imprime **únicamente en la copia interna (`COPIA - TRANSPORTADOR / CONTABILIDAD`) y planillas de cargue**, quedando **terminantemente oculto en la hoja `ORIGINAL - CLIENTE`** para que el comprador jamás lea marcaciones internas de PQR o bajo consumo.
+
+
+#### Escenario 219: Blindaje Poka-Yoke Integral de Fechas de Entrega, Prohibición Retroactiva y Gobernanza de Domingos/Festivos en Ciclo de Vida de Pedidos (SDD v1.9.187)
+- **Given** la Mesa Inteligente de Creación de Pedidos (`/admin/orders/create`), la Consola de Modificación y Cargue (`/admin/orders/loading`) y el Módulo de Borradores IA (`EmailDraftsModule.tsx`).
+- **When** un operador manual, un cliente B2B, o el motor de extracción multimodal OCR/IA procesan una orden de compra:
+- **Then**:
+  1. **Prohibición Inquebrantable de Fechas Retroactivas:**
+     - Se declara contractualmente imposible asignar o reasignar una fecha de entrega anterior a la fecha actual (`delivery_date < hoy (Bogotá)`).
+     - La fecha mínima permitida (`minDeliveryDate`) se calcula dinámicamente con base en la hora de corte (`cutoff_hour_admin`):
+       - Si la hora actual es previa al corte: $\text{minDate} = \text{hoy} + 1\text{ día}$ ($\text{D}+1$).
+       - Si la hora actual iguala o supera el corte (ej. 20:00): $\text{minDate} = \text{hoy} + 2\text{ días}$ ($\text{D}+2$).
+  2. **Gobernanza de Domingos y Festivos según `app_settings`:**
+     - El sistema consulta estrictamente las variables `allow_sunday_deliveries` y `allow_holiday_deliveries` de `app_settings`.
+     - Si `allow_sunday_deliveries === 'false'`, los domingos están estrictamente prohibidos y no pueden seleccionarse ni programarse.
+     - Si `allow_holiday_deliveries === 'false'`, los 19 días festivos oficiales de Colombia (calculados algorítmicamente mediante `isColombianHoliday` según la Ley Emiliani) están estrictamente prohibidos.
+  3. **Poka-Yoke en Ingesta de Documentos IA / OCR:**
+     - Si un documento analizado por IA contiene una fecha de entrega en el texto (`deliveryDateInDocument`), el sistema **NUNCA** la inyecta a ciegas.
+     - Si la fecha detectada es anterior a `minDeliveryDate`, o corresponde a un domingo/festivo no permitido, el sistema la re-enruta automáticamente hacia adelante al primer día hábil válido mediante `getNextValidDeliveryDate(detectedDate, allowSundays, allowHolidays)`.
+     - Se emite una alerta visual amigable informando el ajuste: *"⚠️ La fecha detectada en el documento era festivo o anterior a la ventana de corte. Se ajustó automáticamente al primer día hábil permitido: YYYY-MM-DD"*.
+  4. **Poka-Yoke en Componentes DatePicker (`min` HTML5 & Sanitización Reactiva):**
+     - En todos los selectores de fecha de entrega (`create/page.tsx` y `loading/page.tsx`), se impone el atributo nativo `min={minDeliveryDate}` impidiendo que el usuario pueda hacer clic o navegar hacia días anteriores.
+     - En el manejador `onChange`, si se ingresa manualmente una fecha inválida (pasada, domingo o festivo inhabilitado), el sistema bloquea la asignación y reestablece la fecha al día hábil permitido más cercano.
+  5. **Veto de Integridad en Envío Transaccional (`onSubmit`):**
+     - Antes de ejecutar cualquier mutación hacia la tabla `orders` (`INSERT` o `UPDATE` de `delivery_date`), el backend/frontend valida que `delivery_date >= minDeliveryDate` y `isValidDeliveryDate(delivery_date, allowSundays, allowHolidays)`.
+     - De registrarse cualquier transgresión, se interrumpe el flujo con mensaje de error explícito y se aborta el guardado en base de datos.
 
 ---
 

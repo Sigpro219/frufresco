@@ -19,6 +19,7 @@ import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/
 import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges, isRedundantAttribute } from '@/lib/orderUtils';
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 import { useAuth } from '@/lib/authContext';
+import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD } from '@/lib/colombianHolidays';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -1759,15 +1760,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     showToast(`¡Se dividió el documento en ${newVirtualAttachments.length} adjuntos virtuales según sus fechas de entrega!`, 'success');
   };
 
-  const getMinDeliveryDate = () => {
-    const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const bogotaNow = new Date(utc + (3600000 * -5));
-    const result = new Date(bogotaNow);
-    result.setDate(bogotaNow.getDate() + 1);
-    return result.toISOString().split('T')[0];
-  };
-  const minDeliveryDate = getMinDeliveryDate();
+  const minDeliveryDate = useMemo(() => calculateStandardMinDeliveryDate(true, 20, false, false), []);
+  const getMinDeliveryDate = () => minDeliveryDate;
   const lastDraftIdRef = useRef<string | null>(null);
   const [deliveryDate, setDeliveryDate] = useState<string>(minDeliveryDate);
   const [saving, setSaving] = useState(false);
@@ -7649,11 +7643,24 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   <input
                     ref={deliveryDateInputRef}
                     type="date"
+                    min={minDeliveryDate}
                     className="hide-native-date-picker-indicator"
                     value={deliveryDate}
                     onChange={e => {
                       const newDate = e.target.value;
                       if (newDate) {
+                        if (newDate < minDeliveryDate) {
+                          showToast(`⛔ Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
+                          setDeliveryDate(minDeliveryDate);
+                          return;
+                        }
+                        const check = isValidDeliveryDate(newDate, false, false);
+                        if (!check.valid) {
+                          showToast(`⛔ ${check.reason || 'Día no habilitado para entregas.'}`, 'error');
+                          const nextV = getNextValidDeliveryDate(newDate, false, false);
+                          setDeliveryDate(formatDateToYYYYMMDD(nextV));
+                          return;
+                        }
                         setDeliveryDate(newDate);
                       }
                     }}
@@ -11250,13 +11257,22 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   <Calendar size={18} color="#0D7A57" />
                   <input 
                     type="date" 
+                    min={minDeliveryDate}
                     value={deliveryDate} 
                     onChange={(e) => {
                       const newDate = e.target.value;
                       if (!newDate) return;
-                      const minDate = getMinDeliveryDate();
-                      if (newDate < minDate) {
-                        showToast(`ℹ️ Fecha de despacho express / anterior a la ventana estándar (${minDate}).`, 'info');
+                      if (newDate < minDeliveryDate) {
+                        showToast(`⛔ Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
+                        setDeliveryDate(minDeliveryDate);
+                        return;
+                      }
+                      const check = isValidDeliveryDate(newDate, false, false);
+                      if (!check.valid) {
+                        showToast(`⛔ ${check.reason || 'Día no habilitado para entregas.'}`, 'error');
+                        const nextV = getNextValidDeliveryDate(newDate, false, false);
+                        setDeliveryDate(formatDateToYYYYMMDD(nextV));
+                        return;
                       }
                       setDeliveryDate(newDate);
                     }} 
