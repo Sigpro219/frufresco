@@ -4120,7 +4120,7 @@ export default function BillingDashboard() {
                                                                 </button>
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => window.open(`/admin/orders/contingency-print?ids=${order.id}`, '_blank')}
+                                                                    onClick={() => window.open(`/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}&ids=${order.id}`, '_blank')}
                                                                     title="Imprimir remisión / contingencia"
                                                                     style={{
                                                                         backgroundColor: 'white',
@@ -5488,7 +5488,7 @@ export default function BillingDashboard() {
 
                                         <button 
                                             type="button"
-                                            onClick={() => window.open(`/admin/orders/contingency-print?ids=${selectedOrderDetail.id}`, '_blank')}
+                                            onClick={() => window.open(`/admin/orders/contingency-print?mode=remissions&orderIds=${selectedOrderDetail.id}&ids=${selectedOrderDetail.id}`, '_blank')}
                                             style={{ backgroundColor: 'white', color: '#0F172A', border: '1px solid #CBD5E1', padding: '0.45rem 0.90rem', borderRadius: '8px', fontWeight: '700', fontSize: '0.74rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                             onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                             onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}

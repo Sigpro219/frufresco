@@ -11,12 +11,10 @@ import {
     cleanHumanResolutionNotes,
     parseSanitaryAndHumanNotes
 } from '@/lib/rcaTaxonomy';
-import UniversalLetterhead from '@/components/print/UniversalLetterhead';
 import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
 import { 
     Printer, ArrowLeft, ShieldAlert, CheckCircle2, FileText, 
-    Building2, User, Phone, MapPin, Calendar, Camera, 
-    ShieldCheck, Users 
+    Building2, Camera, ShieldCheck, Users 
 } from 'lucide-react';
 
 export default function RncPrintPage() {
@@ -108,21 +106,14 @@ export default function RncPrintPage() {
     }
 
     // Corporate brand configuration using Investments Cortés preset
-    const brandConfig = {
-        ...INVESTMENTS_CORTES_BRAND,
-        companyName: appSettings.provider_legal_name || INVESTMENTS_CORTES_BRAND.companyName,
-        legalId: appSettings.provider_nit 
-            ? (appSettings.provider_nit.includes('NIT') ? appSettings.provider_nit : `NIT ${appSettings.provider_nit}`)
-            : INVESTMENTS_CORTES_BRAND.legalId,
-        logoUrl: appSettings.provider_logo_url || INVESTMENTS_CORTES_BRAND.logoUrl,
-        watermarkUrl: appSettings.provider_logo_url || INVESTMENTS_CORTES_BRAND.watermarkUrl,
-        headquarters: {
-            ...INVESTMENTS_CORTES_BRAND.headquarters,
-            address: appSettings.provider_address || INVESTMENTS_CORTES_BRAND.headquarters?.address,
-            email: appSettings.provider_email || INVESTMENTS_CORTES_BRAND.headquarters?.email,
-            mobile: appSettings.provider_phone || INVESTMENTS_CORTES_BRAND.headquarters?.mobile,
-        }
-    };
+    const companyLegalName = appSettings.provider_legal_name || INVESTMENTS_CORTES_BRAND.companyName;
+    const companyNit = appSettings.provider_nit 
+        ? (appSettings.provider_nit.includes('NIT') ? appSettings.provider_nit : `NIT ${appSettings.provider_nit}`)
+        : INVESTMENTS_CORTES_BRAND.legalId;
+    const companyLogo = appSettings.provider_logo_url || INVESTMENTS_CORTES_BRAND.logoUrl;
+    const companyAddress = appSettings.provider_address || INVESTMENTS_CORTES_BRAND.headquarters?.address || 'Carrera 35 # 8-45, Bogotá D.C.';
+    const companyPhone = appSettings.provider_phone || INVESTMENTS_CORTES_BRAND.headquarters?.mobile || '+57 322 734 7971';
+    const companyEmail = appSettings.provider_email || INVESTMENTS_CORTES_BRAND.headquarters?.email || 'calidad@frufresco.com';
 
     // Parse RCA information and nominal imputation
     const rca = parseRcaFromRecord(pqr);
@@ -166,23 +157,100 @@ export default function RncPrintPage() {
     }, 0);
 
     const isResolved = pqr.status === 'resolved';
-    const cleanNotes = cleanHumanResolutionNotes(pqr.resolution_notes || '');
     const parsedResolution = parseSanitaryAndHumanNotes(pqr.resolution_notes || '', rca.notes);
 
     return (
-        <div style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', padding: '1.5rem 1rem' }}>
-            {/* Screen Action Toolbar */}
+        <div className="rnc-outer-wrapper">
+            {/* Strict CSS for Carta (Letter) Paper & SGC Golden Print Standards */}
+            <style dangerouslySetInnerHTML={{ __html: `
+                @page {
+                    size: letter portrait;
+                    margin: 8mm 10mm 8mm 10mm;
+                }
+                * {
+                    box-sizing: border-box;
+                }
+                @media print {
+                    *, *::before, *::after {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    html, body {
+                        background: #FFFFFF !important;
+                        color: #0F172A !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+                        font-size: 7pt !important;
+                        line-height: 1.25 !important;
+                        width: 100% !important;
+                        height: auto !important;
+                    }
+                    .no-print {
+                        display: none !important;
+                    }
+                    .rnc-outer-wrapper {
+                        background: transparent !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        min-height: 0 !important;
+                        width: 100% !important;
+                    }
+                    .rnc-paper {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        min-height: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                        border-radius: 0 !important;
+                        background: #FFFFFF !important;
+                    }
+                    .page-break-avoid {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                    }
+                    .page-break-before {
+                        page-break-before: always !important;
+                        break-before: page !important;
+                    }
+                }
+                @media screen {
+                    .rnc-outer-wrapper {
+                        background-color: #F1F5F9;
+                        min-height: 100vh;
+                        padding: 1.5rem 1rem;
+                    }
+                    .rnc-paper {
+                        width: 215.9mm;
+                        min-height: 279.4mm;
+                        margin: 0 auto;
+                        background-color: #FFFFFF;
+                        padding: 8mm 10mm;
+                        border-radius: 8px;
+                        box-shadow: 0 4px 25px rgba(0,0,0,0.08);
+                        border: 1px solid #CBD5E1;
+                        box-sizing: border-box;
+                        position: relative;
+                        display: flex;
+                        flex-direction: column;
+                    }
+                }
+            ` }} />
+
+            {/* Screen Action Toolbar (Excluded from Print) */}
             <div className="no-print" style={{
-                maxWidth: '850px',
-                margin: '0 auto 1.25rem auto',
+                maxWidth: '215.9mm',
+                margin: '0 auto 1rem auto',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 backgroundColor: '#FFFFFF',
-                padding: '0.75rem 1.25rem',
-                borderRadius: '10px',
-                border: '1px solid #E2E8F0',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+                padding: '0.65rem 1.2rem',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
             }}>
                 <button
                     onClick={() => router.back()}
@@ -190,33 +258,33 @@ export default function RncPrintPage() {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '6px',
-                        padding: '7px 14px',
+                        padding: '6px 14px',
                         backgroundColor: '#F8FAFC',
                         border: '1px solid #CBD5E1',
-                        borderRadius: '8px',
+                        borderRadius: '6px',
                         color: '#334155',
                         fontWeight: '700',
-                        fontSize: '0.8rem',
+                        fontSize: '0.80rem',
                         cursor: 'pointer'
                     }}
                 >
-                    <ArrowLeft size={15} /> Volver a Gestión de Calidad
+                    <ArrowLeft size={14} /> Volver a Gestión de Calidad
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: '600' }}>
-                        Estándar Golden Print • Investments Cortés S.A.S.
+                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '700' }}>
+                        Tamaño Carta (Letter 8.5" × 11") • Formato SGC ISO 9001
                     </span>
                     <button
                         onClick={() => window.print()}
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            padding: '8px 18px',
+                            gap: '7px',
+                            padding: '7px 16px',
                             backgroundColor: '#0D7A57',
                             color: '#FFFFFF',
                             border: 'none',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             fontWeight: '800',
                             fontSize: '0.82rem',
                             cursor: 'pointer',
@@ -228,116 +296,223 @@ export default function RncPrintPage() {
                 </div>
             </div>
 
-            {/* Canonical Golden Print Wrapper */}
-            <UniversalLetterhead
-                brand={brandConfig}
-                paperSize="letter"
-                meta={{
-                    title: 'REPORTE DE SALIDA NO CONFORME (RNC)',
-                    subtitle: 'CONTROL DE CALIDAD AGROINDUSTRIAL • ISO 9001:2015 (8.7) • BPM INVIMA RES. 2674/2013',
-                    reference: `RNC #${consecutive}`,
-                    date: creationDateOnly,
-                    badge: isResolved ? 'DICTAMINADO & RESUELTO' : 'EN INVESTIGACIÓN TÉCNICA',
-                    badgeVariant: isResolved ? 'emerald' : 'amber',
-                    operationalTag: {
-                        label: 'PEDIDO',
-                        value: orderSequence
-                    }
-                }}
-            >
-                {/* 1. SECCIÓN IDENTIFICACIÓN DEL CLIENTE Y DESPACHO LOGÍSTICO */}
-                <div className="page-break-avoid" style={{ marginBottom: '10px' }}>
+            {/* Formal Carta (Letter) Paper Canvas */}
+            <div className="rnc-paper">
+                {/* 1. OFFICIAL INVESTMENTS CORTÉS DOCUMENT CONTROL HEADER TABLE (SGC ISO 9001 STANDARD) */}
+                <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    border: '1.5px solid #1E293B',
+                    marginBottom: '6px',
+                    backgroundColor: '#FFFFFF'
+                }}>
+                    <tbody>
+                        <tr>
+                            {/* Cell 1: Official Logo & Legal Entity */}
+                            <td rowSpan={4} style={{
+                                width: '27%',
+                                textAlign: 'center',
+                                padding: '5px 8px',
+                                border: '1px solid #334155',
+                                verticalAlign: 'middle',
+                                backgroundColor: '#FFFFFF'
+                            }}>
+                                <img
+                                    src={companyLogo}
+                                    alt="Investments Cortés S.A.S."
+                                    style={{
+                                        maxHeight: '38px',
+                                        maxWidth: '100%',
+                                        objectFit: 'contain',
+                                        margin: '0 auto 3px auto',
+                                        display: 'block'
+                                    }}
+                                />
+                                <div style={{ fontSize: '7.6pt', fontWeight: '900', color: '#0F172A', lineHeight: '1.15', textTransform: 'uppercase' }}>
+                                    {companyLegalName}
+                                </div>
+                                <div style={{ fontSize: '6.4pt', color: '#334155', fontWeight: '700', marginTop: '1px' }}>
+                                    {companyNit} • FruFresco Operaciones
+                                </div>
+                                <div style={{ fontSize: '5.8pt', color: '#64748B', lineHeight: '1.15' }}>
+                                    {companyAddress}
+                                </div>
+                            </td>
+
+                            {/* Cell 2: Document Formal Title & SGC Subtitle */}
+                            <td rowSpan={4} style={{
+                                width: '48%',
+                                textAlign: 'center',
+                                border: '1px solid #334155',
+                                verticalAlign: 'middle',
+                                padding: '5px 8px',
+                                backgroundColor: '#F8FAFC'
+                            }}>
+                                <div style={{ fontSize: '6.8pt', fontWeight: '800', color: '#0D7A57', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '1px' }}>
+                                    SISTEMA DE GESTIÓN DE CALIDAD E INOCUIDAD (SGC)
+                                </div>
+                                <div style={{ fontSize: '10pt', fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.01em', lineHeight: '1.15' }}>
+                                    REPORTE DE SALIDA NO CONFORME (RNC)
+                                </div>
+                                <div style={{ fontSize: '6pt', color: '#475569', marginTop: '2px', fontWeight: '600' }}>
+                                    Control de Calidad Agroindustrial • ISO 9001:2015 (8.7) • BPM Res. 2674/2013 Invima
+                                </div>
+                            </td>
+
+                            {/* Cell 3: Document Control Metadata (4 rows) */}
+                            <td style={{ width: '25%', fontSize: '6.8pt', fontWeight: '800', color: '#334155', padding: '2.5px 6px', border: '1px solid #334155', backgroundColor: '#FFFFFF' }}>
+                                <span style={{ color: '#64748B', fontWeight: '600' }}>CÓDIGO:</span> SGC-RNC-001
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style={{ fontSize: '6.8pt', fontWeight: '800', color: '#334155', padding: '2.5px 6px', border: '1px solid #334155', backgroundColor: '#FFFFFF' }}>
+                                <span style={{ color: '#64748B', fontWeight: '600' }}>VERSIÓN:</span> 003
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style={{ fontSize: '6.8pt', fontWeight: '800', color: '#0D7A57', padding: '2.5px 6px', border: '1px solid #334155', backgroundColor: '#FFFFFF' }}>
+                                <span style={{ color: '#64748B', fontWeight: '600' }}>RADICADO:</span> RNC #{consecutive}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style={{ fontSize: '6.8pt', fontWeight: '800', color: '#334155', padding: '2.5px 6px', border: '1px solid #334155', backgroundColor: '#FFFFFF' }}>
+                                <span style={{ color: '#64748B', fontWeight: '600' }}>EMISIÓN:</span> {creationDateOnly}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                {/* 2. CASE STATUS & LOGISTICS TRACEABILITY BANNER */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: '#F0FDF4',
+                    border: '1px solid #BBF7D0',
+                    borderLeft: '3.5px solid #0D7A57',
+                    borderRadius: '4px',
+                    padding: '3px 8px',
+                    marginBottom: '6px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <ShieldCheck size={12} color="#0D7A57" />
+                            <span style={{ fontSize: '7pt', fontWeight: '900', color: '#0D7A57', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                Estado de Calidad:
+                            </span>
+                        </div>
+                        <span style={{
+                            fontSize: '6.4pt',
+                            fontWeight: '800',
+                            padding: '1.5px 7px',
+                            borderRadius: '3px',
+                            backgroundColor: isResolved ? '#DCFCE7' : '#FEF3C7',
+                            color: isResolved ? '#15803D' : '#B45309',
+                            border: `1px solid ${isResolved ? '#86EFAC' : '#FDE68A'}`,
+                            textTransform: 'uppercase'
+                        }}>
+                            {isResolved ? 'Dictaminado & Resuelto' : 'En Investigación Técnica'}
+                        </span>
+                    </div>
+                    <div style={{ fontSize: '7pt', color: '#334155', fontWeight: '700' }}>
+                        Pedido FruFresco: <strong style={{ color: '#0D7A57' }}>{orderSequence}</strong> • Radicado: <strong style={{ color: '#0F172A' }}>RNC #{consecutive}</strong>
+                    </div>
+                </div>
+
+                {/* SECTION 1: CUSTOMER & LOGISTICS IDENTIFICATION */}
+                <div className="page-break-avoid" style={{ marginBottom: '6px' }}>
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '5px',
                         backgroundColor: '#F1F5F9',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
+                        padding: '3px 6px',
+                        borderRadius: '3px',
                         borderLeft: '3px solid #0D7A57',
                         color: '#0F172A',
                         fontWeight: '800',
-                        fontSize: '0.72rem',
+                        fontSize: '6.8pt',
                         textTransform: 'uppercase',
-                        marginBottom: '6px'
+                        marginBottom: '4px'
                     }}>
-                        <Building2 size={13} color="#0D7A57" />
+                        <Building2 size={11} color="#0D7A57" />
                         <span>1. Identificación del Cliente y Despacho Logístico</span>
                     </div>
 
                     <div style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(4, 1fr)',
-                        gap: '6px',
+                        gap: '4px',
                         backgroundColor: '#FFFFFF',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '6px',
-                        padding: '6px 10px',
-                        fontSize: '0.68rem'
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '4px',
+                        padding: '4px 8px',
+                        fontSize: '6.6pt'
                     }}>
                         <div>
-                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem' }}>Razón Social / Cliente:</span>
+                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>Razón Social / Cliente:</span>
                             <div style={{ fontWeight: '800', color: '#0F172A' }}>{clientName}</div>
                         </div>
                         <div>
-                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem' }}>NIT / Identificación:</span>
+                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>NIT / Identificación:</span>
                             <div style={{ fontWeight: '700', color: '#1E293B' }}>{clientNit}</div>
                         </div>
                         <div>
-                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem' }}>Contacto / Ecónomo:</span>
+                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>Contacto / Ecónomo:</span>
                             <div style={{ fontWeight: '700', color: '#1E293B' }}>{clientContact}</div>
                         </div>
                         <div>
-                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem' }}>Teléfono / Celular:</span>
+                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>Teléfono / Celular:</span>
                             <div style={{ fontWeight: '700', color: '#1E293B' }}>{clientPhone}</div>
                         </div>
-                        <div style={{ gridColumn: 'span 3', borderTop: '1px solid #F1F5F9', paddingTop: '4px' }}>
-                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem' }}>Dirección de Entrega:</span>
+                        <div style={{ gridColumn: 'span 3', borderTop: '1px solid #F1F5F9', paddingTop: '3px' }}>
+                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>Dirección de Entrega:</span>
                             <div style={{ fontWeight: '600', color: '#334155' }}>{address}</div>
                         </div>
-                        <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '4px' }}>
-                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem' }}>Radicado el:</span>
+                        <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '3px' }}>
+                            <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>Radicado el:</span>
                             <div style={{ fontWeight: '700', color: '#0D7A57' }}>{creationDateFull}</div>
                         </div>
                     </div>
                 </div>
 
-                {/* 2. SECCIÓN DICTAMEN TÉCNICO, CAUSA RAÍZ (RCA) E IMPUTABILIDAD */}
-                <div className="page-break-avoid" style={{ marginBottom: '10px' }}>
+                {/* SECTION 2: TECHNICAL FINDING, ROOT CAUSE (RCA) & NOMINAL IMPUTATION */}
+                <div className="page-break-avoid" style={{ marginBottom: '6px' }}>
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '5px',
                         backgroundColor: '#F1F5F9',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
+                        padding: '3px 6px',
+                        borderRadius: '3px',
                         borderLeft: '3px solid #0D7A57',
                         color: '#0F172A',
                         fontWeight: '800',
-                        fontSize: '0.72rem',
+                        fontSize: '6.8pt',
                         textTransform: 'uppercase',
-                        marginBottom: '6px'
+                        marginBottom: '4px'
                     }}>
-                        <ShieldAlert size={13} color="#0D7A57" />
+                        <ShieldAlert size={11} color="#0D7A57" />
                         <span>2. Dictamen Técnico, Causa Raíz (RCA) e Imputabilidad Nominal</span>
                     </div>
 
                     <div style={{
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '6px',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '4px',
                         overflow: 'hidden',
                         backgroundColor: '#FFFFFF',
-                        fontSize: '0.68rem'
+                        fontSize: '6.6pt'
                     }}>
+                        {/* RCA 3-Column Strip */}
                         <div style={{
                             display: 'grid',
-                            gridTemplateColumns: '1.4fr 2fr 1.2fr',
+                            gridTemplateColumns: '1.3fr 2fr 1.1fr',
                             backgroundColor: '#F8FAFC',
-                            padding: '5px 10px',
+                            padding: '3px 8px',
                             borderBottom: '1px solid #E2E8F0',
                             fontWeight: '800',
                             color: '#475569',
-                            fontSize: '0.62rem',
+                            fontSize: '6pt',
                             textTransform: 'uppercase'
                         }}>
                             <div>Categoría Nivel 1 (RCA)</div>
@@ -347,8 +522,8 @@ export default function RncPrintPage() {
 
                         <div style={{
                             display: 'grid',
-                            gridTemplateColumns: '1.4fr 2fr 1.2fr',
-                            padding: '6px 10px',
+                            gridTemplateColumns: '1.3fr 2fr 1.1fr',
+                            padding: '4px 8px',
                             alignItems: 'center',
                             borderBottom: '1px solid #F1F5F9'
                         }}>
@@ -360,15 +535,15 @@ export default function RncPrintPage() {
                                     {subtypeL2?.label || rca.subtypeL2 || 'Defecto técnico no codificado'}
                                 </span>
                                 {subtypeL2?.description && (
-                                    <div style={{ fontSize: '0.60rem', color: '#64748B' }}>{subtypeL2.description}</div>
+                                    <div style={{ fontSize: '5.8pt', color: '#64748B' }}>{subtypeL2.description}</div>
                                 )}
                             </div>
                             <div>
                                 <span style={{
                                     display: 'inline-block',
-                                    padding: '2px 8px',
-                                    borderRadius: '4px',
-                                    fontSize: '0.62rem',
+                                    padding: '1.5px 6px',
+                                    borderRadius: '3px',
+                                    fontSize: '6pt',
                                     fontWeight: '800',
                                     textTransform: 'uppercase',
                                     backgroundColor: party.bgLight,
@@ -380,31 +555,31 @@ export default function RncPrintPage() {
                             </div>
                         </div>
 
-                        {/* Tabla de Responsables Imputados Nominales */}
+                        {/* Nominal Imputed Entities Table (if exists) */}
                         {rca.imputedEntities && rca.imputedEntities.length > 0 && (
-                            <div style={{ padding: '6px 10px', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
-                                <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <Users size={11} />
+                            <div style={{ padding: '4px 8px', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
+                                <div style={{ fontSize: '6pt', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                    <Users size={10} />
                                     <span>Imputabilidad Nominal (Afectación Contable / Política de Nómina):</span>
                                 </div>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.65rem', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.4pt', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0' }}>
                                     <thead>
                                         <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '1px solid #CBD5E1', textAlign: 'left' }}>
-                                            <th style={{ padding: '3px 6px', fontWeight: '800', color: '#475569' }}>Funcionario / Proveedor</th>
-                                            <th style={{ padding: '3px 6px', fontWeight: '800', color: '#475569' }}>Cargo / Rol</th>
-                                            <th style={{ padding: '3px 6px', fontWeight: '800', color: '#475569', textAlign: 'center' }}>% Imputado</th>
-                                            <th style={{ padding: '3px 6px', fontWeight: '800', color: '#DC2626', textAlign: 'right' }}>Deducción COP</th>
+                                            <th style={{ padding: '2px 5px', fontWeight: '800', color: '#475569' }}>Funcionario / Proveedor</th>
+                                            <th style={{ padding: '2px 5px', fontWeight: '800', color: '#475569' }}>Cargo / Rol</th>
+                                            <th style={{ padding: '2px 5px', fontWeight: '800', color: '#475569', textAlign: 'center' }}>% Imputado</th>
+                                            <th style={{ padding: '2px 5px', fontWeight: '800', color: '#DC2626', textAlign: 'right' }}>Deducción COP</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {rca.imputedEntities.map((ent, eIdx) => (
                                             <tr key={ent.id || eIdx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                <td style={{ padding: '3px 6px', fontWeight: '800', color: '#0F172A' }}>
+                                                <td style={{ padding: '2px 5px', fontWeight: '800', color: '#0F172A' }}>
                                                     {ent.name} {ent.documentId ? `(Doc: ${ent.documentId})` : ''}
                                                 </td>
-                                                <td style={{ padding: '3px 6px', color: '#475569' }}>{ent.role || rca.responsible}</td>
-                                                <td style={{ padding: '3px 6px', textAlign: 'center', fontWeight: '800', color: '#0D7A57' }}>{ent.sharePercent}%</td>
-                                                <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: '900', color: '#DC2626' }}>
+                                                <td style={{ padding: '2px 5px', color: '#475569' }}>{ent.role || rca.responsible}</td>
+                                                <td style={{ padding: '2px 5px', textAlign: 'center', fontWeight: '800', color: '#0D7A57' }}>{ent.sharePercent}%</td>
+                                                <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '900', color: '#DC2626' }}>
                                                     {ent.deductionAmount ? `$${ent.deductionAmount.toLocaleString('es-CO')} COP` : '$0 COP'}
                                                 </td>
                                             </tr>
@@ -414,74 +589,74 @@ export default function RncPrintPage() {
                             </div>
                         )}
 
-                        {/* Declaración del Problema & Hallazgo */}
-                        <div style={{ padding: '6px 10px', backgroundColor: '#FFFFFF', borderTop: '1px solid #E2E8F0' }}>
-                            <div style={{ fontWeight: '800', color: '#0F172A', marginBottom: '2px' }}>
-                                <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem' }}>ASUNTO RADICADO: </span>
+                        {/* Problem Statement & Description */}
+                        <div style={{ padding: '4px 8px', backgroundColor: '#FFFFFF', borderTop: '1px solid #E2E8F0' }}>
+                            <div style={{ fontWeight: '800', color: '#0F172A', marginBottom: '1px' }}>
+                                <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>ASUNTO RADICADO: </span>
                                 {pqr.subject}
                             </div>
-                            <div style={{ color: '#334155', lineHeight: '1.35', whiteSpace: 'pre-line' }}>
-                                <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem' }}>HALLAZGO TÉCNICO / DESCRIPCIÓN: </span>
+                            <div style={{ color: '#334155', lineHeight: '1.3', whiteSpace: 'pre-line' }}>
+                                <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>HALLAZGO TÉCNICO / DESCRIPCIÓN: </span>
                                 {pqr.description}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* 3. SECCIÓN RELACIÓN DE PRODUCTO NO CONFORME Y COSTO DE CALIDAD (CoQ) */}
+                {/* SECTION 3: NON-CONFORMING ITEMS & COST OF QUALITY (CoQ) */}
                 {novelties.length > 0 && (
-                    <div className="page-break-avoid" style={{ marginBottom: '10px' }}>
+                    <div className="page-break-avoid" style={{ marginBottom: '6px' }}>
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             backgroundColor: '#F1F5F9',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
+                            padding: '3px 6px',
+                            borderRadius: '3px',
                             borderLeft: '3px solid #0D7A57',
                             color: '#0F172A',
                             fontWeight: '800',
-                            fontSize: '0.72rem',
+                            fontSize: '6.8pt',
                             textTransform: 'uppercase',
-                            marginBottom: '6px'
+                            marginBottom: '4px'
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <FileText size={13} color="#0D7A57" />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <FileText size={11} color="#0D7A57" />
                                 <span>3. Relación de Ítems No Conformes y Costo de Calidad (CoQ)</span>
                             </div>
                             {totalImpactCoQ > 0 && (
-                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#DC2626' }}>
+                                <span style={{ fontSize: '6.4pt', fontWeight: '800', color: '#DC2626' }}>
                                     Impacto Total CoQ: ${totalImpactCoQ.toLocaleString('es-CO')} COP
                                 </span>
                             )}
                         </div>
 
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.66rem', border: '1px solid #E2E8F0', backgroundColor: '#FFFFFF' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.5pt', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF' }}>
                             <thead>
-                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #CBD5E1', textAlign: 'left' }}>
-                                    <th style={{ padding: '4px 6px', color: '#475569', fontWeight: '800', width: '14%' }}>SKU</th>
-                                    <th style={{ padding: '4px 6px', color: '#475569', fontWeight: '800', width: '38%' }}>Descripción de Ítem</th>
-                                    <th style={{ padding: '4px 6px', color: '#475569', fontWeight: '800', textAlign: 'center', width: '14%' }}>Cant. Afectada</th>
-                                    <th style={{ padding: '4px 6px', color: '#475569', fontWeight: '800', width: '22%' }}>Causal en Descarga</th>
-                                    <th style={{ padding: '4px 6px', color: '#475569', fontWeight: '800', textAlign: 'right', width: '12%' }}>Estado</th>
+                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #CBD5E1', textAlign: 'left' }}>
+                                    <th style={{ padding: '2.5px 5px', color: '#475569', fontWeight: '800', width: '14%' }}>SKU</th>
+                                    <th style={{ padding: '2.5px 5px', color: '#475569', fontWeight: '800', width: '40%' }}>Descripción de Ítem</th>
+                                    <th style={{ padding: '2.5px 5px', color: '#475569', fontWeight: '800', textAlign: 'center', width: '14%' }}>Cant. Afectada</th>
+                                    <th style={{ padding: '2.5px 5px', color: '#475569', fontWeight: '800', width: '20%' }}>Causal en Descarga</th>
+                                    <th style={{ padding: '2.5px 5px', color: '#475569', fontWeight: '800', textAlign: 'right', width: '12%' }}>Estado</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {novelties.map((item, idx) => (
                                     <tr key={item.id || idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
-                                        <td style={{ padding: '4px 6px', fontWeight: '700', color: '#64748B', fontFamily: 'monospace' }}>
+                                        <td style={{ padding: '2.5px 5px', fontWeight: '700', color: '#64748B', fontFamily: 'monospace' }}>
                                             {item.products?.sku || 'N/A'}
                                         </td>
-                                        <td style={{ padding: '4px 6px', fontWeight: '800', color: '#0F172A' }}>
+                                        <td style={{ padding: '2.5px 5px', fontWeight: '800', color: '#0F172A' }}>
                                             {item.products?.name || 'Producto'}
                                         </td>
-                                        <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: '900', color: '#DC2626' }}>
+                                        <td style={{ padding: '2.5px 5px', textAlign: 'center', fontWeight: '900', color: '#DC2626' }}>
                                             {item.quantity_returned} {item.products?.unit_of_measure || 'Kg'}
                                         </td>
-                                        <td style={{ padding: '4px 6px', color: '#334155' }}>
+                                        <td style={{ padding: '2.5px 5px', color: '#334155' }}>
                                             {item.reason || 'Sin observación'}
                                         </td>
-                                        <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: '800', color: item.status === 'approved' ? '#15803D' : item.status === 'rejected' ? '#64748B' : '#B45309' }}>
+                                        <td style={{ padding: '2.5px 5px', textAlign: 'right', fontWeight: '800', color: item.status === 'approved' ? '#15803D' : item.status === 'rejected' ? '#64748B' : '#B45309' }}>
                                             {item.status === 'approved' ? 'Aprobada' : item.status === 'rejected' ? 'Sin Costo' : 'En Revisión'}
                                         </td>
                                     </tr>
@@ -489,14 +664,14 @@ export default function RncPrintPage() {
                             </tbody>
                             {totalImpactCoQ > 0 && (
                                 <tfoot>
-                                    <tr style={{ backgroundColor: '#F8FAFC', borderTop: '1.5px solid #CBD5E1' }}>
-                                        <td colSpan={2} style={{ padding: '4px 6px', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', fontSize: '0.62rem' }}>
+                                    <tr style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #CBD5E1' }}>
+                                        <td colSpan={2} style={{ padding: '2.5px 5px', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', fontSize: '6pt' }}>
                                             Total Impacto Contable
                                         </td>
-                                        <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: '900', color: '#0F172A' }}>
+                                        <td style={{ padding: '2.5px 5px', textAlign: 'center', fontWeight: '900', color: '#0F172A' }}>
                                             {novelties.reduce((acc, it) => acc + (Number(it.quantity_returned) || 0), 0)} Unidades
                                         </td>
-                                        <td colSpan={2} style={{ padding: '4px 6px', textAlign: 'right', fontWeight: '900', color: '#DC2626', fontSize: '0.72rem' }}>
+                                        <td colSpan={2} style={{ padding: '2.5px 5px', textAlign: 'right', fontWeight: '900', color: '#DC2626', fontSize: '6.8pt' }}>
                                             Total CoQ: ${totalImpactCoQ.toLocaleString('es-CO')} COP
                                         </td>
                                     </tr>
@@ -506,37 +681,37 @@ export default function RncPrintPage() {
                     </div>
                 )}
 
-                {/* 4. SECCIÓN EVIDENCIA FOTOGRÁFICA */}
+                {/* SECTION 4: PHOTOGRAPHIC EVIDENCE (CALIBRATED COMPACT HEIGHT FOR CARTA) */}
                 {photos.length > 0 && (
-                    <div className="page-break-avoid" style={{ marginBottom: '10px' }}>
+                    <div className="page-break-avoid" style={{ marginBottom: '6px' }}>
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
+                            gap: '5px',
                             backgroundColor: '#F1F5F9',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
+                            padding: '3px 6px',
+                            borderRadius: '3px',
                             borderLeft: '3px solid #0D7A57',
                             color: '#0F172A',
                             fontWeight: '800',
-                            fontSize: '0.72rem',
+                            fontSize: '6.8pt',
                             textTransform: 'uppercase',
-                            marginBottom: '6px'
+                            marginBottom: '4px'
                         }}>
-                            <Camera size={13} color="#0D7A57" />
+                            <Camera size={11} color="#0D7A57" />
                             <span>4. Evidencia Fotográfica y Registro de Inspección</span>
                         </div>
 
                         <div style={{
                             display: 'grid',
                             gridTemplateColumns: photos.length === 1 ? '1fr' : 'repeat(2, 1fr)',
-                            gap: '8px'
+                            gap: '6px'
                         }}>
-                            {photos.slice(0, 4).map((url, i) => (
+                            {photos.slice(0, 2).map((url, i) => (
                                 <div key={i} style={{
-                                    border: '1px solid #E2E8F0',
-                                    borderRadius: '6px',
-                                    padding: '4px',
+                                    border: '1px solid #CBD5E1',
+                                    borderRadius: '4px',
+                                    padding: '3px',
                                     backgroundColor: '#FAFAFA',
                                     textAlign: 'center'
                                 }}>
@@ -545,15 +720,15 @@ export default function RncPrintPage() {
                                         alt={`Evidencia Fotográfica ${i + 1}`}
                                         style={{
                                             maxWidth: '100%',
-                                            maxHeight: '130px',
+                                            maxHeight: '62px',
                                             objectFit: 'contain',
-                                            borderRadius: '4px',
+                                            borderRadius: '3px',
                                             display: 'block',
                                             margin: '0 auto'
                                         }}
                                     />
-                                    <div style={{ fontSize: '0.58rem', color: '#64748B', marginTop: '3px', fontWeight: '700' }}>
-                                        Evidencia #{i + 1} • Inalterabilidad SGC
+                                    <div style={{ fontSize: '5.5pt', color: '#64748B', marginTop: '2px', fontWeight: '700' }}>
+                                        Evidencia #{i + 1} • Inalterabilidad Probatoria SGC
                                     </div>
                                 </div>
                             ))}
@@ -561,52 +736,52 @@ export default function RncPrintPage() {
                     </div>
                 )}
 
-                {/* 5. SECCIÓN PLAN DE ACCIÓN (CAPA) Y DISPOSICIÓN SANITARIA */}
-                <div className="page-break-avoid" style={{ marginBottom: '12px' }}>
+                {/* SECTION 5: CAPA, SANITARY DISPOSAL & TECHNICAL RESOLUTION */}
+                <div className="page-break-avoid" style={{ marginBottom: '6px' }}>
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '5px',
                         backgroundColor: '#F1F5F9',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
+                        padding: '3px 6px',
+                        borderRadius: '3px',
                         borderLeft: '3px solid #0D7A57',
                         color: '#0F172A',
                         fontWeight: '800',
-                        fontSize: '0.72rem',
+                        fontSize: '6.8pt',
                         textTransform: 'uppercase',
-                        marginBottom: '6px'
+                        marginBottom: '4px'
                     }}>
-                        <CheckCircle2 size={13} color="#0D7A57" />
+                        <CheckCircle2 size={11} color="#0D7A57" />
                         <span>5. Dictamen Técnico, Plan de Acción (CAPA) y Disposición Sanitaria</span>
                     </div>
 
                     <div style={{
                         backgroundColor: '#FFFFFF',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '6px',
-                        padding: '8px 10px',
-                        fontSize: '0.68rem',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '4px',
+                        padding: '6px 8px',
+                        fontSize: '6.6pt',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '8px'
+                        gap: '5px'
                     }}>
                         {/* Concepto Comercial / Dictamen */}
                         {parsedResolution.commercialConcept && (
                             <div style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
+                                gap: '5px',
                                 backgroundColor: '#F0FDF4',
                                 border: '1px solid #BBF7D0',
-                                padding: '3px 8px',
-                                borderRadius: '4px',
+                                padding: '2px 6px',
+                                borderRadius: '3px',
                                 width: 'fit-content'
                             }}>
-                                <span style={{ fontSize: '0.60rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase' }}>
+                                <span style={{ fontSize: '5.8pt', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase' }}>
                                     Dictamen Comercial:
                                 </span>
-                                <span style={{ fontSize: '0.66rem', fontWeight: '700', color: '#15803D' }}>
+                                <span style={{ fontSize: '6.4pt', fontWeight: '700', color: '#15803D' }}>
                                     {parsedResolution.commercialConcept}
                                 </span>
                             </div>
@@ -617,33 +792,33 @@ export default function RncPrintPage() {
                             <div style={{
                                 backgroundColor: '#F8FAFC',
                                 border: '1px solid #CBD5E1',
-                                borderRadius: '5px',
-                                padding: '6px 8px'
+                                borderRadius: '4px',
+                                padding: '5px 7px'
                             }}>
-                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <ShieldCheck size={12} color="#0D7A57" />
+                                <div style={{ fontSize: '6.2pt', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <ShieldCheck size={11} color="#0D7A57" />
                                     <span>Protocolo Sanitario: {parsedResolution.sanitaryTitle}</span>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.64rem', color: '#334155' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '6.2pt', color: '#334155' }}>
                                     {parsedResolution.sanitaryDetails.map((detail, dIdx) => (
-                                        <div key={dIdx} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                                        <div key={dIdx} style={{ display: 'flex', gap: '5px', alignItems: 'flex-start' }}>
                                             <span style={{ color: '#0D7A57', fontWeight: '900', lineHeight: '1.2' }}>•</span>
-                                            <span style={{ lineHeight: '1.3' }}>{detail}</span>
+                                            <span style={{ lineHeight: '1.25' }}>{detail}</span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         ) : null}
 
-                        {/* Observaciones Humanas / Hallazgo Técnico / CAPA */}
+                        {/* Observaciones Técnicas / CAPA Humanas */}
                         {parsedResolution.humanNotes ? (
                             <div style={{
                                 borderTop: parsedResolution.sanitaryTitle ? '1px dashed #E2E8F0' : 'none',
-                                paddingTop: parsedResolution.sanitaryTitle ? '6px' : '0',
+                                paddingTop: parsedResolution.sanitaryTitle ? '4px' : '0',
                                 color: '#1E293B',
-                                lineHeight: '1.4'
+                                lineHeight: '1.3'
                             }}>
-                                <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem', display: 'block', marginBottom: '2px' }}>
+                                <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt', display: 'block', marginBottom: '1px' }}>
                                     Plan de Acción / Observaciones Técnicas:
                                 </span>
                                 <div style={{ fontWeight: '500', whiteSpace: 'pre-line' }}>
@@ -657,12 +832,12 @@ export default function RncPrintPage() {
                         ) : null}
 
                         <div style={{
-                            marginTop: '2px',
-                            paddingTop: '6px',
+                            marginTop: '1px',
+                            paddingTop: '4px',
                             borderTop: '1px solid #F1F5F9',
                             display: 'flex',
                             justifyContent: 'space-between',
-                            fontSize: '0.60rem',
+                            fontSize: '5.8pt',
                             color: '#64748B',
                             fontWeight: '600'
                         }}>
@@ -672,78 +847,96 @@ export default function RncPrintPage() {
                     </div>
                 </div>
 
-                {/* 6. SECCIÓN LEGALIZACIÓN Y TRIÁNGULO DE FIRMAS */}
-                <div className="page-break-avoid" style={{ marginTop: '12px' }}>
+                {/* SECTION 6: THREE-PARTY FORMAL LEGAL SIGNATURES */}
+                <div className="page-break-avoid" style={{ marginBottom: '6px' }}>
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '5px',
                         backgroundColor: '#F1F5F9',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
+                        padding: '3px 6px',
+                        borderRadius: '3px',
                         borderLeft: '3px solid #0D7A57',
                         color: '#0F172A',
                         fontWeight: '800',
-                        fontSize: '0.72rem',
+                        fontSize: '6.8pt',
                         textTransform: 'uppercase',
-                        marginBottom: '8px'
+                        marginBottom: '4px'
                     }}>
-                        <ShieldCheck size={13} color="#0D7A57" />
+                        <ShieldCheck size={11} color="#0D7A57" />
                         <span>6. Legalización y Cierre Formal de las Partes</span>
                     </div>
 
                     <div style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: '10px',
+                        gap: '8px',
                         textAlign: 'center'
                     }}>
                         {/* 1. Quality Assurance */}
-                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px', backgroundColor: '#FAFAFA' }}>
-                            <div style={{ height: '32px', borderBottom: '1px solid #475569', marginBottom: '4px' }}></div>
-                            <div style={{ fontWeight: '900', fontSize: '0.68rem', color: '#0F172A' }}>
+                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '4px', padding: '4px 6px', backgroundColor: '#FAFAFA' }}>
+                            <div style={{ height: '24px', borderBottom: '1px solid #475569', marginBottom: '3px' }}></div>
+                            <div style={{ fontWeight: '900', fontSize: '6.6pt', color: '#0F172A' }}>
                                 Aseguramiento de Calidad
                             </div>
-                            <div style={{ fontSize: '0.60rem', color: '#0D7A57', fontWeight: '700' }}>
-                                {brandConfig.companyName}
+                            <div style={{ fontSize: '5.8pt', color: '#0D7A57', fontWeight: '700' }}>
+                                {companyLegalName}
                             </div>
-                            <div style={{ fontSize: '0.55rem', color: '#64748B' }}>
+                            <div style={{ fontSize: '5.4pt', color: '#64748B' }}>
                                 FruFresco SGC • Control Agroindustrial
                             </div>
                         </div>
 
                         {/* 2. Imputed Responsible / Acceptance */}
-                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px', backgroundColor: '#FAFAFA' }}>
-                            <div style={{ height: '32px', borderBottom: '1px solid #475569', marginBottom: '4px' }}></div>
-                            <div style={{ fontWeight: '900', fontSize: '0.68rem', color: '#0F172A' }}>
+                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '4px', padding: '4px 6px', backgroundColor: '#FAFAFA' }}>
+                            <div style={{ height: '24px', borderBottom: '1px solid #475569', marginBottom: '3px' }}></div>
+                            <div style={{ fontWeight: '900', fontSize: '6.6pt', color: '#0F172A' }}>
                                 Responsable Imputado / Aceptación
                             </div>
-                            <div style={{ fontSize: '0.60rem', color: '#B45309', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: '5.8pt', color: '#B45309', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {rca.imputedEntities && rca.imputedEntities.length > 0 
                                     ? rca.imputedEntities.map(e => e.name).join(', ')
                                     : party.label}
                             </div>
-                            <div style={{ fontSize: '0.55rem', color: '#64748B' }}>
+                            <div style={{ fontSize: '5.4pt', color: '#64748B' }}>
                                 C.C. / NIT • Aceptación Política de Nómina
                             </div>
                         </div>
 
                         {/* 3. Client Representative */}
-                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px', backgroundColor: '#FAFAFA' }}>
-                            <div style={{ height: '32px', borderBottom: '1px solid #475569', marginBottom: '4px' }}></div>
-                            <div style={{ fontWeight: '900', fontSize: '0.68rem', color: '#0F172A' }}>
+                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '4px', padding: '4px 6px', backgroundColor: '#FAFAFA' }}>
+                            <div style={{ height: '24px', borderBottom: '1px solid #475569', marginBottom: '3px' }}></div>
+                            <div style={{ fontWeight: '900', fontSize: '6.6pt', color: '#0F172A' }}>
                                 Recibido Conforme Cliente
                             </div>
-                            <div style={{ fontSize: '0.60rem', color: '#475569', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: '5.8pt', color: '#475569', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {clientName}
                             </div>
-                            <div style={{ fontSize: '0.55rem', color: '#64748B' }}>
+                            <div style={{ fontSize: '5.4pt', color: '#64748B' }}>
                                 Firma / Sello / C.C.
                             </div>
                         </div>
                     </div>
                 </div>
-            </UniversalLetterhead>
+
+                {/* 7. CORPORATE DOCUMENT CONTROL LEGAL FOOTER */}
+                <div style={{
+                    marginTop: 'auto',
+                    paddingTop: '4px',
+                    borderTop: '1px solid #CBD5E1',
+                    textAlign: 'center',
+                    fontSize: '5.8pt',
+                    color: '#64748B',
+                    lineHeight: '1.3'
+                }}>
+                    <div>
+                        <strong style={{ color: '#0F172A' }}>{companyLegalName}</strong> • {companyNit} • {companyAddress} • Tel: {companyPhone} • {companyEmail}
+                    </div>
+                    <div style={{ color: '#94A3B8', marginTop: '1px' }}>
+                        Documento interno oficial del Sistema de Gestión de Calidad (SGC). Válido como sustento técnico para emisión de Notas Crédito, reposición logística de inventario y auditorías de certificación ISO 9001 / BPM.
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruction, getOrderProcurementReferences } from '@/lib/orderUtils';
@@ -442,14 +442,26 @@ function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
     return pages.length > 0 ? pages : [[]];
 }
 
-export default function ContingencyPrintPage() {
+function ContingencyPrintContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const rawOrderIds = searchParams.get('orderIds') || searchParams.get('ids') || '';
-    const paramDate = searchParams.get('date');
-    const mode = searchParams.get('mode') || 'remissions'; // 'remissions' (default) | 'dispatch' | 'picking' | 'purchases' | 'all'
 
-    const [selectedDate, setSelectedDate] = useState<string>(() => paramDate || getBogotaDate(0));
+    // Sincronización instantánea a prueba de hidratación SSR/CSR (lee directo del query string si window está activo)
+    const directOrderIds = typeof window !== 'undefined'
+        ? (new URLSearchParams(window.location.search).get('orderIds') ||
+           new URLSearchParams(window.location.search).get('ids') ||
+           new URLSearchParams(window.location.search).get('orderId') ||
+           new URLSearchParams(window.location.search).get('id') || '')
+        : '';
+
+    const rawOrderIds = (searchParams?.get('orderIds') || searchParams?.get('ids') || searchParams?.get('orderId') || searchParams?.get('id') || directOrderIds || '').trim();
+    const directDate = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('date') : null;
+    const paramDate = searchParams?.get('date') || directDate;
+    const directMode = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('mode') : null;
+    const mode = searchParams?.get('mode') || directMode || 'remissions'; // 'remissions' (default) | 'dispatch' | 'picking' | 'purchases' | 'all'
+
+    // Si se especificaron pedidos concretos, NUNCA defaultear a hoy para evitar consultar todo el tiraje del día por accidente
+    const [selectedDate, setSelectedDate] = useState<string>(() => paramDate || (rawOrderIds ? '' : getBogotaDate(0)));
 
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [stocks, setStocks] = useState<Record<string, number>>({});
@@ -476,17 +488,57 @@ export default function ContingencyPrintPage() {
                         order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, parent_id, min_inventory_level, iva_rate))
                     `);
 
-                if (rawOrderIds) {
-                    const ids = rawOrderIds.split(',').map(id => id.trim()).filter(Boolean);
+                // Resolución de IDs en tiempo de ejecución
+                const currentOrderIds = (
+                    (typeof window !== 'undefined'
+                        ? (new URLSearchParams(window.location.search).get('orderIds') ||
+                           new URLSearchParams(window.location.search).get('ids') ||
+                           new URLSearchParams(window.location.search).get('orderId') ||
+                           new URLSearchParams(window.location.search).get('id') || '')
+                        : '') || rawOrderIds
+                ).trim();
+
+                if (currentOrderIds) {
+                    const ids = currentOrderIds.split(',').map(id => id.trim()).filter(Boolean);
                     if (ids.length === 0) {
+                        setOrders([]);
                         setLoading(false);
                         return;
                     }
-                    query = query.in('id', ids);
+
+                    // Soporte universal para UUIDs o sequence_ids (ej. #1410_1088 o 1088)
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    const isAllUuids = ids.every(id => uuidRegex.test(id));
+
+                    if (isAllUuids) {
+                        query = query.in('id', ids);
+                    } else {
+                        const validUuids = ids.filter(id => uuidRegex.test(id));
+                        const numericIds = ids
+                            .map(id => {
+                                if (id.includes('_')) return Number(id.split('_')[1]);
+                                return Number(id);
+                            })
+                            .filter(n => !isNaN(n) && n > 0);
+
+                        const orConditions: string[] = [];
+                        if (validUuids.length > 0) {
+                            orConditions.push(`id.in.(${validUuids.join(',')})`);
+                        }
+                        if (numericIds.length > 0) {
+                            orConditions.push(`sequence_id.in.(${numericIds.join(',')})`);
+                        }
+                        if (orConditions.length > 0) {
+                            query = query.or(orConditions.join(','));
+                        } else {
+                            query = query.in('id', ids);
+                        }
+                    }
                 } else if (selectedDate) {
                     const OPERATIONAL_STATUSES = ['pending_approval', 'pending', 'recibido', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
                     query = query.eq('delivery_date', selectedDate).in('status', OPERATIONAL_STATUSES);
                 } else {
+                    setOrders([]);
                     setLoading(false);
                     return;
                 }
@@ -829,7 +881,7 @@ export default function ContingencyPrintPage() {
                             const docName = mode === 'purchases' 
                                 ? `Planilla_Compras_${orders[0]?.delivery_date || selectedDate}`
                                 : mode === 'remissions'
-                                ? `Remisiones_Duplicadas_${orders[0]?.delivery_date || selectedDate}`
+                                ? (orders.length === 1 ? `Remision_${getFriendlyOrderId(orders[0])}` : `Remisiones_Duplicadas_${orders[0]?.delivery_date || selectedDate}`)
                                 : mode === 'dispatch'
                                 ? `Manifiesto_Flota_${orders[0]?.delivery_date || selectedDate}`
                                 : `Kit_Contingencia_${orders[0]?.delivery_date || selectedDate}`;
@@ -1603,5 +1655,22 @@ export default function ContingencyPrintPage() {
 
             </div>
         </div>
+    );
+}
+
+export default function ContingencyPrintPage() {
+    return (
+        <Suspense fallback={
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif' }}>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0F172A', marginBottom: '8px' }}>
+                    Cargando Remisión...
+                </div>
+                <div style={{ color: '#64748B', fontSize: '0.9rem' }}>
+                    Sincronizando datos del pedido...
+                </div>
+            </div>
+        }>
+            <ContingencyPrintContent />
+        </Suspense>
     );
 }

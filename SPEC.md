@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.182 (Auditoría Retrospectiva de Casos Cerrados, Parser RCA Balanceado y Reporte RNC Golden Print Universal — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.184 (Previsualización Unitaria y Blindaje de Hidratación en Remisiones Físicas — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 214 Escenarios BDD Ininterrumpidos (1..214)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 216 Escenarios BDD Ininterrumpidos (1..216)
 
 ---
 
@@ -24,11 +24,11 @@
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 214 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 (§39.1 - §39.5) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **214 Escenarios Canónicos (1..214)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **216 Escenarios Canónicos (1..216)** | **🟢 100%** |
 
 ---
 
@@ -10069,6 +10069,24 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        - **Escenario 3 (Nota Crédito):** Informa la emisión del saldo a favor / Nota Crédito y la actualización de su estado de cuenta.
        - **Escenario 4 (Ajuste de Factura):** Informa el ajuste directo en factura para que el pago coincida con lo efectivamente recibido.
        - **Pendientes:** Informa que el caso está en trámite activo por Calidad con compromiso de pronta respuesta.
+
+#### Escenario 216: Previsualización Unitaria y Blindaje de Hidratación en Remisiones Físicas (`/admin/commercial/billing` y `/admin/orders/contingency-print`) (SDD v1.9.184)
+- **Given** un analista de Facturación y Cartera inspeccionando un pedido en la consola de facturación (`/admin/commercial/billing`), ya sea desde la tabla de operaciones o desde el modal de detalle del pedido (ej. pedido `#1410_1088`).
+- **When** pulsa el botón *«Previsualizar Impresión»* (o el icono de impresora en la columna de acciones rápidas):
+- **Then**:
+  1. **Estandarización de Parámetros URL en Facturación:**
+     - La llamada a `window.open` invoca de forma canónica la URL `/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}&ids=${order.id}`.
+     - Se garantiza el envío explícito del modo (`remissions`) y de los parámetros duales `orderIds` e `ids` con el identificador UUID del pedido, asegurando compatibilidad con todas las rutas y herramientas del ecosistema.
+  2. **Blindaje de Hidratación y Extracción Síncrona en Contingencia:**
+     - La vista `/admin/orders/contingency-print` envuelve su contenido en un `<Suspense>` boundary canónico para eliminar advertencias de desoptimización CSR en Next.js App Router.
+     - Se extraen los parámetros (`orderIds`, `ids`, `orderId`, `id`, `mode`, `date`) sincrónicamente directo de `window.location.search` en el cliente, erradicando los falsos vacíos ocasionados por el retardo de hidratación del hook `useSearchParams()`.
+  3. **Erradicación del Fallback Accidental a Toda la Tanda del Día:**
+     - Cuando la URL contiene identificadores de pedido (`orderIds` o `ids`), el estado inicial `selectedDate` no se predetermina a la fecha de hoy, suprimiendo la ejecución espuria de la consulta masiva por jornada.
+     - La consulta a Supabase ejecuta estrictamente el filtro de los pedidos solicitados. Admite tanto UUIDs estándar como `sequence_id` numéricos o amigables (ej. `1088` o `1410_1088`) mediante filtros OR combinados, sin caer jamás en el lote de todos los pedidos del día.
+  4. **Experiencia de Usuario e Identificación Visual Unitaria:**
+     - La barra de herramientas sticky superior detecta pedidos unitarios (`orders.length === 1`) y exhibe la insignia: `Pedido #[ID] (Original + Copia)` en lugar del conteo plural genérico.
+     - La descarga PDF mediante `printViaNewWindow` nombra el archivo limpiamente como `Remision_[ID].pdf` (ej. `Remision_1410_1088.pdf`).
+     - Si el pedido no es hallado, la interfaz despliega un estado vacío explicativo con el identificador buscado y enlaces directos para regresar o conmutar de fecha.
 
 ---
 
