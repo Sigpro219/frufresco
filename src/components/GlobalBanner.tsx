@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
 
-import { ClipboardList, Truck, Clock, Headphones, Building2, PhoneCall } from 'lucide-react';
+import { ClipboardList, Truck, Clock, Headphones, Building2, PhoneCall, Sparkles, CalendarClock, BookmarkCheck } from 'lucide-react';
+import { parseStoreVacationConfig, StoreVacationConfig, calculateStandardMinDeliveryDate, addDaysISO } from '../lib/colombianHolidays';
 
 function formatSpanishDate(dateVal: string | Date): string {
     let d: Date;
@@ -33,6 +34,10 @@ export default function GlobalBanner() {
   const [customDeliveryDate, setCustomDeliveryDate] = useState<string | null>(null);
   const [cutoffEnabled, setCutoffEnabled] = useState(false);
   const [cutoffHourPublic, setCutoffHourPublic] = useState(17);
+  const [storeStatus, setStoreStatus] = useState<'open' | 'vacation_preorder' | 'closed'>('open');
+  const [vacationConfig, setVacationConfig] = useState<StoreVacationConfig | null>(null);
+  const [allowSundays, setAllowSundays] = useState(false);
+  const [allowHolidays, setAllowHolidays] = useState(false);
 
   const [messageIndex, setMessageIndex] = useState(0);
   const [fadeState, setFadeState] = useState(true);
@@ -47,7 +52,15 @@ export default function GlobalBanner() {
         const { data } = await supabase
           .from('app_settings')
           .select('key, value')
-          .in('key', [locale === 'en' ? 'global_banner_en' : 'global_banner', 'enable_cutoff_rules', 'cutoff_hour_public']); 
+          .in('key', [
+            locale === 'en' ? 'global_banner_en' : 'global_banner',
+            'enable_cutoff_rules',
+            'cutoff_hour_public',
+            'store_status',
+            'store_vacation_config',
+            'allow_sunday_deliveries',
+            'allow_holiday_deliveries'
+          ]); 
         
         if (!isMounted) return;
 
@@ -59,6 +72,20 @@ export default function GlobalBanner() {
             if (s.key === 'cutoff_hour_public') {
               const parsed = parseInt(s.value, 10);
               if (!isNaN(parsed) && parsed > 0) setCutoffHourPublic(parsed);
+            }
+            if (s.key === 'store_status') {
+              if (s.value === 'closed' || s.value === 'vacation_preorder' || s.value === 'open') {
+                setStoreStatus(s.value);
+              }
+            }
+            if (s.key === 'store_vacation_config') {
+              setVacationConfig(parseStoreVacationConfig(s.value));
+            }
+            if (s.key === 'allow_sunday_deliveries') {
+              setAllowSundays(s.value === 'true');
+            }
+            if (s.key === 'allow_holiday_deliveries') {
+              setAllowHolidays(s.value === 'true');
             }
             if (s.key === (locale === 'en' ? 'global_banner_en' : 'global_banner')) {
               let text = s.value;
@@ -102,6 +129,129 @@ export default function GlobalBanner() {
       clearInterval(interval);
     };
   }, [pathname]);
+
+  // OVERRIDE 1: TIENDA CERRADA TEMPORALMENTE (MODO VITRINA / CARRITO GUARDADO - CERO WHATSAPP)
+  if (storeStatus === 'closed') {
+    const returnDayFormatted = vacationConfig?.endDate
+      ? formatSpanishDate(addDaysISO(vacationConfig.endDate, 1))
+      : null;
+
+    return (
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 1100,
+        background: 'linear-gradient(90deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)',
+        color: '#F8FAFC',
+        padding: '0.65rem 1rem',
+        fontSize: '0.82rem',
+        fontWeight: 600,
+        letterSpacing: '0.01em',
+        boxShadow: '0 4px 15px rgba(15, 23, 42, 0.35)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '10px',
+        flexWrap: 'wrap',
+        fontFamily: 'var(--font-outfit), var(--font-inter), sans-serif',
+        borderBottom: '1.5px solid #F59E0B'
+      }}>
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          backgroundColor: 'rgba(245, 158, 11, 0.2)',
+          border: '1px solid rgba(245, 158, 11, 0.45)',
+          padding: '3px 10px',
+          borderRadius: '20px',
+          color: '#FDE68A',
+          fontWeight: 800,
+          fontSize: '0.73rem',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase'
+        }}>
+          <Sparkles size={13} strokeWidth={2.2} />
+          Planta en Preparación
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#E2E8F0' }}>
+          <BookmarkCheck size={14} style={{ color: '#38BDF8', flexShrink: 0 }} />
+          <span>
+            {vacationConfig?.customMessage || 'Estamos renovando inventario fresco directo del campo.'}{' '}
+            <b>Puedes explorar el catálogo y guardar tu carrito</b>
+            {returnDayFormatted ? (
+              <> — Reabrimos toma de pedidos el <b>{returnDayFormatted} ({vacationConfig?.reopenTime || '06:00 AM'})</b>.</>
+            ) : (
+              <> para nuestra próxima apertura ({vacationConfig?.reopenTime || '06:00 AM'}).</>
+            )}
+          </span>
+        </span>
+      </div>
+    );
+  }
+
+  // OVERRIDE 2: MODO PREVENTA / RECESO OPERATIVO ACTIVO (SEMANA SANTA / VACACIONES - CERO WHATSAPP)
+  if (storeStatus === 'vacation_preorder' || (vacationConfig?.enabled && vacationConfig.startDate && vacationConfig.endDate)) {
+    const nextValidDate = calculateStandardMinDeliveryDate(
+      cutoffEnabled,
+      cutoffHourPublic,
+      allowSundays,
+      allowHolidays,
+      vacationConfig
+    );
+    const formattedReturnDelivery = formatSpanishDate(nextValidDate);
+
+    if (storeStatus === 'vacation_preorder') {
+      return (
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100,
+          background: 'linear-gradient(90deg, #064E3B 0%, #047857 50%, #064E3B 100%)',
+          color: '#FFFFFF',
+          padding: '0.65rem 1rem',
+          fontSize: '0.82rem',
+          fontWeight: 600,
+          letterSpacing: '0.01em',
+          boxShadow: '0 4px 15px rgba(6, 78, 59, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px',
+          flexWrap: 'wrap',
+          fontFamily: 'var(--font-outfit), var(--font-inter), sans-serif',
+          borderBottom: '1.5px solid #34D399'
+        }}>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: 'rgba(254, 240, 138, 0.2)',
+            border: '1px solid rgba(254, 240, 138, 0.5)',
+            padding: '3px 10px',
+            borderRadius: '20px',
+            color: '#FEF08A',
+            fontWeight: 900,
+            fontSize: '0.73rem',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase'
+          }}>
+            <CalendarClock size={13} strokeWidth={2.2} />
+            Preventa Activa · {vacationConfig?.reasonTitle || 'Receso Operativo'}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#ECFDF5' }}>
+            <Truck size={14} style={{ color: '#A7F3D0', flexShrink: 0 }} />
+            <span>
+              {vacationConfig?.customMessage ? (
+                <>{vacationConfig.customMessage} — Próxima ruta garantizada: <b>{formattedReturnDelivery}</b>.</>
+              ) : (
+                <>Tienda abierta 24/7 en preventa: Agenda tu pedido hoy y recíbelo con <b>Prioridad #1 de Abastecimiento</b> el <b>{formattedReturnDelivery}</b>.</>
+              )}
+            </span>
+          </span>
+        </div>
+      );
+    }
+  }
 
   // MODE B2B INSTITUCIONAL (HEADER FIJO SUPERIOR CON MARQUEE CONTINUO)
   if (isB2B) {

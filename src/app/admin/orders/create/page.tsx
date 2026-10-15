@@ -65,7 +65,7 @@ import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
-import { getNextValidDeliveryDate, isValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow } from '@/lib/colombianHolidays';
+import { getNextValidDeliveryDate, isValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow, parseStoreVacationConfig, StoreVacationConfig } from '@/lib/colombianHolidays';
 import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 export const normalizeDocUnit = (unitStr: string): string => {
@@ -314,6 +314,10 @@ function CreateOrderContent() {
     const formatQuantityDisplay = (qtyStr: string | number | undefined | null): string => {
         if (qtyStr === undefined || qtyStr === null || qtyStr === '') return '';
         
+        if (typeof qtyStr === 'string' && (/[+\-*/=xX()]/.test(qtyStr) || qtyStr.endsWith(',') || qtyStr.endsWith('.'))) {
+            return qtyStr;
+        }
+
         let num: number;
         if (typeof qtyStr === 'number') {
             num = qtyStr;
@@ -708,6 +712,7 @@ function CreateOrderContent() {
     const [originSource, setOriginSource] = useState(searchParams.get('source') || 'phone'); // phone, whatsapp, email
     const [allowSundaysDelivery, setAllowSundaysDelivery] = useState(false);
     const [allowHolidaysDelivery, setAllowHolidaysDelivery] = useState(false);
+    const [storeVacationConfig, setStoreVacationConfig] = useState<StoreVacationConfig | null>(null);
     const [minDeliveryDate, setMinDeliveryDate] = useState(() => {
         return calculateStandardMinDeliveryDate(true, 20, false, false);
     });
@@ -719,13 +724,14 @@ function CreateOrderContent() {
                 const { data: settingsData } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_cutoff_rules', 'cutoff_hour_admin', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'max_order_hogar_cod']);
+                    .in('key', ['enable_cutoff_rules', 'cutoff_hour_admin', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'max_order_hogar_cod', 'store_vacation_config']);
 
                 const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
                 const cutoffHourAdminSetting = settingsData?.find(s => s.key === 'cutoff_hour_admin')?.value;
                 const cutoffHourAdmin = cutoffHourAdminSetting ? parseInt(cutoffHourAdminSetting, 10) : 20;
                 const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
                 const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+                const parsedVac = parseStoreVacationConfig(settingsData?.find(s => s.key === 'store_vacation_config')?.value);
                 const maxCodVal = settingsData?.find(s => s.key === 'max_order_hogar_cod')?.value;
                 if (maxCodVal) {
                     const parsed = parseInt(maxCodVal, 10);
@@ -734,8 +740,9 @@ function CreateOrderContent() {
 
                 setAllowSundaysDelivery(allowSundays);
                 setAllowHolidaysDelivery(allowHolidays);
+                setStoreVacationConfig(parsedVac);
 
-                const dateStr = calculateStandardMinDeliveryDate(cutoffEnabled, cutoffHourAdmin, allowSundays, allowHolidays);
+                const dateStr = calculateStandardMinDeliveryDate(cutoffEnabled, cutoffHourAdmin, allowSundays, allowHolidays, parsedVac);
 
                 setMinDeliveryDate(dateStr);
                 setDeliveryDate(dateStr);
@@ -940,6 +947,15 @@ function CreateOrderContent() {
     };
 
     useEffect(() => {
+        if (focusedClientIndex >= 0) {
+            const el = document.getElementById(`b2b-client-item-${focusedClientIndex}`);
+            if (el) {
+                el.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [focusedClientIndex]);
+
+    useEffect(() => {
         if (focusedClientIndexB2C >= 0) {
             const el = document.getElementById(`b2c-client-item-${focusedClientIndexB2C}`);
             if (el) {
@@ -947,6 +963,15 @@ function CreateOrderContent() {
             }
         }
     }, [focusedClientIndexB2C]);
+
+    useEffect(() => {
+        if (focusedProductIndex >= 0) {
+            const el = document.getElementById(`main-product-suggestion-${focusedProductIndex}`);
+            if (el) {
+                el.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [focusedProductIndex]);
 
     // Auto-scroll para el dropdown flotante de SKUs en la Mesa de Trabajo
     useEffect(() => {
@@ -989,18 +1014,19 @@ function CreateOrderContent() {
                     }
                 });
 
-            // Auto-focus the first select or the quantity input
+            // Auto-focus the first visible select or the quantity input (Parity with EmailDraftsModule)
             setTimeout(() => {
-                if (firstSelectRef.current) {
-                    firstSelectRef.current.focus();
+                const firstDomSelect = firstSelectRef.current || (document.getElementById('modal-select-0') as HTMLSelectElement | null);
+                if (firstDomSelect) {
+                    firstDomSelect.focus();
                 } else {
-                    const qtyInput = document.getElementById('modal-qty-input');
+                    const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
                     if (qtyInput) {
                         qtyInput.focus();
-                        (qtyInput as HTMLInputElement).select();
+                        qtyInput.select();
                     }
                 }
-            }, 80);
+            }, 60);
 
             // Only reset modal states to defaults if we are NOT in editing mode or staging mode!
             if (editingCartIndex !== null || editingStagedItemId !== null) {
@@ -1168,13 +1194,34 @@ function CreateOrderContent() {
             if (e.key === 'Escape') {
                 if (variantConfigProduct) { setVariantConfigProduct(null); return; }
                 if (manageConversionsProduct) { setManageConversionsProduct(null); return; }
-                if (selectedProductForModal) { setSelectedProductForModal(null); return; }
+                if (selectedProductForModal) { e.preventDefault(); closeProductModal(); return; }
                 if (showMapPicker) { setShowMapPicker(false); return; }
                 if (showFloatingDoc) { setShowFloatingDoc(false); return; }
                 if (deleteConfirm) { setDeleteConfirm(null); return; }
                 if (duplicateConfirm) { setDuplicateConfirm(null); return; }
                 if (duplicateStagedMatchConfirm) { setDuplicateStagedMatchConfirm(null); return; }
                 return;
+            }
+
+            // ── ENTER: confirma modales de duplicados o eliminación rápida (Paridad con EmailDraftsModule) ──
+            if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                if (duplicateConfirm && duplicateConfirm.isOpen) {
+                    e.preventDefault();
+                    handleMergeDuplicateItem();
+                    setTimeout(() => productSearchInputRef.current?.focus(), 60);
+                    return;
+                }
+                if (duplicateStagedMatchConfirm && duplicateStagedMatchConfirm.isOpen) {
+                    e.preventDefault();
+                    handleMergeStagedDuplicateMatch();
+                    return;
+                }
+                if (deleteConfirm && deleteConfirm.isOpen) {
+                    e.preventDefault();
+                    deleteConfirm.onConfirm();
+                    setDeleteConfirm(null);
+                    return;
+                }
             }
 
             // Los atajos Alt solo aplican cuando el modal de producto está abierto
@@ -1652,6 +1699,11 @@ function CreateOrderContent() {
             }
         }
         setClientSearchB2C('');
+        setTimeout(() => {
+            if (productSearchInputRef.current) {
+                productSearchInputRef.current.focus();
+            }
+        }, 80);
     };
 
     const filteredClientsB2C = clientSearchB2C.length < 2 ? [] : b2cClients.filter(c => {
@@ -2039,12 +2091,14 @@ function CreateOrderContent() {
         }
     };
 
-    const confirmModalAdd = () => {
+    const confirmModalAdd = (overrideQty?: string | number | React.MouseEvent) => {
         if (!selectedProductForModal) return;
         const sortedOptionKeys = Object.keys(selectedOptions).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         const optionValues = sortedOptionKeys.filter(k => selectedOptions[k]).map(k => selectedOptions[k]);
         const variantLabel = optionValues.length > 0 ? optionValues.map(v => String(v).includes('|') ? `${String(v).split('|')[0]} (${String(v).split('|')[1]} gr)` : v).join(', ') : undefined;
-        const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
+        const rawQtyVal = (typeof overrideQty === 'string' || typeof overrideQty === 'number') ? overrideQty : modalQuantity;
+        const evaluatedQty = evaluateMathExpression(rawQtyVal);
+        const qtyNum = evaluatedQty > 0 ? evaluatedQty : (parseFloat(String(rawQtyVal).replace(',', '.')) || 1);
         
         const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
         const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
@@ -2641,6 +2695,11 @@ function CreateOrderContent() {
             setLongitude(client.longitude);
         }
         setClientSearch('');
+        setTimeout(() => {
+            if (productSearchInputRef.current) {
+                productSearchInputRef.current.focus();
+            }
+        }, 80);
     };
 
     const handleGetLocation = () => {
@@ -2758,7 +2817,7 @@ function CreateOrderContent() {
 
             let query = supabase
                 .from('orders')
-                .select('id, sequence_id, created_at, total, status, delivery_date, admin_notes, document_url, profile_id')
+                .select('id, sequence_id, created_at, total, status, delivery_date, admin_notes, document_url, profile_id, logistics_data')
                 .gte('created_at', sixtyDaysAgo.toISOString())
                 .neq('status', 'cancelled')
                 .order('created_at', { ascending: false })
@@ -2778,6 +2837,7 @@ function CreateOrderContent() {
             let foundMatch: { order: any; matchedCode: string; matchType: 'OC' | 'SOLPED' | 'REFERENCE' } | null = null;
 
             for (const ord of recentOrders) {
+                if ((ord as any).logistics_data?.is_off_agreement_split) continue;
                 const notes = (ord.admin_notes || '').toUpperCase();
                 const docUrl = (ord.document_url || '').toUpperCase();
                 const ordIdStr = String(ord.sequence_id || ord.id).toUpperCase();
@@ -3639,16 +3699,19 @@ function CreateOrderContent() {
                 await Promise.allSettled(learningPromises);
             }
 
-            // 3. Calcular totales financieros, IVA y cubicaje logístico
+            // 3. Calcular totales financieros, IVA y cubicaje logístico (con separación Acuerdo vs Fuera de Acuerdo - Escenario 221)
+            const hasActiveB2BAgreement = clientType === 'B2B' && !isGiftRemissionClient && agreementProductIds.size > 0;
             let subtotal = 0;
             let tax = 0;
             let total = 0;
             let totalWeightKg = 0;
+            let offAgreementWeightKg = 0;
 
             const itemsDataForInsert = stagedItems.map(item => {
                 const prod = item.suggestedProduct!;
                 const prodId = prod.id;
-                const unitPrice = isGiftRemissionClient
+                const isOffAgreementItem = hasActiveB2BAgreement && !agreementProductIds.has(prodId);
+                const unitPrice = (isGiftRemissionClient || isOffAgreementItem)
                     ? 0
                     : ((clientType === 'B2B' && prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
                         ? contractPrices[prodId]
@@ -3656,7 +3719,7 @@ function CreateOrderContent() {
 
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '1');
                 const itemTotal = unitPrice * qtyNum;
-                const ivaRate = isGiftRemissionClient ? 0 : (prod.iva_rate !== null && prod.iva_rate !== undefined ? Number(prod.iva_rate) : 19);
+                const ivaRate = (isGiftRemissionClient || isOffAgreementItem) ? 0 : (prod.iva_rate !== null && prod.iva_rate !== undefined ? Number(prod.iva_rate) : 19);
                 const itemTax = itemTotal * (ivaRate / (100 + ivaRate));
                 const itemSubtotal = itemTotal - itemTax;
 
@@ -3669,10 +3732,15 @@ function CreateOrderContent() {
                 else if (prod.weight_kg && Number(prod.weight_kg) > 0) weightFactor = Number(prod.weight_kg);
                 else weightFactor = 1.0;
 
-                totalWeightKg += qtyNum * weightFactor;
-                subtotal += itemSubtotal;
-                tax += itemTax;
-                total += itemTotal;
+                const itemWeight = qtyNum * weightFactor;
+                if (isOffAgreementItem) {
+                    offAgreementWeightKg += itemWeight;
+                } else {
+                    totalWeightKg += itemWeight;
+                    subtotal += itemSubtotal;
+                    tax += itemTax;
+                    total += itemTotal;
+                }
 
                 const structuredSpec = getStructuredSpecKey(item);
                 const publicOptionValues = item.selected_options 
@@ -3685,6 +3753,8 @@ function CreateOrderContent() {
 
                 return {
                     product_id: prod.id,
+                    product_name: prod.name || item.originalName || 'Producto',
+                    is_off_agreement: isOffAgreementItem,
                     quantity: qtyNum,
                     unit_price: unitPrice,
                     nickname: item.originalName || prod.name,
@@ -3693,6 +3763,11 @@ function CreateOrderContent() {
                     selected_options: item.selected_options || {}
                 };
             });
+
+            const agreementItemsData = itemsDataForInsert.filter(it => !it.is_off_agreement);
+            const offAgreementItemsData = itemsDataForInsert.filter(it => it.is_off_agreement);
+            const isMixedSplitOrder = hasActiveB2BAgreement && agreementItemsData.length > 0 && offAgreementItemsData.length > 0;
+            const isOnlyOffAgreementOrder = hasActiveB2BAgreement && agreementItemsData.length === 0 && offAgreementItemsData.length > 0;
 
             // 4. Armar notas de orden y entrega logística
             const poTokens: string[] = [];
@@ -3707,7 +3782,11 @@ function CreateOrderContent() {
                 poTokens.push(`[CLIENTE HOGAR CREADO] ID: ${finalProfileId} | Nombre: ${guestInfo.name} | Tel: ${guestInfo.phone}`);
             }
             if (adminNotes) poTokens.push(adminNotes);
-            const finalAdminNotes = poTokens.join(' | ');
+            const baseAdminNotes = poTokens.join(' | ');
+            const offAgreementNamesList = offAgreementItemsData.map(it => it.product_name).join(', ');
+            const finalAdminNotes = isOnlyOffAgreementOrder
+                ? `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offAgreementNamesList}]${baseAdminNotes ? ` | ${baseAdminNotes}` : ''}`
+                : baseAdminNotes;
 
             let finalDeliverySlot = clientType === 'B2C' ? (deliverySlot || 'AM') : (deliverySlot || 'AM');
             let logisticsOverride = null;
@@ -3737,7 +3816,7 @@ function CreateOrderContent() {
             }
 
             // GAP-01: Interbloqueo de Crédito y Cartera (Solo para B2B con cobro)
-            if (clientType === 'B2B' && finalProfileId && !isGiftRemissionClient) {
+            if (clientType === 'B2B' && finalProfileId && !isGiftRemissionClient && !isOnlyOffAgreementOrder) {
                 const creditCheck = await checkClientCreditStatus(finalProfileId, Math.round(total));
                 if (!creditCheck.allowed) {
                     showToast(creditCheck.reason || 'Operación cancelada por control de crédito.', 'error');
@@ -3762,16 +3841,20 @@ function CreateOrderContent() {
                 }
             }
 
-            // 5. Inserción atómica en base de datos
+            // 5. Inserción atómica en base de datos (Orden Principal o Única)
+            const primaryItemsList = isMixedSplitOrder ? agreementItemsData : itemsDataForInsert;
+            const primaryWeightKg = isOnlyOffAgreementOrder ? offAgreementWeightKg : totalWeightKg;
+
             const { data: newOrder, error: orderErr } = await supabase
                 .from('orders')
                 .insert({
                     profile_id: finalProfileId,
+                    purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
                     type: clientType === 'B2B' ? 'b2b' : 'b2c',
-                    total: isGiftRemissionClient ? 0 : Math.round(total),
-                    total_weight_kg: parseFloat(totalWeightKg.toFixed(3)),
-                    subtotal: isGiftRemissionClient ? 0 : Math.round(subtotal),
-                    tax: isGiftRemissionClient ? 0 : Math.round(tax),
+                    total: (isGiftRemissionClient || isOnlyOffAgreementOrder) ? 0 : Math.round(total),
+                    total_weight_kg: parseFloat(primaryWeightKg.toFixed(3)),
+                    subtotal: (isGiftRemissionClient || isOnlyOffAgreementOrder) ? 0 : Math.round(subtotal),
+                    tax: (isGiftRemissionClient || isOnlyOffAgreementOrder) ? 0 : Math.round(tax),
                     status: 'pending_approval',
                     payment_status: isGiftRemissionClient ? 'Exonerado' : 'Pendiente',
                     payment_method: isGiftRemissionClient ? 'obsequio_cortesia' : (paymentMethod || (clientType === 'B2B' ? 'Crédito B2B' : 'Contra Entrega')),
@@ -3787,7 +3870,15 @@ function CreateOrderContent() {
                     manual_delivery_time: manualDeliveryTime || null,
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
-                    logistics_data: { ...(logisticsOverride || {}), is_gift_remission: isGiftRemissionClient },
+                    logistics_data: {
+                        ...(logisticsOverride || {}),
+                        is_gift_remission: isGiftRemissionClient,
+                        ...(isOnlyOffAgreementOrder ? {
+                            document_type_override: 'remission',
+                            remission_with_prices_override: false,
+                            is_off_agreement_split: true
+                        } : {})
+                    },
                     document_url: finalDocUrl || permanentDocumentUrl || null
                 })
                 .select()
@@ -3798,7 +3889,7 @@ function CreateOrderContent() {
                 throw new Error(orderErr.message);
             }
 
-            const itemsWithOrderId = itemsDataForInsert.map(it => ({
+            const itemsWithOrderId = primaryItemsList.map(({ product_name, is_off_agreement, ...it }) => ({
                 ...it,
                 order_id: newOrder.id
             }));
@@ -3809,14 +3900,95 @@ function CreateOrderContent() {
 
             if (itemsErr) {
                 console.error('Direct Order Items Insert Error:', itemsErr);
-                // Rollback atómico de orden huérfana
                 await supabase.from('orders').delete().eq('id', newOrder.id);
                 throw new Error(itemsErr.message);
             }
 
+            // 5b. SDD Escenario 221: Si el pedido es mixto (Acuerdo + Fuera de Acuerdo), crear Orden B en Remisión a $0 vinculada
+            const customerName = clientDetails?.company_name || clientDetails?.contact_name || 'Cliente';
+            if (isMixedSplitOrder) {
+                const parentSeqLabel = newOrder.sequence_id || newOrder.id.slice(0, 8);
+                const splitRemissionNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offAgreementNamesList}] | [ANEXO REMISIÓN VINCULADA A FACTURA #${parentSeqLabel}]${baseAdminNotes ? ` | ${baseAdminNotes}` : ''}`;
+
+                const { data: remissionOrder, error: remOrdErr } = await supabase
+                    .from('orders')
+                    .insert({
+                        profile_id: finalProfileId,
+                        purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
+                        type: 'b2b',
+                        total: 0,
+                        total_weight_kg: parseFloat(offAgreementWeightKg.toFixed(3)),
+                        subtotal: 0,
+                        tax: 0,
+                        status: 'pending_approval',
+                        payment_status: 'Pendiente',
+                        payment_method: paymentMethod || 'Crédito B2B',
+                        origin: 'Admin Panel',
+                        origin_source: 'document_upload',
+                        delivery_date: targetDeliveryDate,
+                        delivery_slot: finalDeliverySlot,
+                        admin_notes: splitRemissionNotes,
+                        shipping_address: finalShippingAddress,
+                        latitude: clientDetails?.latitude || latitude || null,
+                        longitude: clientDetails?.longitude || longitude || null,
+                        is_manual_delivery: isManualDelivery,
+                        manual_delivery_time: manualDeliveryTime || null,
+                        manual_delivery_margin: manualDeliveryMargin,
+                        manual_delivery_note: manualDeliveryNote || null,
+                        logistics_data: {
+                            ...(logisticsOverride || {}),
+                            parent_order_id: newOrder.id,
+                            parent_order_sequence: parentSeqLabel,
+                            document_type_override: 'remission',
+                            remission_with_prices_override: false,
+                            is_off_agreement_split: true
+                        },
+                        document_url: finalDocUrl || permanentDocumentUrl || null
+                    })
+                    .select()
+                    .single();
+
+                if (!remOrdErr && remissionOrder) {
+                    const remItemsToInsert = offAgreementItemsData.map(({ product_name, is_off_agreement, ...it }) => ({
+                        ...it,
+                        unit_price: 0,
+                        order_id: remissionOrder.id
+                    }));
+                    const { error: remItemsErr } = await supabase.from('order_items').insert(remItemsToInsert);
+                    if (remItemsErr) {
+                        await supabase.from('orders').delete().eq('id', remissionOrder.id);
+                    } else {
+                        try {
+                            await supabase.from('admin_tasks').insert({
+                                title: `🚨 ASIGNAR PRECIO URGENTE: Remisión #${remissionOrder.sequence_id || remissionOrder.id.slice(0, 8)} (${customerName})`,
+                                description: `Se generó remisión anexa fuera de acuerdo con tarifa $0 COP para: ${offAgreementNamesList}. Vinculada al Pedido #${parentSeqLabel}. Asignar precio comercial antes del cierre de corte de facturación.`,
+                                assigned_to: 'Área Comercial',
+                                priority: 'critical',
+                                due_date: targetDeliveryDate || new Date().toISOString().split('T')[0],
+                                status: 'pending'
+                            });
+                        } catch (taskErr) {
+                            console.warn('No se pudo crear admin_task comercial:', taskErr);
+                        }
+                    }
+                }
+            } else if (isOnlyOffAgreementOrder) {
+                try {
+                    await supabase.from('admin_tasks').insert({
+                        title: `🚨 ASIGNAR PRECIO URGENTE: Remisión #${newOrder.sequence_id || newOrder.id.slice(0, 8)} (${customerName})`,
+                        description: `Se generó remisión fuera de acuerdo con tarifa $0 COP para: ${offAgreementNamesList}. Asignar precio comercial antes del cierre de corte de facturación.`,
+                        assigned_to: 'Área Comercial',
+                        priority: 'critical',
+                        due_date: targetDeliveryDate || new Date().toISOString().split('T')[0],
+                        status: 'pending'
+                    });
+                } catch (taskErr) {
+                    console.warn('No se pudo crear admin_task comercial:', taskErr);
+                }
+            }
+
             // 6. Encolar notificación por correo de confirmación
             const customerEmail = clientDetails?.email || '';
-            const customerName = clientDetails?.company_name || clientDetails?.contact_name || 'Cliente';
             if (customerEmail) {
                 const formattedItems = stagedItems.map(item => {
                     const prodId = item.suggestedProduct?.id;
@@ -4340,9 +4512,9 @@ function CreateOrderContent() {
         if (deliveryOnly < minDeliveryDate) {
             return showToast(`❌ Fecha no permitida: La fecha de despacho (${deliveryOnly}) no puede ser anterior a la ventana mínima operativa (${minDeliveryDate}).`, 'error');
         }
-        const dateCheck = isValidDeliveryDate(deliveryOnly, allowSundaysDelivery, allowHolidaysDelivery);
+        const dateCheck = isValidDeliveryDate(deliveryOnly, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig);
         if (!dateCheck.valid) {
-            return showToast(`❌ Fecha de despacho rechazada: ${dateCheck.reason || 'Día no habilitado según políticas de entrega.'}`, 'error');
+            return showToast(`${dateCheck.reason || 'Día no habilitado según políticas de entrega.'}`, 'error');
         }
 
         if (clientType === 'B2B' && !selectedClient) return showToast('Debes seleccionar un cliente Institucional.');
@@ -4369,13 +4541,17 @@ function CreateOrderContent() {
 
         if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
-        // Block Zero Margin / Zero Price ONLY IF NOT covered by an open agreement AND NOT replacement/gift
+        // Block Zero Margin / Zero Price ONLY IF NOT covered by an open agreement AND NOT replacement/gift AND NOT off-agreement allowed ($0 remission, Escenario 221)
+        const hasActiveAgreementSplit = clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired;
         const zeroPriceItem = cart.find(item => {
             if (orderNature === 'replacement' || isGiftRemissionClient) return false; // SDD §7.5.8 / §21.3: Reposición u Obsequio exonerado a $0 COP
             const isZero = !item.price || parseFloat(item.price.toString()) === 0;
             if (!isZero) return false;
             const isCoveredByAgreement = agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0;
-            return !isCoveredByAgreement;
+            if (isCoveredByAgreement) return false;
+            const isAllowedOffAgreement = hasActiveAgreementSplit && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id);
+            if (isAllowedOffAgreement) return false;
+            return true;
         });
         if (zeroPriceItem) {
             return showToast(`❌ No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 (sin tarifa en contrato ni B2C). Parametrice el precio en el Módulo de Acuerdos Comerciales.`, 'error');
@@ -4469,12 +4645,6 @@ function CreateOrderContent() {
             
             if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
                 finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.targetDayName})]\n${finalAdminNotes}`.trim();
-            }
-
-            // Anotar si contiene ítems sobre Lista Abierta a Consumo ($0 COP)
-            const hasOpenConsumptionItems = !isGiftRemissionClient && cart.some(item => agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0);
-            if (hasOpenConsumptionItems && !finalAdminNotes.includes('CONSUMO ABIERTO')) {
-                finalAdminNotes = `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]\n${finalAdminNotes}`.trim();
             }
 
             // Append Payment Method to Admin Notes if B2C
@@ -4606,7 +4776,7 @@ function CreateOrderContent() {
                 }
             }
 
-            const finalLogisticsData = {
+            const baseLogisticsData = {
                 ...(logisticsOverride || {}),
                 is_replacement: orderNature === 'replacement',
                 is_gift_remission: isGiftRemissionClient,
@@ -4620,15 +4790,67 @@ function CreateOrderContent() {
                     : (effectivePo ? 'oc_formalizada' : null)
             };
 
+            // Escenario 221: Partición Automática para clientes con Acuerdo Vigente que piden productos Fuera de Acuerdo a $0 COP
+            const agreementCartItems = (hasActiveAgreementSplit && !isExoneratedZero)
+                ? cart.filter(item => agreementProductIds.has(item.product.id))
+                : cart;
+            const offAgreementCartItems = (hasActiveAgreementSplit && !isExoneratedZero)
+                ? cart.filter(item => !agreementProductIds.has(item.product.id))
+                : [];
+
+            const isSplitScenario = hasActiveAgreementSplit && !isExoneratedZero && agreementCartItems.length > 0 && offAgreementCartItems.length > 0;
+            const isOnlyOffAgreement = hasActiveAgreementSplit && !isExoneratedZero && agreementCartItems.length === 0 && offAgreementCartItems.length > 0;
+
+            const computeCartGroupFinancials = (groupItems: typeof cart, forceZero: boolean) => {
+                let sub = 0;
+                let tx = 0;
+                let wt = 0;
+                for (const item of groupItems) {
+                    const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+                    const uPrice = forceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                    const lineSub = qtyNum * uPrice;
+                    const lineIva = lineSub * ((item.product?.iva_rate || 0) / 100);
+                    sub += lineSub;
+                    tx += lineIva;
+                    wt += qtyNum * (item.product?.weight_kg || 1);
+                }
+                return { subtotal: sub, tax: tx, total: sub + tx, weight: wt };
+            };
+
+            const primaryCartItems = isSplitScenario ? agreementCartItems : cart;
+            const primaryForceZero = isExoneratedZero || isOnlyOffAgreement;
+            const primaryFin = computeCartGroupFinancials(primaryCartItems, primaryForceZero);
+
+            let primaryAdminNotes = finalAdminNotes;
+            const hasPrimaryOpenConsumption = !isGiftRemissionClient && primaryCartItems.some(item => agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0);
+            if (hasPrimaryOpenConsumption && !primaryAdminNotes.includes('CONSUMO ABIERTO')) {
+                primaryAdminNotes = `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]\n${primaryAdminNotes}`.trim();
+            }
+
+            if (isOnlyOffAgreement) {
+                const offNames = offAgreementCartItems.map(i => i.product?.name).join(', ');
+                primaryAdminNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}]\n${primaryAdminNotes}`.trim();
+            }
+
+            const primaryLogisticsData = isOnlyOffAgreement
+                ? {
+                    ...baseLogisticsData,
+                    document_type_override: 'remission',
+                    remission_with_prices_override: false,
+                    is_off_agreement_split: true,
+                    off_agreement_priced: false
+                }
+                : baseLogisticsData;
+
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
                     profile_id: finalProfileId,
                     purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
-                    total: isExoneratedZero ? 0 : calculateTotal(),
-                    total_weight_kg: calculateTotalWeight(),
-                    subtotal: isExoneratedZero ? 0 : calculateSubtotal(),
-                    tax: isExoneratedZero ? 0 : calculateTotalTax(),
+                    total: primaryForceZero ? 0 : primaryFin.total,
+                    total_weight_kg: primaryFin.weight,
+                    subtotal: primaryForceZero ? 0 : primaryFin.subtotal,
+                    tax: primaryForceZero ? 0 : primaryFin.tax,
                     status: 'pending_approval',
                     payment_status: isExoneratedZero ? 'Exonerado' : 'Pendiente',
                     payment_method: orderNature === 'replacement' ? 'reposicion_garantia' : isGiftRemissionClient ? 'obsequio_cortesia' : paymentMethod,
@@ -4636,17 +4858,16 @@ function CreateOrderContent() {
                     origin_source: orderNature === 'replacement' && originSource === 'phone' ? 'customer_service' : originSource,
                     delivery_date: deliveryDate,
                     delivery_slot: finalDeliverySlot,
-                    admin_notes: finalAdminNotes, // Guardar notas sin redundancia de origen
+                    admin_notes: primaryAdminNotes,
                     shipping_address: shippingAddress,
                     latitude: latitude,
                     longitude: longitude,
-                    // New Manual Delivery Fields
                     is_manual_delivery: isManualDelivery,
                     manual_delivery_time: manualDeliveryTime || null,
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
-                    logistics_data: finalLogisticsData,
-                    document_url: permanentDocumentUrl || null
+                    logistics_data: primaryLogisticsData,
+                    document_url: permanentDocumentUrl || documentUrl || null
                 })
                 .select()
                 .single();
@@ -4656,9 +4877,9 @@ function CreateOrderContent() {
                 throw new Error(orderError.message);
             }
 
-            const itemsData = cart.map(item => {
+            const itemsData = primaryCartItems.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                const unitPrice = isExoneratedZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                const unitPrice = primaryForceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
@@ -4677,9 +4898,101 @@ function CreateOrderContent() {
 
             if (itemsError) {
                 console.error('Order Items Insert Error Detail:', itemsError);
-                // Rollback atómico: eliminar la orden huérfana de inmediato si falla la inserción de items (Hallazgo 7 SDD)
                 await supabase.from('orders').delete().eq('id', order.id);
                 throw new Error(itemsError.message);
+            }
+
+            // Escenario 221: Si hubo partición mixta (Pedido A Acuerdo + Pedido B Remisión $0 Fuera de Acuerdo), crear Pedido B e insertar tarea urgente
+            let childSplitOrder: any = null;
+            if (isSplitScenario) {
+                const offFin = computeCartGroupFinancials(offAgreementCartItems, true);
+                const offNames = offAgreementCartItems.map(i => i.product?.name).join(', ');
+                const parentTag = order.sequence_id ? `#PED-${order.sequence_id}` : `#${order.id.slice(0, 6).toUpperCase()}`;
+                const offNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}] [VINCULADO A PEDIDO ACUERDO ${parentTag}]\n${finalAdminNotes}`.trim();
+
+                const { data: splitOrd, error: splitErr } = await supabase
+                    .from('orders')
+                    .insert({
+                        profile_id: finalProfileId,
+                        purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
+                        total: 0,
+                        total_weight_kg: offFin.weight,
+                        subtotal: 0,
+                        tax: 0,
+                        status: 'pending_approval',
+                        payment_status: 'Pendiente',
+                        payment_method: paymentMethod,
+                        origin: 'Admin Panel',
+                        origin_source: originSource,
+                        delivery_date: deliveryDate,
+                        delivery_slot: finalDeliverySlot,
+                        admin_notes: offNotes,
+                        shipping_address: shippingAddress,
+                        latitude: latitude,
+                        longitude: longitude,
+                        is_manual_delivery: isManualDelivery,
+                        manual_delivery_time: manualDeliveryTime || null,
+                        manual_delivery_margin: manualDeliveryMargin,
+                        manual_delivery_note: manualDeliveryNote || null,
+                        logistics_data: {
+                            ...baseLogisticsData,
+                            parent_order_id: order.id,
+                            parent_order_sequence: order.sequence_id || null,
+                            document_type_override: 'remission',
+                            remission_with_prices_override: false,
+                            is_off_agreement_split: true,
+                            off_agreement_priced: false
+                        },
+                        document_url: permanentDocumentUrl || documentUrl || null
+                    })
+                    .select()
+                    .single();
+
+                if (splitErr) {
+                    console.error('Split Order B Insert Error Detail:', splitErr);
+                    throw new Error(splitErr.message);
+                }
+                childSplitOrder = splitOrd;
+
+                const splitItemsData = offAgreementCartItems.map(item => {
+                    const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+                    return {
+                        order_id: splitOrd.id,
+                        product_id: item.product.id,
+                        quantity: qtyNum,
+                        unit_price: 0,
+                        nickname: item.nickname || item.variant_label || null,
+                        variant_label: item.variant_label || null,
+                        unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
+                        selected_options: item.selected_options || {}
+                    };
+                });
+
+                const { error: splitItemsErr } = await supabase
+                    .from('order_items')
+                    .insert(splitItemsData);
+
+                if (splitItemsErr) {
+                    await supabase.from('orders').delete().eq('id', splitOrd.id);
+                    throw new Error(splitItemsErr.message);
+                }
+            }
+
+            if (isSplitScenario || isOnlyOffAgreement) {
+                const targetRemissionOrder = isSplitScenario ? childSplitOrder : order;
+                const offNames = offAgreementCartItems.map(i => i.product?.name).join(', ');
+                const remSeq = targetRemissionOrder?.sequence_id ? `REM-${targetRemissionOrder.sequence_id}` : `#${(targetRemissionOrder?.id || order.id).slice(0, 6).toUpperCase()}`;
+                const b2bClientName = getSelectedClientDetails()?.company_name || 'Cliente Institucional';
+                await supabase.from('admin_tasks').insert({
+                    type: 'price_extension_request',
+                    status: 'pending',
+                    priority: 'critical',
+                    title: `🚨 ASIGNAR PRECIO URGENTE: Remisión ${remSeq} (${b2bClientName})`,
+                    description: `Se despacharon ${offAgreementCartItems.length} producto(s) fuera del acuerdo comercial a precio $0 COP (${offNames}) para entrega el ${deliveryDate}. Debes asignar el precio comercial antes del cierre del corte de facturación.`,
+                    client_id: finalProfileId,
+                    client_name: b2bClientName,
+                    related_entity_id: targetRemissionOrder?.id || order.id
+                });
             }
 
             // 1. If processing a draft, update its status
@@ -4730,7 +5043,7 @@ function CreateOrderContent() {
                         data: {
                             client: customerName,
                             order_number: order.id.slice(0, 6).toUpperCase(),
-                            total_amount: formatNumber(calculateTotal()),
+                            total_amount: formatNumber(primaryFin.total),
                             items: formattedItems
                         }
                     },
@@ -4739,7 +5052,13 @@ function CreateOrderContent() {
                 });
             }
 
-            showToast('Pedido creado exitosamente ✅', 'success');
+            if (isSplitScenario) {
+                showToast(`✅ Pedido particionado automáticamente: 1 Factura (${agreementCartItems.length} SKUs acuerdo) + 1 Remisión a $0 (${offAgreementCartItems.length} SKUs fuera de acuerdo).`, 'success');
+            } else if (isOnlyOffAgreement) {
+                showToast(`✅ Remisión a $0 creada exitosamente (${offAgreementCartItems.length} SKUs fuera de acuerdo pendientes por asignar precio).`, 'success');
+            } else {
+                showToast('Pedido creado exitosamente ✅', 'success');
+            }
             setUploadedFile(null);
             if (uploadedFileUrl) {
                 URL.revokeObjectURL(uploadedFileUrl);
@@ -4771,71 +5090,8 @@ function CreateOrderContent() {
 
     const filteredProducts = useMemo(() => {
         if (!productSearch || productSearch.trim().length < 2) return [];
-
-        const isStrictAgreement = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
-        const candidatePool = isStrictAgreement
-            ? (products || []).filter(p => agreementProductIds.has(p.id))
-            : (products || []);
-
-        const normalizeStr = (s: string) => (s || '')
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .trim();
-
-        const cleanQuery = normalizeStr(productSearch);
-
-        // Filter products that match query by name, sku, accounting_id, or client exception nickname
-        const matched = candidatePool.filter(p => {
-            const normName = normalizeStr(p.name);
-            const normSku = normalizeStr(p.sku);
-            const normAcc = normalizeStr(String(p.accounting_id || ''));
-            const exc = clientExceptions.find(e => e.product_id === p.id);
-            const normNickname = exc?.nickname ? normalizeStr(exc.nickname) : '';
-
-            return normName.includes(cleanQuery) ||
-                   normSku.includes(cleanQuery) ||
-                   normAcc.includes(cleanQuery) ||
-                   normNickname.includes(cleanQuery);
-        });
-
-        // Compute relevance / prioritization score for each product
-        return matched.sort((a, b) => {
-            const excA = clientExceptions.find(e => e.product_id === a.id);
-            const excB = clientExceptions.find(e => e.product_id === b.id);
-            const freqA = clientFrequentProductMap[a.id];
-            const freqB = clientFrequentProductMap[b.id];
-
-            let scoreA = 0;
-            let scoreB = 0;
-
-            if (agreementProductIds.has(a.id)) scoreA += 4000;
-            if (agreementProductIds.has(b.id)) scoreB += 4000;
-
-            // Prioritize client exceptions/nicknames (highest boost)
-            if (excA) scoreA += 1000;
-            if (excB) scoreB += 1000;
-
-            // Prioritize historical purchase frequency and volume
-            if (freqA) scoreA += (freqA.count * 100) + Math.min(freqA.totalQty, 500);
-            if (freqB) scoreB += (freqB.count * 100) + Math.min(freqB.totalQty, 500);
-
-            // Name match prefix boost
-            const normNameA = normalizeStr(a.name);
-            const normNameB = normalizeStr(b.name);
-            if (normNameA.startsWith(cleanQuery)) scoreA += 50;
-            if (normNameB.startsWith(cleanQuery)) scoreB += 50;
-            if (normNameA === cleanQuery) scoreA += 100;
-            if (normNameB === cleanQuery) scoreB += 100;
-
-            if (scoreB !== scoreA) {
-                return scoreB - scoreA;
-            }
-
-            // Fallback: alphabetical
-            return normNameA.localeCompare(normNameB);
-        }).slice(0, 12);
-    }, [productSearch, products, clientExceptions, clientFrequentProductMap, allowOffAgreementPurchases, agreementProductIds]);
+        return getScoredProductsForQuery(productSearch);
+    }, [productSearch, products, clientExceptions, clientFrequentProductMap, allowOffAgreementPurchases, agreementProductIds, isGiftRemissionClient]);
 
     const handleProductSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (filteredProducts.length === 0) return;
@@ -5805,7 +6061,7 @@ function CreateOrderContent() {
                                                     value={clientSearch}
                                                     onChange={(e) => {
                                                         setClientSearch(e.target.value);
-                                                        setFocusedClientIndex(-1);
+                                                        setFocusedClientIndex(0);
                                                     }}
                                                     onKeyDown={(e) => {
                                                         if (filteredClients.length === 0) return;
@@ -5814,7 +6070,7 @@ function CreateOrderContent() {
                                                             setFocusedClientIndex(prev => Math.min(prev + 1, filteredClients.length - 1));
                                                         } else if (e.key === 'ArrowUp') {
                                                             e.preventDefault();
-                                                            setFocusedClientIndex(prev => Math.max(prev - 1, -1));
+                                                            setFocusedClientIndex(prev => Math.max(prev - 1, 0));
                                                         } else if (e.key === 'Enter' || e.key === 'Tab') {
                                                             const targetIndex = focusedClientIndex >= 0 ? focusedClientIndex : 0;
                                                             if (filteredClients[targetIndex]) {
@@ -5828,7 +6084,12 @@ function CreateOrderContent() {
                                                         }
                                                     }}
                                                     style={{ width: '100%', padding: '0.55rem 0.85rem 0.55rem 2.2rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.88rem', height: '38px', outline: 'none' }}
-                                                    onFocus={(e) => e.target.style.borderColor = '#0D7A57'}
+                                                    onFocus={(e) => {
+                                                        e.target.style.borderColor = '#0D7A57';
+                                                        if (filteredClients.length > 0 && focusedClientIndex < 0) {
+                                                            setFocusedClientIndex(0);
+                                                        }
+                                                    }}
                                                     onBlur={(e) => e.target.style.borderColor = '#CBD5E1'}
                                                 />
                                             </div>
@@ -5847,6 +6108,7 @@ function CreateOrderContent() {
                                                         return (
                                                             <div
                                                                 key={c.id}
+                                                                id={`b2b-client-item-${idx}`}
                                                                 onClick={() => selectClient(c)}
                                                                 style={{
                                                                     padding: '0.85rem 1.15rem', 
@@ -5861,7 +6123,6 @@ function CreateOrderContent() {
                                                                     transition: 'all 0.12s ease-in-out'
                                                                 }}
                                                                 onMouseEnter={() => setFocusedClientIndex(idx)}
-                                                                onMouseLeave={() => setFocusedClientIndex(-1)}
                                                             >
                                                                 <div>
                                                                     <div style={{ fontWeight: isFocused ? '900' : '700', color: isFocused ? '#1E3A8A' : '#1F2937', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -6092,7 +6353,12 @@ function CreateOrderContent() {
                                                                 value={clientSearchB2C}
                                                                 onChange={(e) => {
                                                                     setClientSearchB2C(e.target.value);
-                                                                    setFocusedClientIndexB2C(-1);
+                                                                    setFocusedClientIndexB2C(0);
+                                                                }}
+                                                                onFocus={() => {
+                                                                    if (filteredClientsB2C.length > 0 && focusedClientIndexB2C < 0) {
+                                                                        setFocusedClientIndexB2C(0);
+                                                                    }
                                                                 }}
                                                                 onKeyDown={(e) => {
                                                                     if (filteredClientsB2C.length === 0) return;
@@ -6101,7 +6367,7 @@ function CreateOrderContent() {
                                                                         setFocusedClientIndexB2C(prev => Math.min(prev + 1, filteredClientsB2C.length - 1));
                                                                     } else if (e.key === 'ArrowUp') {
                                                                         e.preventDefault();
-                                                                        setFocusedClientIndexB2C(prev => Math.max(prev - 1, -1));
+                                                                        setFocusedClientIndexB2C(prev => Math.max(prev - 1, 0));
                                                                     } else if (e.key === 'Enter' || e.key === 'Tab') {
                                                                         const targetIndex = focusedClientIndexB2C >= 0 ? focusedClientIndexB2C : 0;
                                                                         if (filteredClientsB2C[targetIndex]) {
@@ -6161,7 +6427,6 @@ function CreateOrderContent() {
                                                                             transition: 'all 0.12s ease-in-out'
                                                                         }}
                                                                         onMouseEnter={() => setFocusedClientIndexB2C(idx)}
-                                                                        onMouseLeave={() => setFocusedClientIndexB2C(-1)}
                                                                     >
                                                                         <div>
                                                                             <div style={{ fontWeight: idx === focusedClientIndexB2C ? '900' : '700', color: idx === focusedClientIndexB2C ? '#1E3A8A' : '#1F2937' }}>
@@ -7831,14 +8096,18 @@ function CreateOrderContent() {
                                                                                                     showToast(`🚫 "${p.name}" no se puede agregar: Insumo bloqueado por escasez.`, 'error');
                                                                                                     return;
                                                                                                 }
-                                                                                                selectStagedProduct(item.id, p, idx);
+                                                                                                if (p.options_config?.length > 0) {
+                                                                                                    selectStagedProduct(item.id, p, idx, undefined, undefined, true);
+                                                                                                } else {
+                                                                                                    selectStagedProduct(item.id, p, idx);
 
-                                                                                                const nextIdx = idx + 1;
-                                                                                                const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
-                                                                                                if (nextInput) {
-                                                                                                    nextInput.focus({ preventScroll: true });
-                                                                                                    nextInput.select();
-                                                                                                    scrollToStagedRow(nextIdx);
+                                                                                                    const nextIdx = idx + 1;
+                                                                                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                                                                                    if (nextInput) {
+                                                                                                        nextInput.focus({ preventScroll: true });
+                                                                                                        nextInput.select();
+                                                                                                        scrollToStagedRow(nextIdx);
+                                                                                                    }
                                                                                                 }
                                                                                             }}
                                                                                             onMouseEnter={() => setFocusedDropdownItemIndex(pIdx)}
@@ -8444,7 +8713,7 @@ function CreateOrderContent() {
                                         type="text"
                                         placeholder="Escribe el nombre o código del producto (ej: Tomate Chonto, Papa, Cebolla)..."
                                         value={productSearch} 
-                                        onChange={e => { setProductSearch(e.target.value); setFocusedProductIndex(-1); }}
+                                        onChange={e => { setProductSearch(e.target.value); setFocusedProductIndex(0); }}
                                         onKeyDown={handleProductSearchKeyDown}
                                         style={{
                                             width: '100%',
@@ -8462,6 +8731,9 @@ function CreateOrderContent() {
                                             e.target.style.borderColor = '#0D7A57';
                                             e.target.style.backgroundColor = '#FFFFFF';
                                             e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.12)';
+                                            if (e.target.value.trim().length >= 2) {
+                                                setFocusedProductIndex(0);
+                                            }
                                         }}
                                         onBlur={(e) => {
                                             e.target.style.borderColor = '#CBD5E1';
@@ -8511,6 +8783,7 @@ function CreateOrderContent() {
                                         return (
                                             <div
                                                 key={p.id}
+                                                id={`main-product-suggestion-${idx}`}
                                                 onClick={() => handleProductClick(p)}
                                                 onMouseEnter={() => setFocusedProductIndex(idx)}
                                                 style={{
@@ -8840,6 +9113,10 @@ function CreateOrderContent() {
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: (clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? '#FFFBEB' : '#F1F5F9') : '#FFF7ED', color: (clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? '#B45309' : '#475569') : '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', border: `1px solid ${isContractExpired ? '#FDE68A' : '#E2E8F0'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                     {(clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? <><AlertTriangle size={11} strokeWidth={2} /> General Institucional (Acuerdo Vencido)</> : <><Building2 size={11} strokeWidth={2} /> General Institucional</>) : <><Tag size={11} strokeWidth={2} /> Tarifa B2C</>}
                                                                 </span>
+                                                            ) : (clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? (
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FFFBEB', color: '#B45309', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FDE68A' }}>
+                                                                    <AlertTriangle size={11} strokeWidth={2} /> Fuera de Acuerdo • Remisión $0
+                                                                </span>
                                                             ) : (
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FCA5A5' }}>
                                                                     <AlertCircle size={11} strokeWidth={2} /> Sin Precio
@@ -8887,25 +9164,78 @@ function CreateOrderContent() {
                                                                 style={{ width: '32px', height: '100%', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
                                                             >−</button>
                                                             <input
+                                                                id={`cart-qty-input-${idx}`}
                                                                 type="text"
                                                                 inputMode="decimal"
                                                                 value={formatQuantityDisplay(item.qty)}
                                                                 onFocus={(e) => e.target.select()}
                                                                 onKeyDown={(e) => {
-                                                                    if (e.key === '.') {
+                                                                    if (e.key === 'Enter') {
                                                                         e.preventDefault();
+                                                                        const evaluated = evaluateMathExpression(item.qty);
+                                                                        if (evaluated > 0) {
+                                                                            setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: evaluated, originalQty: evaluated, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                        }
+                                                                        productSearchInputRef.current?.focus();
+                                                                    } else if (e.key === 'ArrowDown') {
+                                                                        e.preventDefault();
+                                                                        const evaluated = evaluateMathExpression(item.qty);
+                                                                        if (evaluated > 0) {
+                                                                            setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: evaluated, originalQty: evaluated, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                        }
+                                                                        const nextEl = document.getElementById(`cart-qty-input-${idx + 1}`) as HTMLInputElement | null;
+                                                                        if (nextEl) {
+                                                                            nextEl.focus();
+                                                                            nextEl.select();
+                                                                        }
+                                                                    } else if (e.key === 'ArrowUp') {
+                                                                        e.preventDefault();
+                                                                        const evaluated = evaluateMathExpression(item.qty);
+                                                                        if (evaluated > 0) {
+                                                                            setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: evaluated, originalQty: evaluated, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                        }
+                                                                        if (idx > 0) {
+                                                                            const prevEl = document.getElementById(`cart-qty-input-${idx - 1}`) as HTMLInputElement | null;
+                                                                            if (prevEl) {
+                                                                                prevEl.focus();
+                                                                                prevEl.select();
+                                                                            }
+                                                                        } else {
+                                                                            productSearchInputRef.current?.focus();
+                                                                        }
+                                                                    } else if (e.key === 'Tab') {
+                                                                        const evaluated = evaluateMathExpression(item.qty);
+                                                                        if (evaluated > 0) {
+                                                                            setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: evaluated, originalQty: evaluated, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                        }
+                                                                    } else if (e.key === '.') {
                                                                         const input = e.target as HTMLInputElement;
-                                                                        const start = input.selectionStart || 0;
-                                                                        const end = input.selectionEnd || 0;
-                                                                        const val = input.value.replace(/\./g, '');
-                                                                        if (!val.includes(',')) {
-                                                                            const newVal = val.substring(0, start) + ',' + val.substring(end);
-                                                                            setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: newVal, originalQty: parseFloat(newVal.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                        if (!/[+\-*/=xX()]/.test(input.value)) {
+                                                                            e.preventDefault();
+                                                                            const start = input.selectionStart || 0;
+                                                                            const end = input.selectionEnd || 0;
+                                                                            const val = input.value.replace(/\./g, '');
+                                                                            if (!val.includes(',')) {
+                                                                                const newVal = val.substring(0, start) + ',' + val.substring(end);
+                                                                                setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: newVal, originalQty: parseFloat(newVal.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                            }
                                                                         }
                                                                     }
                                                                 }}
+                                                                onBlur={() => {
+                                                                    const evaluated = evaluateMathExpression(item.qty);
+                                                                    if (evaluated > 0) {
+                                                                        setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: evaluated, originalQty: evaluated, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                    }
+                                                                }}
                                                                 onChange={(e) => {
-                                                                    let val = e.target.value.replace(/[^0-9,.]/g, '');
+                                                                    const raw = e.target.value;
+                                                                    if (/[+\-*/=xX()]/.test(raw)) {
+                                                                        const cleanFormula = raw.replace(/[^0-9.,+\-*/()=xX ]/g, '');
+                                                                        setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: cleanFormula } : c));
+                                                                        return;
+                                                                    }
+                                                                    let val = raw.replace(/[^0-9,.]/g, '');
                                                                     const rawVal = val.replace(/\./g, '');
                                                                     const parts = rawVal.split(',');
                                                                     let cleanVal = rawVal;
@@ -8962,7 +9292,7 @@ function CreateOrderContent() {
                                                         <div style={{ 
                                                             fontWeight: '800', 
                                                             fontSize: '0.95rem', 
-                                                            color: (orderNature === 'replacement' || isGiftRemissionClient) ? '#6D28D9' : isZeroPrice ? '#DC2626' : '#1E293B',
+                                                            color: (orderNature === 'replacement' || isGiftRemissionClient) ? '#6D28D9' : (clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? '#D97706' : isZeroPrice ? '#DC2626' : '#1E293B',
                                                             fontVariantNumeric: 'tabular-nums'
                                                         }}>
                                                             {formatMoney((orderNature === 'replacement' || isGiftRemissionClient) ? 0 : unitPrice)}
@@ -8974,6 +9304,10 @@ function CreateOrderContent() {
                                                         ) : isGiftRemissionClient ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#FAF5FF', border: '1px solid #D8B4FE', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                 <Gift size={10} color="#6D28D9" /> Obsequio $0
+                                                            </span>
+                                                        ) : (clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? (
+                                                            <span style={{ fontSize: '0.65rem', color: '#B45309', fontWeight: 'bold', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                <FileText size={10} color="#B45309" /> Remisión $0
                                                             </span>
                                                         ) : isZeroPrice ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -9192,10 +9526,10 @@ function CreateOrderContent() {
                                                         setDeliveryDate(minDeliveryDate);
                                                         return;
                                                     }
-                                                    const check = isValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery);
+                                                    const check = isValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig);
                                                     if (!check.valid) {
-                                                        showToast(`⛔ ${check.reason || 'Día no habilitado para entregas.'}`, 'error');
-                                                        const nextValid = getNextValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery);
+                                                        showToast(`${check.reason || 'Día no habilitado para entregas.'}`, 'error');
+                                                        const nextValid = getNextValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig);
                                                         setDeliveryDate(formatDateToYYYYMMDD(nextValid));
                                                         return;
                                                     }
@@ -9569,6 +9903,39 @@ function CreateOrderContent() {
                                             )}
                                         </span>
                                     </div>
+                                    {(() => {
+                                        if (clientType !== 'B2B' || agreementProductIds.size === 0 || isContractExpired || !allowOffAgreementPurchases || orderNature === 'replacement' || isGiftRemissionClient) return null;
+                                        const inAgCount = cart.filter(i => agreementProductIds.has(i.product.id)).length;
+                                        const offAgCount = cart.filter(i => !agreementProductIds.has(i.product.id)).length;
+                                        if (offAgCount === 0) return null;
+                                        return (
+                                            <div style={{
+                                                marginTop: '0.45rem',
+                                                padding: '0.65rem 0.75rem',
+                                                backgroundColor: '#FFFBEB',
+                                                border: '1px solid #FCD34D',
+                                                borderRadius: '8px',
+                                                fontSize: '0.73rem',
+                                                color: '#92400E',
+                                                lineHeight: 1.4
+                                            }}>
+                                                <div style={{ fontWeight: '800', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px', color: '#B45309' }}>
+                                                    <AlertTriangle size={13} color="#D97706" />
+                                                    {inAgCount > 0 ? 'Partición Automática Activa (2 Documentos)' : 'Despacho por Remisión a $0 COP'}
+                                                </div>
+                                                {inAgCount > 0 ? (
+                                                    <div>
+                                                        • <strong>1 Factura Acuerdo:</strong> {inAgCount} SKU(s) pactado(s)<br />
+                                                        • <strong>1 Remisión a $0:</strong> {offAgCount} SKU(s) fuera de acuerdo (generará tarea urgente para asignar precio comercial antes del cierre de corte)
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        • <strong>1 Remisión a $0:</strong> {offAgCount} SKU(s) fuera de acuerdo (generará tarea urgente para asignar precio comercial antes del cierre de corte)
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {clientType === 'B2C' && (
@@ -9834,10 +10201,16 @@ function CreateOrderContent() {
                 const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
                     if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
                         e.preventDefault();
-                        if (index < totalOptions - 1) {
-                            const nextSelect = document.getElementById(`modal-select-${index + 1}`);
-                            if (nextSelect) (nextSelect as HTMLElement).focus();
-                        } else {
+                        let foundNext = false;
+                        for (let k = index + 1; k < totalOptions; k++) {
+                            const nextSelect = document.getElementById(`modal-select-${k}`);
+                            if (nextSelect) {
+                                (nextSelect as HTMLElement).focus();
+                                foundNext = true;
+                                break;
+                            }
+                        }
+                        if (!foundNext) {
                             const qtyInput = document.getElementById('modal-qty-input');
                             if (qtyInput) {
                                 (qtyInput as HTMLElement).focus();
@@ -9846,9 +10219,14 @@ function CreateOrderContent() {
                         }
                     } else if (e.key === 'Tab' && e.shiftKey) {
                         if (index > 0) {
-                            e.preventDefault();
-                            const prevSelect = document.getElementById(`modal-select-${index - 1}`);
-                            if (prevSelect) (prevSelect as HTMLElement).focus();
+                            for (let k = index - 1; k >= 0; k--) {
+                                const prevSelect = document.getElementById(`modal-select-${k}`);
+                                if (prevSelect) {
+                                    e.preventDefault();
+                                    (prevSelect as HTMLElement).focus();
+                                    break;
+                                }
+                            }
                         }
                     }
                 };
@@ -10370,23 +10748,22 @@ function CreateOrderContent() {
                                                 const evaluated = evaluateMathExpression(modalQuantity);
                                                 const finalVal = evaluated > 0 ? String(evaluated) : '1';
                                                 setModalQuantity(finalVal);
-                                                const unitSel = document.getElementById('modal-unit-select');
-                                                if (unitSel) {
-                                                    unitSel.focus();
-                                                } else {
-                                                    confirmModalAdd();
-                                                }
+                                                confirmModalAdd(finalVal);
                                             } else if (e.key === 'Tab' && !e.shiftKey) {
                                                 e.preventDefault();
                                                 const evaluated = evaluateMathExpression(modalQuantity);
                                                 const finalVal = evaluated > 0 ? String(evaluated) : '1';
                                                 setModalQuantity(finalVal);
-                                                const unitSel = document.getElementById('modal-unit-select');
-                                                if (unitSel) {
-                                                    unitSel.focus();
-                                                } else {
-                                                    const confirmBtn = document.getElementById('modal-confirm-btn');
-                                                    if (confirmBtn) confirmBtn.focus();
+                                                const confirmBtn = document.getElementById('modal-confirm-btn');
+                                                if (confirmBtn) confirmBtn.focus();
+                                            } else if (e.key === 'Tab' && e.shiftKey) {
+                                                for (let k = normalizedOptionsConfig.length - 1; k >= 0; k--) {
+                                                    const prevSelect = document.getElementById(`modal-select-${k}`);
+                                                    if (prevSelect) {
+                                                        e.preventDefault();
+                                                        (prevSelect as HTMLElement).focus();
+                                                        break;
+                                                    }
                                                 }
                                             }
                                         }}

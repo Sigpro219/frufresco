@@ -56,10 +56,12 @@ import {
     RefreshCw,
     Check,
     Heart,
-    UserPlus
+    UserPlus,
+    CalendarClock,
+    BookmarkCheck
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
-import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
+import { getNextValidDeliveryDate, isValidDeliveryDate, parseStoreVacationConfig, StoreVacationConfig } from '@/lib/colombianHolidays';
 import dynamic from 'next/dynamic';
 import GooglePlacesAddressInput from '@/components/checkout/GooglePlacesAddressInput';
 
@@ -84,6 +86,11 @@ export default function CheckoutPage() {
     const [minOrder, setMinOrder] = useState(150000);
     const [deliveryFee, setDeliveryFee] = useState(20000);
     const [maxOrderHogarCod, setMaxOrderHogarCod] = useState(400000);
+    const [storeStatus, setStoreStatus] = useState<'open' | 'vacation_preorder' | 'closed'>('open');
+    const [vacationConfig, setVacationConfig] = useState<StoreVacationConfig | null>(null);
+    const [allowSundays, setAllowSundays] = useState(false);
+    const [allowHolidays, setAllowHolidays] = useState(false);
+    const [cartSavedForReopen, setCartSavedForReopen] = useState(false);
     const [isEditingDeliveryInfo, setIsEditingDeliveryInfo] = useState(false);
     const [showDetailItemsModal, setShowDetailItemsModal] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -368,12 +375,12 @@ export default function CheckoutPage() {
         const dates: { dateStr: string; label: string; weekday: string }[] = [];
         let current = new Date(minDeliveryDate + 'T12:00:00Z');
         let count = 0;
-        while (dates.length < 3 && count < 10) {
+        while (dates.length < 3 && count < 30) {
             const yyyy = current.getUTCFullYear();
             const mm = String(current.getUTCMonth() + 1).padStart(2, '0');
             const dd = String(current.getUTCDate()).padStart(2, '0');
             const str = `${yyyy}-${mm}-${dd}`;
-            if (isValidDeliveryDate(str)) {
+            if (isValidDeliveryDate(str, allowSundays, allowHolidays, vacationConfig)) {
                 const dayName = current.toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { weekday: 'short', timeZone: 'UTC' });
                 const monthDay = current.toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' });
                 dates.push({
@@ -386,7 +393,7 @@ export default function CheckoutPage() {
             count++;
         }
         return dates;
-    }, [minDeliveryDate, locale]);
+    }, [minDeliveryDate, locale, allowSundays, allowHolidays, vacationConfig]);
 
     // Manejador unificado de resolución satelital Google Places
     const handleCoordinatesResolved = (lat: number, lng: number, formattedAddress: string) => {
@@ -985,20 +992,36 @@ export default function CheckoutPage() {
         return result.toISOString().split('T')[0];
     };
 
-    // Initial default value to avoid empty state (skipping Sundays & 19 Colombian holidays)
+    // Initial default value to avoid empty state (skipping Sundays, 19 Colombian holidays & Vacation Recess)
     useEffect(() => {
         async function initDeliveryDate() {
             try {
                 const { data: settingsData } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_cutoff_rules', 'cutoff_hour_public', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
+                    .in('key', [
+                        'enable_cutoff_rules',
+                        'cutoff_hour_public',
+                        'allow_sunday_deliveries',
+                        'allow_holiday_deliveries',
+                        'store_status',
+                        'store_vacation_config'
+                    ]);
 
                 const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
                 const cutoffHourPublicSetting = settingsData?.find(s => s.key === 'cutoff_hour_public')?.value;
                 const cutoffHourPublic = cutoffHourPublicSetting ? parseInt(cutoffHourPublicSetting, 10) : 17;
-                const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
-                const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+                const sundaysAllowed = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
+                const holidaysAllowed = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+                const rawStatus = settingsData?.find(s => s.key === 'store_status')?.value;
+                const parsedVac = parseStoreVacationConfig(settingsData?.find(s => s.key === 'store_vacation_config')?.value);
+
+                setAllowSundays(sundaysAllowed);
+                setAllowHolidays(holidaysAllowed);
+                setVacationConfig(parsedVac);
+                if (rawStatus === 'closed' || rawStatus === 'vacation_preorder' || rawStatus === 'open') {
+                    setStoreStatus(rawStatus);
+                }
 
                 const now = new Date();
                 const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -1009,11 +1032,11 @@ export default function CheckoutPage() {
                 const baseTarget = new Date(bogotaNow);
                 baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
 
-                const validDate = getNextValidDeliveryDate(baseTarget, allowSundays, allowHolidays);
+                const validDate = getNextValidDeliveryDate(baseTarget, sundaysAllowed, holidaysAllowed, parsedVac);
                 const dateStr = validDate.toISOString().split('T')[0];
 
-                setDate(prev => prev || dateStr);
                 setMinDeliveryDate(dateStr);
+                setDate(prev => (!prev || prev < dateStr || !isValidDeliveryDate(prev, sundaysAllowed, holidaysAllowed, parsedVac)) ? dateStr : prev);
             } catch (err) {
                 console.error("Error initializing delivery date in checkout:", err);
             }
@@ -1041,11 +1064,10 @@ export default function CheckoutPage() {
         }
     }, [profile]);
 
-    // Fetch settings and refine date
+    // Fetch settings (Min Order Hogar, Delivery Fee & COD limits)
     useEffect(() => {
         async function loadConfig() {
             try {
-                // 1. Min Order Hogar, Delivery Fee & COD limits
                 const { data: settingsData } = await supabase
                     .from('app_settings')
                     .select('key, value')
@@ -1067,35 +1089,8 @@ export default function CheckoutPage() {
                         }
                     });
                 }
-
-                // 2. Cutoff Rules
-                const { data: cutoffData } = await supabase
-                    .from('app_settings')
-                    .select('value')
-                    .eq('key', 'enable_cutoff_rules')
-                    .limit(1);
-
-                const cutoffEnabled = (cutoffData && cutoffData.length > 0) ? cutoffData[0].value !== 'false' : true;
-                
-                const now = new Date();
-                const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-                const bogotaNow = new Date(utc + (3600000 * -5));
-                const currentHour = bogotaNow.getHours();
-
-                let daysToAdd = 1;
-                if (cutoffEnabled && currentHour >= DEFAULT_CUTOFF_HOUR) {
-                    daysToAdd = 2;
-                }
-
-                const finalDate = getSafeBogotaDate(daysToAdd);
-                setMinDeliveryDate(finalDate);
-                setDate(prev => {
-                    if (!prev || prev < finalDate) return finalDate;
-                    return prev;
-                });
-                console.log(`✅ Config logic synced. Bogota hour: ${currentHour}. Min delivery: ${finalDate}`);
             } catch (err) {
-                console.error('❌ Error loading config:', err);
+                console.error('Error loading config:', err);
             }
         }
         loadConfig();
@@ -1138,11 +1133,34 @@ export default function CheckoutPage() {
         }
     };
 
+    const handleSaveCartForReopen = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('frufresco_saved_cart_reopen', JSON.stringify({
+                savedAt: new Date().toISOString(),
+                itemsCount: items.length,
+                totalPrice: finalOrderTotal,
+                targetReturnDate: minDeliveryDate
+            }));
+        }
+        setCartSavedForReopen(true);
+        notify(
+            locale === 'es'
+                ? `Tu carrito (${items.length} productos) y tus datos han quedado guardados en este dispositivo para nuestra reapertura (${vacationConfig?.reopenTime || '06:00 AM'}).`
+                : `Your cart (${items.length} items) and details have been saved on this device for our reopening.`,
+            'success'
+        );
+    };
+
     const handleSubmit = async () => {
         console.log('🚀 Finalizing order. Date:', date);
+
+        if (storeStatus === 'closed') {
+            handleSaveCartForReopen();
+            return;
+        }
         
         if (!date || date === '' || date === 'dd/mm/aaaa') {
-            const recoveryDate = getSafeBogotaDate(1);
+            const recoveryDate = minDeliveryDate || getSafeBogotaDate(1);
             setDate(recoveryDate);
             notify(locale === 'es' ? 'Hubo un problema con la fecha. Se ha corregido automáticamente, por favor confirma de nuevo.' : 'There was a problem with the date. It has been fixed, please confirm again.', 'warning');
             return;
@@ -1224,11 +1242,13 @@ export default function CheckoutPage() {
             notify(t.outOfZoneMsg, 'error');
             return;
         }
-        if (date < minDeliveryDate) {
+        if (date < minDeliveryDate || !isValidDeliveryDate(date, allowSundays, allowHolidays, vacationConfig)) {
+            const corrected = getNextValidDeliveryDate(date < minDeliveryDate ? minDeliveryDate : date, allowSundays, allowHolidays, vacationConfig).toISOString().split('T')[0];
+            setDate(corrected);
             notify(locale === 'es' 
-                ? `La fecha de entrega seleccionada no es válida. La fecha mínima de entrega permitida es ${minDeliveryDate}.`
-                : `The selected delivery date is not valid. The minimum allowed delivery date is ${minDeliveryDate}.`,
-                'error'
+                ? `La fecha seleccionada cae en un día sin despacho (domingo, festivo o receso operativo). Se ha ajustado automáticamente a nuestra primera ruta disponible: ${corrected}.`
+                : `The selected delivery date is not available. Adjusted to next valid route: ${corrected}.`,
+                'warning'
             );
             return;
         }
@@ -2325,6 +2345,30 @@ export default function CheckoutPage() {
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                            {(storeStatus === 'vacation_preorder' || (vacationConfig?.enabled && vacationConfig.startDate && vacationConfig.endDate)) && (
+                                <div style={{
+                                    padding: '0.75rem 0.9rem',
+                                    borderRadius: '12px',
+                                    backgroundColor: 'rgba(236, 253, 245, 0.9)',
+                                    border: '1px solid #A7F3D0',
+                                    backdropFilter: 'blur(8px)',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '10px',
+                                    boxShadow: '0 4px 12px rgba(5, 150, 105, 0.06)'
+                                }}>
+                                    <CalendarClock size={18} color="#047857" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    <div style={{ fontSize: '0.75rem', color: '#065F46', lineHeight: 1.45 }}>
+                                        <div style={{ fontWeight: 800, color: '#047857', marginBottom: '2px' }}>
+                                            {vacationConfig?.reasonTitle || 'Agenda de Retorno con Prioridad #1 de Abastecimiento'}
+                                        </div>
+                                        <div>
+                                            {vacationConfig?.customMessage || `Nuestras rutas descansan del ${vacationConfig?.startDate || '—'} al ${vacationConfig?.endDate || '—'}. Tu pedido se agenda automáticamente para nuestra primera ruta hábil (${minDeliveryDate}).`}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Selector Concierge de Fechas (Píldoras 1-Tap) */}
                             <div>
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2367,7 +2411,22 @@ export default function CheckoutPage() {
                                         <input
                                             type="date"
                                             value={date}
-                                            onChange={(e) => setDate(e.target.value)}
+                                            onChange={(e) => {
+                                                const picked = e.target.value;
+                                                if (!picked) return;
+                                                if (picked < minDeliveryDate || !isValidDeliveryDate(picked, allowSundays, allowHolidays, vacationConfig)) {
+                                                    const nextValid = getNextValidDeliveryDate(picked < minDeliveryDate ? minDeliveryDate : picked, allowSundays, allowHolidays, vacationConfig).toISOString().split('T')[0];
+                                                    setDate(nextValid);
+                                                    notify(
+                                                        locale === 'es'
+                                                            ? `El día seleccionado no cuenta con despacho (domingo, festivo o receso). Ajustado automáticamente al ${nextValid}.`
+                                                            : `Selected date has no delivery route. Auto-adjusted to ${nextValid}.`,
+                                                        'warning'
+                                                    );
+                                                } else {
+                                                    setDate(picked);
+                                                }
+                                            }}
                                             min={minDeliveryDate}
                                             className="checkout-input-modern"
                                             style={{ width: '100%', padding: '0.45rem 0.5rem 0.45rem 1.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer' }}
@@ -2995,49 +3054,92 @@ export default function CheckoutPage() {
                         )}
 
                         {/* CTA BOTÓN PRIMARIO CON ÍCONOS LUCIDE EXCLUSIVOS */}
-                        <button
-                            type="button"
-                            className="btn-premium"
-                            onClick={handleSubmit}
-                            disabled={loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)}
-                            style={{
-                                width: '100%',
-                                padding: '0.85rem',
-                                fontSize: '0.94rem',
-                                borderRadius: '14px',
-                                fontWeight: '900',
-                                backgroundColor: (loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)) ? '#CBD5E1' : 'var(--primary)',
-                                color: (loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)) ? '#94A3B8' : 'white',
-                                border: 'none',
-                                cursor: (loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)) ? 'not-allowed' : 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                fontFamily: 'var(--font-outfit), sans-serif',
-                                boxShadow: (loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)) ? 'none' : '0 8px 20px rgba(5, 150, 105, 0.22)',
-                                transition: 'all 0.2s ease'
-                            }}
-                        >
-                            {loading ? (
-                                <><Loader2 size={16} className="animate-spin" /> {t.processing}</>
-                            ) : items.length === 0 ? (
-                                <><ShoppingCart size={15} /> {locale === 'es' ? 'Tu canasta está vacía' : 'Your cart is empty'}</>
-                            ) : !isMinOrderMet ? (
-                                <><AlertCircle size={15} /> {locale === 'es' ? 'Pedido mínimo no alcanzado' : 'Minimum order required'}</>
-                            ) : (outOfZone && !isB2B) ? (
-                                <><MapPin size={15} /> {locale === 'es' ? 'Sin Cobertura en la Zona' : 'Out of coverage'}</>
-                            ) : (
-                                <>
-                                    {paymentMethod === 'wompi' ? <Zap size={16} /> : <Truck size={16} />}
-                                    <span>
-                                        {paymentMethod === 'wompi' 
-                                            ? (locale === 'es' ? 'Confirmar y Pagar Online' : 'Confirm & Pay Online')
-                                            : (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')}
-                                    </span>
-                                </>
-                            )}
-                        </button>
+                        {storeStatus === 'closed' ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveCartForReopen}
+                                    disabled={items.length === 0}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.85rem',
+                                        fontSize: '0.9rem',
+                                        borderRadius: '14px',
+                                        fontWeight: '900',
+                                        backgroundColor: items.length === 0 ? '#CBD5E1' : cartSavedForReopen ? '#047857' : '#0F172A',
+                                        color: items.length === 0 ? '#94A3B8' : '#FFFFFF',
+                                        border: '1px solid #F59E0B',
+                                        cursor: items.length === 0 ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        boxShadow: '0 8px 20px rgba(15, 23, 42, 0.2)',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    {cartSavedForReopen ? (
+                                        <>
+                                            <CheckCircle2 size={16} color="#34D399" />
+                                            <span>{locale === 'es' ? 'Carrito Guardado para la Reapertura' : 'Cart Saved for Reopening'}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <BookmarkCheck size={16} color="#FDE68A" />
+                                            <span>{locale === 'es' ? 'Guardar mi Carrito para la Reapertura' : 'Save my Cart for Reopening'}</span>
+                                        </>
+                                    )}
+                                </button>
+                                <div style={{ fontSize: '0.7rem', color: '#475569', textAlign: 'center', lineHeight: 1.4 }}>
+                                    {vacationConfig?.customMessage || 'Nuestra planta está en receso operativo. Tu selección queda guardada en este navegador para confirmar en 1 clic al reabrir.'}
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                className="btn-premium"
+                                onClick={handleSubmit}
+                                disabled={loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.85rem',
+                                    fontSize: '0.94rem',
+                                    borderRadius: '14px',
+                                    fontWeight: '900',
+                                    backgroundColor: (loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)) ? '#CBD5E1' : 'var(--primary)',
+                                    color: (loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)) ? '#94A3B8' : 'white',
+                                    border: 'none',
+                                    cursor: (loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)) ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    boxShadow: (loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)) ? 'none' : '0 8px 20px rgba(5, 150, 105, 0.22)',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                {loading ? (
+                                    <><Loader2 size={16} className="animate-spin" /> {t.processing}</>
+                                ) : items.length === 0 ? (
+                                    <><ShoppingCart size={15} /> {locale === 'es' ? 'Tu canasta está vacía' : 'Your cart is empty'}</>
+                                ) : !isMinOrderMet ? (
+                                    <><AlertCircle size={15} /> {locale === 'es' ? 'Pedido mínimo no alcanzado' : 'Minimum order required'}</>
+                                ) : (outOfZone && !isB2B) ? (
+                                    <><MapPin size={15} /> {locale === 'es' ? 'Sin Cobertura en la Zona' : 'Out of coverage'}</>
+                                ) : (
+                                    <>
+                                        {paymentMethod === 'wompi' ? <Zap size={16} /> : <Truck size={16} />}
+                                        <span>
+                                            {paymentMethod === 'wompi' 
+                                                ? (locale === 'es' ? 'Confirmar y Pagar Online' : 'Confirm & Pay Online')
+                                                : (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')}
+                                        </span>
+                                    </>
+                                )}
+                            </button>
+                        )}
 
                         {/* Badges de Confianza con Íconos Lucide */}
                         <div style={{

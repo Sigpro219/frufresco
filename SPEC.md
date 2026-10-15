@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.187 (Blindaje Poka-Yoke Integral de Fechas de Entrega, Prohibición Retroactiva y Gobernanza de Domingos/Festivos en Ciclo de Vida de Pedidos — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.192 (Gobernanza de Disponibilidad de Tienda, Programación Autónoma de Recesos Operativos en Semana Santa/Vacaciones y Experiencia Anti-Abandono Cero-WhatsApp — 76/76 Pantallas Certificadas)  
 > **Fecha:** 15 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 219 Escenarios BDD Ininterrumpidos (1..219)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 224 Escenarios BDD Ininterrumpidos (1..224)
 
 ---
 
@@ -17,18 +17,18 @@
 
 | Dominio | Nombre del Dominio | Pantallas | Capítulos SDD | Rango de Escenarios BDD | Cobertura |
 | :---: | :--- | :---: | :--- | :---: | :---: |
-| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192 (§40.1 - §40.8) | 🟢 100% |
-| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 219 | 🟢 100% |
+| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224 (§40.1 - §40.8) | 🟢 100% |
+| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224 (§41.1 - §41.4) | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217 (§39.1 - §39.5) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223 (§39.1 - §39.6) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **219 Escenarios Canónicos (1..219)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **224 Escenarios Canónicos (1..224)** | **🟢 100%** |
 
 ---
 
@@ -10170,6 +10170,102 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Tanto en el banner de alerta de la sucursal como directamente debajo del selector `FECHA ENTREGA`, el sistema despliega:
        - **Botón Primario de Cambio Consciente (1 Clic):** `Cambiar a próxima fecha habilitada: [Día DD/MM/YYYY]` (ej. `Mar 20/10/2026`), acompañado de píldoras rápidas para las siguientes fechas disponibles de esa sede (ej. `Jue 22/10/2026`). Al pulsarlo, actualiza `deliveryDate`, limpia cualquier excepción previa y confirma con un toast.
        - **Botón Consciente de Excepción Operativa:** `Mantener [Día DD/MM] como excepción` para cuando el cliente solicitó expresamente recibir fuera de su frecuencia habitual. Al activarlo de forma consciente, el estado visual pasa de alerta roja a confirmación ámbar (`Excepción de Día Autorizada por Operador`) y no vuelve a interrumpir con `window.confirm` al guardar el pedido.
+
+#### Escenario 221: Bifurcación Documental Automática (Factura + Remisión a `$0` para SKUs Fuera de Acuerdo), Prohibición de Auto-Fallback a Lista General, Countdown de Cierre de Corte y Asignación Comercial de Precios por Día (Caso Hotel Wyndham) (SDD v1.9.189)
+- **Given** un cliente institucional B2B con acuerdo comercial vigente (`quotes.status = 'agreement'`) cuya modalidad documental es **Factura** (`document_type = 'invoice'`) y que tiene habilitada la recepción de ítems fuera del acuerdo (`allow_off_agreement_purchases = true`, ej. **Hotel Wyndham**).
+- **When** el cliente solicita un pedido que incluye productos de su acuerdo cerrado y productos adicionales fuera del acuerdo (o exclusivamente productos fuera del acuerdo):
+- **Then**:
+  1. **Prohibición de Auto-Asignación de Precio "General Institucional" en Acuerdos Vigentes (`/api/orders/resolve-agreement-pricing`):**
+     - Cuando el cliente posee un acuerdo vigente (`activeAgreement != null`), el motor de resolución de precios **jamás** rellena los SKUs fuera del acuerdo con la lista *General Institucional*.
+     - Todo SKU permitido que no pertenezca a `agreementProductIds` se resuelve obligatoriamente a **`$0 COP`** y se identifica como **Ítem Fuera de Acuerdo (`Remisión $0`)**.
+     - Si `allow_off_agreement_purchases = false`, el catálogo permanece restringido exclusivamente a los SKUs del acuerdo.
+  2. **Partición Atómica en 2 Pedidos Vinculados en las 3 Puertas de Creación (`handleSubmit`, `handleDirectConfirmAndCreateOrder` y `EmailDraftsModule`):**
+     - Si el pedido contiene mezcla de SKUs dentro del acuerdo y SKUs fuera del acuerdo:
+       - **Pedido A (Principal — Acuerdo):** Contiene únicamente los SKUs del acuerdo con sus precios contractuales. Conserva la modalidad documental del cliente (`Factura`) para facturación y despacho inmediato sin bloqueos.
+       - **Pedido B (Hijo Vinculado — Fuera de Acuerdo):** Se crea atómicamente para la misma sede, fecha y franja, vinculado mediante `logistics_data.parent_order_id = Pedido_A.id`, con override documental forzado a **Remisión Sin Valor (`logistics_data.document_type_override = 'remission'`, `is_off_agreement_split = true`)**, precios en **`$0 COP`** y estampilla canónica en `admin_notes`: `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ...]`.
+     - Si el pedido contiene únicamente SKUs fuera del acuerdo, se registra como un único pedido forzado a **Remisión a `$0`** con la misma estampilla y trazabilidad.
+     - **Inmunidad de Detector de Duplicados de OC:** El detector de órdenes de compra duplicadas (`checkForDuplicateOrders`) reconoce el vínculo `is_off_agreement_split` / `parent_order_id` y no dispara falsas alarmas de duplicidad entre la Factura A y la Remisión B.
+  3. **Tarea Urgente en Dashboard Comercial y Novedad con Countdown contra Hora de Cierre de Corte en Facturación:**
+     - Al crearse la Remisión a `$0`, se inserta automáticamente una tarea crítica en `admin_tasks` (`🚨 ASIGNAR PRECIO URGENTE`) visible en el Dashboard Comercial (`/admin/commercial`).
+     - En la Mesa de Facturación (`/admin/commercial/billing`), `getOrderGraceInfo` clasifica todo pedido con `DESPACHADO SIN PRECIO` en estado **`novelty` (`Con Novedad — Asignar Precio`)**, excluyéndolo de la selección rápida de *"Listos p/ Corte"* mientras siga en `$0`.
+     - La barra de progreso y el reloj de cuenta regresiva (**Countdown**) calculan en tiempo real los minutos/horas restantes contra la **Hora de Cierre de Corte** parametrizada (`billing_cut_close_time`, por defecto `17:00` Hora Bogotá).
+  4. **Liquidación Comercial Puntual por SKU del Día e Inmunidad del Acuerdo Comercial (`/api/commercial/billing/assign-off-agreement-prices`):**
+     - Las remisiones con `FUERA DE ACUERDO - DESPACHADO SIN PRECIO` no usan la liquidación automática ciega de *Consumo Abierto*, sino el modal **`Asignar Precio Comercial ($0)`**.
+     - El Jefe del Área Comercial visualiza todos los SKUs despachados en remisión a `$0` para una fecha específica, ingresa el precio unitario de venta autorizado para ese día y confirma.
+     - El sistema actualiza `order_items.unit_price`, recalcula `subtotal`, `tax` y `total` descontando cualquier devolución física aprobada en recepción (`billing_returns`), remueve el bloqueo `DESPACHADO SIN PRECIO` dejando constancia auditada en `admin_notes`, cierra la tarea en `admin_tasks` y habilita el documento para facturación en el corte.
+     - **Inmunidad Contractual:** El precio asignado es estrictamente puntual para las remisiones del día y **nunca** inserta ni modifica ítems dentro del acuerdo comercial (`quotes` / `quote_items`) del cliente.
+
+---
+
+
+#### Escenario 222: Estandarización Canónica de Navegación por Teclado Zero-Mouse en Creación Manual de Pedidos y Paridad Total con Ingesta por Correo (`EmailDraftsModule` & `/admin/orders/create`) (SDD v1.9.190)
+- **Given** un analista de operaciones o atención al cliente montando un pedido en cualquiera de las puertas de ingesta del sistema (`EmailDraftsModule.tsx` o `/admin/orders/create`).
+- **When** el operador utiliza exclusivamente el teclado para buscar clientes, buscar productos, seleccionar variantes/presentaciones, digitar cantidades (incluyendo fórmulas tipo Excel) y navegar entre las líneas del pedido:
+- **Then**:
+  1. **Preselección Inmediata del Primer Resultado (`focusedIndex = 0`) en Buscadores de Clientes y Productos:**
+     - Al escribir o enfocar el buscador de cliente (B2B o B2C) o el buscador principal de productos (`productSearchInputRef` / `sku-input-${idx}`), el sistema **preselecciona automáticamente el índice `0` (`focusedProductIndex = 0`, `focusedClientIndex = 0`)** resaltándolo en azul (`borderLeft: '6px solid #2563EB'`, `backgroundColor: '#DBEAFE'`).
+     - Al presionar **`ArrowDown` (`↓`)** una sola vez, el foco desciende inmediatamente al **segundo ítem de la lista (`índice 1`)** con auto-scroll automático (`scrollIntoView({ block: 'nearest' })`). Al presionar **`ArrowUp` (`↑`)**, asciende sin perder la preselección en `0` (`Math.max(prev - 1, 0)`).
+     - Al seleccionar un cliente con `Enter` o `Tab`, el foco salta automáticamente al buscador de productos (`productSearchInputRef`) para iniciar la captura sin tocar el mouse.
+  2. **Unificación del Motor Fonético Multi-Token y Priorización Pareto (`getScoredProductsForQuery`):**
+     - El buscador principal de `/admin/orders/create` (`filteredProducts`) utiliza exactamente el mismo motor `getScoredProductsForQuery` que `EmailDraftsModule.tsx` y la Mesa de Trabajo (equivalencia fonética `z <-> s`, `ce <-> se`, `ci <-> si`, coincidencia multi-token en cualquier orden, prioridad `+10000` palabra exacta, `+4000` convenio activo, `+500` alias/excepción del cliente y frecuencia histórica Pareto).
+  3. **Ergonomía de Salto Dinámico en el Modal de Personalización de Producto (`selectedProductForModal` / `customizingModalItem`):**
+     - Al abrir el modal (con `Enter`, `Tab` o clic), el foco se posiciona automáticamente en el primer `<select>` de atributo (`#modal-select-0`) o directamente en `#modal-qty-input` (con el texto seleccionado) si el producto no tiene variantes.
+     - En cualquier `<select>` de atributo (`#modal-select-${index}`):
+       - **`Enter` o `Tab`:** Busca iterativamente en el DOM el siguiente `<select>` efectivamente renderizado (`for (let k = index + 1; k < normalizedOptionsConfig.length; k++)`). Si un atributo intermedio (como `Gramaje`) fue ocultado dinámicamente por el Poka-Yoke condicional o si es el último `<select>`, salta directamente a `#modal-qty-input` seleccionando su contenido.
+       - **`Shift + Tab`:** Retrocede iterativamente al `<select>` visible anterior en el DOM.
+     - En el campo de **Cantidad (`#modal-qty-input`)**:
+       - **`Enter`:** Evalúa cualquier fórmula matemática (`evaluateMathExpression`), **confirma e inyecta inmediatamente el producto en el pedido (`confirmModalAdd`)** sin detenerse jamás en `Unidad de Medida` (`tabIndex={-1}`), cierra el modal y devuelve el foco a `productSearchInputRef` (o al siguiente `sku-input-${nextIdx}` en modo Staging).
+       - **`Tab`:** Evalúa la expresión matemática y traslada el foco al botón primario de confirmación (`#modal-confirm-btn`).
+       - **`Shift + Tab`:** Retrocede al último `<select>` visible de atributos en el DOM.
+     - **`Escape`:** Cierra el modal ejecutando `closeProductModal()` y restituye el foco al input de búsqueda de origen (`productSearchInputRef` o `sku-input-${idx}`).
+  4. **Navegación por Teclado y Fórmulas en la Tabla `Detalle del Pedido` (`cart-qty-input-${idx}`):**
+     - Las celdas de cantidad del carrito soportan conversión automática de punto (`.`) a coma decimal (`,`), evaluación de fórmulas matemáticas (`evaluateMathExpression` al presionar `Enter`, `Tab` o `onBlur`), **`Enter`** para confirmar la cantidad y devolver el foco al buscador de productos (`productSearchInputRef`), y **`ArrowDown` / `ArrowUp`** para desplazarse verticalmente entre las filas del pedido (`cart-qty-input-${idx + 1}` / `cart-qty-input-${idx - 1}`).
+
+#### Escenario 223: Estandarización Canónica de Remisión de Obsequio Institucional (B2B `gift_remission`) y Obsequio Prepagado en Landing Page (Hogar B2C `isGiftForRecipient`) con Liquidación Impresa a `$ 0` y Separación Remitente/Destinatario (SDD v1.9.191)
+- **Given** una entrega correspondiente a una cortesía institucional B2B (`profiles.document_type = 'gift_remission'`) o una compra prepagada realizada desde la Landing Page / Checkout Hogar B2C bajo la modalidad **«Enviar como obsequio / Recibe otra persona»** (`isGiftForRecipient = true` / `[DESTINATARIO / RECIBE EN PUERTA: ...]`).
+- **When** se genera el pedido y se emite su documento físico de entrega en [`/admin/orders/contingency-print`](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx) (tanto en `ORIGINAL - CLIENTE` como en `COPIA - TRANSPORTADOR / CONTABILIDAD`) o en [`/admin/commercial/billing/print/[id]`](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/commercial/billing/print/%5Bid%5D/page.tsx):
+- **Then**:
+  1. **Unificación Estricta del Formato Oficial de Remisión e Iconografía Vectorial Lucide:**
+     - Se prohíbe inventar formatos paralelos o usar emojis unicode (`🎁`). Toda remisión de obsequio utiliza exactamente la misma plantilla oficial `Letterhead` de las remisiones ordinarias (`contingency-print/page.tsx`) y renderiza exclusivamente el ícono vectorial `<Gift />` de `lucide-react`.
+     - El título del membrete se rotula como **`REMISIÓN DE OBSEQUIO #[Folio]`**.
+  2. **Modalidad 1 — Cortesía Institucional B2B (`document_type = 'gift_remission'`):**
+     - En creación de pedidos (`/admin/orders/create`), al seleccionar una sede con `document_type = 'gift_remission'`, todos los productos y totales se fuerzan automáticamente a `$ 0 COP`, eximiendo del bloqueo Poka-Yoke de precio cero y estampando `[REMISIÓN DE OBSEQUIO / CORTESÍA INSTITUCIONAL - SIN COBRO ($0 COP)]`.
+     - En la remisión impresa, todas las columnas monetarias (`VALOR/UM`, `IVA`, `TOTAL`, `Subtotal`, `TOTAL`) se imprimen con `formatMoney(0)` (`$ 0`) en ambas copias (`ORIGINAL` y `COPIA`), acompañadas de la cinta púrpura de cortesía de *Investments Cortés S.A.S.*
+  3. **Modalidad 2 — Obsequio Prepagado por Landing Page / Checkout Hogar B2C (`isGiftForRecipient`):**
+     - **Integridad Financiera en Base de Datos vs Discreción Total en Papel:** En la base de datos (`orders.subtotal`, `orders.tax`, `orders.total`, `order_items.unit_price`), el pedido conserva intacto el valor real pagado por el comprador (ej. Wompi) para efectos contables y de recaudo. Sin embargo, en el documento físico de entrega (`ORIGINAL - CLIENTE` y `COPIA - TRANSPORTADOR / CONTABILIDAD`), todas las columnas de precios y totales se imprimen estrictamente en **`$ 0` (`formatMoney(0)`)** para que el destinatario jamás visualice el costo del regalo ni siquiera al firmar la copia del conductor.
+     - **Ajuste Canónico de Remitente (Quien Obsequia) y Destinatario (Quien Recibe) en el Formato Existente:**
+       - **Subtítulo del Membrete:** `DE PARTE DE (REMITENTE): [NOMBRE DEL COMPRADOR] · PARA: [NOMBRE DEL DESTINATARIO]`.
+       - **Banner de Cortesía con `<Gift />`:** *«DETALLE ESPECIAL FRUFRESCO: Has recibido un obsequio especial enviado por [Nombre del Comprador]. Disfruta de la frescura del campo seleccionada especialmente para ti. Entrega prepagada sin ningún cobro al recibir ($ 0).»*
+       - **Columna Izquierda del Micro-Grid:**
+         - `DESTINATARIO (RECIBE):` Nombre de la persona que recibe en puerta (`recipient_name`).
+         - `DE PARTE DE (OBSEQUIA):` Nombre del comprador que envía el regalo (`sender_name`), suprimiendo su NIT/Cédula y correo electrónico privado.
+         - `DIRECCIÓN:` Dirección de entrega del destinatario.
+         - `TELÉFONO DESTINATARIO:` Número telefónico de quien recibe en puerta (`recipient_phone`).
+       - **Columna Derecha del Micro-Grid (`OBSERVACIÓN`):** Se filtran y suprimen todas las etiquetas técnicas entre corchetes (`[COMPRADOR / FACTURACIÓN: ...]`, `[DESTINATARIO / RECIBE EN PUERTA: ...]`, `[DOMICILIO: ...]`, `[EMPAQUE: ...]`, `[ORIGIN: web]`), imprimiendo únicamente la nota amable de entrega o dedicatoria escrita por el remitente.
+
+
+#### Escenario 224: Gobernanza de Disponibilidad de Tienda (`store_status`), Programación Autónoma de Recesos Operativos (Semana Santa / Vacaciones) y Experiencia Anti-Abandono Cero-WhatsApp (SDD v1.9.192)
+- **Given** el Panel Maestro de Configuración Global (`/admin/settings`), el Cintillo Global (`GlobalBanner.tsx`), el Checkout Hogar/B2B (`/checkout`), el Portal Institucional (`/b2b/dashboard`) y la Mesa de Creación (`/admin/orders/create`).
+- **When** la Dirección General parametriza el estado de la tienda (`store_status`) o programa un rango de fechas de receso operativo (`store_vacation_config`):
+- **Then**:
+  1. **Erradicación del Selector Desconectado y 3 Modos Canónicos de Disponibilidad (`store_status`):**
+     - `open` (**ABIERTA — Operación Normal**): Despachos activos según reglas de hora de corte ($D+1$ / $D+2$), domingos y festivos.
+     - `vacation_preorder` (**MODO PREVENTA / RECESO OPERATIVO**): Ideal para Semana Santa, Fin de Año o vacaciones colectivas. La tienda y el portal B2B **continúan recibiendo y confirmando pedidos 24/7 de forma 100% autónoma**, bloqueando en el calendario los días del receso y asignando automáticamente como primera fecha de entrega el **primer día hábil de retorno** con prioridad #1 de abastecimiento.
+     - `closed` (**CERRADA TEMPORALMENTE — Modo Vitrina / Carrito Guardado**): Ideal para inventarios físicos o ajustes de precios. El catálogo permanece abierto para consulta y armado de canasta, pero el envío de órdenes se pausa temporalmente.
+  2. **Programador de Recesos y Vacaciones Operativas (`store_vacation_config` en `app_settings`):**
+     - Estructura JSON con `enabled` (`boolean`), `startDate` (`YYYY-MM-DD`), `endDate` (`YYYY-MM-DD`), `reopenTime` (ej. `06:00 AM`), `reasonTitle` (ej. `Receso de Semana Santa`) y `customMessage`.
+     - Incluye botones de autocompletado rápido (*1-Click Presets* con iconografía `lucide-react`):
+       - **`[Programar Semana Santa (Jueves a Domingo)]`**: Calcula astronómicamente el Jueves Santo y el Domingo de Resurrección del ciclo vigente mediante `getEasterSunday` (`src/lib/colombianHolidays.ts`).
+       - **`[Receso Fin de Año (31 Dic - 2 Ene)]`**: Configura el cierre de transición anual.
+     - `isValidDeliveryDate` y `getNextValidDeliveryDate` integran nativamente `store_vacation_config`, saltando cualquier fecha comprendida entre `startDate` y `endDate` (inclusive) y proyectando automáticamente el día hábil de retorno.
+  3. **Experiencia Anti-Abandono y Regla Estricta "Cero-WhatsApp en Vacaciones" (`/disenador-web`):**
+     - **Prohibición de Desvío a WhatsApp en Receso/Cierre:** Cuando el equipo (incluyendo el área comercial) se encuentra en vacaciones o receso operativo, **queda terminantemente prohibido** mostrar botones que inviten al cliente a escribir por WhatsApp, evitando falsas expectativas de respuesta inmediata y protegiendo el descanso del personal.
+     - **Cintillo Superior Reactivo (`GlobalBanner.tsx`):**
+       - En `vacation_preorder` o receso activo: Muestra insignia `[PREVENTA ACTIVA]`, el motivo del receso (`reasonTitle`) y la fecha exacta del próximo despacho garantizado.
+       - En `closed`: Muestra insignia `[PLANTA EN PREPARACIÓN]`, el motivo de la pausa y la fecha/hora de reapertura.
+     - **Autogestión en Checkout (`/checkout` y `/b2b/dashboard`):**
+       - En **Modo Preventa / Receso**: Despliega una tarjeta *Frosted Glass* con `<CalendarCheck />` confirmando que el pedido se recibe hoy mismo y queda agendado en **Prioridad #1 de Abastecimiento** para el día de retorno.
+       - En **Modo Cerrada Temporalmente (`closed`)**: Sustituye el botón de pago/confirmación por el botón autónomo **`[Guardar mi Carrito para la Reapertura]`** (`<BookmarkCheck />`), preservando la lista en el dispositivo del comprador y confirmándole visualmente que podrá finalizar su compra en 1 clic apenas reabra la tienda.
 
 ---
 

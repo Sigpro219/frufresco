@@ -13,8 +13,8 @@ import { translations, Locale } from '@/lib/translations';
 import InvoiceDocumentModal from '@/components/InvoiceDocumentModal';
 import AgreementDocumentModal from '@/components/AgreementDocumentModal';
 import B2BReportNoveltyModal from '@/components/B2BReportNoveltyModal';
-import { ShieldCheck, ExternalLink, ArrowRight, Percent, Award } from 'lucide-react';
-import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
+import { ShieldCheck, ExternalLink, ArrowRight, Percent, Award, CalendarClock, BookmarkCheck } from 'lucide-react';
+import { getNextValidDeliveryDate, isValidDeliveryDate, parseStoreVacationConfig, StoreVacationConfig } from '@/lib/colombianHolidays';
 
 interface OrderItem {
     id: string;
@@ -123,6 +123,11 @@ export default function B2BDashboard() {
     const [cartNotice, setCartNotice] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [confirmClearCart, setConfirmClearCart] = useState<boolean>(false);
+    const [storeStatus, setStoreStatus] = useState<'open' | 'vacation_preorder' | 'closed'>('open');
+    const [vacationConfig, setVacationConfig] = useState<StoreVacationConfig | null>(null);
+    const [allowSundays, setAllowSundays] = useState<boolean>(false);
+    const [allowHolidays, setAllowHolidays] = useState<boolean>(false);
+    const [b2bCartSavedNotice, setB2bCartSavedNotice] = useState<boolean>(false);
 
     useEffect(() => {
         const fetchScarcity = async () => {
@@ -560,22 +565,40 @@ export default function B2BDashboard() {
         
         const calculateTime = async (signal?: AbortSignal) => {
             try {
-                // Check Global Settings (Cutoff, Sunday & Holiday Rules)
+                // Check Global Settings (Cutoff, Sunday, Holiday & Vacation Recess Rules)
                 const { data: settingsData } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries'])
+                    .in('key', [
+                        'enable_cutoff_rules',
+                        'cutoff_hour_public',
+                        'allow_sunday_deliveries',
+                        'allow_holiday_deliveries',
+                        'store_status',
+                        'store_vacation_config'
+                    ])
                     .abortSignal(signal as any);
 
                 if (!isMounted.current) return;
 
                 const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
-                const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
-                const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+                const cutoffHourRaw = settingsData?.find(s => s.key === 'cutoff_hour_public')?.value;
+                const cutoffHour = cutoffHourRaw ? (parseInt(cutoffHourRaw, 10) || 17) : 17;
+                const sundaysAllowed = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
+                const holidaysAllowed = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+                const rawStatus = settingsData?.find(s => s.key === 'store_status')?.value;
+                const parsedVac = parseStoreVacationConfig(settingsData?.find(s => s.key === 'store_vacation_config')?.value);
+
+                setAllowSundays(sundaysAllowed);
+                setAllowHolidays(holidaysAllowed);
+                setVacationConfig(parsedVac);
+                if (rawStatus === 'closed' || rawStatus === 'vacation_preorder' || rawStatus === 'open') {
+                    setStoreStatus(rawStatus);
+                }
 
                 const now = new Date();
                 const cutoff = new Date();
-                cutoff.setHours(17, 0, 0, 0);
+                cutoff.setHours(cutoffHour, 0, 0, 0);
 
                 let targetDate = new Date();
 
@@ -590,13 +613,13 @@ export default function B2BDashboard() {
                     targetDate.setDate(now.getDate() + 1);
                 }
 
-                // Ajustar al primer día hábil permitido (saltando domingos y 19 festivos si están deshabilitados)
-                const validTargetDate = getNextValidDeliveryDate(targetDate, allowSundays, allowHolidays);
+                // Ajustar al primer día hábil permitido (saltando domingos, 19 festivos y receso operativo)
+                const validTargetDate = getNextValidDeliveryDate(targetDate, sundaysAllowed, holidaysAllowed, parsedVac);
 
                 if (isMounted.current) {
                     const minDateStr = validTargetDate.toISOString().split('T')[0];
-                    setDeliveryDate(minDateStr);
                     setMinDeliveryDate(minDateStr);
+                    setDeliveryDate(prev => (!prev || prev < minDateStr || !isValidDeliveryDate(prev, sundaysAllowed, holidaysAllowed, parsedVac)) ? minDateStr : prev);
                 }
             } catch (err) {
                 if (isAbortError(err)) return;
@@ -1013,7 +1036,24 @@ export default function B2BDashboard() {
             setCartNotice(msg);
             setTimeout(() => setCartNotice(null), 6000);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('⚠️ ' + msg, 'warning');
+                (window as any).showToast(msg, 'warning');
+            }
+            return;
+        }
+
+        if (storeStatus === 'closed') {
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('frufresco_b2b_saved_cart_reopen', JSON.stringify({
+                    savedAt: new Date().toISOString(),
+                    items: itemsToSubmit,
+                    targetReturnDate: minDeliveryDate
+                }));
+            }
+            setB2bCartSavedNotice(true);
+            const msg = `Planta en receso operativo (${vacationConfig?.reasonTitle || 'Modo Vitrina'}). Tu pedido institucional ha quedado guardado en este navegador para confirmar en nuestra reapertura (${vacationConfig?.reopenTime || '06:00 AM'}).`;
+            setCartNotice(msg);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(msg, 'info');
             }
             return;
         }
@@ -1023,8 +1063,17 @@ export default function B2BDashboard() {
             setCartNotice(msg);
             setTimeout(() => setCartNotice(null), 6000);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('⚠️ ' + msg, 'warning');
+                (window as any).showToast(msg, 'warning');
             }
+            return;
+        }
+
+        if (deliveryDate < minDeliveryDate || !isValidDeliveryDate(deliveryDate, allowSundays, allowHolidays, vacationConfig)) {
+            const corrected = getNextValidDeliveryDate(deliveryDate < minDeliveryDate ? minDeliveryDate : deliveryDate, allowSundays, allowHolidays, vacationConfig).toISOString().split('T')[0];
+            setDeliveryDate(corrected);
+            const msg = `La fecha seleccionada cae en un día sin despacho (domingo, festivo o receso operativo). Se ajustó automáticamente al primer día hábil: ${corrected}.`;
+            setCartNotice(msg);
+            setTimeout(() => setCartNotice(null), 6000);
             return;
         }
         
@@ -2353,23 +2402,33 @@ export default function B2BDashboard() {
                                                 className="btn-premium"
                                                 style={{
                                                     width: '100%',
-                                                    fontSize: '1rem',
+                                                    fontSize: '0.95rem',
                                                     padding: '0.75rem',
-                                                    backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : 'var(--primary)',
+                                                    backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : storeStatus === 'closed' ? (b2bCartSavedNotice ? '#047857' : '#0F172A') : 'var(--primary)',
                                                     color: 'white',
                                                     cursor: orderItems.filter(i => i.quantity > 0).length === 0 ? 'not-allowed' : 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     gap: '10px',
-                                                    border: 'none',
+                                                    border: storeStatus === 'closed' ? '1px solid #F59E0B' : 'none',
                                                     borderRadius: 'var(--radius-full)',
                                                     fontFamily: 'var(--font-outfit), sans-serif',
                                                     fontWeight: '900',
                                                     boxShadow: '0 8px 16px rgba(26, 77, 46, 0.2)',
                                                 }}
                                             >
-                                                {submitting ? t.b2b.dashboard.submitting : (
+                                                {submitting ? t.b2b.dashboard.submitting : storeStatus === 'closed' ? (
+                                                    b2bCartSavedNotice ? (
+                                                        <>
+                                                            <CheckCircle2 size={18} strokeWidth={2.5} color="#34D399" /> Pedido Guardado para la Reapertura
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <BookmarkCheck size={18} strokeWidth={2.5} color="#FDE68A" /> Guardar mi Pedido para la Reapertura
+                                                        </>
+                                                    )
+                                                ) : (
                                                     <>
                                                         <ShoppingCart size={18} strokeWidth={2.5} /> {t.b2b.dashboard.finishOrder}
                                                     </>
@@ -4386,7 +4445,18 @@ export default function B2BDashboard() {
                                 <input
                                     type="date"
                                     value={deliveryDate}
-                                    onChange={(e) => setDeliveryDate(e.target.value)}
+                                    onChange={(e) => {
+                                        const picked = e.target.value;
+                                        if (!picked) return;
+                                        if (picked < minDeliveryDate || !isValidDeliveryDate(picked, allowSundays, allowHolidays, vacationConfig)) {
+                                            const nextValid = getNextValidDeliveryDate(picked < minDeliveryDate ? minDeliveryDate : picked, allowSundays, allowHolidays, vacationConfig).toISOString().split('T')[0];
+                                            setDeliveryDate(nextValid);
+                                            setSubmitError(`El día seleccionado no cuenta con despacho (domingo, festivo o receso operativo). Se ajustó automáticamente al ${nextValid}.`);
+                                        } else {
+                                            setSubmitError(null);
+                                            setDeliveryDate(picked);
+                                        }
+                                    }}
                                     min={minDeliveryDate}
                                     style={{
                                         fontWeight: '800',

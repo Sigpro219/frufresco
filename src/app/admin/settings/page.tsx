@@ -28,9 +28,14 @@ import {
     PackageCheck,
     Percent,
     CalendarX,
+    CalendarClock,
+    Store,
+    BookmarkCheck,
+    CheckCircle2,
     Mail,
     Clock
 } from 'lucide-react';
+import { parseStoreVacationConfig, getHolyWeekRange, StoreVacationConfig } from '@/lib/colombianHolidays';
 
 function ImageUpload({ 
     label, 
@@ -314,7 +319,19 @@ export default function AdminSettingsPage() {
                 }), 
                 description: 'Contenido dinámico de la página de registro B2B' 
             },
-            { key: 'store_status', value: 'open', description: 'Estado actual de la tienda (Abierto/Cerrado)' },
+            { key: 'store_status', value: 'open', description: 'Estado actual de la tienda (Abierto/Preventa/Cerrado)' },
+            { 
+                key: 'store_vacation_config', 
+                value: JSON.stringify({
+                    enabled: false,
+                    startDate: '',
+                    endDate: '',
+                    reopenTime: '06:00 AM',
+                    reasonTitle: 'Receso de Semana Santa',
+                    customMessage: 'Agenda tu pedido hoy y recíbelo fresco en nuestro primer día hábil de retorno.'
+                }), 
+                description: 'Programador de recesos operativos, Semana Santa y vacaciones' 
+            },
             { key: 'global_banner', value: '', description: 'Anuncio superior (ej: ¡Envíos gratis hoy!)' },
             { key: 'home_featured_title', value: 'Lo más vendido de la semana', description: 'Título sección productos destacados' },
             { key: 'home_catalog_title', value: 'Nuestro Catálogo', description: 'Título sección catálogo general' },
@@ -651,7 +668,7 @@ export default function AdminSettingsPage() {
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
                             {(() => {
-                                const opKeys = ['store_status', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'cutoff_hour_admin', 'cutoff_hour_public', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
+                                const opKeys = ['store_status', 'store_vacation_config', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'cutoff_hour_admin', 'cutoff_hour_public', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
                                 return settings
                                     .filter(s => opKeys.includes(s.key))
                                     .sort((a, b) => opKeys.indexOf(a.key) - opKeys.indexOf(b.key))
@@ -662,7 +679,7 @@ export default function AdminSettingsPage() {
                                             padding: '1rem', 
                                             border: `1px solid ${THEME.colors.border}`,
                                             boxShadow: THEME.shadow.sm,
-                                            gridColumn: setting.key === 'packaging_fee_note' ? '1 / -1' : 'span 1'
+                                            gridColumn: (setting.key === 'packaging_fee_note' || setting.key === 'store_vacation_config') ? '1 / -1' : 'span 1'
                                         }}>
                                             <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 {setting.key === 'delivery_fee' ? 'Costo de Envío' :
@@ -671,7 +688,8 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'min_order_hogar' ? 'Mínimo Hogar' :
                                                  setting.key === 'max_order_hogar_cod' ? 'Máximo Hogar (Contra Entrega)' :
                                                  setting.key === 'min_order_institucional' ? 'Mínimo Institucional' :
-                                                 setting.key === 'store_status' ? 'Estado Tienda' :
+                                                 setting.key === 'store_status' ? <><Store size={14} style={{ color: 'var(--primary)' }} /> Estado Operativo de la Tienda</> :
+                                                 setting.key === 'store_vacation_config' ? <><CalendarClock size={14} style={{ color: '#D97706' }} /> Programador de Receso Operativo / Semana Santa / Vacaciones</> :
                                                  setting.key === 'enable_b2b_lead_capture' ? 'Captura Leads B2B' :
                                                  setting.key === 'enable_cutoff_rules' ? <><Clock size={14} style={{ color: 'var(--primary)' }} /> REGLAS HORA DE CORTE</> :
                                                  setting.key === 'cutoff_hour_admin' ? <><Clock size={14} style={{ color: 'var(--primary)' }} /> HORA CORTE ADMIN / B2B</> :
@@ -700,9 +718,9 @@ export default function AdminSettingsPage() {
                                                         outline: 'none'
                                                     }}
                                                 >
-                                                    <option value="sandbox">🟡 MODO PRUEBAS (Sandbox / Redirigir)</option>
-                                                    <option value="disabled">🔴 DESACTIVADO (Silencioso: No enviar)</option>
-                                                    <option value="live">🟢 PRODUCCIÓN REAL (Clientes)</option>
+                                                    <option value="sandbox">MODO PRUEBAS (Sandbox / Redirigir)</option>
+                                                    <option value="disabled">DESACTIVADO (Silencioso: No enviar)</option>
+                                                    <option value="live">PRODUCCIÓN REAL (Clientes)</option>
                                                 </select>
                                             ) : setting.key === 'email_sandbox_recipient' ? (
                                                 <div>
@@ -754,7 +772,196 @@ export default function AdminSettingsPage() {
                                                     <option value="22">10:00 PM (22:00)</option>
                                                     <option value="23">11:00 PM (23:00)</option>
                                                 </select>
-                                            ) : setting.key === 'store_status' || setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'allow_sunday_deliveries' || setting.key === 'allow_holiday_deliveries' || setting.key === 'packaging_fee_enabled' ? (
+                                            ) : setting.key === 'store_status' ? (
+                                                <div>
+                                                    <select 
+                                                        value={setting.value || 'open'} 
+                                                        onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '8px 12px', 
+                                                            borderRadius: THEME.radius.sm, 
+                                                            border: `1px solid ${THEME.colors.borderActive}`, 
+                                                            fontWeight: '700', 
+                                                            fontSize: '0.85rem',
+                                                            color: setting.value === 'closed' ? '#DC2626' : setting.value === 'vacation_preorder' ? '#B45309' : '#15803D',
+                                                            backgroundColor: setting.value === 'closed' ? '#FEE2E2' : setting.value === 'vacation_preorder' ? '#FEF3C7' : '#DCFCE7',
+                                                            cursor: 'pointer',
+                                                            outline: 'none'
+                                                        }}
+                                                    >
+                                                        <option value="open">ABIERTA (Operación Normal)</option>
+                                                        <option value="vacation_preorder">MODO PREVENTA / RECESO (Recibe pedidos para entregar al retorno)</option>
+                                                        <option value="closed">CERRADA TEMPORALMENTE (Modo Vitrina / Carrito Guardado)</option>
+                                                    </select>
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '6px', lineHeight: 1.4 }}>
+                                                        {setting.value === 'closed' 
+                                                            ? 'Catálogo visible en modo vitrina. El checkout pausa el envío y permite al cliente guardar su carrito hasta la reapertura (Cero WhatsApp).'
+                                                            : setting.value === 'vacation_preorder'
+                                                            ? 'Recomendado en Semana Santa/Vacaciones: La tienda sigue facturando 24/7 y agenda entregas automáticamente para el primer día hábil de retorno.'
+                                                            : 'Tienda operando con normalidad según las reglas de hora de corte, domingos y festivos.'}
+                                                    </div>
+                                                </div>
+                                            ) : setting.key === 'store_vacation_config' ? (
+                                                (() => {
+                                                    const vacConfig: StoreVacationConfig = parseStoreVacationConfig(setting.value);
+                                                    const updateVacField = (patch: Partial<StoreVacationConfig>) => {
+                                                        const next = { ...vacConfig, ...patch };
+                                                        handleUpdateSetting('store_vacation_config', JSON.stringify(next));
+                                                    };
+                                                    const applyHolyWeekPreset = () => {
+                                                        const hw = getHolyWeekRange();
+                                                        const next: StoreVacationConfig = {
+                                                            ...vacConfig,
+                                                            enabled: true,
+                                                            startDate: hw.startDate,
+                                                            endDate: hw.endDate,
+                                                            reopenTime: '06:00 AM',
+                                                            reasonTitle: 'Receso Operativo de Semana Santa',
+                                                            customMessage: `Estamos en receso de Semana Santa (${hw.startDate} al ${hw.endDate}). Agenda tu pedido hoy y recíbelo con Prioridad #1 de Abastecimiento el lunes ${hw.returnDate}.`
+                                                        };
+                                                        handleUpdateSetting('store_vacation_config', JSON.stringify(next));
+                                                        const currentStatus = settings.find(s => s.key === 'store_status')?.value;
+                                                        if (currentStatus === 'open') {
+                                                            handleUpdateSetting('store_status', 'vacation_preorder');
+                                                        }
+                                                    };
+                                                    const applyNewYearPreset = () => {
+                                                        const year = new Date().getFullYear();
+                                                        const startDate = `${year}-12-31`;
+                                                        const endDate = `${year + 1}-01-02`;
+                                                        const next: StoreVacationConfig = {
+                                                            ...vacConfig,
+                                                            enabled: true,
+                                                            startDate,
+                                                            endDate,
+                                                            reopenTime: '06:00 AM',
+                                                            reasonTitle: 'Receso de Fin de Año',
+                                                            customMessage: `Feliz Año Nuevo. Nuestras rutas descansan del ${startDate} al ${endDate}. Agenda tu pedido hoy para entrega prioritaria al retorno.`
+                                                        };
+                                                        handleUpdateSetting('store_vacation_config', JSON.stringify(next));
+                                                    };
+
+                                                    return (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', padding: '0.75rem 1rem', backgroundColor: vacConfig.enabled ? '#FFFBEB' : '#F8FAFC', borderRadius: THEME.radius.sm, border: `1px solid ${vacConfig.enabled ? '#FDE68A' : '#E2E8F0'}` }}>
+                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem', color: vacConfig.enabled ? '#92400E' : '#334155' }}>
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={vacConfig.enabled} 
+                                                                        onChange={(e) => updateVacField({ enabled: e.target.checked })}
+                                                                        style={{ width: '16px', height: '16px', accentColor: '#D97706', cursor: 'pointer' }}
+                                                                    />
+                                                                    <span>Activar bloqueo automático de fechas por Receso / Vacaciones</span>
+                                                                </label>
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={applyHolyWeekPreset}
+                                                                        style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '6px',
+                                                                            padding: '6px 10px',
+                                                                            borderRadius: THEME.radius.sm,
+                                                                            border: '1px solid #F59E0B',
+                                                                            backgroundColor: '#FEF3C7',
+                                                                            color: '#92400E',
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: 700,
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                    >
+                                                                        <Sparkles size={13} />
+                                                                        <span>Preset Semana Santa (Jueves a Domingo)</span>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={applyNewYearPreset}
+                                                                        style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '6px',
+                                                                            padding: '6px 10px',
+                                                                            borderRadius: THEME.radius.sm,
+                                                                            border: '1px solid #CBD5E1',
+                                                                            backgroundColor: '#FFFFFF',
+                                                                            color: '#334155',
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: 600,
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                    >
+                                                                        <CalendarClock size={13} />
+                                                                        <span>Preset Fin de Año (31 Dic - 2 Ene)</span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>Primer Día Sin Entrega (Inicio)</label>
+                                                                    <input 
+                                                                        type="date" 
+                                                                        value={vacConfig.startDate || ''} 
+                                                                        onChange={(e) => updateVacField({ startDate: e.target.value })}
+                                                                        style={{ width: '100%', padding: '7px 10px', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.borderActive}`, fontSize: '0.8rem', fontWeight: 600 }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>Último Día de Receso (Fin)</label>
+                                                                    <input 
+                                                                        type="date" 
+                                                                        value={vacConfig.endDate || ''} 
+                                                                        min={vacConfig.startDate || undefined}
+                                                                        onChange={(e) => updateVacField({ endDate: e.target.value })}
+                                                                        style={{ width: '100%', padding: '7px 10px', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.borderActive}`, fontSize: '0.8rem', fontWeight: 600 }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>Hora de Retorno Operativo</label>
+                                                                    <input 
+                                                                        type="text" 
+                                                                        defaultValue={vacConfig.reopenTime || '06:00 AM'} 
+                                                                        placeholder="ej: 06:00 AM"
+                                                                        onBlur={(e) => updateVacField({ reopenTime: e.target.value })}
+                                                                        style={{ width: '100%', padding: '7px 10px', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.borderActive}`, fontSize: '0.8rem', fontWeight: 600 }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>Título del Motivo (Banner)</label>
+                                                                    <input 
+                                                                        type="text" 
+                                                                        defaultValue={vacConfig.reasonTitle || ''} 
+                                                                        key={`title-${vacConfig.reasonTitle}`}
+                                                                        placeholder="ej: Receso de Semana Santa"
+                                                                        onBlur={(e) => updateVacField({ reasonTitle: e.target.value })}
+                                                                        style={{ width: '100%', padding: '7px 10px', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.borderActive}`, fontSize: '0.8rem', fontWeight: 600 }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <div>
+                                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>Mensaje de Hospitalidad al Cliente (Cero Abandono / Cero WhatsApp)</label>
+                                                                <textarea 
+                                                                    defaultValue={vacConfig.customMessage || ''} 
+                                                                    key={`msg-${vacConfig.customMessage}`}
+                                                                    onBlur={(e) => updateVacField({ customMessage: e.target.value })}
+                                                                    placeholder="Mensaje claro informando cuándo se entregará su pedido..."
+                                                                    style={{ width: '100%', padding: '8px 10px', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.borderActive}`, fontSize: '0.8rem', minHeight: '54px', resize: 'vertical' }}
+                                                                />
+                                                            </div>
+
+                                                            <div style={{ padding: '8px 12px', borderRadius: THEME.radius.sm, backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', fontSize: '0.73rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <CheckCircle2 size={15} style={{ flexShrink: 0 }} />
+                                                                <span>
+                                                                    <strong>Política Anti-Abandono Autónomo:</strong> Cuando el receso está activo, el selector de fecha en Checkout B2C, Portal B2B y Admin bloquea automáticamente del <strong>{vacConfig.startDate || '—'}</strong> al <strong>{vacConfig.endDate || '—'}</strong> y salta al primer día hábil de retorno sin redirigir chats a WhatsApp.
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()
+                                            ) : setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'allow_sunday_deliveries' || setting.key === 'allow_holiday_deliveries' || setting.key === 'packaging_fee_enabled' ? (
                                                 <select 
                                                     value={setting.value} 
                                                     onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 
@@ -771,8 +978,8 @@ export default function AdminSettingsPage() {
                                                         outline: 'none'
                                                     }}
                                                 >
-                                                    <option value={setting.key === 'store_status' ? "open" : "true"}>{setting.key === 'store_status' ? "ABIERTA" : "ACTIVADA"}</option>
-                                                    <option value={setting.key === 'store_status' ? "closed" : "false"}>{setting.key === 'store_status' ? "CERRADA" : "DESACTIVADA"}</option>
+                                                    <option value="true">ACTIVADA</option>
+                                                    <option value="false">DESACTIVADA</option>
                                                 </select>
                                             ) : setting.key === 'packaging_fee_note' ? (
                                                 <textarea

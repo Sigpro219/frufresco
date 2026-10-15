@@ -141,14 +141,82 @@ export function isColombianHoliday(dateVal: Date | string): { isHoliday: boolean
     return { isHoliday: false };
 }
 
+export interface StoreVacationConfig {
+    enabled: boolean;
+    startDate: string; // YYYY-MM-DD
+    endDate: string;   // YYYY-MM-DD
+    reopenTime?: string; // ej. '06:00 AM'
+    reasonTitle?: string; // ej. 'Receso de Semana Santa'
+    customMessage?: string;
+}
+
+export function parseStoreVacationConfig(raw?: string | null): StoreVacationConfig {
+    if (!raw) {
+        return {
+            enabled: false,
+            startDate: '',
+            endDate: '',
+            reopenTime: '06:00 AM',
+            reasonTitle: 'Receso de Semana Santa',
+            customMessage: 'Puedes dejar tu pedido confirmado hoy mismo y nuestro sistema lo agendará con Prioridad #1 de Abastecimiento para el primer día hábil de retorno.'
+        };
+    }
+    try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return {
+            enabled: Boolean(parsed?.enabled),
+            startDate: parsed?.startDate || '',
+            endDate: parsed?.endDate || '',
+            reopenTime: parsed?.reopenTime || '06:00 AM',
+            reasonTitle: parsed?.reasonTitle || 'Receso Operativo Programado',
+            customMessage: parsed?.customMessage || 'Puedes dejar tu pedido confirmado hoy mismo y nuestro sistema lo agendará con Prioridad #1 de Abastecimiento para el primer día hábil de retorno.'
+        };
+    } catch {
+        return {
+            enabled: false,
+            startDate: '',
+            endDate: '',
+            reopenTime: '06:00 AM',
+            reasonTitle: 'Receso Operativo Programado',
+            customMessage: 'Puedes dejar tu pedido confirmado hoy mismo y nuestro sistema lo agendará con Prioridad #1 de Abastecimiento para el primer día hábil de retorno.'
+        };
+    }
+}
+
 /**
- * Verifica si una fecha es válida según los permisos de entregas los domingos y festivos.
+ * Calcula automáticamente el rango de Semana Santa (Jueves Santo a Domingo de Resurrección)
+ * para el año en curso (o el año siguiente si ya pasó la Semana Santa actual).
+ */
+export function getHolyWeekRange(referenceYear?: number): { startDate: string; endDate: string; returnDate: string; year: number } {
+    const bogotaNow = getBogotaNow();
+    let targetYear = referenceYear || bogotaNow.getFullYear();
+    let easter = getEasterSunday(targetYear);
+    if (!referenceYear && bogotaNow > easter) {
+        targetYear += 1;
+        easter = getEasterSunday(targetYear);
+    }
+    const juevesSanto = new Date(easter);
+    juevesSanto.setDate(easter.getDate() - 3);
+    const lunesPascua = new Date(easter);
+    lunesPascua.setDate(easter.getDate() + 1);
+
+    return {
+        startDate: formatDateKey(juevesSanto),
+        endDate: formatDateKey(easter),
+        returnDate: formatDateKey(lunesPascua),
+        year: targetYear
+    };
+}
+
+/**
+ * Verifica si una fecha es válida según los permisos de entregas los domingos, festivos y recesos programados.
  */
 export function isValidDeliveryDate(
     dateVal: Date | string,
     allowSundays: boolean = false,
-    allowHolidays: boolean = false
-): { valid: boolean; reason?: string } {
+    allowHolidays: boolean = false,
+    vacationConfig?: StoreVacationConfig | null
+): { valid: boolean; reason?: string; isVacationRecess?: boolean } {
     let d: Date;
     if (typeof dateVal === 'string') {
         const parts = dateVal.split('T')[0].split('-');
@@ -162,6 +230,17 @@ export function isValidDeliveryDate(
     }
 
     if (isNaN(d.getTime())) return { valid: true };
+
+    const dateKey = formatDateKey(d);
+    if (vacationConfig?.enabled && vacationConfig.startDate && vacationConfig.endDate) {
+        if (dateKey >= vacationConfig.startDate && dateKey <= vacationConfig.endDate) {
+            return {
+                valid: false,
+                isVacationRecess: true,
+                reason: `${vacationConfig.reasonTitle || 'Receso operativo programado'} (${vacationConfig.startDate} al ${vacationConfig.endDate}).`
+            };
+        }
+    }
 
     const isSunday = d.getDay() === 0;
     if (isSunday && !allowSundays) {
@@ -182,7 +261,8 @@ export function isValidDeliveryDate(
 export function getNextValidDeliveryDate(
     startDate: Date | string,
     allowSundays: boolean = false,
-    allowHolidays: boolean = false
+    allowHolidays: boolean = false,
+    vacationConfig?: StoreVacationConfig | null
 ): Date {
     let current: Date;
     if (typeof startDate === 'string') {
@@ -196,9 +276,9 @@ export function getNextValidDeliveryDate(
         current = new Date(startDate.getTime());
     }
 
-    // Buscar hasta un máximo de 14 días adelante
-    for (let i = 0; i < 14; i++) {
-        const check = isValidDeliveryDate(current, allowSundays, allowHolidays);
+    // Buscar hasta un máximo de 30 días adelante (soporta recesos largos como Semana Santa o Fin de Año)
+    for (let i = 0; i < 30; i++) {
+        const check = isValidDeliveryDate(current, allowSundays, allowHolidays, vacationConfig);
         if (check.valid) {
             return current;
         }
@@ -223,22 +303,37 @@ export function formatDateToYYYYMMDD(date: Date): string {
     return `${y}-${m}-${d}`;
 }
 
+export function addDaysISO(isoDateStr: string, daysToAdd: number): string {
+    const parts = (isoDateStr || '').split('T')[0].split('-');
+    let d: Date;
+    if (parts.length === 3) {
+        d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    } else {
+        d = new Date(isoDateStr);
+    }
+    if (isNaN(d.getTime())) return isoDateStr;
+    d.setDate(d.getDate() + daysToAdd);
+    return formatDateToYYYYMMDD(d);
+}
+
 /**
  * Calcula la fecha mínima válida de despacho (YYYY-MM-DD) para un pedido nuevo,
- * respetando la hora de corte de Bogotá, domingos y festivos de Colombia.
+ * respetando la hora de corte de Bogotá, domingos, festivos de Colombia y recesos programados.
  */
 export function calculateStandardMinDeliveryDate(
     cutoffEnabled: boolean = true,
     cutoffHour: number = 20,
     allowSundays: boolean = false,
-    allowHolidays: boolean = false
+    allowHolidays: boolean = false,
+    vacationConfig?: StoreVacationConfig | null
 ): string {
     const bogotaNow = getBogotaNow();
     const currentHour = bogotaNow.getHours();
     const daysToAdd = (cutoffEnabled && currentHour >= cutoffHour) ? 2 : 1;
     const baseTarget = new Date(bogotaNow);
     baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
-    const valid = getNextValidDeliveryDate(baseTarget, allowSundays, allowHolidays);
+    const valid = getNextValidDeliveryDate(baseTarget, allowSundays, allowHolidays, vacationConfig);
     return formatDateToYYYYMMDD(valid);
 }
+
 
