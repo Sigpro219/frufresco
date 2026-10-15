@@ -10156,6 +10156,21 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Antes de ejecutar cualquier mutación hacia la tabla `orders` (`INSERT` o `UPDATE` de `delivery_date`), el backend/frontend valida que `delivery_date >= minDeliveryDate` y `isValidDeliveryDate(delivery_date, allowSundays, allowHolidays)`.
      - De registrarse cualquier transgresión, se interrumpe el flujo con mensaje de error explícito y se aborta el guardado en base de datos.
 
+#### Escenario 220: Asistente Consciente de Próxima Fecha Hábil de Entrega según Restricción de Sede B2B y Autorización Explícita de Excepción (`/admin/orders/create`) (SDD v1.9.188)
+- **Given** un operador en la Mesa Inteligente de Creación de Pedidos (`/admin/orders/create`) seleccionando una sucursal B2B que posee restricción de días de entrega en `logistics_data` (ej. `COLSUBSIDIO - BOSQUES DE ATHAN` que solo recibe los **Martes y Jueves**).
+- **When** la fecha de entrega activa (`deliveryDate`, por defecto mañana) cae en un día de la semana no habilitado para esa sede (ej. **Viernes 16/10/2026**):
+- **Then**:
+  1. **Prohibición de Mutación Silenciosa y Gobernanza por Decisión Consciente:**
+     - El sistema jamás cambia la fecha a espaldas del operador al seleccionar la sede, preservando la visibilidad de que la fecha original incumple la ventana habitual del cliente.
+  2. **Motor de Cálculo de Próximas Fechas Hábiles de la Sede (`nextAvailableDates`):**
+     - `evaluateDeliveryRestriction` calcula algorítmicamente las **próximas 3 fechas calendario** a partir de `Math.max(deliveryDate, minDeliveryDate)` que satisfacen simultáneamente:
+       a) El día ISO (`1..7`) pertenece a `allowedIsoDays` de la sucursal (`logistics_data.allowed_days` o `logistics_data.days`).
+       b) La fecha es un día hábil válido de operación en FruFresco (`isValidDeliveryDate(dateStr, allowSundaysDelivery, allowHolidaysDelivery).valid === true`, respetando festivos de Colombia y domingos).
+  3. **Acciones de 1 Clic en el Bloque `FECHA ENTREGA` y en el Banner de Restricción:**
+     - Tanto en el banner de alerta de la sucursal como directamente debajo del selector `FECHA ENTREGA`, el sistema despliega:
+       - **Botón Primario de Cambio Consciente (1 Clic):** `Cambiar a próxima fecha habilitada: [Día DD/MM/YYYY]` (ej. `Mar 20/10/2026`), acompañado de píldoras rápidas para las siguientes fechas disponibles de esa sede (ej. `Jue 22/10/2026`). Al pulsarlo, actualiza `deliveryDate`, limpia cualquier excepción previa y confirma con un toast.
+       - **Botón Consciente de Excepción Operativa:** `Mantener [Día DD/MM] como excepción` para cuando el cliente solicitó expresamente recibir fuera de su frecuencia habitual. Al activarlo de forma consciente, el estado visual pasa de alerta roja a confirmación ámbar (`Excepción de Día Autorizada por Operador`) y no vuelve a interrumpir con `window.confirm` al guardar el pedido.
+
 ---
 
 

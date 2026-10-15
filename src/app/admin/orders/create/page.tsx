@@ -750,6 +750,7 @@ function CreateOrderContent() {
     const [manualDeliveryTime, setManualDeliveryTime] = useState('');
     const [manualDeliveryMargin, setManualDeliveryMargin] = useState(15);
     const [manualDeliveryNote, setManualDeliveryNote] = useState('');
+    const [dayRestrictionExceptionDate, setDayRestrictionExceptionDate] = useState<string | null>(null);
 
     // Estilos para ocultar flechas del input number
     const hideSpinnersStyle = `
@@ -4400,12 +4401,16 @@ function CreateOrderContent() {
         }
 
         // Validación Poka-Yoke de Días Permitidos de Entrega
-        if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
+        if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid && !deliveryRestrictionStatus.isExceptionAuthorized) {
+            const nextHint = deliveryRestrictionStatus.nextAvailableDates?.[0]
+                ? `\nPróxima fecha habilitada sugerida: ${deliveryRestrictionStatus.nextAvailableDates[0].displayFull}.\n`
+                : '\n';
             const confirmException = window.confirm(
                 `⚠️ ALERTA LOGÍSTICA DE ENTREGA:\n\n` +
                 `Esta sede (${selectedClientDetails.company_name}) solo recibe despachos los días:\n` +
                 `👉 ${deliveryRestrictionStatus.allowedDaysNames}${deliveryRestrictionStatus.timeWindow}\n\n` +
-                `Fecha seleccionada: ${deliveryDate.split('T')[0]} (${deliveryRestrictionStatus.targetDayName}).\n\n` +
+                `Fecha seleccionada: ${deliveryDate.split('T')[0]} (${deliveryRestrictionStatus.targetDayName}).` +
+                nextHint + `\n` +
                 `¿Deseas autorizar EXCEPCIONALMENTE este despacho fuera de los días habituales?`
             );
             if (!confirmException) {
@@ -4902,11 +4907,28 @@ function CreateOrderContent() {
     };
 
     const evaluateDeliveryRestriction = (client: any, deliveryDateStr: string) => {
-        if (!client || !deliveryDateStr) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '' };
+        const emptyResult = {
+            isValid: true,
+            message: null as string | null,
+            allowedDaysNames: '',
+            isDayViolation: false,
+            targetDayName: '',
+            timeWindow: '',
+            currentDateShort: '',
+            isExceptionAuthorized: false,
+            nextAvailableDates: [] as Array<{
+                dateStr: string;
+                displayShort: string;
+                displayFull: string;
+                dayName: string;
+            }>
+        };
+
+        if (!client || !deliveryDateStr) return emptyResult;
 
         const dateOnly = deliveryDateStr.split('T')[0];
         const parts = dateOnly.split('-');
-        if (parts.length !== 3) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '' };
+        if (parts.length !== 3) return emptyResult;
 
         const year = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1;
@@ -4926,31 +4948,87 @@ function CreateOrderContent() {
             7: 'Domingo'
         };
 
+        const DAY_SHORT: Record<number, string> = {
+            1: 'Lun',
+            2: 'Mar',
+            3: 'Mié',
+            4: 'Jue',
+            5: 'Vie',
+            6: 'Sáb',
+            7: 'Dom'
+        };
+
         const targetDayName = DAY_NAMES[isoDay] || 'Día';
+        const currentDateShort = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
         const logisticsData = client.logistics_data;
-        if (!logisticsData) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName };
+        if (!logisticsData) return { ...emptyResult, targetDayName, currentDateShort };
 
         let allowedIsoDays: number[] = [];
         if (Array.isArray(logisticsData.allowed_days) && logisticsData.allowed_days.length > 0) {
-            allowedIsoDays = logisticsData.allowed_days;
+            allowedIsoDays = logisticsData.allowed_days.map((d: number) => Number(d));
         } else if (Array.isArray(logisticsData.days) && logisticsData.days.length > 0) {
-            allowedIsoDays = logisticsData.days.map((d: number) => d === 0 ? 7 : d);
+            allowedIsoDays = logisticsData.days.map((d: number) => (Number(d) === 0 ? 7 : Number(d)));
         }
 
         if (allowedIsoDays.length > 0 && !allowedIsoDays.includes(isoDay)) {
-            const allowedDaysNames = allowedIsoDays.sort().map(d => DAY_NAMES[d] || `Día ${d}`).join(', ');
+            const allowedDaysNames = [...allowedIsoDays].sort((a, b) => a - b).map(d => DAY_NAMES[d] || `Día ${d}`).join(', ');
             const timeWindow = (logisticsData.start_time && logisticsData.end_time) ? ` (${logisticsData.start_time} - ${logisticsData.end_time})` : '';
+
+            // Calcular las próximas 3 fechas calendario hábiles que cumplan tanto con los días permitidos de la sede
+            // como con el calendario operativo de FruFresco (festivos / domingos).
+            const nextAvailableDates: Array<{
+                dateStr: string;
+                displayShort: string;
+                displayFull: string;
+                dayName: string;
+            }> = [];
+
+            const minParts = (minDeliveryDate || dateOnly).split('-');
+            const minDateObj = minParts.length === 3
+                ? new Date(parseInt(minParts[0], 10), parseInt(minParts[1], 10) - 1, parseInt(minParts[2], 10))
+                : targetDate;
+
+            const baseStart = targetDate.getTime() >= minDateObj.getTime() ? targetDate : minDateObj;
+
+            for (let offset = 1; offset <= 28 && nextAvailableDates.length < 3; offset++) {
+                const cand = new Date(baseStart.getFullYear(), baseStart.getMonth(), baseStart.getDate() + offset);
+                const candJsDay = cand.getDay();
+                const candIsoDay = candJsDay === 0 ? 7 : candJsDay;
+                if (!allowedIsoDays.includes(candIsoDay)) continue;
+
+                const candY = cand.getFullYear();
+                const candM = String(cand.getMonth() + 1).padStart(2, '0');
+                const candD = String(cand.getDate()).padStart(2, '0');
+                const candStr = `${candY}-${candM}-${candD}`;
+
+                const validCheck = isValidDeliveryDate(candStr, allowSundaysDelivery, allowHolidaysDelivery);
+                if (!validCheck.valid) continue;
+
+                nextAvailableDates.push({
+                    dateStr: candStr,
+                    displayShort: `${DAY_SHORT[candIsoDay]} ${candD}/${candM}/${candY}`,
+                    displayFull: `${DAY_NAMES[candIsoDay]} ${candD}/${candM}/${candY}`,
+                    dayName: DAY_NAMES[candIsoDay]
+                });
+            }
+
+            const exceptionKey = `${client.id || ''}:${dateOnly}`;
+            const isExceptionAuthorized = dayRestrictionExceptionDate === exceptionKey;
+
             return {
                 isValid: false,
                 isDayViolation: true,
                 targetDayName,
                 allowedDaysNames,
                 timeWindow,
+                currentDateShort,
+                isExceptionAuthorized,
+                nextAvailableDates,
                 message: `Esta sede solo recibe entregas los ${allowedDaysNames}${timeWindow}. La fecha seleccionada corresponde a un ${targetDayName}.`
             };
         }
 
-        return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName };
+        return { ...emptyResult, targetDayName, currentDateShort };
     };
 
     const filteredClients = useMemo(() => {
@@ -5037,7 +5115,7 @@ function CreateOrderContent() {
 
     const deliveryRestrictionStatus = useMemo(() => {
         return evaluateDeliveryRestriction(selectedClientDetails, deliveryDate);
-    }, [selectedClientDetails, deliveryDate]);
+    }, [selectedClientDetails, deliveryDate, minDeliveryDate, allowSundaysDelivery, allowHolidaysDelivery, dayRestrictionExceptionDate]);
 
     const getSelectedClientDetails = () => selectedClientDetails;
 
@@ -5388,26 +5466,139 @@ function CreateOrderContent() {
                                                 </button>
                                             </div>
 
-                                            {/* ALERTA REACTIVA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA */}
+                                            {/* ALERTA REACTIVA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA + ASISTENTE DE PRÓXIMA FECHA HÁBIL */}
                                             {!deliveryRestrictionStatus.isValid && (
                                                 <div style={{
-                                                    padding: '0.65rem 0.95rem',
-                                                    backgroundColor: '#FEF2F2',
-                                                    border: '1.5px solid #FCA5A5',
+                                                    padding: '0.65rem 0.9rem',
+                                                    backgroundColor: deliveryRestrictionStatus.isExceptionAuthorized ? '#FFFBEB' : '#FEF2F2',
+                                                    border: deliveryRestrictionStatus.isExceptionAuthorized ? '1.5px solid #FCD34D' : '1.5px solid #FCA5A5',
                                                     borderRadius: '8px',
                                                     display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '10px',
-                                                    color: '#991B1B',
-                                                    fontSize: '0.8rem',
+                                                    flexDirection: 'column',
+                                                    gap: '8px',
+                                                    color: deliveryRestrictionStatus.isExceptionAuthorized ? '#92400E' : '#991B1B',
+                                                    fontSize: '0.78rem',
                                                     fontWeight: '700'
                                                 }}>
-                                                    <AlertTriangle size={18} style={{ color: '#DC2626', flexShrink: 0 }} />
-                                                    <div>
-                                                        <span style={{ fontWeight: '900', color: '#991B1B' }}>⚠️ Restricción Logística de Entrega: </span>
-                                                        <span style={{ fontWeight: '600', color: '#7F1D1D' }}>
-                                                            {deliveryRestrictionStatus.message}
-                                                        </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        {deliveryRestrictionStatus.isExceptionAuthorized ? (
+                                                            <ShieldCheck size={17} style={{ color: '#D97706', flexShrink: 0 }} />
+                                                        ) : (
+                                                            <AlertTriangle size={17} style={{ color: '#DC2626', flexShrink: 0 }} />
+                                                        )}
+                                                        <div style={{ flex: 1 }}>
+                                                            <span style={{ fontWeight: '900', color: deliveryRestrictionStatus.isExceptionAuthorized ? '#92400E' : '#991B1B' }}>
+                                                                {deliveryRestrictionStatus.isExceptionAuthorized
+                                                                    ? 'Excepción de Día Autorizada por Operador: '
+                                                                    : 'Restricción Logística de Entrega: '}
+                                                            </span>
+                                                            <span style={{ fontWeight: '600', color: deliveryRestrictionStatus.isExceptionAuthorized ? '#78350F' : '#7F1D1D' }}>
+                                                                {deliveryRestrictionStatus.message}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Botonera Consciente: Próxima Fecha Hábil vs Excepción */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', paddingLeft: '25px' }}>
+                                                        {deliveryRestrictionStatus.nextAvailableDates.length > 0 && (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const nextOpt = deliveryRestrictionStatus.nextAvailableDates[0];
+                                                                        setDeliveryDate(nextOpt.dateStr);
+                                                                        setDayRestrictionExceptionDate(null);
+                                                                        showToast(`Fecha ajustada al próximo día habilitado: ${nextOpt.displayFull}`, 'success');
+                                                                    }}
+                                                                    style={{
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '5px',
+                                                                        padding: '4px 10px',
+                                                                        borderRadius: '6px',
+                                                                        backgroundColor: '#0D7A57',
+                                                                        color: '#FFFFFF',
+                                                                        border: 'none',
+                                                                        fontSize: '0.72rem',
+                                                                        fontWeight: '800',
+                                                                        cursor: 'pointer',
+                                                                        boxShadow: '0 1px 3px rgba(13, 122, 87, 0.25)'
+                                                                    }}
+                                                                >
+                                                                    <CheckCircle2 size={13} />
+                                                                    <span>Cambiar a próxima fecha habilitada: {deliveryRestrictionStatus.nextAvailableDates[0].displayShort}</span>
+                                                                </button>
+
+                                                                {deliveryRestrictionStatus.nextAvailableDates.slice(1, 3).map((opt) => (
+                                                                    <button
+                                                                        key={opt.dateStr}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setDeliveryDate(opt.dateStr);
+                                                                            setDayRestrictionExceptionDate(null);
+                                                                            showToast(`Fecha ajustada a: ${opt.displayFull}`, 'success');
+                                                                        }}
+                                                                        style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px',
+                                                                            padding: '3.5px 8px',
+                                                                            borderRadius: '6px',
+                                                                            backgroundColor: '#FFFFFF',
+                                                                            color: '#0D7A57',
+                                                                            border: '1px solid #86EFAC',
+                                                                            fontSize: '0.70rem',
+                                                                            fontWeight: '800',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                        title={`Programar para el ${opt.displayFull}`}
+                                                                    >
+                                                                        <span>o {opt.displayShort}</span>
+                                                                    </button>
+                                                                ))}
+                                                            </>
+                                                        )}
+
+                                                        {!deliveryRestrictionStatus.isExceptionAuthorized ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const dateOnly = deliveryDate.split('T')[0];
+                                                                    setDayRestrictionExceptionDate(`${selectedClientDetails?.id || ''}:${dateOnly}`);
+                                                                    showToast(`Excepción consciente autorizada para ${deliveryRestrictionStatus.targetDayName} ${deliveryRestrictionStatus.currentDateShort}`, 'info');
+                                                                }}
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    padding: '3.5px 8px',
+                                                                    borderRadius: '6px',
+                                                                    backgroundColor: '#FFFFFF',
+                                                                    color: '#9A3412',
+                                                                    border: '1px solid #FDBA74',
+                                                                    fontSize: '0.70rem',
+                                                                    fontWeight: '700',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <span>Mantener {deliveryRestrictionStatus.targetDayName} {deliveryRestrictionStatus.currentDateShort.slice(0, 5)} como excepción</span>
+                                                            </button>
+                                                        ) : (
+                                                            <span style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '3px 8px',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: '#FEF3C7',
+                                                                color: '#92400E',
+                                                                border: '1px solid #FCD34D',
+                                                                fontSize: '0.69rem',
+                                                                fontWeight: '800'
+                                                            }}>
+                                                                <Check size={12} /> Excepción consciente activa ({deliveryRestrictionStatus.targetDayName} {deliveryRestrictionStatus.currentDateShort.slice(0, 5)})
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
@@ -9008,13 +9199,109 @@ function CreateOrderContent() {
                                                         setDeliveryDate(formatDateToYYYYMMDD(nextValid));
                                                         return;
                                                     }
+                                                    setDayRestrictionExceptionDate(null);
                                                     setDeliveryDate(newDate);
                                                 }
                                             }}
-                                            style={{ width: '100%', height: '36px', padding: '0 0.5rem', borderRadius: '6px', border: !deliveryRestrictionStatus.isValid ? '1.5px solid #F87171' : '1px solid #CBD5E1', backgroundColor: !deliveryRestrictionStatus.isValid ? '#FEF2F2' : 'white', fontSize: '0.82rem', outline: 'none' }}
+                                            style={{
+                                                width: '100%',
+                                                height: '36px',
+                                                padding: '0 0.5rem',
+                                                borderRadius: '6px',
+                                                border: !deliveryRestrictionStatus.isValid
+                                                    ? (deliveryRestrictionStatus.isExceptionAuthorized ? '1.5px solid #F59E0B' : '1.5px solid #F87171')
+                                                    : '1px solid #CBD5E1',
+                                                backgroundColor: !deliveryRestrictionStatus.isValid
+                                                    ? (deliveryRestrictionStatus.isExceptionAuthorized ? '#FFFBEB' : '#FEF2F2')
+                                                    : 'white',
+                                                fontSize: '0.82rem',
+                                                outline: 'none'
+                                            }}
                                         />
                                     </div>
                                 </div>
+
+                                {/* ASISTENTE CONSCIENTE DE PRÓXIMA FECHA HÁBIL EN PANEL DE ENTREGA */}
+                                {!deliveryRestrictionStatus.isValid && (
+                                    <div style={{
+                                        marginTop: '0.6rem',
+                                        padding: '0.55rem 0.7rem',
+                                        borderRadius: '8px',
+                                        backgroundColor: deliveryRestrictionStatus.isExceptionAuthorized ? '#FFFBEB' : '#FEF2F2',
+                                        border: deliveryRestrictionStatus.isExceptionAuthorized ? '1px solid #FDE68A' : '1px solid #FECACA',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '6px'
+                                    }}>
+                                        <div style={{ fontSize: '0.68rem', fontWeight: '800', color: deliveryRestrictionStatus.isExceptionAuthorized ? '#92400E' : '#991B1B', lineHeight: 1.25 }}>
+                                            {deliveryRestrictionStatus.isExceptionAuthorized
+                                                ? `Excepción activa para ${deliveryRestrictionStatus.targetDayName} ${deliveryRestrictionStatus.currentDateShort.slice(0, 5)} (Recibe: ${deliveryRestrictionStatus.allowedDaysNames})`
+                                                : `Día no habitual (${deliveryRestrictionStatus.targetDayName}). Sede recibe: ${deliveryRestrictionStatus.allowedDaysNames}`}
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                                            {deliveryRestrictionStatus.nextAvailableDates.map((opt, idx) => (
+                                                <button
+                                                    key={opt.dateStr}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setDeliveryDate(opt.dateStr);
+                                                        setDayRestrictionExceptionDate(null);
+                                                        showToast(`Fecha ajustada al próximo día habilitado: ${opt.displayFull}`, 'success');
+                                                    }}
+                                                    style={{
+                                                        flex: idx === 0 ? '1 1 100%' : '1 1 auto',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '4px',
+                                                        padding: idx === 0 ? '5px 8px' : '3.5px 7px',
+                                                        borderRadius: '6px',
+                                                        backgroundColor: idx === 0 ? '#0D7A57' : '#FFFFFF',
+                                                        color: idx === 0 ? '#FFFFFF' : '#0D7A57',
+                                                        border: idx === 0 ? 'none' : '1px solid #86EFAC',
+                                                        fontSize: '0.69rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        boxShadow: idx === 0 ? '0 1px 2px rgba(13, 122, 87, 0.2)' : 'none'
+                                                    }}
+                                                    title={`Cambiar fecha de entrega a ${opt.displayFull}`}
+                                                >
+                                                    <CheckCircle2 size={11} />
+                                                    <span>{idx === 0 ? `Cambiar a ${opt.displayShort}` : opt.displayShort}</span>
+                                                </button>
+                                            ))}
+
+                                            {!deliveryRestrictionStatus.isExceptionAuthorized && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const dateOnly = deliveryDate.split('T')[0];
+                                                        setDayRestrictionExceptionDate(`${selectedClientDetails?.id || ''}:${dateOnly}`);
+                                                        showToast(`Excepción consciente autorizada para ${deliveryRestrictionStatus.targetDayName} ${deliveryRestrictionStatus.currentDateShort}`, 'info');
+                                                    }}
+                                                    style={{
+                                                        flex: '1 1 100%',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '4px',
+                                                        padding: '3.5px 7px',
+                                                        borderRadius: '6px',
+                                                        backgroundColor: '#FFFFFF',
+                                                        color: '#9A3412',
+                                                        border: '1px solid #FDBA74',
+                                                        fontSize: '0.67rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    <span>Mantener {deliveryRestrictionStatus.targetDayName} {deliveryRestrictionStatus.currentDateShort.slice(0, 5)} como excepción</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* FRANJA DE ENTREGA BADGE */}
                                 {(selectedClient || selectedClientB2C) && (
@@ -9125,8 +9412,8 @@ function CreateOrderContent() {
                                     </label>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                         {isColsubsidioSelected && (
-                                            <span style={{ fontSize: '0.62rem', fontWeight: '900', color: '#92400E', backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '4px', border: '1px solid #FCD34D' }}>
-                                                🏢 COLSUBSIDIO
+                                            <span style={{ fontSize: '0.62rem', fontWeight: '900', color: '#92400E', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                <Building2 size={11} strokeWidth={2.5} /> COLSUBSIDIO
                                             </span>
                                         )}
                                         {(purchaseOrderNumber || solpedNumber) && (
