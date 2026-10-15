@@ -1420,13 +1420,13 @@ function ContingencyPrintContent() {
                                                                     {unit}
                                                                 </td>
                                                                 <td style={{ textAlign: 'right', fontSize: isDense ? '7.1pt' : '7.6pt', fontVariantNumeric: 'tabular-nums', color: '#334155', padding: rowPad }}>
-                                                                    {price > 0 ? formatMoney(price) : '$0'}
+                                                                    {price > 0 ? formatMoney(price) : formatMoney(0)}
                                                                 </td>
                                                                 <td style={{ textAlign: 'center', fontSize: smallFontSize, fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: rowPad }}>
                                                                     {ivaPct > 0 ? `${ivaPct}%` : '0%'}
                                                                 </td>
                                                                 <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: rowPad }}>
-                                                                    {lineTotal > 0 ? formatMoney(lineTotal) : '$0'}
+                                                                    {lineTotal > 0 ? formatMoney(lineTotal) : formatMoney(0)}
                                                                 </td>
                                                                 <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: '1px 3px' }}>
                                                                     <div style={{ borderBottom: '1px dashed #94A3B8', height: isDense ? '12px' : '14px' }}></div>
@@ -1492,15 +1492,15 @@ function ContingencyPrintContent() {
                                                     <div style={{ width: isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isDense ? '3px 6px' : '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isDense ? '6.6pt' : '7pt' }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                                                             <span style={{ color: '#475569' }}>Subtotal:</span>
-                                                            <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isZeroCostDoc ? '$0' : formatMoney(subtotal)}</span>
+                                                            <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(subtotal)}</span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                                                             <span style={{ color: '#475569' }}>IVA (0% / Excluido):</span>
-                                                            <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isZeroCostDoc ? '$0' : formatMoney(order.tax || 0)}</span>
+                                                            <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(order.tax || 0)}</span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '1px', fontSize: isDense ? '7.8pt' : '8.4pt', fontWeight: '900' }}>
                                                             <span style={{ color: '#0F172A' }}>TOTAL:</span>
-                                                            <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{isZeroCostDoc ? '$0' : formatMoney(order.total || subtotal)}</span>
+                                                            <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(order.total || subtotal)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
