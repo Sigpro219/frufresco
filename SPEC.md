@@ -9980,6 +9980,23 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
 
 ---
 
+#### Escenario 211: Matriz de Imputabilidad Nominal Equitativa (Dinero Primero / COP-First) y Desbloqueo Comercial en Facturación (SDD v1.9.179)
+- **Given** un auditor SAC o supervisor en la consola de Atención al Cliente (`/admin/customer-service`) liquidando el impacto económico (`caseCoQ`) de una reclamación o devolución comercial en el Paso 2 de `PqrAuditModal.tsx`.
+- **When** distribuye la responsabilidad nominal entre múltiples funcionarios operativos o proveedores (conductores, auxiliares de bodega, líderes de lista, transportadores, proveedores):
+- **Then**:
+  1. **Principio de Justicia Salarial y Gobernanza Monetaria (Dinero Primero / COP-First):**
+     - El dinero en pesos colombianos (COP) gobierna estrictamente sobre el porcentaje, erradicando cobros asimétricos o penalizaciones arbitrarias a trabajadores por truncamiento de enteros (ej. 100% / 3 = 34% + 33% + 33% -> $24.480 vs $23.760).
+     - Al asignar N responsables, el sistema calcula la división exacta de pesos (`Math.floor(caseCoQ / N)`), garantizando que para $72.000 COP entre 3 colaboradores, cada uno pague **exactamente $24.000 COP**.
+     - La deducción total en COP equivale exactamente al 100% de `caseCoQ` al peso.
+  2. **Telemetría de Porcentajes con Precisión Decimal & Auto-Balanceo:**
+     - El porcentaje se computa reactivamente desde el dinero: `((deductionAmount / caseCoQ) * 100).toFixed(2)` (ej. 33.33%).
+     - Los deslizadores manuales operan con resolución de paso de 0.5% y limitación estricta de techo.
+     - Para 2 responsables, el deslizamiento de uno recalcula automáticamente el saldo del otro manteniendo la suma monetaria idéntica a `caseCoQ`.
+     - Se dota la interfaz de un botón de acción rápida *"Dividir en Partes Iguales"* para restaurar el reparto equitativo simétrico con 1 solo clic.
+     - La cabecera proyecta en tiempo real el chip de verificación `Total Imputado: 100%` con tolerancia de punto flotante.
+
+---
+
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
 
 > **Referencia:** Documento maestro [`TECHNICAL_DEBT.md`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/TECHNICAL_DEBT.md) en la raíz del repositorio.  
