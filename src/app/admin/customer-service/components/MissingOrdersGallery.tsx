@@ -22,7 +22,7 @@ interface ClientProfile {
     email?: string;
     parent_id?: string;
     is_corporate_parent?: boolean;
-    delivery_restrictions?: string;
+    delivery_restrictions?: any;
     logistics_data?: any;
 }
 
@@ -242,9 +242,17 @@ export default function MissingOrdersGallery({
             let habitualDaysLabel = '';
 
             // A. Check explicit configuration in logistics_data.allowed_days
-            const allowedDays: number[] = Array.isArray(profile.logistics_data?.allowed_days)
-                ? profile.logistics_data.allowed_days
-                : [];
+            let logisticsObj = profile.logistics_data;
+            if (typeof logisticsObj === 'string') {
+                try {
+                    logisticsObj = JSON.parse(logisticsObj);
+                } catch {
+                    logisticsObj = null;
+                }
+            }
+            const allowedDays: number[] = Array.isArray(logisticsObj?.allowed_days)
+                ? logisticsObj.allowed_days
+                : (Array.isArray(logisticsObj?.days) ? logisticsObj.days : []);
 
             if (allowedDays.length > 0) {
                 // In allowed_days: 1=Lun, 2=Mar, 3=Mie, 4=Jue, 5=Vie, 6=Sab, 7 or 0=Dom
@@ -260,14 +268,19 @@ export default function MissingOrdersGallery({
                 }
             }
 
-            // B. If not explicit, check delivery_restrictions text
+            // B. If not explicit, check delivery_restrictions text safely
             if (!isHabitual && profile.delivery_restrictions) {
-                const text = profile.delivery_restrictions.toLowerCase();
+                const rawRestrictions = typeof profile.delivery_restrictions === 'string'
+                    ? profile.delivery_restrictions
+                    : (typeof profile.delivery_restrictions === 'object'
+                        ? JSON.stringify(profile.delivery_restrictions)
+                        : String(profile.delivery_restrictions));
+                const text = rawRestrictions.toLowerCase();
                 const dayWord = targetDayName.toLowerCase();
                 if (text.includes(dayWord) || text.includes('todos los d') || text.includes('lunes a sabado') || text.includes('diario')) {
                     isHabitual = true;
                     habitualReason = `Menciona "${targetDayName}" en restricciones de entrega`;
-                    if (!habitualDaysLabel) habitualDaysLabel = profile.delivery_restrictions;
+                    if (!habitualDaysLabel) habitualDaysLabel = rawRestrictions;
                 }
             }
 
@@ -323,11 +336,11 @@ export default function MissingOrdersGallery({
         if (searchTerm.trim()) {
             const clean = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
             result = result.filter(item => {
-                const comp = (item.profile.company_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                const cont = (item.profile.contact_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                const nit = (item.profile.nit || '').toLowerCase();
-                const phone = (item.profile.contact_phone || item.profile.phone || '').toLowerCase();
-                const addr = (item.profile.address || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const comp = String(item.profile.company_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const cont = String(item.profile.contact_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const nit = String(item.profile.nit || '').toLowerCase();
+                const phone = String(item.profile.contact_phone || item.profile.phone || '').toLowerCase();
+                const addr = String(item.profile.address || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 return comp.includes(clean) || cont.includes(clean) || nit.includes(clean) || phone.includes(clean) || addr.includes(clean);
             });
         }
@@ -336,7 +349,7 @@ export default function MissingOrdersGallery({
         return result.sort((a, b) => {
             if (!a.contactedAt && b.contactedAt) return -1;
             if (a.contactedAt && !b.contactedAt) return 1;
-            return (a.profile.company_name || '').localeCompare(b.profile.company_name || '');
+            return String(a.profile.company_name || '').localeCompare(String(b.profile.company_name || ''));
         });
     }, [allCompiledItems, statusFilter, searchTerm]);
 
