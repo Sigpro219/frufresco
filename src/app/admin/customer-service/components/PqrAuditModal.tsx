@@ -1001,8 +1001,7 @@ export default function PqrAuditModal({
                     .update({
                         quantity_returned: noveltyQty,
                         reason: reasonText,
-                        notes: compositeNotes,
-                        has_physical_return: hasPhysicalReturn
+                        notes: compositeNotes
                     })
                     .eq('id', existingReturn.id);
                 if (updErr) throw updErr;
@@ -1014,15 +1013,10 @@ export default function PqrAuditModal({
                     quantity_returned: noveltyQty,
                     reason: reasonText,
                     status: 'pending_review',
-                    notes: compositeNotes,
-                    has_physical_return: hasPhysicalReturn
+                    notes: compositeNotes
                 };
 
-                let insertRes = await supabase.from('billing_returns').insert([payload]);
-                if (insertRes.error && insertRes.error.message?.includes('has_physical_return')) {
-                    delete payload.has_physical_return;
-                    insertRes = await supabase.from('billing_returns').insert([payload]);
-                }
+                const insertRes = await supabase.from('billing_returns').insert([payload]);
                 if (insertRes.error) throw insertRes.error;
                 showToast('Novedad de producto registrada con éxito.', 'success');
             }
@@ -1283,8 +1277,8 @@ export default function PqrAuditModal({
             <div style={{
                 position: 'relative',
                 width: '100%',
-                maxWidth: '960px',
-                maxHeight: '92vh',
+                maxWidth: '1080px',
+                maxHeight: '94vh',
                 display: 'flex',
                 flexDirection: 'column',
                 backgroundColor: 'white',
@@ -1698,8 +1692,9 @@ export default function PqrAuditModal({
                                 </div>
                             )}
 
-                            {/* Radication & Contact Banner */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                            {/* 1. Context Row: Radicación & Pedido Asociado (2 balanced columns) */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
+                                {/* Radicación & Asunto */}
                                 <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
@@ -1710,7 +1705,7 @@ export default function PqrAuditModal({
                                         </span>
                                     </div>
                                     <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0F172A' }}>{pqr.subject || 'Sin asunto'}</div>
-                                    <div style={{ fontSize: '0.75rem', color: '#334155', lineHeight: '1.4', backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ fontSize: '0.74rem', color: '#334155', lineHeight: '1.4', backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                         {pqr.description || 'Sin descripción ingresada.'}
                                     </div>
                                     {authorInfo.isColleagueLogged && (
@@ -1721,28 +1716,210 @@ export default function PqrAuditModal({
                                     )}
                                 </div>
 
+                                {/* Pedido Asociado */}
                                 <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
-                                        Contacto Comercial del Cliente
-                                    </span>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0F172A' }}>{authorInfo.clientDisplayName}</div>
-                                        {authorInfo.nit && <div style={{ fontSize: '0.72rem', color: '#64748B' }}>NIT: {authorInfo.nit}</div>}
-                                        {authorInfo.email && <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{authorInfo.email}</div>}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Link2 size={15} style={{ color: '#475569' }} />
+                                            <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                                Pedido Asociado a la Reclamación
+                                            </span>
+                                        </div>
+                                        {pqr.order_id && (
+                                            <button
+                                                type="button"
+                                                onClick={handleUnlinkOrder}
+                                                disabled={isLinkingOrder}
+                                                style={{ fontSize: '0.7rem', color: '#DC2626', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}
+                                            >
+                                                <Unlink size={12} />
+                                                <span>Desvincular</span>
+                                            </button>
+                                        )}
                                     </div>
 
-                                    {/* WhatsApp Direct Action & Professional Template Generator */}
-                                    <div style={{
-                                        paddingTop: '10px',
-                                        borderTop: '1px solid #E2E8F0',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '8px'
-                                    }}>
+                                    {pqr.order_id ? (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '0.74rem' }}>
+                                            <div>
+                                                <span style={{ color: '#94A3B8', fontSize: '0.66rem', display: 'block' }}>Folio Pedido</span>
+                                                <strong style={{ color: '#0F172A', fontSize: '0.85rem' }}>#{pqr.orders?.sequence_id || 'N/A'}</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#94A3B8', fontSize: '0.66rem', display: 'block' }}>Total Pedido</span>
+                                                <strong style={{ color: '#0F172A', fontSize: '0.85rem' }}>{formatMoney(pqr.orders?.total || 0)}</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#94A3B8', fontSize: '0.66rem', display: 'block' }}>Dirección / Sede</span>
+                                                <span style={{ color: '#334155', fontWeight: '600' }}>{pqr.orders?.shipping_address || 'Sede Principal'}</span>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#94A3B8', fontSize: '0.66rem', display: 'block' }}>Conductor Ruta</span>
+                                                <span style={{ color: '#334155', fontWeight: '700' }}>{assignedRouteDriver ? assignedRouteDriver.name : 'No asignado'}</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px dashed #CBD5E1' }}>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                Este caso no tiene un pedido enlazado. Selecciona un pedido reciente del cliente para habilitar reposiciones:
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <SearchableSelect
+                                                        value={linkingOrderId}
+                                                        onChange={setLinkingOrderId}
+                                                        disabled={loadingRecentOrders || isLinkingOrder}
+                                                        placeholder="-- Seleccionar Pedido Reciente --"
+                                                        searchPlaceholder="Buscar por #pedido, fecha o valor..."
+                                                        clearable
+                                                        options={clientRecentOrders.map(o => ({
+                                                            value: o.id,
+                                                            label: `Pedido #${o.sequence_id}`,
+                                                            sublabel: `${new Date(o.created_at).toLocaleDateString('es-CO')} • ${o.shipping_address || 'Sede'}`,
+                                                            badge: formatMoney(o.total || 0)
+                                                        }))}
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleLinkOrder(linkingOrderId)}
+                                                    disabled={!linkingOrderId || isLinkingOrder}
+                                                    style={{ padding: '6px 12px', backgroundColor: '#0D7A57', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                                >
+                                                    {isLinkingOrder ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Link2 size={12} />}
+                                                    <span>Vincular</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 2. Main Operational Workspace (2-Column Split Layout: Evidence & WhatsApp SAC on Left, Novelties Management on Right) */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '12px', alignItems: 'start' }}>
+                                {/* LEFT PANEL: Evidence Photo & WhatsApp SAC */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    {/* Evidence Photo Gallery */}
+                                    <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Camera size={15} style={{ color: '#475569' }} />
+                                                <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                                    Evidencia Fotográfica ({photos.length})
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <input
+                                                    type="file"
+                                                    ref={fileInputRef}
+                                                    onChange={handleUploadEvidence}
+                                                    accept="image/*"
+                                                    style={{ display: 'none' }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    disabled={uploadingPhoto}
+                                                    style={{
+                                                        padding: '4px 8px',
+                                                        backgroundColor: 'white',
+                                                        border: '1px solid #CBD5E1',
+                                                        color: '#334155',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                >
+                                                    {uploadingPhoto ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={11} />}
+                                                    <span>Subir Foto</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {photos.length > 0 ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <div style={{
+                                                    position: 'relative',
+                                                    borderRadius: '10px',
+                                                    overflow: 'hidden',
+                                                    backgroundColor: '#0F172A',
+                                                    height: '160px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    border: '1px solid #CBD5E1'
+                                                }}>
+                                                    <img
+                                                        src={photos[activePhotoIdx]}
+                                                        alt="Evidencia PQR"
+                                                        style={{ maxHeight: '160px', width: 'auto', maxWidth: '100%', objectFit: 'contain', cursor: 'pointer' }}
+                                                        onClick={() => onZoomPhoto(photos[activePhotoIdx])}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onZoomPhoto(photos[activePhotoIdx])}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            bottom: '6px',
+                                                            right: '6px',
+                                                            padding: '4px 8px',
+                                                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                                                            color: 'white',
+                                                            borderRadius: '6px',
+                                                            fontSize: '0.68rem',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}
+                                                    >
+                                                        <Maximize2 size={11} />
+                                                        <span>Ampliar</span>
+                                                    </button>
+                                                </div>
+
+                                                {photos.length > 1 && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+                                                        {photos.map((url, idx) => (
+                                                            <button
+                                                                key={idx}
+                                                                type="button"
+                                                                onClick={() => setActivePhotoIdx(idx)}
+                                                                style={{
+                                                                    width: '44px',
+                                                                    height: '44px',
+                                                                    borderRadius: '6px',
+                                                                    overflow: 'hidden',
+                                                                    padding: 0,
+                                                                    border: activePhotoIdx === idx ? '2px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                    opacity: activePhotoIdx === idx ? 1 : 0.6,
+                                                                    cursor: 'pointer',
+                                                                    flexShrink: 0
+                                                                }}
+                                                            >
+                                                                <img src={url} alt={`Thumb ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div style={{ padding: '1.25rem 1rem', textAlign: 'center', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: '0.72rem' }}>
+                                                No se adjuntaron fotografías al radicar. Puedes subir evidencias usando el botón superior.
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Contacto Comercial & WhatsApp SAC */}
+                                    <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
                                             <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                 <MessageCircle size={13} style={{ color: '#059669' }} />
-                                                <span>Plantillas Oficiales WhatsApp SAC</span>
+                                                <span>Canal WhatsApp SAC</span>
                                             </span>
 
                                             <button
@@ -1758,6 +1935,34 @@ export default function PqrAuditModal({
                                             </button>
                                         </div>
 
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0F172A' }}>{authorInfo.clientDisplayName}</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', color: '#64748B', flexWrap: 'wrap' }}>
+                                                {authorInfo.nit && <span>NIT: {authorInfo.nit}</span>}
+                                                {authorInfo.email && <span>• {authorInfo.email}</span>}
+                                            </div>
+                                        </div>
+
+                                        {editingPhone && (
+                                            <div style={{ display: 'flex', gap: '6px', paddingTop: '2px' }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Ej: 3154456827"
+                                                    value={newPhoneInput}
+                                                    onChange={e => setNewPhoneInput(e.target.value)}
+                                                    style={{ flex: '1', padding: '5px 8px', fontSize: '0.72rem', border: '1px solid #CBD5E1', borderRadius: '6px' }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSavePhone}
+                                                    disabled={savingPhone}
+                                                    style={{ padding: '5px 10px', backgroundColor: '#0F172A', color: 'white', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', border: 'none', cursor: 'pointer' }}
+                                                >
+                                                    {savingPhone ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : 'Guardar'}
+                                                </button>
+                                            </div>
+                                        )}
+
                                         {/* Template Selector Pills */}
                                         <div style={{
                                             display: 'flex',
@@ -1772,8 +1977,8 @@ export default function PqrAuditModal({
                                                     type="button"
                                                     onClick={() => setSelectedWaTemplate(t.id)}
                                                     style={{
-                                                        padding: '4px 8px',
-                                                        fontSize: '0.68rem',
+                                                        padding: '3px 7px',
+                                                        fontSize: '0.66rem',
                                                         fontWeight: selectedWaTemplate === t.id ? '800' : '600',
                                                         borderRadius: '6px',
                                                         border: selectedWaTemplate === t.id ? '1px solid #0D7A57' : '1px solid #CBD5E1',
@@ -1795,12 +2000,12 @@ export default function PqrAuditModal({
                                             backgroundColor: '#F0FDF4',
                                             border: '1px solid #BBF7D0',
                                             borderRadius: '8px',
-                                            padding: '8px 10px',
-                                            fontSize: '0.72rem',
+                                            padding: '7px 9px',
+                                            fontSize: '0.7rem',
                                             color: '#166534',
-                                            lineHeight: '1.4',
+                                            lineHeight: '1.35',
                                             whiteSpace: 'pre-wrap',
-                                            maxHeight: '110px',
+                                            maxHeight: '85px',
                                             overflowY: 'auto'
                                         }}>
                                             {buildPqrWhatsAppMessage(pqr, selectedWaTemplate)}
@@ -1817,23 +2022,23 @@ export default function PqrAuditModal({
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
                                                         gap: '6px',
-                                                        padding: '7px 14px',
+                                                        padding: '6px 12px',
                                                         backgroundColor: '#059669',
                                                         color: 'white',
                                                         borderRadius: '8px',
-                                                        fontSize: '0.74rem',
+                                                        fontSize: '0.72rem',
                                                         fontWeight: '800',
                                                         textDecoration: 'none',
                                                         boxShadow: '0 2px 4px rgba(5, 150, 105, 0.25)',
                                                         transition: 'background-color 0.15s'
                                                     }}
                                                 >
-                                                    <MessageCircle size={14} />
-                                                    <span>Abrir Chat WhatsApp ({authorInfo.phoneParsed.display})</span>
+                                                    <MessageCircle size={13} />
+                                                    <span>Abrir WhatsApp ({authorInfo.phoneParsed.display})</span>
                                                 </a>
                                             ) : (
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#B45309', backgroundColor: '#FEF3C7', padding: '5px 10px', borderRadius: '6px', border: '1px solid #FDE68A' }}>
-                                                    <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', color: '#B45309', backgroundColor: '#FEF3C7', padding: '4px 8px', borderRadius: '6px', border: '1px solid #FDE68A' }}>
+                                                    <AlertTriangle size={11} style={{ flexShrink: 0 }} />
                                                     <span>Sin número celular válido</span>
                                                 </span>
                                             )}
@@ -1848,9 +2053,9 @@ export default function PqrAuditModal({
                                                 style={{
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '5px',
-                                                    padding: '6px 10px',
-                                                    fontSize: '0.72rem',
+                                                    gap: '4px',
+                                                    padding: '5px 9px',
+                                                    fontSize: '0.7rem',
                                                     fontWeight: '700',
                                                     color: '#334155',
                                                     backgroundColor: 'white',
@@ -1860,337 +2065,134 @@ export default function PqrAuditModal({
                                                 }}
                                                 title="Copiar texto del mensaje"
                                             >
-                                                <Copy size={12} />
-                                                <span>Copiar Texto</span>
-                                            </button>
-                                        </div>
-
-                                        {editingPhone && (
-                                            <div style={{ display: 'flex', gap: '6px', paddingTop: '4px' }}>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Ej: 3154456827"
-                                                    value={newPhoneInput}
-                                                    onChange={e => setNewPhoneInput(e.target.value)}
-                                                    style={{ flex: '1', padding: '6px 10px', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '8px' }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={handleSavePhone}
-                                                    disabled={savingPhone}
-                                                    style={{ padding: '6px 12px', backgroundColor: '#0F172A', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer' }}
-                                                >
-                                                    {savingPhone ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : 'Guardar'}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Order Linking / Linked Info */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <Link2 size={15} style={{ color: '#475569' }} />
-                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                            Pedido Asociado a la Reclamación
-                                        </span>
-                                    </div>
-                                    {pqr.order_id && (
-                                        <button
-                                            type="button"
-                                            onClick={handleUnlinkOrder}
-                                            disabled={isLinkingOrder}
-                                            style={{ fontSize: '0.7rem', color: '#DC2626', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}
-                                        >
-                                            <Unlink size={12} />
-                                            <span>Desvincular Pedido</span>
-                                        </button>
-                                    )}
-                                </div>
-
-                                {pqr.order_id ? (
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '0.75rem' }}>
-                                        <div>
-                                            <span style={{ color: '#94A3B8', fontSize: '0.68rem', display: 'block' }}>Folio Pedido</span>
-                                            <strong style={{ color: '#0F172A', fontSize: '0.85rem' }}>#{pqr.orders?.sequence_id || 'N/A'}</strong>
-                                        </div>
-                                        <div>
-                                            <span style={{ color: '#94A3B8', fontSize: '0.68rem', display: 'block' }}>Total Pedido</span>
-                                            <strong style={{ color: '#0F172A', fontSize: '0.85rem' }}>{formatMoney(pqr.orders?.total || 0)}</strong>
-                                        </div>
-                                        <div>
-                                            <span style={{ color: '#94A3B8', fontSize: '0.68rem', display: 'block' }}>Dirección / Sede</span>
-                                            <span style={{ color: '#334155', fontWeight: '600' }}>{pqr.orders?.shipping_address || 'Sede Principal'}</span>
-                                        </div>
-                                        <div>
-                                            <span style={{ color: '#94A3B8', fontSize: '0.68rem', display: 'block' }}>Conductor Ruta</span>
-                                            <span style={{ color: '#334155', fontWeight: '700' }}>{assignedRouteDriver ? assignedRouteDriver.name : 'No asignado'}</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px dashed #CBD5E1' }}>
-                                        <div style={{ fontSize: '0.72rem', color: '#64748B', flex: 1, minWidth: '220px' }}>
-                                            Este caso no tiene un pedido enlazado. Selecciona un pedido reciente del cliente para habilitar reposiciones:
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '280px', flex: 1, justifyContent: 'flex-end' }}>
-                                            <div style={{ flex: 1, minWidth: '220px' }}>
-                                                <SearchableSelect
-                                                    value={linkingOrderId}
-                                                    onChange={setLinkingOrderId}
-                                                    disabled={loadingRecentOrders || isLinkingOrder}
-                                                    placeholder="-- Seleccionar Pedido Reciente --"
-                                                    searchPlaceholder="Buscar por #pedido, fecha o valor..."
-                                                    clearable
-                                                    options={clientRecentOrders.map(o => ({
-                                                        value: o.id,
-                                                        label: `Pedido #${o.sequence_id}`,
-                                                        sublabel: `${new Date(o.created_at).toLocaleDateString('es-CO')} • ${o.shipping_address || 'Sede'}`,
-                                                        badge: formatMoney(o.total || 0)
-                                                    }))}
-                                                />
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleLinkOrder(linkingOrderId)}
-                                                disabled={!linkingOrderId || isLinkingOrder}
-                                                style={{ padding: '6px 12px', backgroundColor: '#0D7A57', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                            >
-                                                {isLinkingOrder ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Link2 size={12} />}
-                                                <span>Vincular</span>
+                                                <Copy size={11} />
+                                                <span>Copiar</span>
                                             </button>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-
-                            {/* Evidence Photo Gallery */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <Camera size={15} style={{ color: '#475569' }} />
-                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                            Evidencia Fotográfica ({photos.length})
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <input
-                                            type="file"
-                                            ref={fileInputRef}
-                                            onChange={handleUploadEvidence}
-                                            accept="image/*"
-                                            style={{ display: 'none' }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            disabled={uploadingPhoto}
-                                            style={{
-                                                padding: '5px 10px',
-                                                backgroundColor: 'white',
-                                                border: '1px solid #CBD5E1',
-                                                color: '#334155',
-                                                borderRadius: '8px',
-                                                fontSize: '0.72rem',
-                                                fontWeight: '700',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px'
-                                            }}
-                                        >
-                                            {uploadingPhoto ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={12} />}
-                                            <span>Subir Evidencia</span>
-                                        </button>
-                                    </div>
                                 </div>
 
-                                {photos.length > 0 ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        <div style={{
-                                            position: 'relative',
-                                            borderRadius: '10px',
-                                            overflow: 'hidden',
-                                            backgroundColor: '#0F172A',
-                                            maxHeight: '260px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            border: '1px solid #CBD5E1'
-                                        }}>
-                                            <img
-                                                src={photos[activePhotoIdx]}
-                                                alt="Evidencia PQR"
-                                                style={{ maxHeight: '260px', width: 'auto', objectFit: 'contain', cursor: 'pointer' }}
-                                                onClick={() => onZoomPhoto(photos[activePhotoIdx])}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => onZoomPhoto(photos[activePhotoIdx])}
-                                                style={{
-                                                    position: 'absolute',
-                                                    bottom: '8px',
-                                                    right: '8px',
-                                                    padding: '6px 10px',
-                                                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                                                    color: 'white',
-                                                    borderRadius: '6px',
-                                                    fontSize: '0.7rem',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px'
-                                                }}
-                                            >
-                                                <Maximize2 size={12} />
-                                                <span>Ampliar</span>
-                                            </button>
-                                        </div>
-
-                                        {photos.length > 1 && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                                                {photos.map((url, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        type="button"
-                                                        onClick={() => setActivePhotoIdx(idx)}
-                                                        style={{
-                                                            width: '54px',
-                                                            height: '54px',
-                                                            borderRadius: '8px',
-                                                            overflow: 'hidden',
-                                                            padding: 0,
-                                                            border: activePhotoIdx === idx ? '2px solid #0D7A57' : '1px solid #CBD5E1',
-                                                            opacity: activePhotoIdx === idx ? 1 : 0.6,
-                                                            cursor: 'pointer',
-                                                            flexShrink: 0
-                                                        }}
-                                                    >
-                                                        <img src={url} alt={`Thumb ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                    </button>
-                                                ))}
+                                {/* RIGHT PANEL: Declaración & Gestión de Novedades de Línea */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {pqr.order_id ? (
+                                        <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                                    Declaración de Novedades de Línea (Faltante / Avería)
+                                                </span>
+                                                <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
+                                                    {orderItems.length} productos en pedido
+                                                </span>
                                             </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div style={{ padding: '2rem 1rem', textAlign: 'center', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: '0.75rem' }}>
-                                        No se adjuntaron fotografías al radicar el caso. Puedes subir evidencias usando el botón superior.
-                                    </div>
-                                )}
-                            </div>
 
-                            {/* Novelty Line Items (If order linked) */}
-                            {pqr.order_id && (
-                                <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                        Declaración de Novedades de Línea (Faltante / Avería)
-                                    </span>
+                                            {/* Formulario de Adición / Modificación */}
+                                            <div style={{ backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <div>
+                                                    <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Producto del Pedido</label>
+                                                    <SearchableSelect
+                                                        value={selectedItemId}
+                                                        onChange={setSelectedItemId}
+                                                        placeholder="-- Seleccionar Producto del Pedido --"
+                                                        searchPlaceholder="Buscar producto por nombre o SKU..."
+                                                        clearable
+                                                        options={orderItems.map(item => ({
+                                                            value: item.id,
+                                                            label: item.products?.name || item.nickname || 'Ítem sin nombre',
+                                                            sublabel: `Pedido: ${item.quantity} ${item.products?.unit_of_measure || 'ud'} • Precio: ${formatMoney(item.unit_price)}`,
+                                                            badge: item.products?.sku || `${item.quantity} ${item.products?.unit_of_measure || 'ud'}`
+                                                        }))}
+                                                    />
+                                                </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Producto del Pedido</label>
-                                            <SearchableSelect
-                                                value={selectedItemId}
-                                                onChange={setSelectedItemId}
-                                                placeholder="-- Seleccionar Producto del Pedido --"
-                                                searchPlaceholder="Buscar producto por nombre o SKU..."
-                                                clearable
-                                                options={orderItems.map(item => ({
-                                                    value: item.id,
-                                                    label: item.products?.name || item.nickname || 'Ítem sin nombre',
-                                                    sublabel: `Pedido: ${item.quantity} ${item.products?.unit_of_measure || 'ud'} • Precio: ${formatMoney(item.unit_price)}`,
-                                                    badge: item.products?.sku || `${item.quantity} ${item.products?.unit_of_measure || 'ud'}`
-                                                }))}
-                                            />
-                                        </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', alignItems: 'end' }}>
+                                                    <div>
+                                                        <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Tipo de Novedad</label>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', height: '32px' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setNoveltyType('faltante')}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '4px',
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: noveltyType === 'faltante' ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                    backgroundColor: noveltyType === 'faltante' ? '#ECFDF5' : '#FFFFFF',
+                                                                    color: noveltyType === 'faltante' ? '#065F46' : '#64748B',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <PackageX size={13} />
+                                                                <span>Faltante</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setNoveltyType('averia')}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '4px',
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: noveltyType === 'averia' ? '1px solid #B45309' : '1px solid #CBD5E1',
+                                                                    backgroundColor: noveltyType === 'averia' ? '#FFFBEB' : '#FFFFFF',
+                                                                    color: noveltyType === 'averia' ? '#B45309' : '#64748B',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <AlertTriangle size={13} />
+                                                                <span>Avería</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
 
-                                        <div>
-                                            <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Tipo de Novedad</label>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', height: '32px' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setNoveltyType('faltante')}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '4px',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: '700',
-                                                        borderRadius: '6px',
-                                                        border: noveltyType === 'faltante' ? '1px solid #0D7A57' : '1px solid #CBD5E1',
-                                                        backgroundColor: noveltyType === 'faltante' ? '#ECFDF5' : '#FFFFFF',
-                                                        color: noveltyType === 'faltante' ? '#065F46' : '#64748B',
-                                                        cursor: 'pointer'
-                                                    }}
-                                                >
-                                                    <PackageX size={13} />
-                                                    <span>Faltante</span>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setNoveltyType('averia')}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '4px',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: '700',
-                                                        borderRadius: '6px',
-                                                        border: noveltyType === 'averia' ? '1px solid #B45309' : '1px solid #CBD5E1',
-                                                        backgroundColor: noveltyType === 'averia' ? '#FFFBEB' : '#FFFFFF',
-                                                        color: noveltyType === 'averia' ? '#B45309' : '#64748B',
-                                                        cursor: 'pointer'
-                                                    }}
-                                                >
-                                                    <AlertTriangle size={13} />
-                                                    <span>Avería</span>
-                                                </button>
+                                                    <div>
+                                                        <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Cantidad Afectada</label>
+                                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                                            <input
+                                                                type="number"
+                                                                min="0.1"
+                                                                step="0.1"
+                                                                placeholder="Cant."
+                                                                value={noveltyQty || ''}
+                                                                onChange={e => setNoveltyQty(parseFloat(e.target.value) || 0)}
+                                                                style={{ width: '100%', padding: '6px 8px', fontSize: '0.72rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px' }}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleCreateNovelty}
+                                                                disabled={actionLoading || !selectedItemId || noveltyQty <= 0}
+                                                                style={{ padding: '6px 12px', backgroundColor: '#0F172A', color: 'white', borderRadius: '6px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                                                            >
+                                                                {actionLoading ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={12} />}
+                                                                <span>Agregar</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ paddingTop: '2px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: '700', color: hasPhysicalReturn ? '#0D7A57' : '#64748B', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={hasPhysicalReturn}
+                                                            onChange={e => setHasPhysicalReturn(e.target.checked)}
+                                                            style={{ width: '15px', height: '15px', accentColor: '#0D7A57', cursor: 'pointer' }}
+                                                        />
+                                                        <Package size={14} style={{ color: hasPhysicalReturn ? '#0D7A57' : '#64748B', flexShrink: 0 }} />
+                                                        <span>¿Retorna físicamente en el camión a bodega? (Ingresa a Cuarentena de Patio)</span>
+                                                    </label>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div>
-                                            <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Cantidad Afectada</label>
-                                            <div style={{ display: 'flex', gap: '6px' }}>
-                                                <input
-                                                    type="number"
-                                                    min="0.1"
-                                                    step="0.1"
-                                                    value={noveltyQty || ''}
-                                                    onChange={e => setNoveltyQty(parseFloat(e.target.value) || 0)}
-                                                    style={{ width: '100%', padding: '6px 8px', fontSize: '0.72rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px' }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={handleCreateNovelty}
-                                                    disabled={actionLoading || !selectedItemId || noveltyQty <= 0}
-                                                    style={{ padding: '6px 12px', backgroundColor: '#0F172A', color: 'white', borderRadius: '6px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer' }}
-                                                >
-                                                    <Plus size={13} />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '4px' }}>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: '700', color: hasPhysicalReturn ? '#0D7A57' : '#64748B', cursor: 'pointer' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={hasPhysicalReturn}
-                                                    onChange={e => setHasPhysicalReturn(e.target.checked)}
-                                                    style={{ width: '15px', height: '15px', accentColor: '#0D7A57', cursor: 'pointer' }}
-                                                />
-                                                <Package size={14} style={{ color: hasPhysicalReturn ? '#0D7A57' : '#64748B', flexShrink: 0 }} />
-                                                <span>¿Retorna físicamente en el camión a bodega? (Ingresa a Cuarentena de Patio)</span>
-                                            </label>
-                                        </div>
-
-                                        {/* Registered Novelties Table / List */}
-                                        {caseReturns.length > 0 && (
-                                            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '4px', borderBottom: '1px solid #E2E8F0' }}>
+                                            {/* Registered Novelties Full-Width Table / List */}
+                                            <div style={{ backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid #E2E8F0' }}>
                                                     <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#0D7A57' }}>
                                                         Novedades Declaradas en este Pedido ({caseReturns.length})
                                                     </span>
@@ -2199,105 +2201,117 @@ export default function PqrAuditModal({
                                                     </span>
                                                 </div>
 
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                    {caseReturns.map((ret: any) => {
-                                                        const oi = orderItems.find(o => o.product_id === ret.product_id) || 
-                                                                   ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
-                                                        const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
-                                                        const subtotal = unitPrice * (Number(ret.quantity_returned) || 0);
-                                                        const pName = ret.products?.name || oi?.products?.name || 'Producto';
-                                                        const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
-                                                        const isPhysical = ret.has_physical_return || (ret.notes || '').includes('RETORNO_FISICO: SI');
-                                                        const isFaltante = (ret.reason || '').toLowerCase().includes('faltante');
+                                                {caseReturns.length === 0 ? (
+                                                    <div style={{ padding: '1rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.72rem' }}>
+                                                        No hay novedades registradas aún en este pedido. Selecciona un producto arriba para agregarlo.
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        {caseReturns.map((ret: any) => {
+                                                            const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                                                                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                                                            const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                                                            const subtotal = unitPrice * (Number(ret.quantity_returned) || 0);
+                                                            const pName = ret.products?.name || oi?.products?.name || 'Producto';
+                                                            const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+                                                            const isPhysical = ret.has_physical_return || (ret.notes || '').includes('RETORNO_FISICO: SI');
+                                                            const isFaltante = (ret.reason || '').toLowerCase().includes('faltante');
 
-                                                        return (
-                                                            <div
-                                                                key={ret.id}
-                                                                style={{
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'space-between',
-                                                                    backgroundColor: '#FFFFFF',
-                                                                    border: '1px solid #E2E8F0',
-                                                                    borderRadius: '8px',
-                                                                    padding: '8px 12px',
-                                                                    fontSize: '0.72rem'
-                                                                }}
-                                                            >
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                    <div style={{
-                                                                        width: '24px',
-                                                                        height: '24px',
-                                                                        borderRadius: '50%',
-                                                                        backgroundColor: isFaltante ? '#ECFDF5' : '#FFFBEB',
-                                                                        color: isFaltante ? '#065F46' : '#B45309',
+                                                            return (
+                                                                <div
+                                                                    key={ret.id}
+                                                                    style={{
                                                                         display: 'flex',
                                                                         alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        flexShrink: 0
-                                                                    }}>
-                                                                        {isFaltante ? <PackageX size={13} /> : <AlertTriangle size={13} />}
-                                                                    </div>
-                                                                    <div>
-                                                                        <strong style={{ color: '#0F172A', display: 'block' }}>{pName}</strong>
-                                                                        <div style={{ fontSize: '0.66rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                                            <span><strong>{ret.quantity_returned} {uom}</strong> @ {formatMoney(unitPrice)}/{uom}</span>
-                                                                            <span style={{
-                                                                                fontSize: '0.62rem',
-                                                                                fontWeight: '700',
-                                                                                padding: '1px 6px',
-                                                                                borderRadius: '4px',
-                                                                                backgroundColor: isFaltante ? '#D1FAE5' : '#FEF3C7',
-                                                                                color: isFaltante ? '#065F46' : '#92400E'
-                                                                            }}>
-                                                                                {isFaltante ? 'Faltante' : 'Avería'}
-                                                                            </span>
-                                                                            {isPhysical && (
+                                                                        justifyContent: 'space-between',
+                                                                        backgroundColor: '#F8FAFC',
+                                                                        border: '1px solid #E2E8F0',
+                                                                        borderRadius: '8px',
+                                                                        padding: '8px 10px',
+                                                                        fontSize: '0.72rem'
+                                                                    }}
+                                                                >
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                                                                        <div style={{
+                                                                            width: '24px',
+                                                                            height: '24px',
+                                                                            borderRadius: '50%',
+                                                                            backgroundColor: isFaltante ? '#ECFDF5' : '#FFFBEB',
+                                                                            color: isFaltante ? '#065F46' : '#B45309',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            flexShrink: 0
+                                                                        }}>
+                                                                            {isFaltante ? <PackageX size={13} /> : <AlertTriangle size={13} />}
+                                                                        </div>
+                                                                        <div style={{ minWidth: 0, flex: 1 }}>
+                                                                            <strong style={{ color: '#0F172A', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName}</strong>
+                                                                            <div style={{ fontSize: '0.66rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                                <span><strong>{ret.quantity_returned} {uom}</strong> @ {formatMoney(unitPrice)}/{uom}</span>
                                                                                 <span style={{
                                                                                     fontSize: '0.62rem',
                                                                                     fontWeight: '700',
                                                                                     padding: '1px 6px',
                                                                                     borderRadius: '4px',
-                                                                                    backgroundColor: '#E0E7FF',
-                                                                                    color: '#3730A3'
+                                                                                    backgroundColor: isFaltante ? '#D1FAE5' : '#FEF3C7',
+                                                                                    color: isFaltante ? '#065F46' : '#92400E'
                                                                                 }}>
-                                                                                    Retorno Físico (Cuarentena)
+                                                                                    {isFaltante ? 'Faltante' : 'Avería'}
                                                                                 </span>
-                                                                            )}
+                                                                                {isPhysical && (
+                                                                                    <span style={{
+                                                                                        fontSize: '0.62rem',
+                                                                                        fontWeight: '700',
+                                                                                        padding: '1px 6px',
+                                                                                        borderRadius: '4px',
+                                                                                        backgroundColor: '#E0E7FF',
+                                                                                        color: '#3730A3'
+                                                                                    }}>
+                                                                                        Retorno Físico
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                </div>
 
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                    <strong style={{ color: '#047857', fontSize: '0.78rem' }}>
-                                                                        {formatMoney(subtotal)}
-                                                                    </strong>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleDeleteNovelty(ret.id)}
-                                                                        disabled={actionLoading}
-                                                                        style={{
-                                                                            border: 'none',
-                                                                            background: 'transparent',
-                                                                            color: '#DC2626',
-                                                                            cursor: 'pointer',
-                                                                            padding: '4px',
-                                                                            borderRadius: '4px'
-                                                                        }}
-                                                                        title="Eliminar esta novedad"
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                                                                        <strong style={{ color: '#047857', fontSize: '0.78rem' }}>
+                                                                            {formatMoney(subtotal)}
+                                                                        </strong>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleDeleteNovelty(ret.id)}
+                                                                            disabled={actionLoading}
+                                                                            style={{
+                                                                                border: 'none',
+                                                                                background: 'transparent',
+                                                                                color: '#DC2626',
+                                                                                cursor: 'pointer',
+                                                                                padding: '4px',
+                                                                                borderRadius: '4px'
+                                                                            }}
+                                                                            title="Eliminar esta novedad"
+                                                                        >
+                                                                            <Trash2 size={14} />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{ padding: '2rem 1.5rem', textAlign: 'center', backgroundColor: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: '12px', color: '#64748B', fontSize: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                                            <Package size={24} style={{ color: '#94A3B8' }} />
+                                            <strong style={{ color: '#334155' }}>Sin Pedido Vinculado</strong>
+                                            <span>Vincula un pedido en la tarjeta superior para habilitar la declaración de faltantes y averías de producto.</span>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
+                            </div>
                         </div>
                     )}
 
