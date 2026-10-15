@@ -8,7 +8,8 @@ import {
     RESPONSIBLE_PARTIES, 
     RCA_CATEGORIES_L1, 
     getStoredTaxonomy,
-    cleanHumanResolutionNotes
+    cleanHumanResolutionNotes,
+    parseSanitaryAndHumanNotes
 } from '@/lib/rcaTaxonomy';
 import UniversalLetterhead from '@/components/print/UniversalLetterhead';
 import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
@@ -166,6 +167,7 @@ export default function RncPrintPage() {
 
     const isResolved = pqr.status === 'resolved';
     const cleanNotes = cleanHumanResolutionNotes(pqr.resolution_notes || '');
+    const parsedResolution = parseSanitaryAndHumanNotes(pqr.resolution_notes || '', rca.notes);
 
     return (
         <div style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', padding: '1.5rem 1rem' }}>
@@ -584,16 +586,80 @@ export default function RncPrintPage() {
                         border: '1px solid #E2E8F0',
                         borderRadius: '6px',
                         padding: '8px 10px',
-                        fontSize: '0.68rem'
+                        fontSize: '0.68rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
                     }}>
-                        <div style={{ color: '#0F172A', whiteSpace: 'pre-line', lineHeight: '1.4', fontWeight: '500' }}>
-                            {cleanNotes || 'Caso en proceso de análisis e investigación técnica en mesa de calidad.'}
-                        </div>
+                        {/* Concepto Comercial / Dictamen */}
+                        {parsedResolution.commercialConcept && (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                backgroundColor: '#F0FDF4',
+                                border: '1px solid #BBF7D0',
+                                padding: '3px 8px',
+                                borderRadius: '4px',
+                                width: 'fit-content'
+                            }}>
+                                <span style={{ fontSize: '0.60rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase' }}>
+                                    Dictamen Comercial:
+                                </span>
+                                <span style={{ fontSize: '0.66rem', fontWeight: '700', color: '#15803D' }}>
+                                    {parsedResolution.commercialConcept}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Protocolo de Disposición Sanitaria */}
+                        {parsedResolution.sanitaryTitle ? (
+                            <div style={{
+                                backgroundColor: '#F8FAFC',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '5px',
+                                padding: '6px 8px'
+                            }}>
+                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <ShieldCheck size={12} color="#0D7A57" />
+                                    <span>Protocolo Sanitario: {parsedResolution.sanitaryTitle}</span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.64rem', color: '#334155' }}>
+                                    {parsedResolution.sanitaryDetails.map((detail, dIdx) => (
+                                        <div key={dIdx} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                                            <span style={{ color: '#0D7A57', fontWeight: '900', lineHeight: '1.2' }}>•</span>
+                                            <span style={{ lineHeight: '1.3' }}>{detail}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {/* Observaciones Humanas / Hallazgo Técnico / CAPA */}
+                        {parsedResolution.humanNotes ? (
+                            <div style={{
+                                borderTop: parsedResolution.sanitaryTitle ? '1px dashed #E2E8F0' : 'none',
+                                paddingTop: parsedResolution.sanitaryTitle ? '6px' : '0',
+                                color: '#1E293B',
+                                lineHeight: '1.4'
+                            }}>
+                                <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '0.60rem', display: 'block', marginBottom: '2px' }}>
+                                    Plan de Acción / Observaciones Técnicas:
+                                </span>
+                                <div style={{ fontWeight: '500', whiteSpace: 'pre-line' }}>
+                                    {parsedResolution.humanNotes}
+                                </div>
+                            </div>
+                        ) : !parsedResolution.sanitaryTitle ? (
+                            <div style={{ color: '#64748B', fontStyle: 'italic' }}>
+                                Caso cerrado conforme a los protocolos operativos estándar de calidad.
+                            </div>
+                        ) : null}
 
                         <div style={{
-                            marginTop: '6px',
+                            marginTop: '2px',
                             paddingTop: '6px',
-                            borderTop: '1px dashed #E2E8F0',
+                            borderTop: '1px solid #F1F5F9',
                             display: 'flex',
                             justifyContent: 'space-between',
                             fontSize: '0.60rem',
@@ -601,7 +667,7 @@ export default function RncPrintPage() {
                             fontWeight: '600'
                         }}>
                             <span>Dictaminado en Sistema SGC: <strong>{resolutionDate}</strong></span>
-                            <span>Normativa Sanitaria: <strong>Res. 2674/2013 Invima</strong></span>
+                            <span>Normativa Sanitaria: <strong>Res. 2674/2013 Invima • ISO 9001:2015</strong></span>
                         </div>
                     </div>
                 </div>
