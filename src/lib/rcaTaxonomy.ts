@@ -607,6 +607,17 @@ export interface SanitaryDisposalTemplate {
 
 export const DISPOSICION_SANITARIA_TEMPLATES: SanitaryDisposalTemplate[] = [
     {
+        id: 'producto_conforme_sin_baja',
+        title: 'Producto Conforme / Aceptado por el Cliente (Sin Baja Sanitaria)',
+        icon: 'ShieldCheck',
+        category: 'destruccion',
+        summary: 'El producto cumple el estándar de calidad acordado o fue aceptado en sitio sin descarte ni destrucción física.',
+        textTemplate: `[DISPOSICIÓN SANITARIA: PRODUCTO CONFORME ACEPTADO EN SITIO (SIN BAJA SANITARIA)]
+- Dictamen: Producto verificado conforme a los parámetros técnicos y organolépticos acordados.
+- Acción: El cliente conserva y aprovecha el producto en su operación normal sin requerir baja ni destrucción física.
+- Destino final: Consumo / aprovechamiento normal en sede del cliente.`
+    },
+    {
         id: 'disposicion_cliente_sin_retorno',
         title: 'Disposición en Sitio por el Cliente (Sin Retorno a Bodega)',
         icon: 'Store',

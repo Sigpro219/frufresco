@@ -240,7 +240,9 @@ export default function PqrAuditModal({
 
         const rawNotes = pqr.resolution_notes || '';
         // Pre-hydrate sanitary protocol template if saved in notes
-        if (rawNotes.includes('DISPOSICIÓN EN SITIO') || rawNotes.includes('disposicion_cliente_sin_retorno')) {
+        if (rawNotes.includes('PRODUCTO CONFORME ACEPTADO') || rawNotes.includes('producto_conforme_sin_baja') || rawNotes.includes('Cerrado conforme sin impacto económico')) {
+            setSanitaryKey('producto_conforme_sin_baja');
+        } else if (rawNotes.includes('DISPOSICIÓN EN SITIO') || rawNotes.includes('disposicion_cliente_sin_retorno')) {
             setSanitaryKey('disposicion_cliente_sin_retorno');
         } else if (rawNotes.includes('BAJA TOTAL') || rawNotes.includes('destruccion_biologica')) {
             setSanitaryKey('destruccion_biologica');
@@ -2517,7 +2519,18 @@ export default function PqrAuditModal({
                                     {/* Opt 1: Conforme */}
                                     <button
                                         type="button"
-                                        onClick={() => setResolutionOption('opt1')}
+                                        onClick={() => {
+                                            setResolutionOption('opt1');
+                                            setSanitaryKey('producto_conforme_sin_baja');
+                                            const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === 'producto_conforme_sin_baja');
+                                            if (tmpl) {
+                                                setResolutionNotes(prev => {
+                                                    const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
+                                                    if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
+                                                    return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
+                                                });
+                                            }
+                                        }}
                                         style={{
                                             padding: '12px 14px',
                                             borderRadius: '12px',
@@ -2539,7 +2552,21 @@ export default function PqrAuditModal({
                                     {/* Opt 2: Reposición D+1 $0 COP */}
                                     <button
                                         type="button"
-                                        onClick={() => setResolutionOption('opt2')}
+                                        onClick={() => {
+                                            setResolutionOption('opt2');
+                                            if (sanitaryKey === 'producto_conforme_sin_baja') {
+                                                const nextKey = hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno';
+                                                setSanitaryKey(nextKey);
+                                                const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
+                                                if (tmpl) {
+                                                    setResolutionNotes(prev => {
+                                                        const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
+                                                        if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
+                                                        return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
+                                                    });
+                                                }
+                                            }
+                                        }}
                                         style={{
                                             padding: '12px 14px',
                                             borderRadius: '12px',
@@ -2561,7 +2588,21 @@ export default function PqrAuditModal({
                                     {/* Opt 3: Nota Crédito Financiera */}
                                     <button
                                         type="button"
-                                        onClick={() => setResolutionOption('opt3')}
+                                        onClick={() => {
+                                            setResolutionOption('opt3');
+                                            if (sanitaryKey === 'producto_conforme_sin_baja') {
+                                                const nextKey = hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno';
+                                                setSanitaryKey(nextKey);
+                                                const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
+                                                if (tmpl) {
+                                                    setResolutionNotes(prev => {
+                                                        const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
+                                                        if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
+                                                        return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
+                                                    });
+                                                }
+                                            }
+                                        }}
                                         style={{
                                             padding: '12px 14px',
                                             borderRadius: '12px',
@@ -2583,7 +2624,21 @@ export default function PqrAuditModal({
                                     {/* Opt 4: Ajustar Factura */}
                                     <button
                                         type="button"
-                                        onClick={() => setResolutionOption('opt4')}
+                                        onClick={() => {
+                                            setResolutionOption('opt4');
+                                            if (sanitaryKey === 'producto_conforme_sin_baja') {
+                                                const nextKey = hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno';
+                                                setSanitaryKey(nextKey);
+                                                const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
+                                                if (tmpl) {
+                                                    setResolutionNotes(prev => {
+                                                        const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
+                                                        if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
+                                                        return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
+                                                    });
+                                                }
+                                            }
+                                        }}
                                         style={{
                                             padding: '12px 14px',
                                             borderRadius: '12px',
@@ -2610,6 +2665,12 @@ export default function PqrAuditModal({
                                     <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
                                         2. Protocolo de Disposición Sanitaria (Invima Res. 2674/2013)
                                     </label>
+                                    {sanitaryKey === 'producto_conforme_sin_baja' && (
+                                        <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#DBEAFE', padding: '2px 8px', borderRadius: '4px', border: '1px solid #93C5FD', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <ShieldCheck size={12} />
+                                            <span>Producto Conforme (Sin Baja Sanitaria)</span>
+                                        </span>
+                                    )}
                                     {sanitaryKey === 'disposicion_cliente_sin_retorno' && (
                                         <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#047857', backgroundColor: '#D1FAE5', padding: '2px 8px', borderRadius: '4px', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                             <Store size={12} />
@@ -2636,7 +2697,8 @@ export default function PqrAuditModal({
                                     placeholder="Seleccionar Protocolo Invima..."
                                     searchPlaceholder="Buscar protocolo sanitario..."
                                     options={DISPOSICION_SANITARIA_TEMPLATES.map(tmpl => {
-                                        const IconComp = tmpl.id === 'disposicion_cliente_sin_retorno' ? Store :
+                                        const IconComp = tmpl.id === 'producto_conforme_sin_baja' ? ShieldCheck :
+                                                         tmpl.id === 'disposicion_cliente_sin_retorno' ? Store :
                                                          tmpl.id === 'destruccion_biologica' ? Trash2 :
                                                          tmpl.id === 'transformacion_industrial' ? Layers :
                                                          tmpl.id === 'donacion_banco_alimentos' ? HeartHandshake : Sparkles;
@@ -2644,11 +2706,30 @@ export default function PqrAuditModal({
                                             value: tmpl.id,
                                             label: tmpl.title,
                                             sublabel: tmpl.summary || tmpl.textTemplate,
-                                            badge: tmpl.id === 'disposicion_cliente_sin_retorno' ? 'Sin Retorno' : undefined,
-                                            icon: <IconComp size={15} style={{ color: tmpl.id === 'disposicion_cliente_sin_retorno' ? '#0D7A57' : '#64748B' }} />
+                                            badge: tmpl.id === 'producto_conforme_sin_baja' ? 'Sin Baja' : tmpl.id === 'disposicion_cliente_sin_retorno' ? 'Sin Retorno' : undefined,
+                                            icon: <IconComp size={15} style={{ color: tmpl.id === 'producto_conforme_sin_baja' ? '#1D4ED8' : tmpl.id === 'disposicion_cliente_sin_retorno' ? '#0D7A57' : '#64748B' }} />
                                         };
                                     })}
                                 />
+
+                                {sanitaryKey === 'producto_conforme_sin_baja' && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '8px 12px',
+                                        backgroundColor: '#EFF6FF',
+                                        border: '1px solid #BFDBFE',
+                                        borderRadius: '8px',
+                                        fontSize: '0.72rem',
+                                        color: '#1E40AF'
+                                    }}>
+                                        <ShieldCheck size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
+                                        <span>
+                                            <strong>Producto Conforme en Sitio:</strong> El producto cumple con las especificaciones de calidad o fue aceptado por el cliente para su consumo normal sin requerir destrucción ni retorno.
+                                        </span>
+                                    </div>
+                                )}
 
                                 {sanitaryKey === 'disposicion_cliente_sin_retorno' && (
                                     <div style={{
@@ -2835,29 +2916,49 @@ export default function PqrAuditModal({
                                             <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#1E293B' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
                                         </div>
 
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ECFDF5', padding: '6px 12px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
-                                            <span style={{ fontSize: '0.7rem', color: '#065F46', fontWeight: '600' }}>Impacto Imputado:</span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#047857' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            backgroundColor: resolutionOption === 'opt1' ? '#EFF6FF' : '#FFF1F2',
+                                            padding: '6px 12px',
+                                            borderRadius: '8px',
+                                            border: resolutionOption === 'opt1' ? '1px solid #BFDBFE' : '1px solid #FECDD3'
+                                        }}>
+                                            <span style={{ fontSize: '0.7rem', color: resolutionOption === 'opt1' ? '#1E40AF' : '#9F1239', fontWeight: '700' }}>Impacto a Cobrar:</span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: resolutionOption === 'opt1' ? '#1D4ED8' : '#BE123C' }}>
+                                                {resolutionOption === 'opt1' ? '$0 COP (Exonerado)' : formatMoney(nominalNoveltiesCoQ)}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div style={{
                                     padding: '8px 12px',
-                                    backgroundColor: '#F8FAFC',
-                                    border: '1px solid #E2E8F0',
+                                    backgroundColor: resolutionOption === 'opt1' ? '#EFF6FF' : '#FFF1F2',
+                                    border: resolutionOption === 'opt1' ? '1px solid #BFDBFE' : '1px solid #FECDD3',
                                     borderRadius: '8px',
                                     fontSize: '0.72rem',
-                                    color: '#334155',
+                                    color: resolutionOption === 'opt1' ? '#1E40AF' : '#9F1239',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     lineHeight: '1.4'
                                 }}>
-                                    <Info size={16} style={{ flexShrink: 0, color: '#0D7A57' }} />
-                                    <span>
-                                        <strong>Asignación de Responsabilidad Operativa:</strong> Se imputa la responsabilidad técnica sobre el valor total de la novedad (<strong>{formatMoney(nominalNoveltiesCoQ)}</strong>). Basado en la <strong>Decisión Comercial (Paso 2)</strong>: si se determinó Opción 1 (Cerrar Conforme / Sin Costo), la cuota salarial es <strong>$0 COP (Exonerado)</strong> con fines formativos. Si se determinó Opción 2, 3 o 4, se imputa la cuota real correspondiente.
-                                    </span>
+                                    {resolutionOption === 'opt1' ? (
+                                        <ShieldCheck size={16} style={{ flexShrink: 0, color: '#2563EB' }} />
+                                    ) : (
+                                        <ShieldAlert size={16} style={{ flexShrink: 0, color: '#E11D48' }} />
+                                    )}
+                                    {resolutionOption === 'opt1' ? (
+                                        <span>
+                                            <strong>Trazabilidad Formativa ISO 9001 (Opción 1 — Cerrar Conforme):</strong> En el Paso 2 determinaste cerrar el caso sin impacto económico. La asignación de funcionario o área se registra exclusivamente con fines estadísticos y formativos: <strong>la deducción en nómina es estrictamente $0 COP (Exonerado)</strong>.
+                                        </span>
+                                    ) : (
+                                        <span>
+                                            <strong>Imputación Patrimonial Activa ({resolutionOption === 'opt2' ? 'Opción 2: Reposición D+1' : resolutionOption === 'opt3' ? 'Opción 3: Nota Crédito' : 'Opción 4: Ajuste de Factura'}):</strong> En el Paso 2 aprobaste reconocer la novedad por <strong>{formatMoney(nominalNoveltiesCoQ)}</strong>. La cuota asignada abajo se cargará a nómina / estado de cuenta del responsable.
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* Selector to Add Entity */}
@@ -3119,23 +3220,6 @@ export default function PqrAuditModal({
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <button
                                     type="button"
-                                    onClick={() => handleResolvePqr('rejected')}
-                                    disabled={actionLoading}
-                                    style={{
-                                        padding: '8px 14px',
-                                        backgroundColor: '#FFF1F2',
-                                        color: '#BE123C',
-                                        border: '1px solid #FECDD3',
-                                        borderRadius: '10px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '700',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Rechazar Caso
-                                </button>
-                                <button
-                                    type="button"
                                     onClick={() => handleResolvePqr('resolved')}
                                     disabled={actionLoading}
                                     style={{
@@ -3154,7 +3238,15 @@ export default function PqrAuditModal({
                                     }}
                                 >
                                     {actionLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
-                                    <span>Confirmar & Cerrar Dictamen</span>
+                                    <span>
+                                        {resolutionOption === 'opt1'
+                                            ? 'Confirmar Cierre Conforme ($0 COP)'
+                                            : resolutionOption === 'opt2'
+                                            ? 'Confirmar Reposición D+1 ($0 COP)'
+                                            : resolutionOption === 'opt3'
+                                            ? 'Continuar a Emisión de Nota Crédito'
+                                            : 'Continuar a Ajuste de Factura'}
+                                    </span>
                                 </button>
                             </div>
                         )}
