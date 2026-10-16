@@ -10385,6 +10385,40 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Genera los movimientos correspondientes en inventory_movements (reference_type = 'employee_sale'), sumándose al Total a Descontar Nómina en /admin/hr y a la Columna N de inventario.
 ---
 
+#### Escenario 230: Espacios Especiales de Negociación Corporativa B2B (Nutresa & Colsubsidio) (SDD v1.9.199)
+- **Given** el módulo comercial en `/admin/commercial?tab=operations` con la nueva subpestaña canónica `🤝 Acuerdos Especiales` (`subtab=agreements`).
+- **When** el director o analista comercial accede al módulo y selecciona un cliente institucional corporativo:
+- **Then**:
+  1. **Espacio Corporativo Grupo Nutresa (IRCC - Beer Station, El Corral, Leños & Carbón, Corral Gourmet):**
+     - Despliega el header de alta jerarquía con el logo oficial SVG de Nutresa y las marcas de la sombrilla IRCC.
+     - **Motor Paramétrico Indexado a SIPSA (DANE):**
+       * Modela la fórmula contractual: `Precio Final = SIPSA (DANE) + Prima $ COP`.
+       * Proporciona botón interactivo `[ 📡 Sincronizar SIPSA DANE (SODA) ]` que consulta los precios mayoristas oficiales de Corabastos vía SODA API (`datos.gov.co`) con fallback de resiliencia al valor del archivo Excel.
+     - **Importador Excel Nativo Nutresa:**
+       * Parsea directamente las columnas: `Key`, `Cadena`, `Nombre Cadena o Compañía`, `Cód Item`, `Nombre Item`, `DESCRIPCIÓN UNIFICADA`, `Prima $ COP`, `$ SIPSA [Mes Anterior]`, `Precio [Mes Actual] / 26`.
+     - **Exportador Oficial Nutresa:**
+       * Genera y descarga el archivo `.xlsx` idéntico con fórmulas de suma de celdas (`G+H`) y nombres de hoja requeridos por el equipo de compras de Nutresa.
+  2. **Espacio Corporativo Caja de Compensación Familiar Colsubsidio (NIT: 901393217 INVESTMENTS CORTES SAS):**
+     - Despliega el header de alta jerarquía con el logo oficial SVG de Colsubsidio y las sedes institucionales.
+     - **Motor de Negociación Quincenal por Variación (1Q / 2Q):**
+       * Compara `NUE PRE` (Propuesta), `ANT PRE` (Precio Anterior), `DIFERE`, `PORC` y el indicador `ESTADO` (`SUBIÓ` en rojo / `BAJÓ` en verde).
+       * Cruce automático de códigos SAP `Material` Colsubsidio con los SKUs del catálogo FruFresco.
+     - **Importador Excel Nativo Colsubsidio:**
+       * Lee las hojas oficiales (`LIST PRE INVESMTES`, `Hoja1`, `INV. CORTES 2Q SEPT`).
+     - **Exportador Oficial Colsubsidio:**
+       * Descarga la matriz quincenal respetando las columnas, redondeos y etiquetas de variación.
+  3. **Comparador Financiero y Arbitraje de Mercado (Común para Ambos Clientes):**
+     - Cada fila de producto proyecta simultáneamente:
+       * **Consumo Promedio Mensual ($Kg$)** derivado de órdenes entregadas en FruFresco para el cliente.
+       * **Precio Base Mercado (General Institucional hoy)**.
+       * **Costo Real de Compra (Corabastos / Matriz de Costos)**.
+       * **Precio Propuesto por el Cliente**.
+       * **Sugerido Inteligente ⚡:** Algoritmo que calcula el piso mínimo de rentabilidad ($\text{Costo Real} + 15\%$ margen operativo) y recomienda el precio o prima de equilibrio.
+       * **Impacto Financiero Mensual ($):** $(\text{Precio Acordado} - \text{Precio Base}) \times \text{Consumo Mensual}$ para auditar la utilidad neta proyectada.
+  4. **Consagración en 1 Clic como Acuerdo Vigente:**
+     - Al concluir la ronda de negociación, el botón `[ 🏛️ Consagrar Acuerdo Vigente ]` actualiza las listas de precios activas del cliente en Supabase con su fecha de vigencia pactada sin digitación manual.
+---
+
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
 
 > **Referencia:** Documento maestro [`TECHNICAL_DEBT.md`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/TECHNICAL_DEBT.md) en la raíz del repositorio.  

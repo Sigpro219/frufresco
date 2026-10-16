@@ -17,7 +17,8 @@ import {
     Layers,
     Loader2,
     TrendingUp,
-    ClipboardList
+    ClipboardList,
+    Handshake
 } from 'lucide-react';
 
 function SubtabSkeleton({ title }: { title: string }) {
@@ -59,6 +60,11 @@ const PricingSettingsView = dynamic(() => import('./settings/page'), {
 
 const CampaignsView = dynamic(() => import('./campaigns/page'), {
     loading: () => <SubtabSkeleton title="Campañas Temporales" />,
+    ssr: false
+});
+
+const SpecialAgreementsView = dynamic(() => import('@/components/SpecialAgreementsModule'), {
+    loading: () => <SubtabSkeleton title="Acuerdos Especiales Corporativos" />,
     ssr: false
 });
 
@@ -156,6 +162,12 @@ export default function CommercialPage() {
             label: 'Cotizaciones',
             icon: <FileText size={16} strokeWidth={2} />,
             description: 'Historial de ofertas, acuerdos y cotizaciones vigentes'
+        },
+        {
+            id: 'agreements',
+            label: 'Acuerdos Especiales',
+            icon: <Handshake size={16} strokeWidth={2} />,
+            description: 'Negociación corporativa B2B Nutresa & Colsubsidio con SIPSA'
         },
         {
             id: 'settings',
@@ -419,6 +431,12 @@ export default function CommercialPage() {
 
                     {activeOpSubtab === 'quotes' && (
                         <QuotesListView embedded={true} />
+                    )}
+
+                    {activeOpSubtab === 'agreements' && (
+                        <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 0' }}>
+                            <SpecialAgreementsView embedded={true} />
+                        </div>
                     )}
 
                     {activeOpSubtab === 'settings' && (
