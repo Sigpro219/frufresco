@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.203 (Gobernanza del Costo en Tríada de Calidad, Imputación Operativa Dinámica y Cero Sesgo Dogmático de Rechazo — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.205 (Tríada Cronológica de Calidad, Sincronización Financiera de Imputaciones e Integración de Cobros PQR en Nómina HR con Iconografía Lucide — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 235 Escenarios BDD Ininterrumpidos (1..235)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 236 Escenarios BDD Ininterrumpidos (1..236)
 
 ---
 
@@ -24,11 +24,11 @@
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230, 231, 232, 233, 234 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229 (§42.1 - §42.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235 (§39.1 - §39.6) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **235 Escenarios Canónicos (1..235)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **236 Escenarios Canónicos (1..236)** | **🟢 100%** |
 
 ---
 
@@ -10541,6 +10541,24 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        * Si en Paso 2 se eligió **Opción 1**: Banner azul zafiro informativo. La imputación a responsables o áreas operativas se realiza con propósito **100% Formativo / Estadístico ISO 9001**. La cuota monetaria a colaboradores es **$0 COP (Exonerado)**.
        * Si en Paso 2 se eligió **Opción 2, 3 o 4**: Se proyecta la pérdida económica real (**$3.230 COP**) y los colaboradores/proveedores son imputados con cuota real cargada, garantizando justicia salarial y trazabilidad contable.
 - **Then** el botón final de confirmación en el Paso 3 ejecuta la resolución y cierre sin requerir marcha atrás ni generar contradicciones temporales en pantalla.
+---
+
+#### Escenario 236: Integración Transversal de Cobros por Reclamación PQR en Talento Humano (`/admin/hr`), Sincronización en Ajuste Financiero y Estándar Estricto de Iconografía Lucide (SDD v1.9.205)
+- **Given** el flujo integral de resolución de PQRS en `/admin/customer-service` (`PqrAuditModal.tsx`), el modal de ajuste financiero (`FinancialAdjustmentModal.tsx`), la consola de Facturación (`/admin/commercial/billing`) y el módulo de Talento Humano (`/admin/hr` — pestaña *Deducciones de Nómina Columna N*).
+- **When** el auditor de Calidad resuelve un caso bajo cualquiera de las 4 opciones de la Tríada y asigna (o exonera) responsabilidad a colaboradores internos (`employee`, `driver`, `sales_rep`):
+- **Then**:
+  1. **Sincronización Incondicional de Imputaciones en Opciones 3 y 4 (`FinancialAdjustmentModal.tsx`):**
+     - Antes de invocar `FinancialAdjustmentModal` desde el Paso 3 de `PqrAuditModal.tsx`, se persiste preliminarmente el bloque `[RCA_METADATA: ...]` con las entidades imputadas y el borrador activo en `localStorage`.
+     - `FinancialAdjustmentModal.tsx` hidrata automáticamente `rcaCategoryL1`, `rcaSubtypeL2`, `rcaResponsible`, `imputedTargetType` e `imputedEntities` desde las props o el borrador activo (`pqr_audit_draft_{id}`), recalculando proporcionalmente el `deductionAmount` de cada colaborador sobre `calculatedCreditAmount` al emitir la Nota Crédito (Opción 3) o el Ajuste Directo en Factura (Opción 4).
+  2. **Integración y Diferenciación Tripartita en Talento Humano (`/admin/hr`):**
+     - La función `fetchPayrollSales` en `src/app/admin/hr/page.tsx` consulta concurrentemente las órdenes de empleados (`orders` con `order_type = 'employee_sale'`) y las reclamaciones resueltas (`customer_service_pqrs` en estado `resolved` con `[RCA_METADATA:`) dentro del rango quincenal seleccionado.
+     - Filtra únicamente las imputaciones con impacto patrimonial real (`deductionAmount > 0`), garantizando que los casos cerrados conforme bajo **Opción 1 ($0 COP Exonerado)** jamás generen cobros en la nómina del trabajador.
+     - Tanto en las píldoras de resumen del colaborador como en la subtabla desplegable (*Ver Detalle*), el sistema diferencia visualmente las tres naturalezas transaccionales:
+       * **Compra de Producto (Nómina):** Insignia Verde Esmeralda con icono `<ShoppingBag size={11} />` y etiqueta `COMPRA DE PRODUCTO (NÓMINA)` (suma al total a descontar en Columna N).
+       * **Cobro por Reclamación PQR:** Insignia Rojo Carmesí con icono `<ShieldAlert size={11} />` y etiqueta `COBRO POR RECLAMACIÓN PQR` junto con la categoría de causa raíz, el dictamen comercial aplicado y el resumen del fallo (suma al total a descontar en Columna N).
+       * **Compra de Producto (Pagado Online Wompi):** Insignia Azul con icono `<CreditCard size={11} />` y etiqueta `COMPRA PRODUCTO (WOMPI) — $0 A DESCONTAR` (informativo, $0 a deducir).
+  3. **Estándar Innegociable de Iconografía Vectorial (`lucide-react`, Cero Emojis):**
+     - Queda terminantemente prohibido el uso de emojis de texto Unicode en las etiquetas, botones, insignias y tablas de `PqrAuditModal.tsx`, `FinancialAdjustmentModal.tsx`, `src/app/admin/customer-service/page.tsx` y `src/app/admin/hr/page.tsx`. Toda señalización visual utiliza exclusivamente componentes SVG de `lucide-react` (`ShoppingBag`, `ShieldAlert`, `CreditCard`, `Truck`, `DollarSign`, `Percent`, `ShieldCheck`, `AlertTriangle`, `Scale`).
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
