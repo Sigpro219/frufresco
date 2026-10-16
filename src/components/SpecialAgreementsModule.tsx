@@ -27,7 +27,9 @@ import {
     Minus,
     Store,
     Info,
-    Check
+    Check,
+    Cpu,
+    Bot
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -37,6 +39,7 @@ export interface AgreementItem {
     client_code?: string | number;
     raw_name: string;
     unified_name: string;
+    mapped_sku?: string; // Machine Learning / Catálogo FruFresco SKU
     category?: string;
     chain_name?: string; // Para Nutresa: Beer Station, El Corral, etc.
     unit: string;
@@ -91,6 +94,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 32,
                         raw_name: 'AJOS',
                         unified_name: 'Ajo',
+                        mapped_sku: 'VER-0012',
                         chain_name: 'Beer Station',
                         unit: 'KG',
                         monthly_consumption_kg: 180,
@@ -107,6 +111,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 33,
                         raw_name: 'CEBOLLA CABEZONA',
                         unified_name: 'Cebolla cabezona blanca',
+                        mapped_sku: 'VER-0045',
                         chain_name: 'El Corral',
                         unit: 'KG',
                         monthly_consumption_kg: 3200,
@@ -123,6 +128,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 34,
                         raw_name: 'CILANTRO',
                         unified_name: 'Cilantro',
+                        mapped_sku: 'VER-0078',
                         chain_name: 'Leños & Carbón',
                         unit: 'KG',
                         monthly_consumption_kg: 450,
@@ -139,6 +145,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 36,
                         raw_name: 'LIMON',
                         unified_name: 'Limón Tahití',
+                        mapped_sku: 'FRU-0102',
                         chain_name: 'El Corral',
                         unit: 'KG',
                         monthly_consumption_kg: 2100,
@@ -155,6 +162,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 1180,
                         raw_name: 'PIMENTON',
                         unified_name: 'Pimentón Rojo',
+                        mapped_sku: 'VER-0210',
                         chain_name: 'Corral Gourmet',
                         unit: 'KG',
                         monthly_consumption_kg: 850,
@@ -171,6 +179,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 1265,
                         raw_name: 'AJI CHIVATO',
                         unified_name: 'Ají Chivato',
+                        mapped_sku: 'VER-0015',
                         chain_name: 'Beer Station',
                         unit: 'KG',
                         monthly_consumption_kg: 120,
@@ -192,6 +201,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 646594,
                         raw_name: 'CILANTRO 1000 GR',
                         unified_name: 'Cilantro Atado 1Kg',
+                        mapped_sku: 'VER-0078',
                         unit: 'KG',
                         monthly_consumption_kg: 1400,
                         baseline_price: 11000,
@@ -206,6 +216,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 647081,
                         raw_name: 'PEPINO RELLENAR 1000 GR',
                         unified_name: 'Pepino Cohombro Rellenar',
+                        mapped_sku: 'VER-0199',
                         unit: 'KG',
                         monthly_consumption_kg: 890,
                         baseline_price: 4900,
@@ -220,6 +231,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 647168,
                         raw_name: 'HABICHUELINA 1000 GR',
                         unified_name: 'Habichuelina Especial',
+                        mapped_sku: 'VER-0145',
                         unit: 'KG',
                         monthly_consumption_kg: 320,
                         baseline_price: 31000,
@@ -234,6 +246,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 1080,
                         raw_name: 'LIMON COMUN 1000 GR',
                         unified_name: 'Limón Común',
+                        mapped_sku: 'FRU-0105',
                         unit: 'KG',
                         monthly_consumption_kg: 1850,
                         baseline_price: 5800,
@@ -248,6 +261,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 647060,
                         raw_name: 'CALABAZA KG',
                         unified_name: 'Calabaza Trozo Fresco',
+                        mapped_sku: 'VER-0038',
                         unit: 'KG',
                         monthly_consumption_kg: 750,
                         baseline_price: 3100,
@@ -262,6 +276,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         client_code: 120330,
                         raw_name: 'PATILLA 1000 GR',
                         unified_name: 'Patilla Baby / Trozo',
+                        mapped_sku: 'FRU-0215',
                         unit: 'KG',
                         monthly_consumption_kg: 2400,
                         baseline_price: 4100,
@@ -306,7 +321,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 return item;
             }));
 
-            setSuccessMsg('✅ Precios SIPSA (DANE) sincronizados exitosamente con Corabastos.');
+            setSuccessMsg('Precios SIPSA (DANE) sincronizados exitosamente con Corabastos.');
             setTimeout(() => setSuccessMsg(null), 4000);
         } catch (err) {
             console.error('Error sincronizando SIPSA:', err);
@@ -358,6 +373,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                             client_code: codItem,
                             raw_name: rawName,
                             unified_name: unifiedName,
+                            mapped_sku: `SKU-${1000 + i}`,
                             chain_name: chainName,
                             unit: 'KG',
                             monthly_consumption_kg: 500, // Default estimativo
@@ -372,7 +388,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     }
                     if (parsed.length > 0) {
                         setAgreementItems(parsed);
-                        setSuccessMsg(`✅ Importadas ${parsed.length} filas del archivo de Nutresa.`);
+                        setSuccessMsg(`Importadas ${parsed.length} filas del archivo de Nutresa.`);
                         setTimeout(() => setSuccessMsg(null), 4000);
                     }
                 } else {
@@ -399,6 +415,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                             client_code: matCode,
                             raw_name: desc,
                             unified_name: desc,
+                            mapped_sku: `SKU-${2000 + i}`,
                             unit: um,
                             monthly_consumption_kg: 600,
                             baseline_price: baseline,
@@ -411,7 +428,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     }
                     if (parsed.length > 0) {
                         setAgreementItems(parsed);
-                        setSuccessMsg(`✅ Importadas ${parsed.length} filas del archivo de Colsubsidio.`);
+                        setSuccessMsg(`Importadas ${parsed.length} filas del archivo de Colsubsidio.`);
                         setTimeout(() => setSuccessMsg(null), 4000);
                     }
                 }
@@ -435,6 +452,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 'Cód Item': item.client_code,
                 'Nombre Item': item.raw_name,
                 'DESCRIPCIÓN UNIFICADA': item.unified_name,
+                'SKU FruFresco': item.mapped_sku || '',
                 'Prima $  COP ': item.our_counterproposal - (item.sipsa_price || 0),
                 '$ SIPSA Anterior': item.sipsa_price || 0,
                 'Contrapropuesta FruFresco': item.our_counterproposal
@@ -448,6 +466,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
             const exportData = agreementItems.map(item => ({
                 'Material': item.client_code,
                 'Descripcion': item.raw_name,
+                'SKU FruFresco': item.mapped_sku || '',
                 'U.M': item.unit,
                 'PRECIO PROPUESTO CLIENTE': item.client_proposed_price,
                 'CONTRAPROPUESTA FRUFRESCO': item.our_counterproposal,
@@ -468,7 +487,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
             ...item,
             our_counterproposal: item.suggested_price
         })));
-        setSuccessMsg('⚡ Sugeridos inteligentes aplicados a todas las contrapropuestas.');
+        setSuccessMsg('Sugeridos inteligentes aplicados a todas las contrapropuestas.');
         setTimeout(() => setSuccessMsg(null), 3000);
     };
 
@@ -477,7 +496,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
         setIsSaving(true);
         try {
             await new Promise(r => setTimeout(r, 1000));
-            setSuccessMsg(`🏛️ Acuerdo consagrado exitosamente como Lista Vigente para ${selectedClient === 'nutresa' ? 'Grupo Nutresa' : 'Colsubsidio'}.`);
+            setSuccessMsg(`Acuerdo consagrado exitosamente como Lista Vigente para ${selectedClient === 'nutresa' ? 'Grupo Nutresa' : 'Colsubsidio'}.`);
             setTimeout(() => setSuccessMsg(null), 5000);
         } catch (err) {
             console.error('Error consagrando acuerdo:', err);
@@ -855,7 +874,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                             title="Consulta el Web Service de SODA DANE de precios mayoristas de Corabastos"
                         >
                             <RefreshCw size={14} className={syncingSipsa ? 'animate-spin' : ''} />
-                            {syncingSipsa ? 'Consultando SODA...' : '📡 Sincronizar SIPSA DANE'}
+                            {syncingSipsa ? 'Consultando SODA...' : 'Sincronizar SIPSA DANE'}
                         </button>
                     )}
 
@@ -877,7 +896,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         }}
                     >
                         <Zap size={14} />
-                        ⚡ Aplicar Sugeridos de Equilibrio
+                        Aplicar Sugeridos de Equilibrio
                     </button>
 
                     {/* INPUT HIDDEN PARA EXCEL */}
@@ -951,7 +970,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         }}
                     >
                         <Save size={14} />
-                        {isSaving ? 'Consagrando...' : '🏛️ Consagrar Acuerdo Vigente'}
+                        {isSaving ? 'Consagrando...' : 'Consagrar Acuerdo Vigente'}
                     </button>
                 </div>
             </div>
@@ -970,6 +989,11 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, textAlign: 'left' }}>
                                 <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary }}>CÓD / MAT</th>
                                 <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary }}>PRODUCTO EN PLANILLA</th>
+                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#047857' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <Cpu size={14} color="#047857" /> SKU FRUFRESCO (ML)
+                                    </div>
+                                </th>
                                 {selectedClient === 'nutresa' && (
                                     <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary }}>CADENA / MARCA</th>
                                 )}
@@ -979,7 +1003,11 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                     <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#0284C7', textAlign: 'right' }}>SIPSA DANE</th>
                                 )}
                                 <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#DC2626', textAlign: 'right' }}>PROPUESTA CLIENTE</th>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#B45309', textAlign: 'right' }}>SUGERIDO ⚡</th>
+                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#B45309', textAlign: 'right' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                        <Zap size={13} color="#B45309" /> SUGERIDO
+                                    </div>
+                                </th>
                                 <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.primary, textAlign: 'right' }}>NUESTRA CONTRAPROPUESTA</th>
                                 <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary, textAlign: 'right' }}>IMPACTO MES ($)</th>
                             </tr>
@@ -1007,6 +1035,26 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             </div>
                                             <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary }}>
                                                 {item.unified_name} • {item.unit}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '0.75rem 1rem' }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{
+                                                    fontSize: '0.72rem',
+                                                    fontFamily: 'monospace',
+                                                    fontWeight: 800,
+                                                    backgroundColor: '#ECFDF5',
+                                                    color: '#065F46',
+                                                    border: '1px solid #A7F3D0',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}>
+                                                    <Bot size={12} color="#059669" />
+                                                    {item.mapped_sku || 'AUTODETECT'}
+                                                </span>
                                             </div>
                                         </td>
                                         {selectedClient === 'nutresa' && (
@@ -1050,11 +1098,15 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                     fontSize: '0.78rem',
                                                     padding: '2px 8px',
                                                     borderRadius: '4px',
-                                                    cursor: 'pointer'
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
                                                 }}
                                                 title="Hacer clic para transferir sugerido a la contrapropuesta"
                                             >
-                                                ⚡ {formatMoney(item.suggested_price)}
+                                                <Zap size={12} color="#B45309" />
+                                                {formatMoney(item.suggested_price)}
                                             </button>
                                         </td>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
