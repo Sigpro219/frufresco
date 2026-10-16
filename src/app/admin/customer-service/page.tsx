@@ -1448,7 +1448,13 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                     isOpen={showFinancialModal}
                     onClose={() => setShowFinancialModal(false)}
                     onSuccess={() => {
+                        if (selectedAuditPqr?.id) {
+                            try {
+                                localStorage.removeItem(`pqr_audit_draft_${selectedAuditPqr.id}`);
+                            } catch {}
+                        }
                         setShowFinancialModal(false);
+                        setSelectedAuditPqr(null);
                         fetchData();
                     }}
                     mode={financialModalMode}
