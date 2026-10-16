@@ -135,7 +135,22 @@ export default function PqrAuditModal({
         return novelties.filter(n => n.order_id === pqr.order_id);
     }, [pqr?.order_id, novelties]);
 
-    // Calculate CoQ for this case
+    // Valor nominal total de las novedades físicas declaradas (independiente de la resolución)
+    const nominalNoveltiesCoQ = useMemo(() => {
+        if (!pqr) return 0;
+        if (pqr.order_id && caseReturns.length > 0) {
+            return caseReturns.reduce((sum, item) => {
+                const oi = orderItems.find(o => o.product_id === item.product_id) || 
+                           item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
+                const price = Number(oi?.unit_price || item.unit_price || 0);
+                return sum + (price * (Number(item.quantity_returned) || 0));
+            }, 0);
+        }
+        const isTotalRejection = (pqr.subject?.toLowerCase().includes('rechazo total') || pqr.description?.toLowerCase().includes('rechazo total'));
+        return isTotalRejection && pqr.orders?.total ? Number(pqr.orders.total) : 0;
+    }, [pqr, caseReturns, orderItems]);
+
+    // Calculate CoQ liquidable para imputación / deducción financiera de este caso
     const caseCoQ = useMemo(() => {
         if (!pqr) return 0;
 
@@ -152,19 +167,8 @@ export default function PqrAuditModal({
             return 0;
         }
 
-        if (pqr.order_id && caseReturns.length > 0) {
-            return caseReturns.reduce((sum, item) => {
-                const oi = orderItems.find(o => o.product_id === item.product_id) || 
-                           item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
-                const price = Number(oi?.unit_price || item.unit_price || 0);
-                return sum + (price * (Number(item.quantity_returned) || 0));
-            }, 0);
-        }
-
-        // Erradicación de fallback ciego al total de la orden. Solo aplica si explícitamente se especifica 'rechazo total'
-        const isTotalRejection = (pqr.subject?.toLowerCase().includes('rechazo total') || pqr.description?.toLowerCase().includes('rechazo total'));
-        return isTotalRejection && pqr.orders?.total ? Number(pqr.orders.total) : 0;
-    }, [pqr, caseReturns, orderItems, resolutionOption]);
+        return nominalNoveltiesCoQ;
+    }, [pqr, resolutionOption, nominalNoveltiesCoQ]);
 
     // Clear saved case draft helper
     const clearCaseDraft = (pqrId: string) => {
@@ -2337,7 +2341,7 @@ export default function PqrAuditModal({
                                                         Novedades Declaradas en este Pedido ({caseReturns.length})
                                                     </span>
                                                     <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#047857' }}>
-                                                        Impacto Total: {formatMoney(caseCoQ)}
+                                                        Impacto Total: {formatMoney(nominalNoveltiesCoQ)}
                                                     </span>
                                                 </div>
 
@@ -2609,9 +2613,14 @@ export default function PqrAuditModal({
                                             );
                                         })()}
 
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ECFDF5', padding: '6px 12px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
-                                            <span style={{ fontSize: '0.7rem', color: '#065F46', fontWeight: '600' }}>Impacto Liquidable:</span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#047857' }}>{formatMoney(caseCoQ)}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#F8FAFC', padding: '6px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                            <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: '600' }}>Valor Novedad:</span>
+                                            <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#1E293B' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: caseCoQ > 0 ? '#ECFDF5' : '#F1F5F9', padding: '6px 12px', borderRadius: '8px', border: `1px solid ${caseCoQ > 0 ? '#A7F3D0' : '#CBD5E1'}` }}>
+                                            <span style={{ fontSize: '0.7rem', color: caseCoQ > 0 ? '#065F46' : '#64748B', fontWeight: '600' }}>Impacto Liquidable:</span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: caseCoQ > 0 ? '#047857' : '#475569' }}>{formatMoney(caseCoQ)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -2631,7 +2640,7 @@ export default function PqrAuditModal({
                                     }}>
                                         <Info size={16} style={{ flexShrink: 0, color: '#3B82F6' }} />
                                         <span>
-                                            <strong>Caso Formativo / Sin Costo (Cerrado Conforme o Rechazado):</strong> La imputación de funcionarios o clientes se registra exclusivamente con fines de trazabilidad operativa y estadísticas de Calidad (RCA). <u>La deducción en nómina o cobro financiero es estrictamente $0 COP</u>.
+                                            <strong>Caso en Dictamen Conforme / Formativo ($0 a Deducir):</strong> El valor físico de la novedad es <strong>{formatMoney(nominalNoveltiesCoQ)}</strong>. Al resolverse bajo Opción 1 (Cerrar Conforme sin Costo) o mientras no se seleccione Reposición/Nota Crédito en el Paso 3, la deducción salarial a colaboradores o cobro financiero se liquida en <u>estrictamente $0 COP</u>.
                                         </span>
                                     </div>
                                 )}

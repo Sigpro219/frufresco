@@ -166,7 +166,7 @@ async function runCascadeAndPqrs() {
         products (id, name, unit_of_measure)
       )
     `)
-    .eq('delivery_date', '2026-10-15')
+    .eq('delivery_date', '2026-10-16')
     .order('sequence_id', { ascending: true });
 
   if (fetchErr || !orders || orders.length === 0) {
