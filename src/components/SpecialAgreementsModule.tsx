@@ -32,7 +32,8 @@ import {
     Bot,
     ArrowUpDown,
     ArrowUp,
-    ArrowDown
+    ArrowDown,
+    HelpCircle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { INITIAL_NUTRESA_ITEMS, INITIAL_COLSUBSIDIO_ITEMS } from '@/lib/agreementsData';
@@ -874,10 +875,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderTopLeftRadius: '11px',
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar por código"
+                                    title="Código interno o número de material con el que el cliente identifica este producto en su ERP (SAP/Oracle). Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                        CÓD / MAT
+                                        <span>CÓD / MAT</span>
+                                        <span title="Código del cliente en su propio ERP">
+                                            <HelpCircle size={12} color="#94A3B8" />
+                                        </span>
                                         {sortField === 'code' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
@@ -895,10 +899,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar alfabéticamente por producto"
+                                    title="Nombre original del producto tal como fue cargado en la planilla de licitación del cliente junto con su equivalencia estandarizada. Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                        PRODUCTO EN PLANILLA
+                                        <span>PRODUCTO EN PLANILLA</span>
+                                        <span title="Nombre del ítem en la planilla de licitación del cliente">
+                                            <HelpCircle size={12} color="#94A3B8" />
+                                        </span>
                                         {sortField === 'name' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
@@ -916,26 +923,38 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar por SKU FruFresco"
+                                    title="Homologación Inteligente (Machine Learning): Código SKU maestro del catálogo oficial de FruFresco vinculado automáticamente al producto del cliente. Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                        <Cpu size={14} color="#047857" /> SKU FRUFRESCO (ML)
+                                        <Cpu size={14} color="#047857" />
+                                        <span>SKU FRUFRESCO (HOMOLOGADO)</span>
+                                        <span title="SKU maestro de FruFresco mapeado por IA/Machine Learning con nuestro catálogo de inventario">
+                                            <HelpCircle size={12} color="#059669" />
+                                        </span>
                                         {sortField === 'sku' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
                                 {selectedClient === 'nutresa' && (
-                                    <th style={{ 
-                                        padding: '0.65rem 0.85rem', 
-                                        fontWeight: 800, 
-                                        color: THEME.colors.textSecondary,
-                                        position: 'sticky',
-                                        top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
-                                        borderBottom: `2px solid ${THEME.colors.border}`,
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
-                                    }}>
-                                        CADENA / MARCA
+                                    <th 
+                                        style={{ 
+                                            padding: '0.65rem 0.85rem', 
+                                            fontWeight: 800, 
+                                            color: THEME.colors.textSecondary,
+                                            position: 'sticky',
+                                            top: embedded ? '190px' : '133px',
+                                            zIndex: 65,
+                                            backgroundColor: '#F8FAFC',
+                                            borderBottom: `2px solid ${THEME.colors.border}`,
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                        }}
+                                        title="Marca o cadena comercial destino dentro del grupo corporativo (ej: El Corral, Leños & Carbón, Beer Station, Papa John's, Schlotzsky's)."
+                                    >
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <span>CADENA / MARCA DESTINO</span>
+                                            <span title="Marca restaurante del cliente a la que pertenece el consumo (ej: El Corral, Leños & Carbón, Beer Station)">
+                                                <HelpCircle size={12} color="#94A3B8" />
+                                            </span>
+                                        </div>
                                     </th>
                                 )}
                                 <th 
@@ -953,10 +972,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar por volumen de consumo"
+                                    title="Volumen proyectado de consumo mensual en kilogramos o unidades pactadas según el histórico de abastecimiento del cliente. Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                        CONSUMO MES
+                                        <span>CONSUMO ESTIMADO MES</span>
+                                        <span title="Volumen mensual proyectado en Kg o unidades según la licitación">
+                                            <HelpCircle size={12} color="#94A3B8" />
+                                        </span>
                                         {sortField === 'consumption' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
@@ -975,10 +997,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar por costo Corabastos"
+                                    title="Costo de compra en Corabastos Bogotá (fuente de abastecimiento matriz). Es el costo piso base para calcular nuestro margen de rentabilidad. Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                        COSTO CORABASTOS
+                                        <span>COSTO CORABASTOS</span>
+                                        <span title="Costo mayorista de compra en Corabastos (base para cálculo de margen mínimo del 15%)">
+                                            <HelpCircle size={12} color="#94A3B8" />
+                                        </span>
                                         {sortField === 'cost' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
@@ -998,10 +1023,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             borderBottom: `2px solid ${THEME.colors.border}`,
                                             boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                         }}
-                                        title="Ordenar por precio SIPSA DANE"
+                                        title="Precio oficial de referencia del boletín SIPSA DANE para el mercado mayorista de Bogotá. Usado como fórmula de indexación de prima. Haz clic para ordenar."
                                     >
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                            SIPSA DANE
+                                            <span>SIPSA DANE</span>
+                                            <span title="Precio oficial de referencia SIPSA DANE (base de indexación en acuerdos institucionales)">
+                                                <HelpCircle size={12} color="#0284C7" />
+                                            </span>
                                             {sortField === 'sipsa' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                         </div>
                                     </th>
@@ -1021,10 +1049,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar por propuesta del cliente"
+                                    title="Tarifa máxima unitaria que el cliente solicita pagar según su pliego o planilla de cotización inicial. Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                        PROPUESTA CLIENTE
+                                        <span>PROPUESTA CLIENTE</span>
+                                        <span title="Precio que el cliente quiere pagar según su planilla de licitación">
+                                            <HelpCircle size={12} color="#DC2626" />
+                                        </span>
                                         {sortField === 'proposed' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
@@ -1043,10 +1074,14 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar por precio sugerido"
+                                    title="Tarifa calculada inteligentemente por el sistema: garantiza un margen mínimo del 15% sobre Corabastos o aplica la fórmula SIPSA + Prima contractual. Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                        <Zap size={13} color="#B45309" /> SUGERIDO
+                                        <Zap size={13} color="#B45309" />
+                                        <span>PRECIO SUGERIDO</span>
+                                        <span title="Precio recomendado por el algoritmo: margen saludable del 15% o fórmula SIPSA DANE + Prima pactada">
+                                            <HelpCircle size={12} color="#B45309" />
+                                        </span>
                                         {sortField === 'suggested' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
@@ -1065,10 +1100,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar por nuestra contrapropuesta"
+                                    title="Tarifa final que FruFresco ofertará oficialmente al cliente en este acuerdo. Es un campo editable por el equipo comercial. Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                        NUESTRA CONTRAPROPUESTA
+                                        <span>NUESTRA CONTRAPROPUESTA</span>
+                                        <span title="Precio editable que FruFresco enviará oficialmente en el acta de consagración del acuerdo">
+                                            <HelpCircle size={12} color={THEME.colors.primary} />
+                                        </span>
                                         {sortField === 'counter' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
@@ -1088,10 +1126,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         borderTopRightRadius: '11px',
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                                     }}
-                                    title="Ordenar por impacto mensual en pesos"
+                                    title="Delta Financiero Mensual en pesos ($): (Nuestra Contrapropuesta - Propuesta Cliente) × Consumo Mes. Mide la ganancia o defensa de margen lograda en la negociación. Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                        IMPACTO MES ($)
+                                        <span>IMPACTO MES ($)</span>
+                                        <span title="Delta económico mensual: (Contrapropuesta - Propuesta Cliente) × Consumo Mensual">
+                                            <HelpCircle size={12} color="#94A3B8" />
+                                        </span>
                                         {sortField === 'impact' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
