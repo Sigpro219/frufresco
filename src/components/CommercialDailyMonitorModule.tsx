@@ -657,9 +657,12 @@ export default function CommercialDailyMonitorModule() {
                                 fontSize: '0.9rem',
                                 padding: '3px 10px',
                                 borderRadius: '8px',
-                                fontWeight: '700'
+                                fontWeight: '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px'
                             }}>
-                                📅 {selectedDate}
+                                <Calendar size={15} /> {selectedDate}
                             </span>
                         )}
                     </h1>
@@ -729,8 +732,8 @@ export default function CommercialDailyMonitorModule() {
                         borderBottom: `1px solid ${THEME.colors.border}`
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
-                                📅 Fechas de Entrega
+                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Calendar size={14} /> Fechas de Entrega
                             </span>
                             <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '4px' }}>
                                 6 Meses

@@ -419,22 +419,23 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                         <div style={{
                             width: '130px',
-                            height: '50px',
+                            height: '52px',
                             position: 'relative',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            backgroundColor: '#FAFAFA',
+                            backgroundColor: '#FFFFFF',
                             borderRadius: '8px',
-                            padding: '6px',
-                            border: '1px solid #F0F0F0'
+                            padding: '4px',
+                            border: '1px solid #E2E8F0',
+                            overflow: 'hidden'
                         }}>
                             <Image 
-                                src="/logos/nutresa.svg" 
+                                src="/logos/nutresa.jpg" 
                                 alt="Grupo Nutresa" 
                                 width={120} 
-                                height={40} 
-                                style={{ objectFit: 'contain' }}
+                                height={46} 
+                                style={{ objectFit: 'contain', width: 'auto', height: '100%' }}
                             />
                         </div>
                         <div>
@@ -494,22 +495,23 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                         <div style={{
                             width: '130px',
-                            height: '50px',
+                            height: '52px',
                             position: 'relative',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            backgroundColor: '#FAFAFA',
+                            backgroundColor: '#FFFFFF',
                             borderRadius: '8px',
-                            padding: '6px',
-                            border: '1px solid #F0F0F0'
+                            padding: '4px',
+                            border: '1px solid #E2E8F0',
+                            overflow: 'hidden'
                         }}>
                             <Image 
-                                src="/logos/colsubsidio.svg" 
+                                src="/logos/colsubsidio.jpg" 
                                 alt="Colsubsidio" 
                                 width={120} 
-                                height={40} 
-                                style={{ objectFit: 'contain' }}
+                                height={46} 
+                                style={{ objectFit: 'contain', width: 'auto', height: '100%' }}
                             />
                         </div>
                         <div>
