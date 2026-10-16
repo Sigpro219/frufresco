@@ -1630,7 +1630,7 @@ export default function PqrAuditModal({
                             backgroundColor: currentStep === 2 ? '#0D7A57' : '#E2E8F0',
                             color: currentStep === 2 ? 'white' : '#475569'
                         }}>2</span>
-                        <span>Causa Raíz & Imputación</span>
+                        <span>Decisión Comercial</span>
                     </button>
 
                     <button
@@ -1664,7 +1664,7 @@ export default function PqrAuditModal({
                             backgroundColor: currentStep === 3 ? '#0D7A57' : '#E2E8F0',
                             color: currentStep === 3 ? 'white' : '#475569'
                         }}>3</span>
-                        <span>Resolución Comercial</span>
+                        <span>Causa Raíz & Imputación</span>
                     </button>
                 </div>
 
@@ -2473,346 +2473,8 @@ export default function PqrAuditModal({
                         </div>
                     )}
 
-                    {/* ================= STEP 2: RCA & IMPUTABILITY ================= */}
+                    {/* ================= STEP 2: DECISIÓN COMERCIAL & CAPA ================= */}
                     {currentStep === 2 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {/* Macrocausa L1 & Subtype L2 Selection */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                        1. Diagnóstico de Causa Raíz (RCA)
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={onOpenTaxonomyModal}
-                                        style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: '700', textDecoration: 'underline', background: 'transparent', border: 'none', cursor: 'pointer' }}
-                                    >
-                                        Personalizar Taxonomía
-                                    </button>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
-                                    <div>
-                                        <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
-                                            Macrocausa (Nivel 1)
-                                        </label>
-                                        <SearchableSelect
-                                            value={rcaCategoryL1}
-                                            onChange={catCode => {
-                                                setRcaCategoryL1(catCode);
-                                                const found = customTaxonomy.find(c => c.code === catCode);
-                                                if (found && found.subtypes.length > 0) {
-                                                    setRcaSubtypeL2(found.subtypes[0].code);
-                                                    handleResponsibleAreaChange(found.subtypes[0].typicalResponsible);
-                                                }
-                                            }}
-                                            placeholder="Seleccionar Macrocausa (L1)..."
-                                            searchPlaceholder="Buscar macrocausa..."
-                                            options={customTaxonomy.map(cat => ({
-                                                value: cat.code,
-                                                label: cat.label,
-                                                badge: `${cat.subtypes.length} subtipos`
-                                            }))}
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
-                                            Subtipo Específico (Nivel 2)
-                                        </label>
-                                        <SearchableSelect
-                                            value={rcaSubtypeL2}
-                                            onChange={subCode => {
-                                                setRcaSubtypeL2(subCode);
-                                                const subObj = availableSubtypes.find(s => s.code === subCode);
-                                                if (subObj) {
-                                                    handleResponsibleAreaChange(subObj.typicalResponsible);
-                                                }
-                                            }}
-                                            placeholder="Seleccionar Subtipo (L2)..."
-                                            searchPlaceholder="Buscar subtipo o falla específica..."
-                                            options={availableSubtypes.map(sub => ({
-                                                value: sub.code,
-                                                label: sub.label,
-                                                badge: sub.typicalResponsible ? `Área: ${sub.typicalResponsible}` : undefined
-                                            }))}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Responsible Area Grid (6 Cards) */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                    2. Área Responsable Imputada
-                                </span>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
-                                    {(Object.entries(RESPONSIBLE_PARTIES) as [any, any][]).map(([code, item]) => {
-                                        const isSelected = rcaResponsible === code;
-                                        return (
-                                            <button
-                                                key={code}
-                                                type="button"
-                                                onClick={() => handleResponsibleAreaChange(code)}
-                                                style={{
-                                                    padding: '10px 8px',
-                                                    borderRadius: '10px',
-                                                    textAlign: 'center',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: isSelected ? '800' : '600',
-                                                    backgroundColor: isSelected ? '#0D7A57' : 'white',
-                                                    color: isSelected ? 'white' : '#334155',
-                                                    border: isSelected ? '1px solid #065F46' : '1px solid #CBD5E1',
-                                                    cursor: 'pointer',
-                                                    boxShadow: isSelected ? '0 2px 4px rgba(13, 122, 87, 0.2)' : 'none'
-                                                }}
-                                            >
-                                                {item.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Nominal Imputation Matrix & Payroll Recovery Policy */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                                    <div>
-                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
-                                            3. Matriz de Imputabilidad Nominal & Descuento
-                                        </span>
-                                        <p style={{ fontSize: '0.68rem', color: '#64748B', margin: '2px 0 0 0' }}>
-                                            Política de Responsabilidad: Asigna a los funcionarios, proveedores o cliente para trazabilidad y deducción en nómina / fletes / nota débito.
-                                        </p>
-                                    </div>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                        {imputedEntities.length > 0 && (() => {
-                                            const totalPct = Number(imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0).toFixed(1));
-                                            const isComplete = totalPct >= 99.9 && totalPct <= 100.1;
-                                            const isOver = totalPct > 100.1;
-                                            return (
-                                                <div style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    padding: '6px 12px',
-                                                    borderRadius: '8px',
-                                                    border: isComplete ? '1px solid #A7F3D0' : isOver ? '1px solid #FECACA' : '1px solid #FDE68A',
-                                                    backgroundColor: isComplete ? '#ECFDF5' : isOver ? '#FEF2F2' : '#FFFBEB',
-                                                    fontSize: '0.72rem',
-                                                    fontWeight: '800',
-                                                    color: isComplete ? '#065F46' : isOver ? '#991B1B' : '#92400E'
-                                                }}>
-                                                    <span>Total Imputado: {isComplete ? '100%' : `${totalPct}%`}</span>
-                                                    {isComplete ? (
-                                                        <Check size={13} style={{ color: '#059669' }} />
-                                                    ) : isOver ? (
-                                                        <AlertTriangle size={13} style={{ color: '#DC2626' }} />
-                                                    ) : (
-                                                        <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Resta {Number((100 - totalPct).toFixed(1))}%)</span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#F8FAFC', padding: '6px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                            <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: '600' }}>Valor Novedad:</span>
-                                            <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#1E293B' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
-                                        </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ECFDF5', padding: '6px 12px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
-                                            <span style={{ fontSize: '0.7rem', color: '#065F46', fontWeight: '600' }}>Impacto Imputado:</span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#047857' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div style={{
-                                    padding: '8px 12px',
-                                    backgroundColor: '#F8FAFC',
-                                    border: '1px solid #E2E8F0',
-                                    borderRadius: '8px',
-                                    fontSize: '0.72rem',
-                                    color: '#334155',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    lineHeight: '1.4'
-                                }}>
-                                    <Info size={16} style={{ flexShrink: 0, color: '#0D7A57' }} />
-                                    <span>
-                                        <strong>Asignación de Responsabilidad Operativa:</strong> Se imputa la responsabilidad técnica sobre el valor total de la novedad (<strong>{formatMoney(nominalNoveltiesCoQ)}</strong>). En el <strong>Paso 3 (Resolución Comercial)</strong> se definirá si el valor se cobra al responsable (Reposición D+1 / Nota Crédito) o si se exonera en nómina al colaborador ($0 COP) en caso de cerrarse conforme sin costo.
-                                    </span>
-                                </div>
-
-                                {/* Selector to Add Entity */}
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <div style={{ flex: '1', minWidth: 0 }}>
-                                        <SearchableSelect
-                                            value={selectedImputedToAdd}
-                                            onChange={setSelectedImputedToAdd}
-                                            placeholder={`-- Seleccionar ${rcaResponsible === 'proveedor' ? 'Proveedor' : rcaResponsible === 'cliente' ? 'Cliente' : 'Funcionario'} para Imputar --`}
-                                            searchPlaceholder={rcaResponsible === 'proveedor' ? "Buscar proveedor por nombre o NIT..." : rcaResponsible === 'cliente' ? "Buscar cliente..." : "Buscar funcionario por nombre o cargo..."}
-                                            clearable
-                                            options={rcaResponsible === 'proveedor' ? (
-                                                providersList.map(prov => ({
-                                                    value: prov.id,
-                                                    label: prov.name,
-                                                    sublabel: prov.nit ? `NIT: ${prov.nit}` : undefined,
-                                                    badge: 'Proveedor'
-                                                }))
-                                            ) : rcaResponsible === 'cliente' ? (
-                                                pqr?.profiles ? [{
-                                                    value: pqr.client_id,
-                                                    label: pqr.profiles.company_name || pqr.profiles.contact_name || 'Cliente de la PQR',
-                                                    sublabel: pqr.profiles.nit ? `NIT: ${pqr.profiles.nit}` : undefined,
-                                                    badge: 'Cliente'
-                                                }] : []
-                                            ) : (
-                                                collaboratorsList.map(colab => ({
-                                                    value: colab.id,
-                                                    label: colab.contact_name,
-                                                    sublabel: colab.phone || undefined,
-                                                    badge: colab.role || 'Operativo'
-                                                }))
-                                            )}
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAddImputedEntity(selectedImputedToAdd)}
-                                        disabled={!selectedImputedToAdd}
-                                        style={{ padding: '8px 14px', backgroundColor: '#0F172A', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0, height: '34px' }}
-                                    >
-                                        <Plus size={13} />
-                                        <span>Agregar</span>
-                                    </button>
-                                </div>
-
-                                {/* Imputed Entities List with % Split Sliders */}
-                                {imputedEntities.length > 0 ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {imputedEntities.length > 1 && (
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '2px' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleResetEqualSplit}
-                                                    style={{
-                                                        padding: '4px 10px',
-                                                        backgroundColor: '#ECFDF5',
-                                                        border: '1px solid #A7F3D0',
-                                                        borderRadius: '6px',
-                                                        fontSize: '0.68rem',
-                                                        fontWeight: '700',
-                                                        color: '#065F46',
-                                                        cursor: 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}
-                                                    title="Dividir el dinero y porcentaje en partes iguales exactas"
-                                                >
-                                                    <RotateCcw size={11} />
-                                                    <span>Dividir en Partes Iguales ({imputedEntities.length})</span>
-                                                </button>
-                                            </div>
-                                        )}
-                                        {imputedEntities.map(entity => (
-                                            <div
-                                                key={entity.id}
-                                                style={{
-                                                    backgroundColor: 'white',
-                                                    padding: '10px 14px',
-                                                    borderRadius: '10px',
-                                                    border: '1px solid #E2E8F0',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    flexWrap: 'wrap',
-                                                    gap: '10px'
-                                                }}
-                                            >
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <strong style={{ color: '#0F172A', fontSize: '0.78rem' }}>{entity.name}</strong>
-                                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0' }}>
-                                                            {entity.role}
-                                                        </span>
-                                                    </div>
-                                                    {entity.documentId && <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Doc: {entity.documentId}</span>}
-                                                </div>
-
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                                    {/* % Split Slider */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <input
-                                                            type="range"
-                                                            min="0"
-                                                            max="100"
-                                                            step="0.5"
-                                                            value={entity.sharePercent || 0}
-                                                            onChange={e => handleUpdateEntityPercent(entity.id, parseFloat(e.target.value))}
-                                                            style={{ width: '90px', accentColor: '#0D7A57', cursor: 'pointer' }}
-                                                        />
-                                                        <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.75rem', color: '#334155', minWidth: '42px', textAlign: 'right' }}>
-                                                            {Number(entity.sharePercent || 0).toFixed(1)}%
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Calculated COP Deduction */}
-                                                    <div style={{ textAlign: 'right', minWidth: '95px' }}>
-                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Cuota Imputada</span>
-                                                        <strong style={{ fontSize: '0.82rem', color: resolutionOption === 'opt1' ? '#059669' : '#BE123C' }}>
-                                                            {resolutionOption === 'opt1' ? (
-                                                                <>
-                                                                    $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Exonerado)</span>
-                                                                </>
-                                                            ) : (
-                                                                formatMoney(entity.deductionAmount !== undefined && entity.deductionAmount > 0 
-                                                                    ? entity.deductionAmount 
-                                                                    : Math.round((nominalNoveltiesCoQ * (entity.sharePercent || 0)) / 100))
-                                                            )}
-                                                        </strong>
-                                                    </div>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveImputedEntity(entity.id)}
-                                                        style={{ padding: '6px', color: '#94A3B8', background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '6px' }}
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: '0.75rem' }}>
-                                        No hay funcionarios o proveedores imputados nominalmente. Agrega al menos uno usando el selector superior.
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Technical Evidence Notes Textarea */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                    4. Justificación Técnica & Hallazgos de Inspección
-                                </label>
-                                <textarea
-                                    rows={3}
-                                    value={rcaEvidenceNotes}
-                                    onChange={e => setRcaEvidenceNotes(e.target.value)}
-                                    placeholder="Detalla los hallazgos técnicos (ej: Temperatura en termógrafo al arribo: 14°C, daño por aplastamiento en 3 canastillas inferiores)..."
-                                    style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', lineHeight: '1.4' }}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ================= STEP 3: RESOLUTION & CAPA ================= */}
-                    {currentStep === 3 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {pqr.status === 'resolved' && (
                                 <div style={{
@@ -3013,7 +2675,345 @@ export default function PqrAuditModal({
                     )}
                 </div>
 
-                {/* 4. Modal Footer Navigation */}
+                {/* ================= STEP 3: RCA & IMPUTABILITY ================= */}
+                    {currentStep === 3 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Macrocausa L1 & Subtype L2 Selection */}
+                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                        1. Diagnóstico de Causa Raíz (RCA)
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={onOpenTaxonomyModal}
+                                        style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: '700', textDecoration: 'underline', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                                    >
+                                        Personalizar Taxonomía
+                                    </button>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
+                                            Macrocausa (Nivel 1)
+                                        </label>
+                                        <SearchableSelect
+                                            value={rcaCategoryL1}
+                                            onChange={catCode => {
+                                                setRcaCategoryL1(catCode);
+                                                const found = customTaxonomy.find(c => c.code === catCode);
+                                                if (found && found.subtypes.length > 0) {
+                                                    setRcaSubtypeL2(found.subtypes[0].code);
+                                                    handleResponsibleAreaChange(found.subtypes[0].typicalResponsible);
+                                                }
+                                            }}
+                                            placeholder="Seleccionar Macrocausa (L1)..."
+                                            searchPlaceholder="Buscar macrocausa..."
+                                            options={customTaxonomy.map(cat => ({
+                                                value: cat.code,
+                                                label: cat.label,
+                                                badge: `${cat.subtypes.length} subtipos`
+                                            }))}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
+                                            Subtipo Específico (Nivel 2)
+                                        </label>
+                                        <SearchableSelect
+                                            value={rcaSubtypeL2}
+                                            onChange={subCode => {
+                                                setRcaSubtypeL2(subCode);
+                                                const subObj = availableSubtypes.find(s => s.code === subCode);
+                                                if (subObj) {
+                                                    handleResponsibleAreaChange(subObj.typicalResponsible);
+                                                }
+                                            }}
+                                            placeholder="Seleccionar Subtipo (L2)..."
+                                            searchPlaceholder="Buscar subtipo o falla específica..."
+                                            options={availableSubtypes.map(sub => ({
+                                                value: sub.code,
+                                                label: sub.label,
+                                                badge: sub.typicalResponsible ? `Área: ${sub.typicalResponsible}` : undefined
+                                            }))}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Responsible Area Grid (6 Cards) */}
+                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                    2. Área Responsable Imputada
+                                </span>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                                    {(Object.entries(RESPONSIBLE_PARTIES) as [any, any][]).map(([code, item]) => {
+                                        const isSelected = rcaResponsible === code;
+                                        return (
+                                            <button
+                                                key={code}
+                                                type="button"
+                                                onClick={() => handleResponsibleAreaChange(code)}
+                                                style={{
+                                                    padding: '10px 8px',
+                                                    borderRadius: '10px',
+                                                    textAlign: 'center',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: isSelected ? '800' : '600',
+                                                    backgroundColor: isSelected ? '#0D7A57' : 'white',
+                                                    color: isSelected ? 'white' : '#334155',
+                                                    border: isSelected ? '1px solid #065F46' : '1px solid #CBD5E1',
+                                                    cursor: 'pointer',
+                                                    boxShadow: isSelected ? '0 2px 4px rgba(13, 122, 87, 0.2)' : 'none'
+                                                }}
+                                            >
+                                                {item.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Nominal Imputation Matrix & Payroll Recovery Policy */}
+                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
+                                            3. Matriz de Imputabilidad Nominal & Descuento
+                                        </span>
+                                        <p style={{ fontSize: '0.68rem', color: '#64748B', margin: '2px 0 0 0' }}>
+                                            Política de Responsabilidad: Asigna a los funcionarios, proveedores o cliente para trazabilidad y deducción en nómina / fletes / nota débito.
+                                        </p>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        {imputedEntities.length > 0 && (() => {
+                                            const totalPct = Number(imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0).toFixed(1));
+                                            const isComplete = totalPct >= 99.9 && totalPct <= 100.1;
+                                            const isOver = totalPct > 100.1;
+                                            return (
+                                                <div style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    padding: '6px 12px',
+                                                    borderRadius: '8px',
+                                                    border: isComplete ? '1px solid #A7F3D0' : isOver ? '1px solid #FECACA' : '1px solid #FDE68A',
+                                                    backgroundColor: isComplete ? '#ECFDF5' : isOver ? '#FEF2F2' : '#FFFBEB',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
+                                                    color: isComplete ? '#065F46' : isOver ? '#991B1B' : '#92400E'
+                                                }}>
+                                                    <span>Total Imputado: {isComplete ? '100%' : `${totalPct}%`}</span>
+                                                    {isComplete ? (
+                                                        <Check size={13} style={{ color: '#059669' }} />
+                                                    ) : isOver ? (
+                                                        <AlertTriangle size={13} style={{ color: '#DC2626' }} />
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Resta {Number((100 - totalPct).toFixed(1))}%)</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#F8FAFC', padding: '6px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                            <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: '600' }}>Valor Novedad:</span>
+                                            <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#1E293B' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ECFDF5', padding: '6px 12px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
+                                            <span style={{ fontSize: '0.7rem', color: '#065F46', fontWeight: '600' }}>Impacto Imputado:</span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#047857' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{
+                                    padding: '8px 12px',
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '8px',
+                                    fontSize: '0.72rem',
+                                    color: '#334155',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    lineHeight: '1.4'
+                                }}>
+                                    <Info size={16} style={{ flexShrink: 0, color: '#0D7A57' }} />
+                                    <span>
+                                        <strong>Asignación de Responsabilidad Operativa:</strong> Se imputa la responsabilidad técnica sobre el valor total de la novedad (<strong>{formatMoney(nominalNoveltiesCoQ)}</strong>). Basado en la <strong>Decisión Comercial (Paso 2)</strong>: si se determinó Opción 1 (Cerrar Conforme / Sin Costo), la cuota salarial es <strong>$0 COP (Exonerado)</strong> con fines formativos. Si se determinó Opción 2, 3 o 4, se imputa la cuota real correspondiente.
+                                    </span>
+                                </div>
+
+                                {/* Selector to Add Entity */}
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <div style={{ flex: '1', minWidth: 0 }}>
+                                        <SearchableSelect
+                                            value={selectedImputedToAdd}
+                                            onChange={setSelectedImputedToAdd}
+                                            placeholder={`-- Seleccionar ${rcaResponsible === 'proveedor' ? 'Proveedor' : rcaResponsible === 'cliente' ? 'Cliente' : 'Funcionario'} para Imputar --`}
+                                            searchPlaceholder={rcaResponsible === 'proveedor' ? "Buscar proveedor por nombre o NIT..." : rcaResponsible === 'cliente' ? "Buscar cliente..." : "Buscar funcionario por nombre o cargo..."}
+                                            clearable
+                                            options={rcaResponsible === 'proveedor' ? (
+                                                providersList.map(prov => ({
+                                                    value: prov.id,
+                                                    label: prov.name,
+                                                    sublabel: prov.nit ? `NIT: ${prov.nit}` : undefined,
+                                                    badge: 'Proveedor'
+                                                }))
+                                            ) : rcaResponsible === 'cliente' ? (
+                                                pqr?.profiles ? [{
+                                                    value: pqr.client_id,
+                                                    label: pqr.profiles.company_name || pqr.profiles.contact_name || 'Cliente de la PQR',
+                                                    sublabel: pqr.profiles.nit ? `NIT: ${pqr.profiles.nit}` : undefined,
+                                                    badge: 'Cliente'
+                                                }] : []
+                                            ) : (
+                                                collaboratorsList.map(colab => ({
+                                                    value: colab.id,
+                                                    label: colab.contact_name,
+                                                    sublabel: colab.phone || undefined,
+                                                    badge: colab.role || 'Operativo'
+                                                }))
+                                            )}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleAddImputedEntity(selectedImputedToAdd)}
+                                        disabled={!selectedImputedToAdd}
+                                        style={{ padding: '8px 14px', backgroundColor: '#0F172A', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0, height: '34px' }}
+                                    >
+                                        <Plus size={13} />
+                                        <span>Agregar</span>
+                                    </button>
+                                </div>
+
+                                {/* Imputed Entities List with % Split Sliders */}
+                                {imputedEntities.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {imputedEntities.length > 1 && (
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '2px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleResetEqualSplit}
+                                                    style={{
+                                                        padding: '4px 10px',
+                                                        backgroundColor: '#ECFDF5',
+                                                        border: '1px solid #A7F3D0',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '700',
+                                                        color: '#065F46',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                    title="Dividir el dinero y porcentaje en partes iguales exactas"
+                                                >
+                                                    <RotateCcw size={11} />
+                                                    <span>Dividir en Partes Iguales ({imputedEntities.length})</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                        {imputedEntities.map(entity => (
+                                            <div
+                                                key={entity.id}
+                                                style={{
+                                                    backgroundColor: 'white',
+                                                    padding: '10px 14px',
+                                                    borderRadius: '10px',
+                                                    border: '1px solid #E2E8F0',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    flexWrap: 'wrap',
+                                                    gap: '10px'
+                                                }}
+                                            >
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <strong style={{ color: '#0F172A', fontSize: '0.78rem' }}>{entity.name}</strong>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0' }}>
+                                                            {entity.role}
+                                                        </span>
+                                                    </div>
+                                                    {entity.documentId && <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Doc: {entity.documentId}</span>}
+                                                </div>
+
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                    {/* % Split Slider */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <input
+                                                            type="range"
+                                                            min="0"
+                                                            max="100"
+                                                            step="0.5"
+                                                            value={entity.sharePercent || 0}
+                                                            onChange={e => handleUpdateEntityPercent(entity.id, parseFloat(e.target.value))}
+                                                            style={{ width: '90px', accentColor: '#0D7A57', cursor: 'pointer' }}
+                                                        />
+                                                        <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.75rem', color: '#334155', minWidth: '42px', textAlign: 'right' }}>
+                                                            {Number(entity.sharePercent || 0).toFixed(1)}%
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Calculated COP Deduction */}
+                                                    <div style={{ textAlign: 'right', minWidth: '95px' }}>
+                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Cuota Imputada</span>
+                                                        <strong style={{ fontSize: '0.82rem', color: resolutionOption === 'opt1' ? '#059669' : '#BE123C' }}>
+                                                            {resolutionOption === 'opt1' ? (
+                                                                <>
+                                                                    $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Exonerado)</span>
+                                                                </>
+                                                            ) : (
+                                                                formatMoney(entity.deductionAmount !== undefined && entity.deductionAmount > 0 
+                                                                    ? entity.deductionAmount 
+                                                                    : Math.round((nominalNoveltiesCoQ * (entity.sharePercent || 0)) / 100))
+                                                            )}
+                                                        </strong>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveImputedEntity(entity.id)}
+                                                        style={{ padding: '6px', color: '#94A3B8', background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '6px' }}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: '0.75rem' }}>
+                                        No hay funcionarios o proveedores imputados nominalmente. Agrega al menos uno usando el selector superior.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Technical Evidence Notes Textarea */}
+                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                    4. Justificación Técnica & Hallazgos de Inspección
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    value={rcaEvidenceNotes}
+                                    onChange={e => setRcaEvidenceNotes(e.target.value)}
+                                    placeholder="Detalla los hallazgos técnicos (ej: Temperatura en termógrafo al arribo: 14°C, daño por aplastamiento en 3 canastillas inferiores)..."
+                                    style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', lineHeight: '1.4' }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 4. Modal Footer Navigation */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',

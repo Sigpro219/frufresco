@@ -10524,21 +10524,23 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
 
 ---
 
-#### Escenario 235: Gobernanza del Costo en Tríada de Calidad, Imputación Operativa Dinámica y Cero Sesgo Dogmático de Rechazo (SDD v1.9.203)
-- **Given** el analista de Calidad, auditor SAC o supervisor gestionando una reclamación o devolución comercial en el modal de auditoría técnica (`PqrAuditModal.tsx`) en `/admin/customer-service`.
-- **When** navega secuencialmente a través de la tríada de pasos (Paso 1: Hecho & Evidencias -> Paso 2: Causa Raíz & Imputación -> Paso 3: Resolución Comercial):
-- **Then**:
-  1. **Consistencia Tridimensional del Costo Físico vs Liquidable (`nominalNoveltiesCoQ` vs `caseCoQ`):**
-     - En el **Paso 1 (Hecho & Evidencias)**, el valor económico real de los productos afectados (`nominalNoveltiesCoQ`) gobierna de forma absoluta el encabezado de novedades (`Impacto Total: {formatMoney(nominalNoveltiesCoQ)}`), erradicando que aparezca en $0 COP por preselecciones del paso final.
-     - En el **Paso 2 (Causa Raíz & Imputación)**, la cabecera proyecta en paralelo el **Valor Novedad: $X.XXX** (costo físico del producto dañado) y el **Impacto Liquidable: $Y.YYY** (monto sujeto a deducción salarial o descuento comercial).
-     - La imputación nominal a colaboradores, transportadores o proveedores calcula y exhibe las cuotas en pesos sobre el valor real del producto, garantizando total transparencia operativa.
-  2. **Erradicación del Sesgo Dogmático de Rechazo (Neutralidad en Paso 3):**
-     - Al aperturar un caso de calidad o avería, el sistema no preselecciona forzosamente la Opción 1 (Cerrar Conforme / Rechazar Queja), permitiendo que la decisión comercial inicie de forma neutral y abierta según el mérito de la reclamación (ej. Reposición D+1 o Nota Crédito).
-     - La tarjeta de **Opción 1: Cerrar Conforme (Sin Costo)** declara explícitamente su garantía laboral: *«El reclamo no procede o fue aclarado con el cliente. Se cobra el 100% de la factura original y no aplica deducción de nómina al colaborador ($0 COP)»*.
-  3. **Poka-Yoke de Exoneración Salarial al Colaborador (Justicia Laboral Escenario 213):**
-     - Únicamente si el auditor selecciona la Opción 1 (o si el caso ya fue desestimado/archivado sin costo), el sistema activa el salvaguarda de justicia laboral, conmutando la deducción salarial a **estrictamente $0 COP** e informando al auditor mediante el banner institucional azul zafiro.
-     - Si se selecciona Opción 2 (Reposición D+1 $0 COP), Opción 3 (Nota Crédito) u Opción 4 (Ajuste en Factura), el Impacto Liquidable se confirma plenamente y las cuotas de responsabilidad se transfieren a nómina o compras según corresponda.
-
+#### Escenario 235: Flujo Cronológico Natural en Tríada de Calidad: Daño Físico -> Decisión Comercial -> Causa Raíz e Imputación (SDD v1.9.204)
+- **Given** el analista de Calidad, auditor SAC o supervisor gestionando una reclamación en el modal de auditoría técnica (`PqrAuditModal.tsx`) en `/admin/customer-service`.
+- **When** navega secuencialmente a través del flujo cronológico y ergonómico natural:
+  1. **Paso 1: ¿QUÉ PASÓ? (El Hecho Físico & Evidencias):**
+     - Determina los productos afectados, evidencias fotográficas, cantidades devueltas y el Costo Físico de No Calidad (`nominalNoveltiesCoQ`, ej. $3.230 COP).
+  2. **Paso 2: ¿QUÉ HACEMOS CON EL CLIENTE? (La Decisión Comercial & Protocolo Sanitario):**
+     - El auditor define el tratamiento comercial frente al cliente de forma neutral entre las 4 alternativas:
+       * **Opción 1 (Cerrar Conforme / Desestimar Queja):** El cliente asume el 100% de la factura. Impacto económico comercial: **$0 COP**.
+       * **Opción 2 (Reponer D+1 $0 COP):** Se despacha reposición gratuita al día siguiente. Impacto económico: **$nominalNoveltiesCoQ** ($3.230 COP).
+       * **Opción 3 (Nota Crédito):** Se emite saldo a favor. Impacto económico: **$nominalNoveltiesCoQ** ($3.230 COP).
+       * **Opción 4 (Ajustar Factura):** Se reduce el cobro de la orden antes de facturar. Impacto económico: **$nominalNoveltiesCoQ** ($3.230 COP).
+     - Incorpora el Protocolo de Disposición Sanitaria Invima (Res. 2674/2013) y las notas de dictamen hacia el cliente.
+  3. **Paso 3: ¿QUIÉN RESPONDE INTERNAMENTE? (Causa Raíz RCA e Imputación):**
+     - Habiendo fijado la consecuencia económica en el Paso 2, la pantalla de RCA e Imputación proyecta la realidad financiera sin ambigüedades:
+       * Si en Paso 2 se eligió **Opción 1**: Banner azul zafiro informativo. La imputación a responsables o áreas operativas se realiza con propósito **100% Formativo / Estadístico ISO 9001**. La cuota monetaria a colaboradores es **$0 COP (Exonerado)**.
+       * Si en Paso 2 se eligió **Opción 2, 3 o 4**: Se proyecta la pérdida económica real (**$3.230 COP**) y los colaboradores/proveedores son imputados con cuota real cargada, garantizando justicia salarial y trazabilidad contable.
+- **Then** el botón final de confirmación en el Paso 3 ejecuta la resolución y cierre sin requerir marcha atrás ni generar contradicciones temporales en pantalla.
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
