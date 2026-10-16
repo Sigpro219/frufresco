@@ -49,7 +49,7 @@ import WeeklyMarketBulletinModal from './WeeklyMarketBulletinModal';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from './SpecialClientBadge';
 
-type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month' | 'all';
+type TimeRange = 'today' | '7d' | '15d' | '30d' | '90d' | 'all';
 
 // Known coordinates for localities in Bogotá and municipalities in Cundinamarca
 const ZONE_COORDINATES: Record<string, { lat: number; lng: number }> = {
@@ -501,6 +501,9 @@ export default function CommercialUnifiedDashboard({
     const [selectedPin, setSelectedPin] = useState<ClientMapPin | null>(null);
     const [focusTarget, setFocusTarget] = useState<{ lat: number; lng: number } | null>(null);
 
+    // Tactical Sentinels Hover State (Floating Popovers)
+    const [hoveredSentinel, setHoveredSentinel] = useState<'bulletin' | 'sla' | null>(null);
+
     // Weekly Market Bulletin HITL state
     const [isBulletinModalOpen, setIsBulletinModalOpen] = useState(false);
     const [lastBulletinDispatch, setLastBulletinDispatch] = useState<{
@@ -534,10 +537,10 @@ export default function CommercialUnifiedDashboard({
                 prevEndDate = new Date(startDate.getTime() - 1);
                 prevStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                 break;
-            case 'this_month':
-                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            case '90d':
+                startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
                 prevEndDate = new Date(startDate.getTime() - 1);
-                prevStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                prevStartDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
                 break;
             case 'all':
                 startDate = new Date(2020, 0, 1);
@@ -1118,7 +1121,7 @@ export default function CommercialUnifiedDashboard({
                     id: 'alert-cost-matrix-expired-urgent',
                     type: 'cost_expired',
                     severity: 'critical',
-                    title: `⚠️ ${expiredCount} SKUs Requieren Recotización Urgente`,
+                    title: `${expiredCount} SKUs Requieren Recotización Urgente`,
                     subtitle: highVolumeExpired.length > 0
                         ? `Alerta de margen: ${highVolumeExpired.slice(0, 3).map(x => `${x.name} (${x.quantity} Kg)`).join(', ')} tienen costo desactualizado.`
                         : `Productos con costo de compra vencido (>SLA de perecibilidad). Requieren actualizar precio de Corabastos.`,
@@ -1250,7 +1253,7 @@ export default function CommercialUnifiedDashboard({
                     id: `unpriced-order-${uo.id}`,
                     type: 'unpriced_dispatch',
                     severity: 'critical',
-                    title: `🚨 ASIGNAR PRECIO: ${isOffAgreement ? 'Remisión Fuera de Acuerdo' : 'Pedido'} #${uo.sequence_id || uo.id.slice(0, 8)}`,
+                    title: `ASIGNAR PRECIO: ${isOffAgreement ? 'Remisión Fuera de Acuerdo' : 'Pedido'} #${uo.sequence_id || uo.id.slice(0, 8)}`,
                     subtitle: `${clientName} (${itemsList})`,
                     dateInfo: uo.delivery_date ? `Entrega: ${uo.delivery_date} • Pendiente fijar tarifa antes de cierre de corte` : 'Despachado a alistamiento sin precio ($0)',
                     linkUrl: `/admin/commercial/billing?search=${uo.sequence_id || uo.id.slice(0, 8)}&assign_price=1&order_id=${uo.id}${uo.delivery_date ? `&date=${uo.delivery_date}` : ''}`,
@@ -1468,7 +1471,7 @@ export default function CommercialUnifiedDashboard({
                                 { id: '7d', label: '7 Días' },
                                 { id: '15d', label: '15 Días' },
                                 { id: '30d', label: '30 Días' },
-                                { id: 'this_month', label: 'Mes Actual' },
+                                { id: '90d', label: '90 Días' },
                                 { id: 'all', label: 'Histórico' }
                             ] as const
                         ).map(t => {
@@ -1514,223 +1517,255 @@ export default function CommercialUnifiedDashboard({
                     >
                         <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
                     </button>
-                </div>
-            </div>
 
-            {/* TACTICAL WEEKLY TASK: BOLETÍN AGRO-COMERCIAL DE COSECHAS & ESCASEZ (HITL) */}
-            <div style={{
-                backgroundColor: '#0F172A',
-                border: '1px solid #1E293B',
-                borderLeft: '5px solid #059669',
-                borderRadius: THEME.radius.lg,
-                padding: '1.25rem 1.5rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '1.25rem',
-                boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
-                color: '#FFFFFF'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '320px', flex: 1 }}>
-                    <div style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '14px',
-                        backgroundColor: 'rgba(5, 150, 105, 0.2)',
-                        border: '1px solid rgba(5, 150, 105, 0.4)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        color: '#34D399'
-                    }}>
-                        <Sprout size={26} />
-                    </div>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                            <span style={{
-                                fontSize: '0.7rem',
-                                fontWeight: '800',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.8px',
-                                backgroundColor: '#065F46',
-                                color: '#A7F3D0',
-                                padding: '2px 8px',
-                                borderRadius: '100px'
-                            }}>
-                                Centro de Tareas Semanales • HITL
-                            </span>
-                            {lastBulletinDispatch ? (
-                                <span style={{
-                                    fontSize: '0.72rem',
-                                    fontWeight: '800',
-                                    backgroundColor: '#064E3B',
-                                    color: '#6EE7B7',
-                                    padding: '2px 8px',
-                                    borderRadius: '6px',
+                    {/* CENTINELAS TÁCTICOS COMPACTOS (OPCIÓN A: HOVER POPOVERS FLOTANTES) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '0.25rem' }}>
+                        
+                        {/* 1. CENTINELA TÁCTICO: BOLETÍN AGRO-COMERCIAL */}
+                        <div 
+                            style={{ position: 'relative' }}
+                            onMouseEnter={() => setHoveredSentinel('bulletin')}
+                            onMouseLeave={() => setHoveredSentinel(null)}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => setIsBulletinModalOpen(true)}
+                                style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '4px'
-                                }}>
-                                    ✓ Despachado: {new Date(lastBulletinDispatch.dispatched_at).toLocaleDateString('es-CO')} ({lastBulletinDispatch.clients_count} cuentas)
-                                </span>
-                            ) : (
-                                <span style={{
-                                    fontSize: '0.72rem',
+                                    gap: '6px',
+                                    padding: '0.4rem 0.75rem',
+                                    borderRadius: '10px',
+                                    border: '1px solid #1E293B',
+                                    backgroundColor: hoveredSentinel === 'bulletin' ? '#0F172A' : '#1E293B',
+                                    color: '#A7F3D0',
+                                    fontSize: '0.74rem',
                                     fontWeight: '800',
-                                    backgroundColor: '#78350F',
-                                    color: '#FDE68A',
-                                    padding: '2px 8px',
-                                    borderRadius: '6px'
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    boxShadow: '0 2px 5px rgba(15, 23, 42, 0.15)'
+                                }}
+                            >
+                                <span style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '999px',
+                                    backgroundColor: '#10B981',
+                                    boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.4)',
+                                    display: 'inline-block'
+                                }} />
+                                <Sprout size={14} color="#34D399" />
+                                <span>Boletín Semanal</span>
+                                <span style={{
+                                    backgroundColor: 'rgba(5, 150, 105, 0.3)',
+                                    color: '#6EE7B7',
+                                    padding: '1px 6px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '900'
                                 }}>
-                                    ● Pendiente de Envío Semanal
+                                    {costDecreases.length > 0 ? costDecreases.length : 4}C / {costIncreases.length > 0 ? costIncreases.length : 3}A
                                 </span>
+                            </button>
+
+                            {/* POPOVER FLOTANTE EN HOVER: BOLETÍN */}
+                            {hoveredSentinel === 'bulletin' && (
+                                <div 
+                                    style={{
+                                        position: 'absolute',
+                                        top: 'calc(100% + 8px)',
+                                        right: 0,
+                                        zIndex: 1000,
+                                        width: '460px',
+                                        backgroundColor: '#0F172A',
+                                        border: '1px solid #334155',
+                                        borderRadius: '14px',
+                                        padding: '1.25rem',
+                                        boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.45)',
+                                        color: '#FFFFFF',
+                                        animation: 'fadeIn 0.15s ease'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'rgba(5, 150, 105, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34D399' }}>
+                                                <Sprout size={18} />
+                                            </div>
+                                            <div>
+                                                <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '900', color: '#FFFFFF' }}>
+                                                    Boletín Agro-Comercial
+                                                </h4>
+                                                <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                                                    Centro de Tareas Semanales • HITL
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {lastBulletinDispatch ? (
+                                            <span style={{ fontSize: '0.68rem', fontWeight: '800', backgroundColor: '#064E3B', color: '#6EE7B7', padding: '2px 7px', borderRadius: '6px' }}>
+                                                Despachado: {new Date(lastBulletinDispatch.dispatched_at).toLocaleDateString('es-CO')}
+                                            </span>
+                                        ) : (
+                                            <span style={{ fontSize: '0.68rem', fontWeight: '800', backgroundColor: '#78350F', color: '#FDE68A', padding: '2px 7px', borderRadius: '6px' }}>
+                                                Pendiente de Envío
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p style={{ margin: '0 0 0.85rem 0', fontSize: '0.74rem', color: '#94A3B8', lineHeight: 1.4 }}>
+                                        Filtro inteligente por consumo real histórico $\le 60$d. Solo notifica a cuentas que compran los productos afectados (cero spam y protección de contratos).
+                                    </p>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.75rem', borderTop: '1px solid #1E293B' }}>
+                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                            <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', color: '#A7F3D0', fontWeight: '700' }}>
+                                                {costDecreases.length > 0 ? costDecreases.length : 4} Cosechas
+                                            </span>
+                                            <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', color: '#FCA5A5', fontWeight: '700' }}>
+                                                {costIncreases.length > 0 ? costIncreases.length : 3} Alertas Plaza
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsBulletinModalOpen(true)}
+                                            style={{
+                                                backgroundColor: '#059669',
+                                                color: '#FFFFFF',
+                                                border: 'none',
+                                                padding: '0.45rem 1rem',
+                                                borderRadius: '8px',
+                                                fontSize: '0.78rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px'
+                                            }}
+                                        >
+                                            <Sparkles size={14} /> Abrir Despacho
+                                        </button>
+                                    </div>
+                                </div>
                             )}
                         </div>
-                        <h3 style={{
-                            margin: '4px 0 2px 0',
-                            fontSize: '1.05rem',
-                            fontWeight: '900',
-                            color: '#FFFFFF',
-                            fontFamily: 'Outfit, sans-serif',
-                            letterSpacing: '-0.2px'
-                        }}>
-                            Boletín Agro-Comercial: Oportunidades de Cosecha & Alertas con Sustitutos B2B
-                        </h3>
-                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#94A3B8', lineHeight: 1.4 }}>
-                            Filtro inteligente por consumo real histórico $\le 60$d. Solo notifica a cuentas que compran los productos afectados (cero spam y protección de contratos).
-                        </p>
-                    </div>
-                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', gap: '8px', fontSize: '0.75rem' }}>
-                        <span style={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                            border: '1px solid rgba(255, 255, 255, 0.15)',
-                            padding: '4px 10px',
-                            borderRadius: '8px',
-                            color: '#A7F3D0',
-                            fontWeight: '700'
-                        }}>
-                            🌿 {costDecreases.length > 0 ? costDecreases.length : 4} Cosechas
-                        </span>
-                        <span style={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                            border: '1px solid rgba(255, 255, 255, 0.15)',
-                            padding: '4px 10px',
-                            borderRadius: '8px',
-                            color: '#FCA5A5',
-                            fontWeight: '700'
-                        }}>
-                            ⚠️ {costIncreases.length > 0 ? costIncreases.length : 3} Alertas Plaza
-                        </span>
-                    </div>
+                        {/* 2. CENTINELA TÁCTICO: ALERTA SLA RECOTIZACIÓN */}
+                        {costAlertStats.expiredCount > 0 && (
+                            <div 
+                                style={{ position: 'relative' }}
+                                onMouseEnter={() => setHoveredSentinel('sla')}
+                                onMouseLeave={() => setHoveredSentinel(null)}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (onNavigateToCostMatrix) {
+                                            onNavigateToCostMatrix();
+                                        } else {
+                                            window.location.href = '/admin/commercial?tab=operations&subtab=cost-matrix';
+                                        }
+                                    }}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '0.4rem 0.75rem',
+                                        borderRadius: '10px',
+                                        border: '1px solid #FCA5A5',
+                                        backgroundColor: hoveredSentinel === 'sla' ? '#FEE2E2' : '#FEF2F2',
+                                        color: '#991B1B',
+                                        fontSize: '0.74rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease',
+                                        boxShadow: '0 2px 5px rgba(220, 38, 38, 0.1)'
+                                    }}
+                                >
+                                    <span style={{
+                                        width: '8px',
+                                        height: '8px',
+                                        borderRadius: '999px',
+                                        backgroundColor: '#DC2626',
+                                        boxShadow: '0 0 0 2px rgba(220, 38, 38, 0.4)',
+                                        display: 'inline-block'
+                                    }} />
+                                    <AlertTriangle size={14} color="#DC2626" />
+                                    <span>{costAlertStats.expiredCount} SLA Vencido</span>
+                                </button>
 
-                    <button
-                        onClick={() => setIsBulletinModalOpen(true)}
-                        style={{
-                            backgroundColor: '#059669',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            padding: '0.65rem 1.25rem',
-                            borderRadius: '10px',
-                            fontSize: '0.86rem',
-                            fontWeight: '800',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            boxShadow: '0 4px 12px rgba(5, 150, 105, 0.35)',
-                            transition: 'all 0.15s'
-                        }}
-                    >
-                        <Sparkles size={16} /> Iniciar Despacho de Boletín Semanal
-                    </button>
+                                {/* POPOVER FLOTANTE EN HOVER: ALERTA SLA */}
+                                {hoveredSentinel === 'sla' && (
+                                    <div 
+                                        style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 8px)',
+                                            right: 0,
+                                            zIndex: 1000,
+                                            width: '420px',
+                                            backgroundColor: '#FFFFFF',
+                                            border: '1px solid #FECACA',
+                                            borderLeft: '4px solid #DC2626',
+                                            borderRadius: '14px',
+                                            padding: '1.15rem',
+                                            boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.25)',
+                                            color: '#1E293B',
+                                            animation: 'fadeIn 0.15s ease'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem' }}>
+                                            <div style={{ width: '28px', height: '28px', borderRadius: '7px', backgroundColor: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <AlertTriangle size={16} color="#DC2626" />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#991B1B' }}>
+                                                        Alerta Operativa de Precios
+                                                    </h4>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: '800', backgroundColor: '#DC2626', color: 'white', padding: '1px 6px', borderRadius: '4px' }}>
+                                                        SLA Vencido
+                                                    </span>
+                                                </div>
+                                                <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                    {costAlertStats.expiredCount} productos requieren recotización
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <p style={{ margin: '0 0 0.85rem 0', fontSize: '0.74rem', color: '#B91C1C', lineHeight: 1.4 }}>
+                                            {costAlertStats.criticalExpiredNames.length > 0
+                                                ? `Prioridad alta en venta: ${costAlertStats.criticalExpiredNames.slice(0, 3).join(', ')}${costAlertStats.criticalExpiredNames.length > 3 ? ` y ${costAlertStats.criticalExpiredNames.length - 3} más.` : '.'} Riesgo de descalce de margen en cotizaciones vivas.`
+                                                : 'Precios de compra sin vigencia según perecibilidad.'}
+                                        </p>
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (onNavigateToCostMatrix) {
+                                                        onNavigateToCostMatrix();
+                                                    } else {
+                                                        window.location.href = '/admin/commercial?tab=operations&subtab=cost-matrix';
+                                                    }
+                                                }}
+                                                style={{
+                                                    backgroundColor: '#DC2626',
+                                                    color: '#FFFFFF',
+                                                    border: 'none',
+                                                    padding: '0.4rem 0.9rem',
+                                                    borderRadius: '7px',
+                                                    fontSize: '0.76rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px'
+                                                }}
+                                            >
+                                                Recotizar en Matriz <ExternalLink size={12} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-
-            {/* OPERATIONAL BANNER: ALERTAS DE RECOTIZACIÓN URGENTE */}
-            {costAlertStats.expiredCount > 0 && (
-                <div style={{
-                    backgroundColor: '#FEF2F2',
-                    border: '1px solid #FECACA',
-                    borderLeft: '5px solid #DC2626',
-                    borderRadius: THEME.radius.lg,
-                    padding: '0.9rem 1.25rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.85rem',
-                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '280px', flex: 1 }}>
-                        <div style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '10px',
-                            backgroundColor: '#FEE2E2',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                        }}>
-                            <AlertTriangle size={20} color="#DC2626" />
-                        </div>
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '0.88rem', fontWeight: '900', color: '#991B1B' }}>
-                                    Alerta Operativa: {costAlertStats.expiredCount} productos requieren recotización inmediata de mercado
-                                </span>
-                                <span style={{
-                                    fontSize: '0.68rem',
-                                    fontWeight: '800',
-                                    backgroundColor: '#DC2626',
-                                    color: 'white',
-                                    padding: '2px 7px',
-                                    borderRadius: '6px'
-                                }}>
-                                    SLA Vencido
-                                </span>
-                            </div>
-                            <p style={{ margin: '3px 0 0 0', fontSize: '0.76rem', color: '#B91C1C', fontWeight: '500' }}>
-                                {costAlertStats.criticalExpiredNames.length > 0
-                                    ? `Prioridad alta en venta: ${costAlertStats.criticalExpiredNames.slice(0, 4).join(', ')}${costAlertStats.criticalExpiredNames.length > 4 ? ` y ${costAlertStats.criticalExpiredNames.length - 4} más.` : '.'} Precios de compra fuera de vigencia según perecibilidad.`
-                                    : 'Precios de compra sin vigencia según el SLA de perecibilidad. Riesgo de margen en ventas activas.'}
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (onNavigateToCostMatrix) {
-                                onNavigateToCostMatrix();
-                            } else {
-                                window.location.href = '/admin/commercial?tab=operations&subtab=cost-matrix';
-                            }
-                        }}
-                        style={{
-                            border: 'none',
-                            cursor: 'pointer',
-                            backgroundColor: '#DC2626',
-                            color: 'white',
-                            fontWeight: '800',
-                            fontSize: '0.8rem',
-                            padding: '0.5rem 1.1rem',
-                            borderRadius: '8px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)',
-                            transition: 'all 0.15s'
-                        }}
-                    >
-                        Recotizar en Matriz <ExternalLink size={13} />
-                    </button>
-                </div>
-            )}
 
             {/* 2. HERO KPI CARDS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
@@ -2029,7 +2064,7 @@ export default function CommercialUnifiedDashboard({
                                     <Compass size={20} color={THEME.colors.primary} /> Embudo de Conversión Comercial (Sales Funnel)
                                 </h2>
                                 <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary }}>
-                                    Ciclo de vida Institucional: Prospectos ➔ Cotizaciones ➔ Acuerdos ➔ Compras Facturadas.
+                                    Ciclo de vida Institucional: Prospectos -&gt; Cotizaciones -&gt; Acuerdos -&gt; Compras Facturadas.
                                 </p>
                             </div>
                             <span style={{ fontSize: '0.72rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#059669', padding: '4px 10px', borderRadius: '12px', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
