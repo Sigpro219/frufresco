@@ -6,7 +6,7 @@ import { THEME, formatMoney } from '@/lib/adminTheme';
 import { 
     Mail, Search, Paperclip, Send, Plus, CornerUpLeft, 
     Sparkles, RefreshCw, X, FileSpreadsheet, FileText, 
-    Download, ShieldCheck, ZoomIn, ZoomOut
+    Download, ShieldCheck, ZoomIn, ZoomOut, Check, AlertTriangle, Pin, Edit3
 } from 'lucide-react';
 import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
@@ -92,7 +92,7 @@ export default function CommercialInboxModule() {
                 throw new Error(resData.error || 'Fallo al enviar respuesta');
             }
 
-            alert('🎉 Respuesta enviada con éxito');
+            alert('Respuesta enviada con éxito');
             setReplyText('');
             await fetchEmails();
         } catch (err: any) {
@@ -216,7 +216,7 @@ export default function CommercialInboxModule() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al enviar contraoferta');
 
-            alert('🎉 ¡Contraoferta enviada con éxito al cliente!');
+            alert('¡Contraoferta enviada con éxito al cliente!');
             setIsCounterOfferModalOpen(false);
             setActiveVersion(2);
             await fetchEmails();
@@ -248,7 +248,7 @@ export default function CommercialInboxModule() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al fijar acuerdo');
 
-            alert('🎉 ¡Acuerdo Comercial fijado y activado exitosamente!');
+            alert('¡Acuerdo Comercial fijado y activado exitosamente!');
             setIsAgreementModalOpen(false);
             setIsProposalModalOpen(false);
             await fetchEmails();
@@ -622,10 +622,13 @@ export default function CommercialInboxModule() {
                                             fontWeight: '800',
                                             backgroundColor: activeVersion === 1 ? 'white' : 'transparent',
                                             color: activeVersion === 1 ? '#1E293B' : '#64748B',
-                                            boxShadow: activeVersion === 1 ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                            boxShadow: activeVersion === 1 ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
                                         }}
                                     >
-                                        📌 Versión 1: Propuesta Cliente
+                                        <Pin size={14} /> Versión 1: Propuesta Cliente
                                     </button>
                                     <button
                                         onClick={() => setActiveVersion(2)}
@@ -638,10 +641,13 @@ export default function CommercialInboxModule() {
                                             fontWeight: '800',
                                             backgroundColor: activeVersion === 2 ? '#111827' : 'transparent',
                                             color: activeVersion === 2 ? '#FFFFFF' : '#64748B',
-                                            boxShadow: activeVersion === 2 ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                            boxShadow: activeVersion === 2 ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
                                         }}
                                     >
-                                        ✏️ Versión 2: Contraoferta FruFresco
+                                        <Edit3 size={14} /> Versión 2: Contraoferta FruFresco
                                     </button>
                                 </div>
 
@@ -735,12 +741,12 @@ export default function CommercialInboxModule() {
                                     </div>
 
                                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                        <span style={{ fontSize: '0.8rem', padding: '4px 10px', borderRadius: '8px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: '800' }}>
-                                            ✓ {acceptedCount} Aceptados
+                                        <span style={{ fontSize: '0.8rem', padding: '4px 10px', borderRadius: '8px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <Check size={13} strokeWidth={2.5} /> {acceptedCount} Aceptados
                                         </span>
                                         {counterOfferedCount > 0 && (
-                                            <span style={{ fontSize: '0.8rem', padding: '4px 10px', borderRadius: '8px', backgroundColor: '#FFF7ED', color: '#C2410C', fontWeight: '800' }}>
-                                                ⚠️ {counterOfferedCount} Contraofertados
+                                            <span style={{ fontSize: '0.8rem', padding: '4px 10px', borderRadius: '8px', backgroundColor: '#FFF7ED', color: '#C2410C', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                <AlertTriangle size={13} /> {counterOfferedCount} Contraofertados
                                             </span>
                                         )}
                                         <span style={{ fontSize: '0.8rem', padding: '4px 10px', borderRadius: '8px', backgroundColor: '#F1F5F9', color: '#334155', fontWeight: '800' }}>

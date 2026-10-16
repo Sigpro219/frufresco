@@ -72,7 +72,12 @@ import {
     Tag,
     Upload,
     CopyPlus,
-    ArrowRightLeft
+    ArrowRightLeft,
+    Crown,
+    Star,
+    Megaphone,
+    Handshake,
+    Ban
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule, { extractRowsFromExcelSheet } from './CommercialAgreementsModule';
@@ -482,7 +487,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
             setScarcityProductSearch('');
 
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast(`🚫 ${selectedScarcityProduct.name} bloqueado por escasez. Tarea de reactivación creada.`, 'success');
+                (window as any).showToast(`${selectedScarcityProduct.name} bloqueado por escasez. Tarea de reactivación creada.`, 'success');
             }
         } catch (err: any) {
             console.error('Error locking SKU:', err);
@@ -526,7 +531,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
 
             setScarcityLockedMap(updatedMap);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast(`⚡ "${prodName}" reactivado con éxito en todos los canales.`, 'success');
+                (window as any).showToast(`"${prodName}" reactivado con éxito en todos los canales.`, 'success');
             }
         } catch (err: any) {
             console.error('Error reactivando SKU:', err);
@@ -751,7 +756,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                 .eq('id', clientId);
         }
 
-        window.showToast?.(isVerified ? '✓ Cliente marcado como REVISADO (Dev)' : '⏳ Cliente marcado como PENDIENTE (Dev)', 'success');
+        window.showToast?.(isVerified ? 'Cliente marcado como REVISADO (Dev)' : 'Cliente marcado como PENDIENTE (Dev)', 'success');
     };
 
     const downloadConversionTemplate = async () => {
@@ -981,7 +986,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
 
             // Segunda confirmación (Énfasis en la criticidad)
             const confirm2 = window.confirm(
-                `⚠️ ATENCIÓN: Esta acción es CRÍTICA.\n\n` +
+                `ATENCIÓN: Esta acción es CRÍTICA.\n\n` +
                 `El cambio de modelo re-estructurará cómo se calculan los precios para este cliente. ¿Estás absolutamente seguro de proceder?`
             );
             if (!confirm2) return;
@@ -1100,7 +1105,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
 
             let jerarquiaVisual = 'INDEPENDIENTE';
             if (c.role === 'b2c_client') jerarquiaVisual = 'HOGAR';
-            else if (c.is_corporate_parent) jerarquiaVisual = '🏢 CASA MATRIZ';
+            else if (c.is_corporate_parent) jerarquiaVisual = 'CASA MATRIZ';
             else if (isBranch) jerarquiaVisual = '  ↳ SUCURSAL';
 
             return {
@@ -1270,7 +1275,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
         ];
 
         const sample1 = [
-            "", "ACTIVO", "SI", "vip,corporativo", "SI", "NO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos", "Mendoza", "Carlos Mendoza", "3159998877", 
+            "", "ACTIVO", "SI", "vip,corporativo", "SI", "NO", "CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos", "Mendoza", "Carlos Mendoza", "3159998877", 
             "carlos@elgourmet.com", "facturacion2@elgourmet.com", "", "Calle 100 # 15-30", "Oficina 502", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
             5000000, "15 Días", "SI", "NO", "NO", 
@@ -2207,11 +2212,13 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                         border: 'none',
                                         color: '#A0AEC0',
                                         cursor: 'pointer',
-                                        fontSize: '0.85rem',
-                                        fontWeight: '700'
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '2px'
                                     }}
                                 >
-                                    ✕
+                                    <X size={14} />
                                 </button>
                             )}
                         </div>
@@ -2743,7 +2750,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                 }}
                                                                 title="Filtrar por Casas Matrices, Sucursales o Cuentas Individuales"
                                                             >
-                                                                {filterStructureHeader === 'matriz' ? '👑 Matriz' : filterStructureHeader === 'sucursal' ? '🏢 Sucursal' : filterStructureHeader === 'individual' ? '👤 Individual' : ''}
+                                                                {filterStructureHeader === 'matriz' ? 'Matriz' : filterStructureHeader === 'sucursal' ? 'Sucursal' : filterStructureHeader === 'individual' ? 'Individual' : ''}
                                                                 <ChevronDown size={12} />
                                                             </button>
                                                         </div>
@@ -2753,13 +2760,13 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos los tipos ({clientsB2B.length})
                                                                 </div>
                                                                 <div onClick={() => { setFilterStructureHeader('matriz'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStructureHeader === 'matriz' ? 'bold' : 'normal', backgroundColor: filterStructureHeader === 'matriz' ? '#EFF6FF' : 'transparent', color: '#1E40AF' }}>
-                                                                    👑 Solo Casas Matrices ({clientsB2B.filter(c => c.is_corporate_parent).length})
+                                                                    Solo Casas Matrices ({clientsB2B.filter(c => c.is_corporate_parent).length})
                                                                 </div>
                                                                 <div onClick={() => { setFilterStructureHeader('sucursal'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStructureHeader === 'sucursal' ? 'bold' : 'normal', backgroundColor: filterStructureHeader === 'sucursal' ? '#EFF6FF' : 'transparent', color: '#0369A1' }}>
-                                                                    🏢 Solo Sucursales ({clientsB2B.filter(c => !!c.parent_id).length})
+                                                                    Solo Sucursales ({clientsB2B.filter(c => !!c.parent_id).length})
                                                                 </div>
                                                                 <div onClick={() => { setFilterStructureHeader('individual'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStructureHeader === 'individual' ? 'bold' : 'normal', backgroundColor: filterStructureHeader === 'individual' ? '#F1F5F9' : 'transparent', color: '#475569' }}>
-                                                                    👤 Cuentas Individuales ({clientsB2B.filter(c => !c.is_corporate_parent && !c.parent_id).length})
+                                                                    Cuentas Individuales ({clientsB2B.filter(c => !c.is_corporate_parent && !c.parent_id).length})
                                                                 </div>
                                                             </div>
                                                         )}
@@ -2795,11 +2802,11 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                 </div>
                                                                 {availableLocations.map(loc => (
                                                                     <div key={loc} onClick={() => { setFilterLocationHeader(loc); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === loc ? 'bold' : 'normal', backgroundColor: filterLocationHeader === loc ? '#F1F5F9' : 'transparent' }}>
-                                                                        📍 {loc}
+                                                                        {loc}
                                                                     </div>
                                                                 ))}
                                                                 <div onClick={() => { setFilterLocationHeader('sin_ubicacion'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === 'sin_ubicacion' ? 'bold' : 'normal', backgroundColor: filterLocationHeader === 'sin_ubicacion' ? '#F1F5F9' : 'transparent', color: '#94A3B8' }}>
-                                                                    🚫 Sin ubicación
+                                                                    Sin ubicación
                                                                 </div>
                                                             </div>
                                                         )}
@@ -2835,10 +2842,10 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('activo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'activo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'activo' ? '#F1F5F9' : 'transparent' }}>
-                                                                    🟢 Activos
+                                                                    Activos
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('inactivo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'inactivo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'inactivo' ? '#F1F5F9' : 'transparent' }}>
-                                                                    🔴 Inactivos
+                                                                    Inactivos
                                                                 </div>
                                                             </div>
                                                         )}
@@ -2873,26 +2880,26 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                 </div>
                                                                 <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', padding: '4px 8px 2px', textTransform: 'uppercase' }}>Acuerdos de Precios</div>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('agreement_active'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_active' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_active' ? '#F1F5F9' : 'transparent' }}>
-                                                                    ⚡ Al Día
+                                                                    Al Día
                                                                 </div>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('agreement_warning'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_warning' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_warning' ? '#F1F5F9' : 'transparent' }}>
-                                                                    ⚠️ Por Vencer
+                                                                    Por Vencer
                                                                 </div>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('agreement_expired'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_expired' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_expired' ? '#F1F5F9' : 'transparent' }}>
-                                                                    🚫 Vencido
+                                                                    Vencido
                                                                 </div>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('agreement_inherited'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_inherited' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_inherited' ? '#F1F5F9' : 'transparent', color: '#0369A1' }}>
-                                                                    🏢 Heredado Matriz
+                                                                    Heredado Matriz
                                                                 </div>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('agreement_none'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_none' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_none' ? '#F1F5F9' : 'transparent' }}>
-                                                                    📄 Sin Acuerdo
+                                                                    Sin Acuerdo
                                                                 </div>
                                                                 <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', padding: '6px 8px 2px', borderTop: '1px solid #F1F5F9', textTransform: 'uppercase', marginTop: '4px' }}>Geolocalización</div>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('gps_ok'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'gps_ok' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'gps_ok' ? '#F1F5F9' : 'transparent' }}>
-                                                                    📍 GPS OK
+                                                                    GPS OK
                                                                 </div>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('gps_missing'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'gps_missing' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'gps_missing' ? '#F1F5F9' : 'transparent' }}>
-                                                                    ❌ Sin GPS
+                                                                    Sin GPS
                                                                 </div>
                                                             </div>
                                                         )}
@@ -3033,7 +3040,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                 </div>
                                                                 {availableLocations.map(loc => (
                                                                     <div key={loc} onClick={() => { setFilterLocationHeader(loc); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === loc ? 'bold' : 'normal', backgroundColor: filterLocationHeader === loc ? '#F1F5F9' : 'transparent' }}>
-                                                                        📍 {loc}
+                                                                        {loc}
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -3070,10 +3077,10 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('activo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'activo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'activo' ? '#F1F5F9' : 'transparent' }}>
-                                                                    🟢 Activos
+                                                                    Activos
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('inactivo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'inactivo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'inactivo' ? '#F1F5F9' : 'transparent' }}>
-                                                                    🔴 Inactivos
+                                                                    Inactivos
                                                                 </div>
                                                             </div>
                                                         )}
@@ -3203,7 +3210,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                 </div>
                                                                 {availableLocations.map(loc => (
                                                                     <div key={loc} onClick={() => { setFilterLocationHeader(loc); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === loc ? 'bold' : 'normal', backgroundColor: filterLocationHeader === loc ? '#F1F5F9' : 'transparent' }}>
-                                                                        📍 {loc}
+                                                                        {loc}
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -3240,16 +3247,16 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('new'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'new' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'new' ? '#F1F5F9' : 'transparent' }}>
-                                                                    🆕 Nuevos
+                                                                    Nuevos
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('contacted'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'contacted' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'contacted' ? '#F1F5F9' : 'transparent' }}>
-                                                                    📞 Contactados
+                                                                    Contactados
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('converted'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'converted' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'converted' ? '#F1F5F9' : 'transparent' }}>
-                                                                    🤝 Convertidos
+                                                                    Convertidos
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('rejected'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'rejected' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'rejected' ? '#F1F5F9' : 'transparent' }}>
-                                                                    ❌ Descartados
+                                                                    Descartados
                                                                 </div>
                                                             </div>
                                                         )}
@@ -3322,7 +3329,9 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                 </div>
                                 <h2 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1E293B', margin: 0 }}>Cargue Masivo (Clientes CRM)</h2>
                             </div>
-                            <button onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '1.25rem', fontWeight: '300' }}>✕</button>
+                            <button onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <X size={20} />
+                            </button>
                         </div>
 
                         <div style={{ padding: '1.5rem' }}>
@@ -3367,7 +3376,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                     }}
                                     style={{ display: 'none' }}
                                 />
-                                <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📁</div>
+                                <div style={{ marginBottom: "8px", display: "flex", justifyContent: "center" }}><Folder size={40} color="#94A3B8" /></div>
                                 {selectedFile ? (
                                     <div style={{ textAlign: 'center', padding: '0 1rem' }}>
                                         <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#0F172A', wordBreak: 'break-all' }}>{selectedFile.name}</div>
@@ -3656,7 +3665,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                     alignItems: 'center',
                                                     gap: '6px'
                                                 }}>
-                                                    <span>📅 El acuerdo vencerá el:</span>
+                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><Calendar size={14} /> El acuerdo vencerá el:</span>
                                                     <strong style={{ color: '#0D7A57' }}>{formattedExpiry}</strong>
                                                 </div>
                                             );
@@ -4088,7 +4097,7 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
             <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: '900', color: '#9F1239', fontSize: '1rem', marginBottom: '0.2rem' }}>{lead.company_name || lead.contact_name}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', backgroundColor: '#BE123C', color: 'white', borderRadius: '6px', fontWeight: '900' }}>⚠️ VENCIDA</span>
+                    <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", backgroundColor: "#BE123C", color: "white", borderRadius: "6px", fontWeight: "900", display: "inline-flex", alignItems: "center", gap: "4px" }}><AlertTriangle size={12} /> VENCIDA</span>
                     <span style={{ fontSize: '0.8rem', color: '#E11D48', fontWeight: '700' }}>
                         {overdueDays <= 0 ? 'Para hoy' : `Hace ${overdueDays} días`}
                     </span>
@@ -4460,7 +4469,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {((isB2B || isB2C) && profileData && profileData.latitude && profileData.longitude) || (isLead && leadData && leadData.latitude && leadData.longitude) ? (
                     <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700', paddingLeft: '1.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <MapPin size={12} strokeWidth={1.5} /> {isLead ? leadData?.latitude?.toFixed(4) : profileData?.latitude?.toFixed(4)}, {isLead ? leadData?.longitude?.toFixed(4) : profileData?.longitude?.toFixed(4)} 
-                        <span style={{ marginLeft: '8px', color: '#059669' }}>✓ Geo</span>
+                        <span style={{ marginLeft: "8px", color: "#059669", display: "inline-flex", alignItems: "center", gap: "3px" }}><Check size={12} strokeWidth={2.5} /> Geo</span>
                     </div>
                 ) : null}
                 {isB2B && profileData && (
@@ -4573,9 +4582,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                 }}>
                                     {(() => {
                                         const size = leadData.business_size || '';
-                                        if (size.includes('Grande') || size.includes('30M')) return '🟢 ' + size;
-                                        if (size.includes('Mediano') || size.includes('10M')) return '🟡 ' + size;
-                                        if (size.includes('Pequeño') || size.includes('< 10M')) return '🔴 ' + size;
+                                        if (size.includes('Grande') || size.includes('30M')) return size;
+                                        if (size.includes('Mediano') || size.includes('10M')) return size;
+                                        if (size.includes('Pequeño') || size.includes('< 10M')) return size;
                                         return size || 'No especificado';
                                     })()}
                                 </div>
@@ -4585,7 +4594,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', backgroundColor: '#F1F5F9', borderRadius: '12px' }}>
                             <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block' }}>CONTACTOS</label>
-                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B' }}>📞 {leadData.contact_count || 0} veces</div>
+                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B' }}>{leadData.contact_count || 0} veces</div>
                             </div>
                             {leadData.last_contact_date && (
                                 <div style={{ flex: 2 }}>
@@ -4605,7 +4614,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                 alignItems: 'center',
                                 gap: '10px'
                             }}>
-                                <span style={{ fontSize: '1.2rem' }}>{new Date(leadData.next_contact_date as string) < new Date() ? '⚠️' : '📅'}</span>
+                                <span style={{ fontSize: '1.2rem' }}>{new Date(leadData.next_contact_date as string) < new Date() ? <AlertTriangle size={18} color="#DC2626" /> : <Calendar size={18} color="#16A34A" />}</span>
                                 <div>
                                     <label style={{ fontSize: '0.65rem', fontWeight: '800', color: new Date(leadData.next_contact_date as string) < new Date() ? '#991B1B' : '#166534', display: 'block' }}>
                                         {new Date(leadData.next_contact_date as string) < new Date() ? 'TAREA VENCIDA' : 'SIGUIENTE CONTACTO'}
@@ -5790,7 +5799,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             const fileName = `Pareto_Consumo_${safeClientName}_NIT_${clientNit}_${dateStr}.xlsx`;
 
             XLSX.writeFile(wb, fileName);
-            window.showToast?.(`📊 Planilla Pareto descargada con éxito: ${fileName}`, 'success');
+            window.showToast?.(`Planilla Pareto descargada con éxito: ${fileName}`, 'success');
         } catch (err: any) {
             console.error('Error exporting Pareto Excel:', err);
             window.showToast?.(`Error al exportar Pareto: ${err.message}`, 'error');
@@ -6022,7 +6031,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         try {
             const addressQuery = `${formData.address}, ${formData.municipality || 'Bogotá'}, Colombia`;
 
-            console.log('--- 🛰️ INICIANDO GEOCODING VÍA PROXY ---');
+            console.log('--- INICIANDO GEOCODING VÍA PROXY ---');
             console.log('Query:', addressQuery);
 
             const response = await fetch(`/api/geocode?address=${encodeURIComponent(addressQuery)}`);
@@ -6033,7 +6042,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             if (data.status === 'OK' && data.results && data.results[0]) {
                 const { lat, lng } = data.results[0].geometry.location;
                 
-                console.log('✅ Coordenadas encontradas:', lat, lng);
+                console.log('Coordenadas encontradas:', lat, lng);
                 
                 setFormData(prev => ({
                     ...prev,
@@ -6066,7 +6075,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 window.showToast?.(`Error de Google: ${data.status}`, 'error');
             }
         } catch (err) {
-            console.error('❌ Error crítico en Geocoding Proxy:', err);
+            console.error('Error crítico en Geocoding Proxy:', err);
             window.showToast?.('Error al conectar con el servicio de mapas', 'error');
         } finally {
             setGeocoding(false);
@@ -6303,8 +6312,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             outline: 'none'
                                         }}
                                     >
-                                        <option value="active">🟢 ACTIVO</option>
-                                        <option value="inactive">🔴 INACTIVO / ARCHIVADO</option>
+                                        <option value="active">ACTIVO</option>
+                                        <option value="inactive">INACTIVO / ARCHIVADO</option>
                                     </select>
                                 </div>
                             </>
@@ -6323,11 +6332,12 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             alignItems: 'center',
                             justifyContent: 'center',
                             boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-                            fontSize: '1.2rem',
                             color: '#94A3B8',
                             transition: 'all 0.2s'
                         }}
-                    >✕</button>
+                    >
+                        <X size={20} />
+                    </button>
                 </header>
 
                 {isLead ? (
@@ -6422,7 +6432,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 <div ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#059669' }}>✓ Ubicación exacta detectada</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#059669' }}>Ubicación exacta detectada</span>
                                                 <a 
                                                     href={`https://www.google.com/maps?q=${editData.latitude},${editData.longitude}`} 
                                                     target="_blank" 
@@ -6435,7 +6445,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         </div>
                                     ) : (
                                         <div style={{ padding: '2rem 1rem', textAlign: 'center', backgroundColor: '#FFFBEB', borderRadius: '16px', border: '1px solid #FEF3C7', color: '#B45309' }}>
-                                            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
+                                            <div style={{ marginBottom: "0.5rem", display: "flex", justifyContent: "center" }}><AlertTriangle size={32} color="#D97706" /></div>
                                             <div style={{ fontSize: '0.85rem', fontWeight: '800' }}>Sin Coordenadas GPS</div>
                                             <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>El prospecto no proporcionó o no se pudo georeferenciar la ubicación automáticamente.</div>
                                         </div>
@@ -6879,7 +6889,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 transition: 'all 0.15s ease'
                                             }}
                                         >
-                                            <span>👑</span> Casa Matriz
+                                            <Crown size={14} /> Casa Matriz
                                         </button>
                                         <button
                                             type="button"
@@ -6905,7 +6915,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 transition: 'all 0.15s ease'
                                             }}
                                         >
-                                            <span>🏢</span> Sucursal de Matriz
+                                            <Building2 size={14} /> Sucursal de Matriz
                                         </button>
                                         <button
                                             type="button"
@@ -6938,7 +6948,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 transition: 'all 0.15s ease'
                                             }}
                                         >
-                                            <span>👤</span> Cuenta Individual
+                                            <User size={14} /> Cuenta Individual
                                         </button>
                                     </div>
                                 )}
@@ -6978,7 +6988,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                             gap: '6px'
                                                         }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                                                <span style={{ fontSize: '0.85rem' }}>👑</span>
+                                                                <Crown size={14} color="#D97706" />
                                                                 <span style={{ fontWeight: '800', fontSize: '0.8rem', color: '#1E40AF', overflow: 'hidden', textOverflow: 'ellipsis' }} title={parent?.company_name || 'Casa Matriz'}>
                                                                     {parent?.company_name || 'Casa Matriz Seleccionada'}
                                                                 </span>
@@ -7125,7 +7135,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                                                     >
                                                                         <div style={{ fontWeight: '800', fontSize: '0.8rem', color: '#1E3A8A' }}>
-                                                                            👑 {p.company_name}
+                                                                            {p.company_name}
                                                                         </div>
                                                                         <div style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px' }}>
                                                                             <span>NIT: {p.nit}</span>
@@ -7615,7 +7625,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                         color: isA ? '#15803D' : isB ? '#B45309' : '#64748B',
                                                                         border: `1px solid ${isA ? '#86EFAC' : isB ? '#FDE68A' : '#E2E8F0'}`
                                                                     }}>
-                                                                        {isA ? '🟢 A (80%)' : isB ? '🟡 B (15%)' : '⚪ C (5%)'}
+                                                                        {isA ? 'A (80%)' : isB ? 'B (15%)' : 'C (5%)'}
                                                                     </span>
                                                                 </td>
                                                                 <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: '700', color: '#475569' }}>
@@ -7981,7 +7991,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 gap: '10px',
                                                 fontFamily: THEME.typography.fontFamilySecondary
                                             }}>
-                                                <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                                <AlertTriangle size={18} color="#D97706" />
                                                 <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>
                                                     {formData.parent_id ? 'La Casa Matriz no cuenta con un Acuerdo Institucional vigente.' : 'El cliente no cuenta con un Acuerdo Institucional vigente.'}
                                                 </span>
@@ -8196,7 +8206,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 {/* 1. Selector de Medio de Pago Habitual / Preferido */}
                                 <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>
                                     <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#475569', display: 'block', textTransform: 'uppercase', letterSpacing: '0.03rem', marginBottom: '0.8rem' }}>
-                                        ⭐ Medio de Pago Habitual / Preferido para este Cliente
+                                        Medio de Pago Habitual / Preferido para este Cliente
                                     </span>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
                                         {/* Wompi Card */}
@@ -8696,7 +8706,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                 onClick={() => {
                                                                     if (isReadOnly) return;
                                                                     if (isSundayBlocked) {
-                                                                        return window.showToast?.('🔒 Entregas en domingo desactivadas globalmente en Configuración General (/admin/settings)', 'info');
+                                                                        return window.showToast?.('Entregas en domingo desactivadas globalmente en Configuración General (/admin/settings)', 'info');
                                                                     }
                                                                     const newDays = isActive ? days.filter((d: number) => d !== idx + 1) : [...days, idx + 1];
                                                                     setFormData({ ...formData, logistics_data: { 
@@ -8705,7 +8715,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                         days: newDays.map((d: number) => d === 7 ? 0 : d) 
                                                                     } });
                                                                 }}
-                                                                title={isSundayBlocked ? "🔒 Entregas en Domingo DESACTIVADAS en Configuración General (/admin/settings)" : `Día ${day}`}
+                                                                title={isSundayBlocked ? "Entregas en Domingo DESACTIVADAS en Configuración General (/admin/settings)" : `Día ${day}`}
                                                                 style={{ 
                                                                     width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: '600',
                                                                     cursor: isReadOnly ? 'default' : (isSundayBlocked ? 'not-allowed' : 'pointer'),
@@ -8721,7 +8731,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                             >
                                                                 {day}
                                                                 {isSundayBlocked && (
-                                                                    <span style={{ position: 'absolute', top: '-4px', right: '-4px', fontSize: '10px' }}>🔒</span>
+                                                                    <span style={{ position: "absolute", top: "-4px", right: "-4px" }}><Lock size={11} color="#DC2626" /></span>
                                                                 )}
                                                             </div>
                                                         );
@@ -8995,7 +9005,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1rem', borderRadius: '16px', color: '#047857', fontSize: '0.8rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    ✓ ACCESO CREADO CON ÉXITO
+                                    ACCESO CREADO CON ÉXITO
                                 </div>
                                 <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.4' }}>
                                     Por favor copia estas credenciales temporales y compártelas de forma segura con el cliente institucional. Se le solicitará cambiar la contraseña en su primer ingreso.
@@ -10633,7 +10643,7 @@ function BranchTransferModal({
                 console.warn('Advertencia al inactivar ficha fuente:', updateErr);
             }
 
-            window.showToast?.(`✅ Sede traspasada con éxito. Nuevo ID fiscal generado bajo ${selectedParent.company_name}`, 'success');
+            window.showToast?.(`Sede traspasada con éxito. Nuevo ID fiscal generado bajo ${selectedParent.company_name}`, 'success');
             onSuccess(newBranchPayload as Profile);
         } catch (err: any) {
             console.error('Error in handleExecuteTransfer:', err);
@@ -10824,7 +10834,7 @@ function BranchTransferModal({
                                                         </div>
                                                         <div>
                                                             <div style={{ fontWeight: '800', fontSize: '0.82rem', color: isSelected ? '#1E3A8A' : '#1E293B' }}>
-                                                                👑 {p.company_name}
+                                                                {p.company_name}
                                                             </div>
                                                             <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', gap: '8px' }}>
                                                                 <span>NIT: {p.nit}</span>
@@ -10887,7 +10897,7 @@ function BranchTransferModal({
                                         <span style={{ fontSize: '0.65rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#15803D' }}>NUEVO ENLACE FISCAL</span>
                                     </div>
                                     <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#14532D' }}>
-                                        👑 {selectedParent.company_name}
+                                        {selectedParent.company_name}
                                     </div>
                                     <div style={{ fontSize: '0.75rem', color: '#166534', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <span>NIT: <strong>{selectedParent.nit}</strong></span>
@@ -11047,8 +11057,10 @@ function LeadFormModal({ onClose, onRefresh }: LeadFormModalProps) {
                 boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800', color: '#0F172A' }}>📢 Crear Nuevo Prospecto (Lead)</h3>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748B' }}>✕</button>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800', color: '#0F172A' }}>Crear Nuevo Prospecto (Lead)</h3>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}>
+                        <X size={20} />
+                    </button>
                 </div>
 
                 {error && (

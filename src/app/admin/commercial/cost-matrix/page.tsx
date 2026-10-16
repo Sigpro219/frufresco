@@ -1932,7 +1932,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             active={tercilFilter === 'all' && lifecycleFilter === 'all'}
                         />
                         <StatCard 
-                            label="🔥 T1: Pulso Diario (4d)" 
+                            label="T1: Pulso Diario (4d)" 
                             value={stats.t1Count} 
                             subValue="Alta Frecuencia"
                             color="#7C3AED" 
@@ -1942,7 +1942,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             active={tercilFilter === 'T1'}
                         />
                         <StatCard 
-                            label="📦 T2: Moderado (8d)" 
+                            label="T2: Moderado (8d)" 
                             value={stats.t2Count} 
                             subValue="Rotación Media"
                             color="#0284C7" 
@@ -1952,7 +1952,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             active={tercilFilter === 'T2'}
                         />
                         <StatCard 
-                            label="⏳ T3: Quincenal (15d)" 
+                            label="T3: Quincenal (15d)" 
                             value={stats.t3Count} 
                             subValue="Secos / Catálogo"
                             color="#059669" 
@@ -3897,7 +3897,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             if (sortedObs.length === 0) {
                                 narrative = `El producto no cuenta con compras físicas ni cotizaciones registradas. Se mantiene el costo de referencia base de $${formatNumber(refCost || 0)} COP/${activeProduct.unit_of_measure || 'Kg'} como piso provisional hasta que se registre una compra de báscula (Camino A) o una cotización comercial (Camino B).`;
                             } else if (cb.isTriggered) {
-                                narrative = `🚨 ALERTA POKA-YOKE: CIRCUIT BREAKER ACTIVADO (+/- >20%). El último precio registrado ($${formatNumber(latestPrice)} COP) tuvo una variación del ${shockPct > 0 ? '+' : ''}${shockPct}% frente al precio anterior ($${formatNumber(prevPrice)} COP). Para proteger los márgenes y prevenir errores de digitación en bodega o plaza, el costo comercial se mantiene CONGELADO en $${formatNumber(prevPrice)} COP hasta que el Jefe Comercial presione 'Aprobar' o digite el costo manual definitivo.`;
+                                narrative = `ALERTA POKA-YOKE: CIRCUIT BREAKER ACTIVADO (+/- >20%). El último precio registrado ($${formatNumber(latestPrice)} COP) tuvo una variación del ${shockPct > 0 ? '+' : ''}${shockPct}% frente al precio anterior ($${formatNumber(prevPrice)} COP). Para proteger los márgenes y prevenir errores de digitación en bodega o plaza, el costo comercial se mantiene CONGELADO en $${formatNumber(prevPrice)} COP hasta que el Jefe Comercial presione 'Aprobar' o digite el costo manual definitivo.`;
                             } else if (sortedObs.length === 1) {
                                 narrative = `Regla Canónica del Último Precio Real: Existe una única señal registrada en el sistema ($${formatNumber(latestPrice)} COP/${activeProduct.unit_of_measure || 'Kg'}). El sistema adopta este valor como costo base directo y le suma el rendimiento por merma (${shrinkagePct}%), fijando un costo neto vendible de $${formatNumber(liveModel.cost)} COP.`;
                             } else {
@@ -4149,8 +4149,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                             </div>
                                             <div style={{ fontSize: '0.72rem', color: cb.isTriggered ? '#B91C1C' : '#059669', fontWeight: '700', marginTop: '2px' }}>
                                                 {cb.isTriggered 
-                                                    ? '⚠️ Congelado por Alerta >20%' 
-                                                    : '✅ Último Precio Real'}
+                                                    ? 'Congelado por Alerta >20%' 
+                                                    : 'Último Precio Real'}
                                             </div>
                                         </div>
 
@@ -4469,7 +4469,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                                 {pct > 0 ? `+${pct}%` : `${pct}%`}
                                                             </div>
                                                             <div style={{ fontSize: '0.7rem', color: isTriggered ? '#B91C1C' : '#059669', fontWeight: '700' }}>
-                                                                {isTriggered ? '🚨 Supera umbral del 20%' : '✅ Dentro del rango de tolerancia'}
+                                                                {isTriggered ? 'Supera umbral del 20%' : 'Dentro del rango de tolerancia'}
                                                             </div>
                                                         </div>
 
@@ -4512,9 +4512,9 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
                                                     <div style={{ fontSize: '0.78rem', color: '#334155', lineHeight: '1.5', backgroundColor: 'white', padding: '0.75rem 0.95rem', borderRadius: '8px', border: isTriggered ? '1px solid #FECDD3' : '1px solid #E2E8F0' }}>
                                                         <strong>Dictamen Pedagógico:</strong> {isTriggered ? (
-                                                            `🚨 El salto del ${pct > 0 ? '+' : ''}${pct}% activó el Circuit Breaker. Para proteger a los clientes institucionales y la cartera de FruFresco, el precio comercial NO salta a $${formatNumber(nextVal)}, sino que se CONGELA preventivamente en $${formatNumber(prevVal)}. El Jefe Comercial debe pulsar '[Aprobar]' en la fila o ingresar el costo corregido antes de que impacte pedidos.`
+                                                            `El salto del ${pct > 0 ? '+' : ''}${pct}% activó el Circuit Breaker. Para proteger a los clientes institucionales y la cartera de FruFresco, el precio comercial NO salta a $${formatNumber(nextVal)}, sino que se CONGELA preventivamente en $${formatNumber(prevVal)}. El Jefe Comercial debe pulsar '[Aprobar]' en la fila o ingresar el costo corregido antes de que impacte pedidos.`
                                                         ) : (
-                                                            `✅ La variación del ${pct > 0 ? '+' : ''}${pct}% se encuentra dentro del rango operativo normal (≤ 20%). El sistema adopta automáticamente $${formatNumber(nextVal)} COP como el Último Precio Real, actualizando el costo neto y la lista de precios B2B de inmediato.`
+                                                            `La variación del ${pct > 0 ? '+' : ''}${pct}% se encuentra dentro del rango operativo normal (≤ 20%). El sistema adopta automáticamente $${formatNumber(nextVal)} COP como el Último Precio Real, actualizando el costo neto y la lista de precios B2B de inmediato.`
                                                         )}
                                                     </div>
                                                 </div>

@@ -23,7 +23,9 @@ import {
     FileSpreadsheet,
     HelpCircle,
     ExternalLink,
-    Filter
+    Filter,
+    Check,
+    X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -951,8 +953,8 @@ export default function CommercialDailyMonitorModule() {
                                     </div>
                                 </div>
                             </div>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#991B1B' }}>
-                                {activePokaYoke === 'equal_value' ? 'Filtro Activo ✓' : 'Filtrar'}
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#991B1B', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                {activePokaYoke === 'equal_value' ? <><Check size={12} strokeWidth={2.5} /> Filtro Activo</> : 'Filtrar'}
                             </span>
                         </div>
 
@@ -995,8 +997,8 @@ export default function CommercialDailyMonitorModule() {
                                     </div>
                                 </div>
                             </div>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6B21A8' }}>
-                                {activePokaYoke === 'multiple_orders' ? 'Filtro Activo ✓' : 'Filtrar'}
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6B21A8', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                {activePokaYoke === 'multiple_orders' ? <><Check size={12} strokeWidth={2.5} /> Filtro Activo</> : 'Filtrar'}
                             </span>
                         </div>
 
@@ -1039,8 +1041,8 @@ export default function CommercialDailyMonitorModule() {
                                     </div>
                                 </div>
                             </div>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#9A3412' }}>
-                                {activePokaYoke === 'under_minimum' ? 'Filtro Activo ✓' : 'Filtrar'}
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#9A3412', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                {activePokaYoke === 'under_minimum' ? <><Check size={12} strokeWidth={2.5} /> Filtro Activo</> : 'Filtrar'}
                             </span>
                         </div>
                     </div>
@@ -1157,10 +1159,13 @@ export default function CommercialDailyMonitorModule() {
                                         background: 'transparent',
                                         color: THEME.colors.textSecondary,
                                         cursor: 'pointer',
-                                        fontSize: '0.75rem'
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '2px'
                                     }}
                                 >
-                                    ✕
+                                    <X size={14} />
                                 </button>
                             )}
                         </div>

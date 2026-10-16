@@ -612,7 +612,7 @@ function OrderLoadingContent() {
         setGeocodedMessage(`Coordenadas GPS asignadas al pedido: ${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`);
         setIsMapPickerOpen(false);
         if (typeof window !== 'undefined' && (window as any).showToast) {
-            (window as any).showToast(`✅ Coordenadas GPS asignadas al pedido: ${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`, 'success');
+            (window as any).showToast(`Coordenadas GPS asignadas al pedido: ${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`, 'success');
         }
     };
 
@@ -636,7 +636,7 @@ function OrderLoadingContent() {
                 setTempLng(loc.lng);
                 setTempGeocodeMsg(`Ubicación georreferenciada por IA: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`);
                 if (typeof window !== 'undefined' && (window as any).showToast) {
-                    (window as any).showToast(`✅ Pin inteligente asignado: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`, 'success');
+                    (window as any).showToast(`Pin inteligente asignado: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`, 'success');
                 }
             } else {
                 const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryAddr + ', ' + tempCity + ', Colombia')}`);
@@ -648,7 +648,7 @@ function OrderLoadingContent() {
                     setTempLng(lon);
                     setTempGeocodeMsg(`Ubicación georreferenciada (OSM): ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
                 } else {
-                    setTempGeocodeMsg('⚠️ No se hallaron coordenadas automáticas para esta dirección.');
+                    setTempGeocodeMsg('No se hallaron coordenadas automáticas para esta dirección.');
                 }
             }
         } catch (err) {
@@ -709,7 +709,7 @@ function OrderLoadingContent() {
                         if (!pos) return;
                         setTempLat(pos.lat());
                         setTempLng(pos.lng());
-                        setTempGeocodeMsg(`📍 Marcador ajustado a: ${pos.lat().toFixed(5)}, ${pos.lng().toFixed(5)}`);
+                        setTempGeocodeMsg(`Marcador ajustado a: ${pos.lat().toFixed(5)}, ${pos.lng().toFixed(5)}`);
                     });
 
                     mapPickerInstanceRef.current.addListener('click', (e: any) => {
@@ -718,7 +718,7 @@ function OrderLoadingContent() {
                         markerPickerInstanceRef.current.setPosition(pos);
                         setTempLat(pos.lat());
                         setTempLng(pos.lng());
-                        setTempGeocodeMsg(`📍 Marcador movido a: ${pos.lat().toFixed(5)}, ${pos.lng().toFixed(5)}`);
+                        setTempGeocodeMsg(`Marcador movido a: ${pos.lat().toFixed(5)}, ${pos.lng().toFixed(5)}`);
                     });
                 } else {
                     mapPickerInstanceRef.current.setCenter(center);
@@ -746,14 +746,14 @@ function OrderLoadingContent() {
                         const position = event.target.getLatLng();
                         setTempLat(position.lat);
                         setTempLng(position.lng);
-                        setTempGeocodeMsg(`📍 Marcador arrastrado a: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`);
+                        setTempGeocodeMsg(`Marcador arrastrado a: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`);
                     });
 
                     map.on('click', (e: any) => {
                         marker.setLatLng(e.latlng);
                         setTempLat(e.latlng.lat);
                         setTempLng(e.latlng.lng);
-                        setTempGeocodeMsg(`📍 Marcador movido a: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
+                        setTempGeocodeMsg(`Marcador movido a: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
                     });
 
                     mapPickerInstanceRef.current = map;
@@ -1040,7 +1040,7 @@ function OrderLoadingContent() {
             };
             const { error: auditErr } = await supabase.from('order_audit_logs').insert([auditLog]);
             if (auditErr) {
-                console.warn('⚠️ No se pudo registrar en order_audit_logs:', auditErr);
+                console.warn('No se pudo registrar en order_audit_logs:', auditErr);
             }
 
             // 3. Update local state
@@ -1069,7 +1069,7 @@ function OrderLoadingContent() {
             setIsReassignModalOpen(false);
 
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast(`✅ Pedido reasignado exitosamente a "${reassignSelectedClient.company_name || reassignSelectedClient.contact_name}" con registro de auditoría.`, 'success');
+                (window as any).showToast(`Pedido reasignado exitosamente a "${reassignSelectedClient.company_name || reassignSelectedClient.contact_name}" con registro de auditoría.`, 'success');
             }
         } catch (err: any) {
             console.error('Error reasignando pedido:', err);
@@ -1126,7 +1126,7 @@ function OrderLoadingContent() {
             setShowFormalizeOcModal(false);
             setFormalizeOcInput('');
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('🎉 ¡Orden de Compra formalizada con éxito!', 'success');
+                (window as any).showToast('¡Orden de Compra formalizada con éxito!', 'success');
             }
         } catch (err: any) {
             console.error('Error formalizando OC:', err);
@@ -1553,7 +1553,7 @@ function OrderLoadingContent() {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'orders' },
                 (payload) => {
-                    console.log('⚡ [Realtime] Cambio detectado en pedidos:', payload.eventType);
+                    console.log('[Realtime] Cambio detectado en pedidos:', payload.eventType);
                     fetchOrders(false);
                 }
             )
@@ -1561,7 +1561,7 @@ function OrderLoadingContent() {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'order_items' },
                 (payload) => {
-                    console.log('⚡ [Realtime] Cambio detectado en ítems:', payload.eventType);
+                    console.log('[Realtime] Cambio detectado en ítems:', payload.eventType);
                     fetchOrders(false);
                 }
             )
@@ -1820,7 +1820,7 @@ function OrderLoadingContent() {
             
             // FALLBACK: Si el Join falla (a veces por RLS o Schema Cache), pedimos los productos por separado
             if (error || !data || data.some(item => !item.products)) {
-                console.warn('⚠️ Falló el Join automático, intentando carga manual de productos...');
+                console.warn('Falló el Join automático, intentando carga manual de productos...');
                 
                 const { data: rawItems, error: itemsErr } = await supabase
                     .from('order_items')
@@ -1848,9 +1848,9 @@ function OrderLoadingContent() {
             }
 
             if (!data || data.length === 0) {
-                console.warn('⚠️ No se encontraron items para el pedido:', order.id);
+                console.warn('No se encontraron items para el pedido:', order.id);
             } else {
-                console.log('✅ Items cargados:', data.length);
+                console.log('Items cargados:', data.length);
             }
 
             setOrderItems(data || []);
@@ -1937,7 +1937,7 @@ function OrderLoadingContent() {
         
         setSearching(true);
         const delayDebounceFn = setTimeout(async () => {
-            console.log('🔍 Buscando productos en edición (debounced):', productSearch);
+            console.log('Buscando productos en edición (debounced):', productSearch);
             try {
                 const { data, error } = await supabase
                     .from('products')
@@ -1947,7 +1947,7 @@ function OrderLoadingContent() {
                     .limit(50);
                 
                 if (error) {
-                    console.error('❌ Error de Supabase:', error.message, error.details, error.hint, error.code);
+                    console.error('Error de Supabase:', error.message, error.details, error.hint, error.code);
                     throw error;
                 }
 
@@ -1958,14 +1958,14 @@ function OrderLoadingContent() {
                     finalProducts = finalProducts.filter(p => agreementPricesMap[p.id] !== undefined);
                 }
                 
-                console.log('✅ Resultados encontrados en edición:', finalProducts.length);
+                console.log('Resultados encontrados en edición:', finalProducts.length);
                 setSearchResults(finalProducts);
             } catch (err: any) {
-                console.error('💥 Excepción en búsqueda:', err);
+                console.error('Excepción en búsqueda:', err);
                 const msg = err.message || JSON.stringify(err);
                 
                 if (err.code === '42501' || msg.includes('permission denied')) {
-                    alert('⚠️ Error de Permisos (RLS): No tienes permiso para buscar en la tabla "products". Por favor, ejecuta el script SQL de permisos.');
+                    alert('Error de Permisos (RLS): No tienes permiso para buscar en la tabla "products". Por favor, ejecuta el script SQL de permisos.');
                 }
             } finally {
                 setSearching(false);
@@ -2090,7 +2090,7 @@ function OrderLoadingContent() {
 
     const addProductToOrder = (product: any) => {
         if (scarcityLockedMap[product.id]) {
-            alert(`🚫 "${product.name}" no se puede agregar al pedido: Insumo bloqueado por escasez en el mercado.`);
+            alert(`"${product.name}" no se puede agregar al pedido: Insumo bloqueado por escasez en el mercado.`);
             return;
         }
         // 1. Check for product substitution exception
@@ -2440,14 +2440,14 @@ function OrderLoadingContent() {
         // Block Zero Margin / Zero Price
         const zeroPriceItem = orderItems.find(item => !item.unit_price || parseFloat(item.unit_price.toString()) === 0);
         if (zeroPriceItem) {
-            alert(`❌ No se puede guardar: El producto "${zeroPriceItem.products?.name || 'Item'}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`);
+            alert(`No se puede guardar: El producto "${zeroPriceItem.products?.name || 'Item'}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`);
             return;
         }
 
         // Block Zero / Negative Quantities
         const zeroQtyItem = orderItems.find(item => !item.quantity || parseFloat(item.quantity.toString()) <= 0);
         if (zeroQtyItem) {
-            alert(`❌ No se puede guardar: El producto "${zeroQtyItem.products?.name || 'Item'}" tiene cantidad menor o igual a 0. Si desea eliminarlo, use el icono de la papelera.`);
+            alert(`No se puede guardar: El producto "${zeroQtyItem.products?.name || 'Item'}" tiene cantidad menor o igual a 0. Si desea eliminarlo, use el icono de la papelera.`);
             return;
         }
 
@@ -2457,12 +2457,12 @@ function OrderLoadingContent() {
             const originalDeliveryOnly = (selectedOrder.delivery_date || '').split('T')[0];
             if (deliveryOnly !== originalDeliveryOnly) {
                 if (deliveryOnly < minDeliveryDate) {
-                    alert(`❌ Fecha no permitida: La nueva fecha de entrega (${deliveryOnly}) no puede ser anterior a la fecha mínima operativa permitida (${minDeliveryDate}).`);
+                    alert(`Fecha no permitida: La nueva fecha de entrega (${deliveryOnly}) no puede ser anterior a la fecha mínima operativa permitida (${minDeliveryDate}).`);
                     return;
                 }
                 const holidayCheck = isValidDeliveryDate(deliveryOnly, allowSundaysSetting, allowHolidaysSetting);
                 if (!holidayCheck.valid) {
-                    alert(`❌ Fecha de despacho rechazada: ${holidayCheck.reason || 'Día no habilitado según políticas de entrega (domingos/festivos desactivados).'}`);
+                    alert(`Fecha de despacho rechazada: ${holidayCheck.reason || 'Día no habilitado según políticas de entrega (domingos/festivos desactivados).'}`);
                     return;
                 }
             }
@@ -2473,9 +2473,9 @@ function OrderLoadingContent() {
         let exceptionStamp = '';
         if (isB2B && !editDeliveryRestrictionStatus.isValid) {
             const confirmException = window.confirm(
-                `⚠️ ALERTA LOGÍSTICA DE ENTREGA:\n\n` +
+                `ALERTA LOGÍSTICA DE ENTREGA:\n\n` +
                 `Esta sede (${selectedOrder.profiles?.company_name || selectedOrder.customer_name || 'Cliente'}) solo recibe despachos los días:\n` +
-                `🗓️ ${editDeliveryRestrictionStatus.allowedDaysNames}${editDeliveryRestrictionStatus.timeWindow || ''}\n\n` +
+                `${editDeliveryRestrictionStatus.allowedDaysNames}${editDeliveryRestrictionStatus.timeWindow || ''}\n\n` +
                 `Fecha seleccionada: ${editDeliveryDate.split('T')[0]} (${editDeliveryRestrictionStatus.targetDayName}).\n\n` +
                 `¿Deseas autorizar EXCEPCIONALMENTE este despacho fuera de los días habituales?`
             );
@@ -2489,12 +2489,12 @@ function OrderLoadingContent() {
         const cleanOc = editPurchaseOrder.trim();
         const cleanSolped = editSolped.trim();
         if (isSelectedOrderColsubsidio && !cleanOc && !cleanSolped) {
-            alert('❌ Regla Corporativa Colsubsidio: Es OBLIGATORIO ingresar al menos el número de Orden de Compra (OC) o Solicitud de Pedido (SOLPED).');
+            alert('Regla Corporativa Colsubsidio: Es OBLIGATORIO ingresar al menos el número de Orden de Compra (OC) o Solicitud de Pedido (SOLPED).');
             return;
         }
 
         setUpdateLoading(true);
-        console.log('📦 Iniciando actualización del pedido:', selectedOrder.id);
+        console.log('Iniciando actualización del pedido:', selectedOrder.id);
         
         try {
             // 1. Preparar nota de auditoría en admin_notes
@@ -2651,10 +2651,10 @@ function OrderLoadingContent() {
             });
             
             setEditMode(false);
-            alert('✅ Pedido actualizado correctamente');
+            alert('Pedido actualizado correctamente');
         } catch (err: any) {
-            console.error('💥 Error crítico actualizando pedido:', err);
-            alert(`❌ Error al actualizar el pedido: ${err.message || 'Error desconocido'}`);
+            console.error('Error crítico actualizando pedido:', err);
+            alert(`Error al actualizar el pedido: ${err.message || 'Error desconocido'}`);
         } finally {
             setUpdateLoading(false);
         }
@@ -2665,10 +2665,10 @@ function OrderLoadingContent() {
 
         const friendlyId = getFriendlyOrderId(selectedOrder);
         const confirmDelete = window.confirm(
-            `🚨 ¿Estás seguro de que deseas ELIMINAR COMPLETAMENTE el pedido ${friendlyId}?\n\n` +
+            `¿Estás seguro de que deseas ELIMINAR COMPLETAMENTE el pedido ${friendlyId}?\n\n` +
             `Cliente: ${selectedOrder.customer_name}\n` +
             `Total: ${formatMoney(selectedOrder.total)}\n\n` +
-            `⚠️ Esta acción es permanente, borrará los productos vinculados y liberará el pedido de la mesa de despacho.`
+            `Esta acción es permanente, borrará los productos vinculados y liberará el pedido de la mesa de despacho.`
         );
 
         if (!confirmDelete) return;
@@ -2720,10 +2720,10 @@ function OrderLoadingContent() {
             setOrders(prev => prev.filter(o => o.id !== selectedOrder.id));
             setSelectedOrder(null);
             setEditMode(false);
-            alert(`🗑️ Pedido ${friendlyId} eliminado completamente.`);
+            alert(`Pedido ${friendlyId} eliminado completamente.`);
         } catch (err: any) {
             console.error('Error eliminando pedido:', err);
-            alert(`❌ Error al eliminar el pedido: ${err.message || 'Error desconocido'}`);
+            alert(`Error al eliminar el pedido: ${err.message || 'Error desconocido'}`);
         } finally {
             setUpdateLoading(false);
         }
@@ -2753,10 +2753,10 @@ function OrderLoadingContent() {
             const distinctInvalidDates = Array.from(new Set(invalidDateOrders.map(o => o.delivery_date || 'Sin Fecha'))).join(', ');
             
             if (!isSuperAdmin) {
-                alert(`⚠️ RESTRICCIÓN DE FECHA OPERATIVA:\n\nSolo es posible enviar al Proceso Logístico los pedidos cuya fecha de entrega sea MAÑANA (${tomorrowStr}).\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fechas no permitidas (${distinctInvalidDates}).\n\nPor favor filtra o selecciona únicamente los pedidos de entrega para mañana (${tomorrowStr}).`);
+                alert(`RESTRICCIÓN DE FECHA OPERATIVA:\n\nSolo es posible enviar al Proceso Logístico los pedidos cuya fecha de entrega sea MAÑANA (${tomorrowStr}).\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fechas no permitidas (${distinctInvalidDates}).\n\nPor favor filtra o selecciona únicamente los pedidos de entrega para mañana (${tomorrowStr}).`);
                 return;
             } else {
-                const forceDate = confirm(`⚠️ RESTRICCIÓN DE FECHA OPERATIVA:\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fecha diferente a mañana (${distinctInvalidDates}).\n\n¿Deseas forzar el lanzamiento de todos modos con permisos de Administrador?`);
+                const forceDate = confirm(`RESTRICCIÓN DE FECHA OPERATIVA:\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fecha diferente a mañana (${distinctInvalidDates}).\n\n¿Deseas forzar el lanzamiento de todos modos con permisos de Administrador?`);
                 if (!forceDate) return;
             }
         }
@@ -2769,10 +2769,10 @@ function OrderLoadingContent() {
             const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || profile?.custom_permissions?.includes('*') || hasPermission('admin.orders');
 
             if (!isSuperAdmin) {
-                alert(`⏰ FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nEl lanzamiento a Proceso Logístico para mañana (${tomorrowStr}) está habilitado únicamente entre las 10:00 AM y las 23:50 PM (Hora Colombia).\n\nHora actual: ${currentH}:${currentM}.\n\nLa consolidación de compras y despacho opera dentro de este horario.`);
+                alert(`FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nEl lanzamiento a Proceso Logístico para mañana (${tomorrowStr}) está habilitado únicamente entre las 10:00 AM y las 23:50 PM (Hora Colombia).\n\nHora actual: ${currentH}:${currentM}.\n\nLa consolidación de compras y despacho opera dentro de este horario.`);
                 return;
             } else {
-                const forceTime = confirm(`⏰ FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nHora actual: ${currentH}:${currentM} (Ventana estándar: 10:00 AM - 23:50 PM).\n\n¿Deseas autorizar el lanzamiento logístico como Administrador?`);
+                const forceTime = confirm(`FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nHora actual: ${currentH}:${currentM} (Ventana estándar: 10:00 AM - 23:50 PM).\n\n¿Deseas autorizar el lanzamiento logístico como Administrador?`);
                 if (!forceTime) return;
             }
         }
@@ -2791,11 +2791,11 @@ function OrderLoadingContent() {
             const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || profile?.custom_permissions?.includes('*') || hasPermission('admin.orders');
 
             if (invalidDateOrders.length > 0 && !isSuperAdmin) {
-                alert(`⚠️ No se puede proceder: Hay pedidos seleccionados con fecha diferente a mañana (${tomorrowStr}).`);
+                alert(`No se puede proceder: Hay pedidos seleccionados con fecha diferente a mañana (${tomorrowStr}).`);
                 return;
             }
             if (!isWithinCutoffWindow() && !isSuperAdmin) {
-                alert(`⏰ No se puede proceder: Fuera de la ventana de corte operativo (10:00 AM a 23:50 PM).`);
+                alert(`No se puede proceder: Fuera de la ventana de corte operativo (10:00 AM a 23:50 PM).`);
                 return;
             }
         }
@@ -2819,11 +2819,11 @@ function OrderLoadingContent() {
             setSelectedOrders(new Set());
             setOrders(prev => prev.map(o => launchedIds.has(o.id) ? { ...o, status: targetStatus } : o));
             setRefreshTrigger(prev => prev + 1); // Trigger refresh
-            alert('✅ Pedidos enviados a Proceso Logístico correctamente');
+            alert('Pedidos enviados a Proceso Logístico correctamente');
 
         } catch (err: any) {
             console.error('Error in bulk update:', err);
-            alert(`❌ Error al actualizar: ${err.message}`);
+            alert(`Error al actualizar: ${err.message}`);
         } finally {
             setUpdateLoading(false);
         }
@@ -4609,7 +4609,7 @@ function OrderLoadingContent() {
                                                     onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F59E0B'}
                                                 >
                                                     <Sparkles size={16} />
-                                                    <span>INICIAR ASISTENTE GUIADO (PASO A PASO) ➔</span>
+                                                    <span>INICIAR ASISTENTE GUIADO (PASO A PASO) -&gt;</span>
                                                 </button>
                                                 <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
                                                     Te llevará pantalla a pantalla para asignar, imprimir y validar cada documento en orden.
@@ -4830,7 +4830,7 @@ function OrderLoadingContent() {
                                         ) : dispatchMode === 'contingency' ? (
                                             <>
                                                 <Sparkles size={18} strokeWidth={2} />
-                                                <span>INICIAR ASISTENTE GUIADO (PASO A PASO) ➔</span>
+                                                <span>INICIAR ASISTENTE GUIADO (PASO A PASO) -&gt;</span>
                                             </>
                                         ) : (
                                             <>
@@ -4843,8 +4843,8 @@ function OrderLoadingContent() {
 
                                 <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '0.70rem', color: '#64748B' }}>
                                     {dispatchMode === 'contingency' 
-                                        ? '🏭 Modo Manual: Asignará bahías en piso y te guiará para imprimir la sábana, compras, remisiones y rótulos.' 
-                                        : '📱 Modo Digital: Sincronizará compras y picking directamente en tablets de bodega (Paperless sin papel).'}
+                                        ? 'Modo Manual: Asignará bahías en piso y te guiará para imprimir la sábana, compras, remisiones y rótulos.' 
+                                        : 'Modo Digital: Sincronizará compras y picking directamente en tablets de bodega (Paperless sin papel).'}
                                 </div>
 
                             </div>
@@ -5345,12 +5345,12 @@ function OrderLoadingContent() {
                                                         const val = e.target.value;
                                                         if (val) {
                                                             if (val < minDeliveryDate) {
-                                                                alert(`⛔ Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`);
+                                                                alert(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`);
                                                                 return;
                                                             }
                                                             const check = isValidDeliveryDate(val, allowSundaysSetting, allowHolidaysSetting);
                                                             if (!check.valid) {
-                                                                alert(`⛔ ${check.reason || 'Día no habilitado para entregas.'}`);
+                                                                alert(`${check.reason || 'Día no habilitado para entregas.'}`);
                                                                 const nextV = getNextValidDeliveryDate(val, allowSundaysSetting, allowHolidaysSetting);
                                                                 setEditDeliveryDate(formatDateToYYYYMMDD(nextV));
                                                                 return;
@@ -5384,9 +5384,9 @@ function OrderLoadingContent() {
                                                     }}>
                                                         <AlertTriangle size={14} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
                                                         <div>
-                                                            <div style={{ fontWeight: '800', color: '#991B1B' }}>⚠️ Día no habitual de sede:</div>
+                                                            <div style={{ fontWeight: '800', color: '#991B1B', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={14} /> Día no habitual de sede:</div>
                                                             <div style={{ color: '#7F1D1D', fontWeight: '500', marginTop: '2px' }}>{editDeliveryRestrictionStatus.message}</div>
-                                                            <div style={{ color: '#047857', fontWeight: '700', marginTop: '3px' }}>✓ Puedes guardar para autorizar el despacho excepcional.</div>
+                                                            <div style={{ color: '#047857', fontWeight: '700', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={14} /> Puedes guardar para autorizar el despacho excepcional.</div>
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -5559,7 +5559,7 @@ function OrderLoadingContent() {
                                                             fontWeight: '800',
                                                             border: editSolped.trim() && !editPurchaseOrder.trim() ? '1px solid #FCD34D' : '1px solid #E2E8F0'
                                                         }}>
-                                                            {editSolped.trim() && !editPurchaseOrder.trim() ? '⏳ Estado Provisional' : 'Referencia Inicial'}
+                                                            {editSolped.trim() && !editPurchaseOrder.trim() ? 'Estado Provisional' : 'Referencia Inicial'}
                                                         </span>
                                                     )}
                                                 </div>
@@ -7806,7 +7806,7 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Zap size={15} strokeWidth={2.8} />
-                        <span>⚡ PEDIDO EXPRESS EXTEMPORÁNEO (SAME-DAY)</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Zap size={14} /> PEDIDO EXPRESS EXTEMPORÁNEO (SAME-DAY)</span>
                     </div>
                     <span style={{
                         backgroundColor: '#FFFFFF',
@@ -7872,7 +7872,7 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                                                     title={audit.full}
                                                     style={{ fontSize: '0.62rem', color: audit.type === 'reassign' ? '#92400E' : '#1D4ED8', fontWeight: '800', backgroundColor: audit.type === 'reassign' ? '#FEF3C7' : '#EFF6FF', border: `1px solid ${audit.type === 'reassign' ? '#FCD34D' : '#BFDBFE'}`, padding: '1px 5px', borderRadius: '5px', whiteSpace: 'nowrap' }}
                                                 >
-                                                    ✏️ {audit.label}
+                                                    <Edit3 size={13} style={{ display: 'inline', marginRight: '4px' }} /> {audit.label}
                                                 </span>
                                             );
                                         })()}

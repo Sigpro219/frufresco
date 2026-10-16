@@ -59,7 +59,15 @@ import {
     Eye,
     ExternalLink,
     Link2,
-    Gift
+    Gift,
+    Star,
+    Users,
+    Clipboard,
+    Lock,
+    Unlock,
+    Calendar,
+    Flame,
+    Siren
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
@@ -547,7 +555,7 @@ function CreateOrderContent() {
                 price: 0,
                 observations: item.observations ? item.observations : 'Reposición de Garantía ($0 COP)'
             })));
-            showToast('🔄 Modo Reposición Activo: Todos los productos se liquidarán a $0 COP.', 'info');
+            showToast('Modo Reposición Activo: Todos los productos se liquidarán a $0 COP.', 'info');
         } else {
             // Restaurar precios de catálogo/acuerdo
             setParentOrderId(null);
@@ -562,7 +570,7 @@ function CreateOrderContent() {
                     price: rePrice
                 };
             }));
-            showToast('📦 Modo Venta Ordinaria Restaurado.', 'info');
+            showToast('Modo Venta Ordinaria Restaurado.', 'info');
         }
     };
 
@@ -592,7 +600,7 @@ function CreateOrderContent() {
             return;
         }
         setCart(itemsToAdd);
-        showToast(`✅ Se cargaron ${itemsToAdd.length} artículos del Pedido #${pOrder.sequence_id} a $0 COP. Elimina los ítems conformes y ajusta cantidades de los averiados.`, 'success');
+        showToast(`Se cargaron ${itemsToAdd.length} artículos del Pedido #${pOrder.sequence_id} a $0 COP. Elimina los ítems conformes y ajusta cantidades de los averiados.`, 'success');
     };
 
     // --- CUSTOMER STRUCTURED PREFERENCES (PINNED COMBINATIONS) ---
@@ -1074,7 +1082,7 @@ function CreateOrderContent() {
                     }
                 });
             }
-            // 💡 Pre-populate with customer's structured preferred options if exist!
+            // Pre-populate with customer's structured preferred options if exist!
             const exc = clientExceptions.find(e => e.product_id === selectedProductForModal.id);
             if (exc?.preferred_options && typeof exc.preferred_options === 'object') {
                 Object.entries(exc.preferred_options).forEach(([k, v]) => {
@@ -1720,7 +1728,7 @@ function CreateOrderContent() {
         if (matchedCollab) {
             setIsCollaboratorOrder(true);
             setSelectedCollaboratorInfo(matchedCollab);
-            showToast(`👥 Colaborador Reconocido: ${matchedCollab.contact_name} (${matchedCollab.role || 'Personal FruFresco'}). Beneficio del 5% aplicado.`, 'success');
+            showToast(`Colaborador Reconocido: ${matchedCollab.contact_name} (${matchedCollab.role || 'Personal FruFresco'}). Beneficio del 5% aplicado.`, 'success');
         } else {
             setIsCollaboratorOrder(false);
             setSelectedCollaboratorInfo(null);
@@ -1759,7 +1767,7 @@ function CreateOrderContent() {
 
     const handleProductClick = (product: any) => {
         if (scarcityLockedMap[product.id]) {
-            showToast(`🚫 "${product.name}" no se puede agregar al pedido: Insumo bloqueado por escasez en el mercado.`, 'error');
+            showToast(`"${product.name}" no se puede agregar al pedido: Insumo bloqueado por escasez en el mercado.`, 'error');
             return;
         }
 
@@ -1914,7 +1922,7 @@ function CreateOrderContent() {
             return newCart;
         });
         setDuplicateConfirm(null);
-        showToast('Cantidad acumulada en la línea existente. ✅', 'success');
+        showToast('Cantidad acumulada en la línea existente.', 'success');
     };
 
     const handleKeepDuplicateAsSeparate = () => {
@@ -1922,7 +1930,7 @@ function CreateOrderContent() {
         const { product, qty, variantLabel, optionsRaw, unit, factor } = duplicateConfirm;
         addToCartDirectly(product, qty, variantLabel, optionsRaw, unit, factor, true);
         setDuplicateConfirm(null);
-        showToast('Producto agregado como una fila separada. ✅', 'success');
+        showToast('Producto agregado como una fila separada.', 'success');
     };
 
     const handleConsolidateAllCartDuplicates = () => {
@@ -1950,7 +1958,7 @@ function CreateOrderContent() {
                 }
             });
             if (mergedCount > 0) {
-                showToast(`✅ Se consolidaron ${mergedCount} filas duplicadas en el pedido.`, 'success');
+                showToast(`Se consolidaron ${mergedCount} filas duplicadas en el pedido.`, 'success');
             } else {
                 showToast('No se encontraron líneas duplicadas para consolidar.', 'info');
             }
@@ -2038,9 +2046,9 @@ function CreateOrderContent() {
             });
 
             if (mergedCount > 0) {
-                showToast(`✅ Se cargaron ${itemsToInject.length - mergedCount} productos nuevos y se consolidaron ${mergedCount} cantidades del último pedido (Tarifa B2C de hoy aplicada).`, 'success');
+                showToast(`Se cargaron ${itemsToInject.length - mergedCount} productos nuevos y se consolidaron ${mergedCount} cantidades del último pedido (Tarifa B2C de hoy aplicada).`, 'success');
             } else {
-                showToast(`✅ Se cargaron ${itemsToInject.length} productos del último pedido (Tarifa B2C de hoy aplicada).`, 'success');
+                showToast(`Se cargaron ${itemsToInject.length} productos del último pedido (Tarifa B2C de hoy aplicada).`, 'success');
             }
         } catch (err: any) {
             console.error('Error al cargar último pedido B2C:', err);
@@ -2624,7 +2632,7 @@ function CreateOrderContent() {
                 }
             });
             if (mergedCount > 0) {
-                showToast(`✅ Se consolidaron ${mergedCount} filas duplicadas en la tabla de auditoría.`, 'success');
+                showToast(`Se consolidaron ${mergedCount} filas duplicadas en la tabla de auditoría.`, 'success');
             } else {
                 showToast('No se encontraron filas duplicadas para consolidar en la tabla.', 'info');
             }
@@ -2996,7 +3004,7 @@ function CreateOrderContent() {
 
             if (updateError) throw updateError;
 
-            showToast(`✅ ¡Pedido #${targetOrder.sequence_id || targetOrder.id.slice(0, 8)} vinculado y actualizado correctamente con la OC!`, 'success');
+            showToast(`¡Pedido #${targetOrder.sequence_id || targetOrder.id.slice(0, 8)} vinculado y actualizado correctamente con la OC!`, 'success');
             
             setIsStaging(false);
             setStagedItems([]);
@@ -3008,7 +3016,7 @@ function CreateOrderContent() {
             setUploadedFile(null);
         } catch (err: any) {
             console.error('Error al vincular orden duplicada:', err);
-            showToast(`❌ Error al vincular el pedido: ${err.message || err}`, 'error');
+            showToast(`Error al vincular el pedido: ${err.message || err}`, 'error');
         } finally {
             setIsLinkingDuplicate(false);
         }
@@ -3243,7 +3251,7 @@ function CreateOrderContent() {
                 if (autoMatchedProfile) {
                     setSelectedClient(autoMatchedProfile.id);
                     setClientSearch(autoMatchedProfile.company_name || autoMatchedProfile.contact_name || '');
-                    showToast(`🎯 Empresa detectada y seleccionada: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}`, 'success');
+                    showToast(`Empresa detectada y seleccionada: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}`, 'success');
                 }
             } else if (clientType === 'B2C' && b2cClients && b2cClients.length > 0) {
                 autoMatchedProfile = resolveClientProfile({
@@ -3257,7 +3265,7 @@ function CreateOrderContent() {
                     setB2CMode('search');
                     setSelectedClientB2C(autoMatchedProfile.id);
                     setClientSearchB2C(autoMatchedProfile.contact_name || autoMatchedProfile.phone || '');
-                    showToast(`🎯 Cliente Hogar detectado: ${autoMatchedProfile.contact_name || autoMatchedProfile.phone}`, 'success');
+                    showToast(`Cliente Hogar detectado: ${autoMatchedProfile.contact_name || autoMatchedProfile.phone}`, 'success');
                 } else if (data.clientInDocument || data.phoneInDocument || data.addressInDocument) {
                     setB2CMode('new');
                     setGuestInfo(prev => ({
@@ -3269,7 +3277,7 @@ function CreateOrderContent() {
                     if (data.addressInDocument) {
                         setEditableAddress(data.addressInDocument);
                     }
-                    showToast(`📝 Datos de cliente Hogar extraídos para registro nuevo.`, 'info');
+                    showToast(`Datos de cliente Hogar extraídos para registro nuevo.`, 'info');
                 }
             }
 
@@ -3307,10 +3315,10 @@ function CreateOrderContent() {
                             const reasonMsg = isPastDate
                                 ? `fecha anterior a la ventana mínima de despacho (${minDeliveryDate})`
                                 : (holidayCheck.reason || 'día no hábil');
-                            showToast(`⚠️ Fecha del documento (${parsedDelivery}) ajustada a ${nextValidStr} por ${reasonMsg}.`, 'info');
+                            showToast(`Fecha del documento (${parsedDelivery}) ajustada a ${nextValidStr} por ${reasonMsg}.`, 'info');
                         } else {
                             setDeliveryDate(parsedDelivery);
-                            showToast(`📅 Fecha de entrega detectada en el documento: ${parsedDelivery}`, 'success');
+                            showToast(`Fecha de entrega detectada en el documento: ${parsedDelivery}`, 'success');
                         }
                     }
                 } catch (dateErr) {
@@ -3472,7 +3480,7 @@ function CreateOrderContent() {
 
             setStagedItems(suggested);
             setIsStaging(true);
-            showToast(`⚡ ${isTextInput ? 'Texto de WhatsApp' : 'Documento'} procesado en ${elapsedSec}s (${suggested.length} productos detectados)`, 'success');
+            showToast(`${isTextInput ? 'Texto de WhatsApp' : 'Documento'} procesado en ${elapsedSec}s (${suggested.length} productos detectados)`, 'success');
         } catch (error: any) {
             const isAuthErr = error.message?.includes('Auth session missing') || 
                               error.message?.includes('Unauthorized') || 
@@ -3500,14 +3508,14 @@ function CreateOrderContent() {
                                     rawMsg.toLowerCase().includes('bytes');
 
                 if (isModelIssue) {
-                    showToast('⚠️ El modelo de Inteligencia Artificial ya no está vigente. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo. Por favor ingrese el pedido manualmente.', 'error');
+                    showToast('El modelo de Inteligencia Artificial ya no está vigente. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo. Por favor ingrese el pedido manualmente.', 'error');
                 } else if (isFileIssue) {
                     const formatted = rawMsg.toLowerCase().includes('archivo dañado') 
                         ? rawMsg 
                         : `Archivo dañado o no compatible. ${rawMsg}`;
-                    showToast(`⚠️ ${formatted}`, 'error');
+                    showToast(`${formatted}`, 'error');
                 } else {
-                    showToast(`⚠️ ${error.message}`, 'error');
+                    showToast(`${error.message}`, 'error');
                 }
             }
         } finally {
@@ -3588,7 +3596,7 @@ function CreateOrderContent() {
             const exceedsLimit = creditLimit > 0 && projectedDebt > creditLimit;
 
             if (exceedsLimit || hasOverdue) {
-                let msg = `⚠️ CONTROL DE CARTERA Y CRÉDITO - ${client.company_name || client.contact_name}:\n\n`;
+                let msg = `CONTROL DE CARTERA Y CRÉDITO - ${client.company_name || client.contact_name}:\n\n`;
                 if (hasOverdue) {
                     msg += `• Facturas vencidas en mora: ${overdueCount} documento(s).\n`;
                 }
@@ -3636,19 +3644,19 @@ function CreateOrderContent() {
 
     const handleDirectConfirmOrder = async () => {
         if (clientType === 'B2B' && !selectedClient) {
-            showToast('⚠️ Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar el pedido.', 'error');
+            showToast('Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar el pedido.', 'error');
             return;
         }
 
         if (clientType === 'B2C') {
             if (b2cMode === 'new') {
                 if (!guestInfo.name || !guestInfo.phone) {
-                    showToast('⚠️ Debes ingresar al menos Nombre y Teléfono para cliente Hogar nuevo.', 'error');
+                    showToast('Debes ingresar al menos Nombre y Teléfono para cliente Hogar nuevo.', 'error');
                     return;
                 }
             } else {
                 if (!selectedClientB2C) {
-                    showToast('⚠️ Debes seleccionar un cliente Hogar existente en el sistema.', 'error');
+                    showToast('Debes seleccionar un cliente Hogar existente en el sistema.', 'error');
                     return;
                 }
             }
@@ -3662,25 +3670,25 @@ function CreateOrderContent() {
 
         if (!importValidation?.isMatch && importValidation?.clientInDocument) {
             const confirmed = window.confirm(
-                `⚠️ ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes seleccionado:\n"${effectiveClientDisplayName}"\n\n¿Deseas continuar y crear este pedido directamente para ${effectiveClientDisplayName}?`
+                `ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes seleccionado:\n"${effectiveClientDisplayName}"\n\n¿Deseas continuar y crear este pedido directamente para ${effectiveClientDisplayName}?`
             );
             if (!confirmed) return;
         }
 
         if (stagedItems.length === 0) {
-            showToast('⚠️ No hay productos en la mesa de trabajo para crear el pedido.', 'error');
+            showToast('No hay productos en la mesa de trabajo para crear el pedido.', 'error');
             return;
         }
 
         const unassigned = stagedItems.filter(i => !i.suggestedProduct);
         if (unassigned.length > 0) {
-            showToast(`⚠️ Hay ${unassigned.length} producto(s) sin homologar en el catálogo. Asígnalos o elimínalos antes de crear el pedido directamente.`, 'error');
+            showToast(`Hay ${unassigned.length} producto(s) sin homologar en el catálogo. Asígnalos o elimínalos antes de crear el pedido directamente.`, 'error');
             return;
         }
 
         const targetDeliveryDate = deliveryDate || minDeliveryDate;
         if (!targetDeliveryDate) {
-            showToast('⚠️ Debes seleccionar la fecha de entrega.', 'error');
+            showToast('Debes seleccionar la fecha de entrega.', 'error');
             return;
         }
 
@@ -3890,7 +3898,7 @@ function CreateOrderContent() {
 
             // GAP-01b: Control de Riesgo y Límite Contra Entrega para Hogar (B2C)
             if (clientType === 'B2C' && paymentMethod === 'contra_entrega' && total > maxOrderHogarCod) {
-                showToast(`❌ Límite Excedido: Los pedidos para Hogar con pago Contra Entrega no pueden superar ${formatMoney(maxOrderHogarCod)}. Por favor cambia el método a "Transferencia Anticipada" o "Wompi / Link".`, 'error');
+                showToast(`Límite Excedido: Los pedidos para Hogar con pago Contra Entrega no pueden superar ${formatMoney(maxOrderHogarCod)}. Por favor cambia el método a "Transferencia Anticipada" o "Wompi / Link".`, 'error');
                 return;
             }
 
@@ -4029,7 +4037,7 @@ function CreateOrderContent() {
                     } else {
                         try {
                             await supabase.from('admin_tasks').insert({
-                                title: `🚨 ASIGNAR PRECIO URGENTE: Remisión #${remissionOrder.sequence_id || remissionOrder.id.slice(0, 8)} (${customerName})`,
+                                title: `ASIGNAR PRECIO URGENTE: Remisión #${remissionOrder.sequence_id || remissionOrder.id.slice(0, 8)} (${customerName})`,
                                 description: `Se generó remisión anexa fuera de acuerdo con tarifa $0 COP para: ${offAgreementNamesList}. Vinculada al Pedido #${parentSeqLabel}. Asignar precio comercial antes del cierre de corte de facturación.`,
                                 assigned_to: 'Área Comercial',
                                 priority: 'critical',
@@ -4044,7 +4052,7 @@ function CreateOrderContent() {
             } else if (isOnlyOffAgreementOrder) {
                 try {
                     await supabase.from('admin_tasks').insert({
-                        title: `🚨 ASIGNAR PRECIO URGENTE: Remisión #${newOrder.sequence_id || newOrder.id.slice(0, 8)} (${customerName})`,
+                        title: `ASIGNAR PRECIO URGENTE: Remisión #${newOrder.sequence_id || newOrder.id.slice(0, 8)} (${customerName})`,
                         description: `Se generó remisión fuera de acuerdo con tarifa $0 COP para: ${offAgreementNamesList}. Asignar precio comercial antes del cierre de corte de facturación.`,
                         assigned_to: 'Área Comercial',
                         priority: 'critical',
@@ -4093,11 +4101,11 @@ function CreateOrderContent() {
                 setUploadedFileUrl(null);
             }
             setUploadedFile(null);
-            showToast(`⚡ ¡Pedido #${newOrder.sequence_id || newOrder.id.slice(0, 8)} creado exitosamente con el documento!`, 'success');
+            showToast(`¡Pedido #${newOrder.sequence_id || newOrder.id.slice(0, 8)} creado exitosamente con el documento!`, 'success');
             router.push('/admin/orders/loading');
         } catch (err: any) {
             console.error('Error al confirmar y crear pedido directamente:', err);
-            showToast(`❌ Error al crear el pedido: ${err.message || err}`, 'error');
+            showToast(`Error al crear el pedido: ${err.message || err}`, 'error');
         } finally {
             setIsDirectConfirming(false);
         }
@@ -4107,19 +4115,19 @@ function CreateOrderContent() {
         // 1. Validación de Seguridad según el Canal (B2B vs B2C Hogar)
         if (clientType === 'B2B') {
             if (!selectedClient) {
-                showToast('⚠️ Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar la importación.', 'error');
+                showToast('Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar la importación.', 'error');
                 return;
             }
         } else {
             // Canal Hogar (B2C)
             if (b2cMode === 'new') {
                 if (!guestInfo.name?.trim() || !guestInfo.phone?.trim()) {
-                    showToast('⚠️ Debes ingresar al menos Nombre y Teléfono para cliente Hogar nuevo antes de continuar.', 'error');
+                    showToast('Debes ingresar al menos Nombre y Teléfono para cliente Hogar nuevo antes de continuar.', 'error');
                     return;
                 }
             } else {
                 if (!selectedClientB2C) {
-                    showToast('⚠️ Debes buscar y seleccionar un cliente Hogar existente en el sistema antes de confirmar la importación.', 'error');
+                    showToast('Debes buscar y seleccionar un cliente Hogar existente en el sistema antes de confirmar la importación.', 'error');
                     return;
                 }
             }
@@ -4134,7 +4142,7 @@ function CreateOrderContent() {
 
         if (!isAuditClientMatch && importValidation?.clientInDocument && targetClientDisplayName) {
             const confirmed = window.confirm(
-                `⚠️ ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes asignado:\n"${targetClientDisplayName}"\n\n¿Deseas continuar e importar este pedido para ${targetClientDisplayName}?`
+                `ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes asignado:\n"${targetClientDisplayName}"\n\n¿Deseas continuar e importar este pedido para ${targetClientDisplayName}?`
             );
             if (!confirmed) {
                 return;
@@ -4274,9 +4282,9 @@ function CreateOrderContent() {
             }
 
             if (mergedCount > 0) {
-                showToast(`✅ Se inyectaron ${itemsToInject.length - mergedCount} productos y se consolidaron ${mergedCount} cantidades duplicadas.`, 'success');
+                showToast(`Se inyectaron ${itemsToInject.length - mergedCount} productos y se consolidaron ${mergedCount} cantidades duplicadas.`, 'success');
             } else {
-                showToast(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
+                showToast(`Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
             }
         } catch (err: any) {
             console.error('Error al confirmar importación:', err);
@@ -4289,7 +4297,7 @@ function CreateOrderContent() {
     // --- GESTIÓN INTELIGENTE DE PEDIDOS RELACIONADOS MULTI-ENTREGA ---
     const handleCreateMultiOrders = async () => {
         if (!selectedClient) {
-            showToast('⚠️ Debes seleccionar una empresa cliente antes de crear los pedidos.', 'error');
+            showToast('Debes seleccionar una empresa cliente antes de crear los pedidos.', 'error');
             return;
         }
 
@@ -4297,12 +4305,12 @@ function CreateOrderContent() {
         const group2Items = stagedItems.filter(i => i.deliverySchedule && i.suggestedProduct);
 
         if (group1Items.length === 0 && group2Items.length === 0) {
-            showToast('⚠️ No hay productos válidos con match para crear pedidos.', 'error');
+            showToast('No hay productos válidos con match para crear pedidos.', 'error');
             return;
         }
 
         if (!multiOrderDate1 || !multiOrderDate2) {
-            showToast('⚠️ Debes definir las fechas de entrega para ambos pedidos.', 'error');
+            showToast('Debes definir las fechas de entrega para ambos pedidos.', 'error');
             return;
         }
 
@@ -4461,7 +4469,7 @@ function CreateOrderContent() {
             });
             setShowMultiOrderModal(false);
 
-            showToast(`🎉 ¡Éxito! Creados 2 Pedidos Relacionados para ${poNum}`, 'success');
+            showToast(`¡Éxito! Creados 2 Pedidos Relacionados para ${poNum}`, 'success');
 
             setIsStaging(false);
             setStagedItems([]);
@@ -4525,7 +4533,7 @@ function CreateOrderContent() {
                     setOutOfZone(false);
                 }
             } else {
-                showToast('❌ No se encontraron coordenadas para esta dirección en ' + guestInfo.city + '. Intente verificar la nomenclatura (ej: Cra 100 Sur # 100-21).', 'error');
+                showToast('No se encontraron coordenadas para esta dirección en ' + guestInfo.city + '. Intente verificar la nomenclatura (ej: Cra 100 Sur # 100-21).', 'error');
                 setLatitude(null);
                 setLongitude(null);
             }
@@ -4575,11 +4583,11 @@ function CreateOrderContent() {
     const handleSubmit = async () => {
         // POKA-YOKE SDD ESCENARIO 219: Blindaje Integral de Fecha de Despacho
         if (!deliveryDate) {
-            return showToast('❌ Debe seleccionar una fecha de entrega válida.', 'error');
+            return showToast('Debe seleccionar una fecha de entrega válida.', 'error');
         }
         const deliveryOnly = deliveryDate.split('T')[0];
         if (deliveryOnly < minDeliveryDate) {
-            return showToast(`❌ Fecha no permitida: La fecha de despacho (${deliveryOnly}) no puede ser anterior a la ventana mínima operativa (${minDeliveryDate}).`, 'error');
+            return showToast(`Fecha no permitida: La fecha de despacho (${deliveryOnly}) no puede ser anterior a la ventana mínima operativa (${minDeliveryDate}).`, 'error');
         }
         const dateCheck = isValidDeliveryDate(deliveryOnly, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig);
         if (!dateCheck.valid) {
@@ -4603,7 +4611,7 @@ function CreateOrderContent() {
             if (paymentMethod === 'contra_entrega') {
                 const orderTotal = calculateTotal();
                 if (orderTotal > maxOrderHogarCod) {
-                    return showToast(`❌ Límite Excedido: Los pedidos para Hogar con pago Contra Entrega no pueden superar ${formatMoney(maxOrderHogarCod)}. Por favor cambia el método de pago a "Transferencia Anticipada" o "Wompi / Link".`, 'error');
+                    return showToast(`Límite Excedido: Los pedidos para Hogar con pago Contra Entrega no pueden superar ${formatMoney(maxOrderHogarCod)}. Por favor cambia el método de pago a "Transferencia Anticipada" o "Wompi / Link".`, 'error');
                 }
             }
         }
@@ -4623,12 +4631,12 @@ function CreateOrderContent() {
             return true;
         });
         if (zeroPriceItem) {
-            return showToast(`❌ No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 (sin tarifa en contrato ni B2C). Parametrice el precio en el Módulo de Acuerdos Comerciales.`, 'error');
+            return showToast(`No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 (sin tarifa en contrato ni B2C). Parametrice el precio en el Módulo de Acuerdos Comerciales.`, 'error');
         }
 
         // Poka-Yoke SDD §7.5.8: Reposición debe estar ligada a un Pedido Original
         if (orderNature === 'replacement' && !parentOrderId) {
-            return showToast('❌ Atención: Todo pedido de reposición debe estar vinculado a un Pedido Original para trazabilidad de calidad.', 'error');
+            return showToast('Atención: Todo pedido de reposición debe estar vinculado a un Pedido Original para trazabilidad de calidad.', 'error');
         }
 
         // Poka-Yoke SDD §7.5.9: Para pedidos de Colsubsidio es obligatorio ingresar OC o SOLPED (Excepto en Remisión de Obsequio)
@@ -4636,7 +4644,7 @@ function CreateOrderContent() {
             const effectivePo = purchaseOrderNumber?.trim() || (importValidation?.poNumber ? String(importValidation.poNumber).trim() : null);
             const effectiveSolped = solpedNumber?.trim() || (importValidation?.solpedNumber ? String(importValidation.solpedNumber).trim() : null);
             if (!effectivePo && !effectiveSolped) {
-                return showToast('❌ Regla Corporativa Colsubsidio: Es OBLIGATORIO ingresar al menos el número de Orden de Compra (OC) o Solicitud de Pedido (SOLPED).', 'error');
+                return showToast('Regla Corporativa Colsubsidio: Es OBLIGATORIO ingresar al menos el número de Orden de Compra (OC) o Solicitud de Pedido (SOLPED).', 'error');
             }
         }
 
@@ -4651,9 +4659,9 @@ function CreateOrderContent() {
                 ? `\nPróxima fecha habilitada sugerida: ${deliveryRestrictionStatus.nextAvailableDates[0].displayFull}.\n`
                 : '\n';
             const confirmException = window.confirm(
-                `⚠️ ALERTA LOGÍSTICA DE ENTREGA:\n\n` +
+                `ALERTA LOGÍSTICA DE ENTREGA:\n\n` +
                 `Esta sede (${selectedClientDetails.company_name}) solo recibe despachos los días:\n` +
-                `👉 ${deliveryRestrictionStatus.allowedDaysNames}${deliveryRestrictionStatus.timeWindow}\n\n` +
+                `${deliveryRestrictionStatus.allowedDaysNames}${deliveryRestrictionStatus.timeWindow}\n\n` +
                 `Fecha seleccionada: ${deliveryDate.split('T')[0]} (${deliveryRestrictionStatus.targetDayName}).` +
                 nextHint + `\n` +
                 `¿Deseas autorizar EXCEPCIONALMENTE este despacho fuera de los días habituales?`
@@ -5142,7 +5150,7 @@ ${primaryAdminNotes}`.trim();
                     type: 'price_extension_request',
                     status: 'pending',
                     priority: 'critical',
-                    title: `🚨 ASIGNAR PRECIO URGENTE: Remisión ${remSeq} (${b2bClientName})`,
+                    title: `ASIGNAR PRECIO URGENTE: Remisión ${remSeq} (${b2bClientName})`,
                     description: `Se despacharon ${offAgreementCartItems.length} producto(s) fuera del acuerdo comercial a precio $0 COP (${offNames}) para entrega el ${deliveryDate}. Debes asignar el precio comercial antes del cierre del corte de facturación.`,
                     client_id: finalProfileId,
                     client_name: b2bClientName,
@@ -5208,11 +5216,11 @@ ${primaryAdminNotes}`.trim();
             }
 
             if (isSplitScenario) {
-                showToast(`✅ Pedido particionado automáticamente: 1 Factura (${agreementCartItems.length} SKUs acuerdo) + 1 Remisión a $0 (${offAgreementCartItems.length} SKUs fuera de acuerdo).`, 'success');
+                showToast(`Pedido particionado automáticamente: 1 Factura (${agreementCartItems.length} SKUs acuerdo) + 1 Remisión a $0 (${offAgreementCartItems.length} SKUs fuera de acuerdo).`, 'success');
             } else if (isOnlyOffAgreement) {
-                showToast(`✅ Remisión a $0 creada exitosamente (${offAgreementCartItems.length} SKUs fuera de acuerdo pendientes por asignar precio).`, 'success');
+                showToast(`Remisión a $0 creada exitosamente (${offAgreementCartItems.length} SKUs fuera de acuerdo pendientes por asignar precio).`, 'success');
             } else {
-                showToast('Pedido creado exitosamente ✅', 'success');
+                showToast('Pedido creado exitosamente', 'success');
             }
             setUploadedFile(null);
             if (uploadedFileUrl) {
@@ -5842,7 +5850,7 @@ ${primaryAdminNotes}`.trim();
                                                             alignItems: 'center',
                                                             gap: '4px'
                                                         }} title={!allowOffAgreementPurchases ? 'Compras restringidas estrictamente a productos pactados en el acuerdo vigente' : 'Compras permitidas para productos fuera de convenio con tarifa general'}>
-                                                            {!allowOffAgreementPurchases ? '🔒 Solo Convenio' : '🔓 Permite Fuera de Convenio'}
+                                                            {!allowOffAgreementPurchases ? 'Solo Convenio' : 'Permite Fuera de Convenio'}
                                                         </span>
                                                     )}
                                                     {selectedClientDetails?.parent_id && (
@@ -6121,7 +6129,7 @@ ${primaryAdminNotes}`.trim();
                                                                                     selectClient(b);
                                                                                     setIsBranchDropdownOpen(false);
                                                                                     setBranchFilterQuery('');
-                                                                                    showToast(`🏢 Sede cambiada a: ${b.company_name}`, 'success');
+                                                                                    showToast(`Sede cambiada a: ${b.company_name}`, 'success');
                                                                                 }}
                                                                                 style={{
                                                                                     padding: '0.65rem 0.85rem',
@@ -6146,7 +6154,7 @@ ${primaryAdminNotes}`.trim();
                                                                                         <span>{b.company_name}</span>
                                                                                         {isDocSuggested && (
                                                                                             <span style={{ fontSize: '0.68rem', backgroundColor: '#F59E0B', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                                                                                                ⭐ Sugerida por documento
+                                                                                                Sugerida por documento
                                                                                             </span>
                                                                                         )}
                                                                                     </div>
@@ -6404,14 +6412,14 @@ ${primaryAdminNotes}`.trim();
                                                                             const val = e.target.checked;
                                                                             setIsCollaboratorOrder(val);
                                                                             if (val) {
-                                                                                showToast('👥 Beneficio de Colaborador activado (5% base + 5% efectivo adicional).', 'success');
+                                                                                showToast('Beneficio de Colaborador activado (5% base + 5% efectivo adicional).', 'success');
                                                                             } else {
                                                                                 showToast('Beneficio de Colaborador desactivado.', 'info');
                                                                             }
                                                                         }}
                                                                         style={{ accentColor: '#059669', cursor: 'pointer' }}
                                                                     />
-                                                                    <span>{isCollaboratorOrder ? '👥 Colaborador FruFresco (Beneficio 5% Activo)' : '¿Es Colaborador FruFresco?'}</span>
+                                                                    <span>{isCollaboratorOrder ? 'Colaborador FruFresco (Beneficio 5% Activo)' : '¿Es Colaborador FruFresco?'}</span>
                                                                 </label>
                                                                 {isCollaboratorOrder && selectedCollaboratorInfo && (
                                                                     <span style={{ fontSize: '0.7rem', color: '#047857', fontWeight: '700' }}>
@@ -6967,7 +6975,7 @@ ${primaryAdminNotes}`.trim();
                                                                     const text = await navigator.clipboard.readText();
                                                                     if (text) {
                                                                         setWhatsappInputText(text);
-                                                                        showToast('📋 Texto pegado desde el portapapeles', 'success');
+                                                                        showToast('Texto pegado desde el portapapeles', 'success');
                                                                     }
                                                                 } catch (_) {
                                                                     showToast('No fue posible acceder al portapapeles automáticamente. Pega el texto manualmente con Ctrl+V.', 'info');
@@ -6987,7 +6995,7 @@ ${primaryAdminNotes}`.trim();
                                                                 gap: '5px'
                                                             }}
                                                         >
-                                                            <span>📋 Pegar Portapapeles</span>
+                                                            <span>Pegar Portapapeles</span>
                                                         </button>
                                                         {whatsappInputText && (
                                                             <button
@@ -7063,7 +7071,7 @@ ${primaryAdminNotes}`.trim();
                                                         ) : (
                                                             <>
                                                                 <Sparkles size={18} />
-                                                                <span>⚡ Interpretar Pedido con IA</span>
+                                                                <span><Zap size={14} style={{ display: 'inline', marginRight: '4px' }} /> Interpretar Pedido con IA</span>
                                                             </>
                                                         )}
                                                     </button>
@@ -7105,7 +7113,7 @@ ${primaryAdminNotes}`.trim();
                                                             type="button"
                                                             onClick={() => {
                                                                 setClientType('B2B');
-                                                                showToast('🏢 Canal de importación: Institucional (B2B)', 'info');
+                                                                showToast('Canal de importación: Institucional (B2B)', 'info');
                                                             }}
                                                             style={{
                                                                 padding: '3px 8px',
@@ -7132,7 +7140,7 @@ ${primaryAdminNotes}`.trim();
                                                                 if (!guestInfo.name && importValidation?.clientInDocument) {
                                                                     setGuestInfo(prev => ({ ...prev, name: importValidation.clientInDocument }));
                                                                 }
-                                                                showToast('🏠 Canal de importación: Hogar (B2C)', 'info');
+                                                                showToast('Canal de importación: Hogar (B2C)', 'info');
                                                             }}
                                                             style={{
                                                                 padding: '3px 8px',
@@ -7164,7 +7172,7 @@ ${primaryAdminNotes}`.trim();
                                                     !selectedClient ? (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                                                             <span style={{ fontSize: '0.85rem', color: '#DC2626', fontWeight: '700' }}>
-                                                                ⚠️ No has seleccionado la empresa en el sistema.
+                                                                No has seleccionado la empresa en el sistema.
                                                             </span>
                                                             <button
                                                                 type="button"
@@ -7180,7 +7188,7 @@ ${primaryAdminNotes}`.trim();
                                                                     cursor: 'pointer'
                                                                 }}
                                                             >
-                                                                ⚡ Buscar "{importValidation.clientInDocument}"
+                                                                Buscar "{importValidation.clientInDocument}"
                                                             </button>
                                                             <button
                                                                 type="button"
@@ -7189,7 +7197,7 @@ ${primaryAdminNotes}`.trim();
                                                                     if (!guestInfo.name && importValidation?.clientInDocument) {
                                                                         setGuestInfo(prev => ({ ...prev, name: importValidation.clientInDocument }));
                                                                     }
-                                                                    showToast('🏠 Cambiado a Pedido Hogar (B2C)', 'info');
+                                                                    showToast('Cambiado a Pedido Hogar (B2C)', 'info');
                                                                 }}
                                                                 style={{
                                                                     fontSize: '0.75rem',
@@ -7202,20 +7210,20 @@ ${primaryAdminNotes}`.trim();
                                                                     cursor: 'pointer'
                                                                 }}
                                                             >
-                                                                🏠 ¿Es Pedido Hogar? Cambiar a Hogar
+                                                                ¿Es Pedido Hogar? Cambiar a Hogar
                                                             </button>
                                                         </div>
                                                     ) : !isAuditClientMatch ? (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
                                                             <span style={{ fontSize: '0.84rem', color: '#C2410C', fontWeight: '600' }}>
-                                                                ⚠️ El documento parece ser para <b>{importValidation.clientInDocument}</b>, pero tienes seleccionada la empresa <b>{selectedClientDetails?.company_name}</b>.
+                                                                El documento parece ser para <b>{importValidation.clientInDocument}</b>, pero tienes seleccionada la empresa <b>{selectedClientDetails?.company_name}</b>.
                                                             </span>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setSelectedClient('');
                                                                     setClientSearch(importValidation.clientInDocument);
-                                                                    showToast(`🔍 Buscando cliente: ${importValidation.clientInDocument}`, 'info');
+                                                                    showToast(`Buscando cliente: ${importValidation.clientInDocument}`, 'info');
                                                                 }}
                                                                 style={{
                                                                     fontSize: '0.75rem',
@@ -7238,7 +7246,7 @@ ${primaryAdminNotes}`.trim();
                                                         </div>
                                                     ) : (
                                                         <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
-                                                            ✅ Empresa validada correctamente ({selectedClientDetails?.company_name}).
+                                                            Empresa validada correctamente ({selectedClientDetails?.company_name}).
                                                         </div>
                                                     )
                                                 ) : (
@@ -7260,7 +7268,7 @@ ${primaryAdminNotes}`.trim();
                                                                         cursor: 'pointer'
                                                                     }}
                                                                 >
-                                                                    🔍 Buscar Cliente Existente
+                                                                    Buscar Cliente Existente
                                                                 </button>
                                                                 <button
                                                                     type="button"
@@ -7281,7 +7289,7 @@ ${primaryAdminNotes}`.trim();
                                                                         cursor: 'pointer'
                                                                     }}
                                                                 >
-                                                                    👤 Cliente Hogar Nuevo
+                                                                    Cliente Hogar Nuevo
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -7290,7 +7298,7 @@ ${primaryAdminNotes}`.trim();
                                                             selectedClientB2C ? (
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
                                                                     <span style={{ fontSize: '0.84rem', color: '#166534', fontWeight: '700' }}>
-                                                                        ✅ Cliente Hogar: <b>{getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name}</b> (Tel: {getSelectedB2CDetails()?.phone || getSelectedB2CDetails()?.contact_phone || 'Sin tel'} - {getSelectedB2CDetails()?.address || 'Sin dir'})
+                                                                        Cliente Hogar: <b>{getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name}</b> (Tel: {getSelectedB2CDetails()?.phone || getSelectedB2CDetails()?.contact_phone || 'Sin tel'} - {getSelectedB2CDetails()?.address || 'Sin dir'})
                                                                     </span>
                                                                     <button
                                                                         type="button"
@@ -7350,7 +7358,7 @@ ${primaryAdminNotes}`.trim();
                                                                                     whiteSpace: 'nowrap'
                                                                                 }}
                                                                             >
-                                                                                ⚡ Buscar "{importValidation.clientInDocument}"
+                                                                                Buscar "{importValidation.clientInDocument}"
                                                                             </button>
                                                                         )}
                                                                     </div>
@@ -7441,7 +7449,7 @@ ${primaryAdminNotes}`.trim();
                                                                     }}
                                                                 />
                                                                 <span style={{ fontSize: '0.72rem', color: '#15803D', fontWeight: '700' }}>
-                                                                    ✨ Se registrará como cliente Hogar al confirmar
+                                                                    Se registrará como cliente Hogar al confirmar
                                                                 </span>
                                                             </div>
                                                         )}
@@ -7610,7 +7618,7 @@ ${primaryAdminNotes}`.trim();
                                                 </div>
                                                 <div>
                                                     <div style={{ fontWeight: '900', color: '#991B1B', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                        <span>🚨 Posible Duplicidad o Regularización Detectada</span>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><AlertTriangle size={15} /> Posible Duplicidad o Regularización Detectada</span>
                                                         <span style={{ backgroundColor: '#FECACA', color: '#991B1B', padding: '2px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '800' }}>
                                                             {duplicateOrderMatch.matchType}: {duplicateOrderMatch.matchedCode}
                                                         </span>
@@ -7722,7 +7730,7 @@ ${primaryAdminNotes}`.trim();
                                                     </div>
                                                     <div>
                                                         <div style={{ fontWeight: '900', color: '#92400E', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <span>🚚 Orden Multi-Entrega Detectada</span>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Truck size={15} /> Orden Multi-Entrega Detectada</span>
                                                             {importValidation?.poNumber && (
                                                                 <span style={{ backgroundColor: '#FDE68A', padding: '2px 8px', borderRadius: '6px', fontSize: '0.78rem', color: '#78350F' }}>
                                                                     OC: {importValidation.poNumber}
@@ -7765,7 +7773,7 @@ ${primaryAdminNotes}`.trim();
                                                     onMouseLeave={e => e.currentTarget.style.backgroundColor = '#D97706'}
                                                 >
                                                     <Sparkles size={16} />
-                                                    <span>⚡ Generar 2 Pedidos Relacionados</span>
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Zap size={14} /> Generar 2 Pedidos Relacionados</span>
                                                 </button>
                                             </div>
                                         );
@@ -8066,7 +8074,7 @@ ${primaryAdminNotes}`.trim();
                                                                                 title="Personalizar variantes / equivalencias"
                                                                             >
                                                                                 <CheckCircle2 size={11} color="#15803D" /> {item.isConfirmed ? 'Confirmado' : `${item.confidenceScore ? `${item.confidenceScore}%` : '100%'}`}
-                                                                                {clientFrequentProductIds.includes(item.suggestedProduct.id) && <span style={{ marginLeft: '2px', color: '#D97706' }}>⭐ Habitual</span>}
+                                                                                {clientFrequentProductIds.includes(item.suggestedProduct.id) && <span style={{ marginLeft: '2px', color: '#D97706', display: 'inline-flex', alignItems: 'center', gap: '2px' }}><Star size={11} /> Habitual</span>}
                                                                             </span>
                                                                         ) : (
                                                                             <span style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -8091,7 +8099,7 @@ ${primaryAdminNotes}`.trim();
                                                                                 alignItems: 'center',
                                                                                 gap: '4px'
                                                                             }}>
-                                                                                🗓️ Para: {item.deliverySchedule}
+                                                                                Para: {item.deliverySchedule}
                                                                             </span>
                                                                         )}
                                                                         {item.observations && (
@@ -8112,7 +8120,7 @@ ${primaryAdminNotes}`.trim();
                                                                                     display: 'inline-block'
                                                                                 }}
                                                                             >
-                                                                                📝 {item.observations}
+                                                                                {item.observations}
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -8287,7 +8295,7 @@ ${primaryAdminNotes}`.trim();
                                                                                             onMouseDown={(e) => {
                                                                                                 e.preventDefault();
                                                                                                 if (isScarcityLocked) {
-                                                                                                    showToast(`🚫 "${p.name}" no se puede agregar: Insumo bloqueado por escasez.`, 'error');
+                                                                                                    showToast(`"${p.name}" no se puede agregar: Insumo bloqueado por escasez.`, 'error');
                                                                                                     return;
                                                                                                 }
                                                                                                 if (p.options_config?.length > 0) {
@@ -8373,7 +8381,7 @@ ${primaryAdminNotes}`.trim();
                                                                                                         gap: '3px',
                                                                                                         border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
                                                                                                     }}>
-                                                                                                        ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
+                                                                                                        Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
                                                                                                     </span>
                                                                                                 )}
                                                                                                 {exc?.preferred_options && typeof exc.preferred_options === 'object' && Object.keys(exc.preferred_options).length > 0 && (
@@ -8678,7 +8686,7 @@ ${primaryAdminNotes}`.trim();
                                                     onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                                                 >
                                                     <Sparkles size={16} strokeWidth={2} />
-                                                    <span>⚡ Generar 2 Pedidos Relacionados</span>
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Zap size={14} /> Generar 2 Pedidos Relacionados</span>
                                                 </button>
                                             )}
                                             {/* Hallazgo 2: Botón de Creación Inmediata Directa (1 Clic) */}
@@ -8714,7 +8722,7 @@ ${primaryAdminNotes}`.trim();
                                                 ) : (
                                                     <>
                                                         <CheckCircle2 size={16} strokeWidth={2.5} />
-                                                        <span>⚡ Confirmar y Crear Pedido Inmediato</span>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Zap size={14} /> Confirmar y Crear Pedido Inmediato</span>
                                                     </>
                                                 )}
                                             </button>
@@ -9051,7 +9059,7 @@ ${primaryAdminNotes}`.trim();
                                                             gap: '4px',
                                                             border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
                                                         }}>
-                                                            ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
+                                                            Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
                                                         </span>
                                                     )}
                                                     {exc?.preferred_options && typeof exc.preferred_options === 'object' && Object.keys(exc.preferred_options).length > 0 && (
@@ -9719,7 +9727,7 @@ ${primaryAdminNotes}`.trim();
                                                             if (!isSameDayExpress) {
                                                                 setIsSameDayExpress(true);
                                                                 setDeliveryDate(expressCheck.targetDeliveryDate);
-                                                                showToast('⚡ Pedido Express Same-Day activado: Despacho forzado a Remisión Oficial.', 'info');
+                                                                showToast('Pedido Express Same-Day activado: Despacho forzado a Remisión Oficial.', 'info');
                                                             } else {
                                                                 setIsSameDayExpress(false);
                                                                 setDeliveryDate(minDeliveryDate);
@@ -9741,7 +9749,7 @@ ${primaryAdminNotes}`.trim();
                                                         title="Ventana Express activa. Despacho exclusivo remisionado."
                                                     >
                                                         <Zap size={10} strokeWidth={2.5} />
-                                                        {isSameDayExpress ? 'Express Activo' : '⚡ Habilitar Hoy'}
+                                                        {isSameDayExpress ? 'Express Activo' : 'Habilitar Hoy'}
                                                     </button>
                                                 );
                                             })()}
@@ -9754,7 +9762,7 @@ ${primaryAdminNotes}`.trim();
                                                 const newDate = e.target.value;
                                                 if (newDate) {
                                                     if (newDate < minDeliveryDate) {
-                                                        showToast(`⛔ Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
+                                                        showToast(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
                                                         setDeliveryDate(minDeliveryDate);
                                                         return;
                                                     }
@@ -10210,12 +10218,12 @@ ${primaryAdminNotes}`.trim();
                                                 cursor: 'pointer'
                                             }}
                                         >
-                                            <option value="contra_entrega">🚚 Contra Entrega / Efectivo {isCollaboratorOrder ? '(10% Descuento Total)' : ''}</option>
+                                            <option value="contra_entrega">Contra Entrega / Efectivo {isCollaboratorOrder ? '(10% Descuento Total)' : ''}</option>
                                             {isCollaboratorOrder && (
-                                                <option value="payroll_deduction">📋 Deducción de Nómina (5% Descuento • Cuentas x Cobrar)</option>
+                                                <option value="payroll_deduction">Deducción de Nómina (5% Descuento • Cuentas x Cobrar)</option>
                                             )}
-                                            <option value="transferencia">🏦 Transferencia Anticipada {isCollaboratorOrder ? '(5% Descuento)' : ''}</option>
-                                            <option value="wompi">💳 Wompi / Link Digital {isCollaboratorOrder ? '(5% Descuento)' : ''}</option>
+                                            <option value="transferencia">Transferencia Anticipada {isCollaboratorOrder ? '(5% Descuento)' : ''}</option>
+                                            <option value="wompi">Wompi / Link Digital {isCollaboratorOrder ? '(5% Descuento)' : ''}</option>
                                         </select>
 
                                         {/* Escenario 228: Desglose Visual de Beneficio para Colaboradores */}
@@ -11660,7 +11668,7 @@ ${primaryAdminNotes}`.trim();
                                                     return;
                                                 }
                                                 setCreatedB2CProfileId(newProfileId);
-                                                showToast(`🌟 ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente Hogar'} Creado Exitosamente. El perfil de ${guestInfo.name} se ha guardado en la base de datos con ubicación verificada. Ya puedes agregar productos y completar su pedido cuando desees.`, 'success');
+                                                showToast(`${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente Hogar'} Creado Exitosamente. El perfil de ${guestInfo.name} se ha guardado en la base de datos con ubicación verificada. Ya puedes agregar productos y completar su pedido cuando desees.`, 'success');
                                             }
                                             setShowMapPicker(false);
                                         }}
@@ -11730,7 +11738,7 @@ ${primaryAdminNotes}`.trim();
                                                 }
                                                 setHasCoverageOverride(true);
                                                 setShowMapPicker(false);
-                                                showToast(`🌟 Excepción Autorizada y ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente'} Guardado. El perfil de ${guestInfo.name} se ha guardado exitosamente con Excepción Permanente. Ya puedes agregar productos y completar su pedido cuando desees.`, 'success');
+                                                showToast(`Excepción Autorizada y ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente'} Guardado. El perfil de ${guestInfo.name} se ha guardado exitosamente con Excepción Permanente. Ya puedes agregar productos y completar su pedido cuando desees.`, 'success');
                                             }}
                                             style={{ padding: '0.6rem 1.5rem', borderRadius: '99px', border: 'none', background: '#F59E0B', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
                                         >
@@ -11753,7 +11761,7 @@ ${primaryAdminNotes}`.trim();
                                                 setHasCoverageOverride(false);
                                                 setCoverageOverrideReason('');
                                                 setShowMapPicker(false);
-                                                showToast('❌ Dirección Rechazada por Fuera de Cobertura. Se ha limpiado la ubicación del pedido.', 'error');
+                                                showToast('Dirección Rechazada por Fuera de Cobertura. Se ha limpiado la ubicación del pedido.', 'error');
                                             }}
                                             style={{ 
                                                 padding: '0.8rem 1.5rem', 
@@ -12307,7 +12315,7 @@ ${primaryAdminNotes}`.trim();
                                 if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = orderNature === 'replacement' ? '#6D28D9' : '#1E293B';
                             }}
                         >
-                            {loading ? 'Creando...' : orderNature === 'replacement' ? '⚡ Confirmar Reposición ($0 COP)' : 'Confirmar Pedido'}
+                            {loading ? 'Creando...' : orderNature === 'replacement' ? 'Confirmar Reposición ($0 COP)' : 'Confirmar Pedido'}
                         </button>
                     </div>
                 </div>
@@ -12562,7 +12570,7 @@ ${primaryAdminNotes}`.trim();
                                                 <div style={{ maxWidth: '70%' }}>
                                                     <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#1E293B' }}>{it.suggestedProduct?.name || it.originalName}</div>
                                                     {it.observations && (
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748B', fontStyle: 'italic' }}>📝 {it.observations}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748B', fontStyle: 'italic' }}>{it.observations}</div>
                                                     )}
                                                 </div>
                                                 <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0F172A', whiteSpace: 'nowrap' }}>
@@ -12632,7 +12640,7 @@ ${primaryAdminNotes}`.trim();
                                                 <div style={{ maxWidth: '70%' }}>
                                                     <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#1E293B' }}>{it.suggestedProduct?.name || it.originalName}</div>
                                                     {it.observations && (
-                                                        <div style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: '600' }}>🗓️ {it.observations}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: '600' }}>{it.observations}</div>
                                                     )}
                                                 </div>
                                                 <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400E', whiteSpace: 'nowrap' }}>
@@ -12704,7 +12712,7 @@ ${primaryAdminNotes}`.trim();
                                     ) : (
                                         <>
                                             <CheckCircle2 size={18} />
-                                            <span>🚀 Confirmar y Crear los 2 Pedidos</span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Zap size={14} /> Confirmar y Crear los 2 Pedidos</span>
                                         </>
                                     )}
                                 </button>
