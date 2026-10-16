@@ -581,7 +581,7 @@ export default function PermissionTreeEditor({ initialPermissions, onChange, rol
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* 👑 Super Admin / All Access Toggle Card */}
+      {/* Super Admin / All Access Toggle Card */}
       <div style={{
         padding: '12px 16px',
         borderRadius: '12px',
@@ -594,7 +594,7 @@ export default function PermissionTreeEditor({ initialPermissions, onChange, rol
         boxShadow: isAllAccess ? '0 4px 12px rgba(139, 92, 246, 0.08)' : 'none'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '20px' }} role="img" aria-label="crown">👑</span>
+          <span style={{ fontSize: '20px' }} role="img" aria-label="crown"></span>
           <div>
             <div style={{ fontWeight: '800', fontSize: '0.9rem', color: isAllAccess ? '#6d28d9' : '#1e293b' }}>
               Super Administrador (All Access)

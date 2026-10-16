@@ -845,7 +845,7 @@ export default function SupervisorDashboard() {
             color: activeTab === 'quarantine' ? 'white' : 'var(--ops-text-muted)'
           }}
         >
-          🛡️ Cuarentenas ({quarantines.length})
+          Cuarentenas ({quarantines.length})
         </button>
         <button 
           onClick={() => { setActiveTab('discrepancy'); setSearchQuery(''); }}
@@ -863,7 +863,7 @@ export default function SupervisorDashboard() {
             color: activeTab === 'discrepancy' ? 'white' : 'var(--ops-text-muted)'
           }}
         >
-          ⚖️ Excedentes ({discrepancies.length})
+          ️ Excedentes ({discrepancies.length})
         </button>
         <button 
           onClick={() => { setActiveTab('staff'); setSearchQuery(''); }}
@@ -881,7 +881,7 @@ export default function SupervisorDashboard() {
             color: activeTab === 'staff' ? 'white' : 'var(--ops-text-muted)'
           }}
         >
-          👥 Colaboradores ({collaborators.length})
+          Colaboradores ({collaborators.length})
         </button>
       </div>
 
@@ -986,7 +986,7 @@ export default function SupervisorDashboard() {
                         borderRadius: '6px',
                         textTransform: 'uppercase'
                       }}>
-                        ⚠️ Calidad Amarilla
+                        Calidad Amarilla
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', color: 'var(--ops-text-muted)', fontSize: '0.75rem', flexWrap: 'wrap' }}>
@@ -1146,7 +1146,7 @@ export default function SupervisorDashboard() {
                         alignItems: 'center',
                         gap: '4px'
                       }}>
-                        ⚖️ Excedente de Peso: +{formatNumber(item.excess_quantity)} {item.product.unit_of_measure}
+                        ️ Excedente de Peso: +{formatNumber(item.excess_quantity)} {item.product.unit_of_measure}
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', color: 'var(--ops-text-muted)', fontSize: '0.75rem', flexWrap: 'wrap' }}>
@@ -1291,7 +1291,7 @@ export default function SupervisorDashboard() {
                         </span>
                         {collab.specialty && (
                           <span style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
-                            📍 {collab.specialty}
+                            {collab.specialty}
                           </span>
                         )}
                         {collab.document_id && (
@@ -1407,7 +1407,7 @@ export default function SupervisorDashboard() {
               fontFamily: 'Outfit, sans-serif',
               color: actionType === 'approve' ? '#10B981' : '#EF4444'
             }}>
-              {actionType === 'approve' ? '🛡️ Confirmar Aprobación de Cuarentena' : '🛑 Confirmar Rechazo de Mercancía'}
+              {actionType === 'approve' ? 'Confirmar Aprobación de Cuarentena' : 'Confirmar Rechazo de Mercancía'}
             </h3>
             
             <p style={{ fontSize: '0.85rem', color: 'var(--ops-text-muted)', margin: '0 0 1rem 0', lineHeight: '1.4' }}>
@@ -1618,7 +1618,7 @@ export default function SupervisorDashboard() {
               fontFamily: 'Outfit, sans-serif',
               color: actionType === 'approve' ? '#10B981' : '#EF4444'
             }}>
-              {actionType === 'approve' ? '⚖️ Autorizar Peso Excedente' : '🛑 Confirmar Rechazo de Exceso'}
+              {actionType === 'approve' ? '️ Autorizar Peso Excedente' : 'Confirmar Rechazo de Exceso'}
             </h3>
             
             <p style={{ fontSize: '0.85rem', color: 'var(--ops-text-muted)', margin: '0 0 1.25rem 0', lineHeight: '1.4' }}>

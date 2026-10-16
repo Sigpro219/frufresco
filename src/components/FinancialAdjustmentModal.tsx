@@ -366,7 +366,7 @@ export default function FinancialAdjustmentModal({
 
                 if (pqrUpdateErr) throw pqrUpdateErr;
 
-                onSuccess(`✅ Nota Crédito de ${formatMoney(calculatedCreditAmount)} emitida y aprobada con éxito.`);
+                onSuccess(`Nota Crédito de ${formatMoney(calculatedCreditAmount)} emitida y aprobada con éxito.`);
                 onClose();
 
             } else {
@@ -441,7 +441,7 @@ export default function FinancialAdjustmentModal({
 
                 if (pqrUpdateErr) throw pqrUpdateErr;
 
-                onSuccess(`✅ Factura y Pedido ajustados con éxito. Nuevo Total: ${formatMoney(newTotal)}.`);
+                onSuccess(`Factura y Pedido ajustados con éxito. Nuevo Total: ${formatMoney(newTotal)}.`);
                 onClose();
             }
 

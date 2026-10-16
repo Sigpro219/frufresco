@@ -100,7 +100,7 @@ export async function POST(req: Request) {
 
       const htmlContent = generateWeeklyHarvestBulletinHtml(emailData);
       const textContent = generateWeeklyHarvestBulletinText(emailData);
-      const subject = `🌾 Boletín Agro-Comercial Semanal • Cosechas & Novedades de Mercado - ${clientName}`;
+      const subject = `Boletín Agro-Comercial Semanal • Cosechas & Novedades de Mercado - ${clientName}`;
 
       for (const toEmail of targetEmails) {
         mailRecordsToInsert.push({

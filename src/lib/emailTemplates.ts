@@ -837,7 +837,7 @@ export function generateWeeklyHarvestBulletinHtml(data: WeeklyHarvestBulletinEma
       <div style="background-color: #FFFFFF; border: 1px solid #FECACA; border-radius: 8px; padding: 8px 12px; margin-top: 6px; display: table; width: 100%; box-sizing: border-box;">
         <div style="display: table-cell; vertical-align: middle; width: 50%;">
           <strong style="color: #991B1B; font-size: 12px; font-family: 'Outfit', sans-serif;">
-            👉 Sustituto Sugerido: ${sub.name}
+            Sustituto Sugerido: ${sub.name}
           </strong>
           <span style="font-size: 11px; color: #64748B; margin-left: 4px;">(${sub.unit})</span>
         </div>
@@ -981,7 +981,7 @@ export function generateWeeklyHarvestBulletinHtml(data: WeeklyHarvestBulletinEma
     <div style="padding: 12px 28px;">
       <div style="margin-bottom: 10px;">
         <span style="display: inline-block; background-color: #DCFCE7; color: #15803D; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-          🟢 ALTA DISPONIBILIDAD & MEJOR COSTO
+          ALTA DISPONIBILIDAD & MEJOR COSTO
         </span>
         <h3 class="text-dark" style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 800; color: #0F172A; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">
           Productos en Pico de Cosecha (${harvestItems.length} oportunidades)
@@ -1012,7 +1012,7 @@ export function generateWeeklyHarvestBulletinHtml(data: WeeklyHarvestBulletinEma
     <div style="padding: 16px 28px 10px;">
       <div style="margin-bottom: 12px;">
         <span style="display: inline-block; background-color: #FEE2E2; color: #B91C1C; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-          🔴 CONTINUIDAD DE MENÚ & CONTROL DE COSTOS
+          CONTINUIDAD DE MENÚ & CONTROL DE COSTOS
         </span>
         <h3 class="text-dark" style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 800; color: #0F172A; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">
           Alertas de Escasez & Sustitutos Gastronómicos (${scarcityItems.length} alertas)
@@ -1078,7 +1078,7 @@ export function generateWeeklyHarvestBulletinText(data: WeeklyHarvestBulletinEma
   ).join('\n');
 
   const scarcityText = scarcityItems.map(s => {
-    const subs = s.substitutes.map(sub => `   👉 Sustituto: ${sub.name} (${sub.unit}) [${sub.ratio_description || ''} | ${sub.price_comparison || ''}]`).join('\n');
+    const subs = s.substitutes.map(sub => `   Sustituto: ${sub.name} (${sub.unit}) [${sub.ratio_description || ''} | ${sub.price_comparison || ''}]`).join('\n');
     return `• ${s.name} (${s.unit}) - Causa: ${s.reason}\n${subs}`;
   }).join('\n\n');
 

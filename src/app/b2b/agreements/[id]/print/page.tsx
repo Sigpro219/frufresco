@@ -231,10 +231,10 @@ export default function PrintAgreementPage() {
                             {agreement.model_snapshot_name || agreement.pricing_models?.name || 'Convenio Tarifa Preferencial'}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: '600', marginTop: '1px' }}>
-                            📅 Vigencia: <strong>{validUntilDate}</strong>
+                            Vigencia: <strong>{validUntilDate}</strong>
                         </div>
                         <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: '600', marginTop: '1px' }}>
-                            📦 Portafolio: <strong>{items.length} Insumos Preferenciales</strong> (~{avgSavingsPct}% Ahorro)
+                            Portafolio: <strong>{items.length} Insumos Preferenciales</strong> (~{avgSavingsPct}% Ahorro)
                         </div>
                         <div style={{ marginTop: '4px' }}>
                             <span style={{

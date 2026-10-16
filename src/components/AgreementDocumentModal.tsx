@@ -261,7 +261,7 @@ export default function AgreementDocumentModal({
                                     {validUntilDate}
                                 </div>
                                 <div style={{ fontSize: '0.78rem', color: '#15803D', fontWeight: '700', marginTop: '1px' }}>
-                                    🟢 Garantía de Precio Institucional
+                                    Garantía de Precio Institucional
                                 </div>
                             </div>
 

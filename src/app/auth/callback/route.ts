@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     const errorDescription = searchParams.get('error_description')
 
     if (errorParam || errorDescription) {
-        console.warn('⚠️ Error en callback de autenticación:', errorParam, errorDescription)
+        console.warn('️ Error en callback de autenticación:', errorParam, errorDescription)
         const errorMsg = errorDescription || errorParam || 'Error en autenticación'
         return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(errorMsg)}`)
     }
@@ -62,10 +62,10 @@ export async function GET(request: Request) {
         const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
         if (!error && data.session) {
-            console.log('✅ Sesión canjeada con éxito en servidor para:', data.session.user.email)
+            console.log('Sesión canjeada con éxito en servidor para:', data.session.user.email)
             return response
         } else if (error) {
-            console.error('❌ Error canjeando código en servidor:', error.message)
+            console.error('Error canjeando código en servidor:', error.message)
             return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`)
         }
     }
@@ -124,11 +124,11 @@ export async function GET(request: Request) {
 
         if (!error && (data?.session || data?.user)) {
             const userEmail = data.session?.user?.email || data.user?.email || 'usuario'
-            console.log('✅ Sesión canjeada con éxito en servidor vía token_hash para:', userEmail)
+            console.log('Sesión canjeada con éxito en servidor vía token_hash para:', userEmail)
             return response
         } else if (error) {
             const errMsg = error?.message || 'Error al canjear el enlace de acceso'
-            console.error('❌ Error canjeando token_hash en servidor:', errMsg)
+            console.error('Error canjeando token_hash en servidor:', errMsg)
             return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(errMsg)}`)
         }
     }

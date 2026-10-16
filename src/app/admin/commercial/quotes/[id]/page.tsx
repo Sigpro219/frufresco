@@ -1711,7 +1711,7 @@ export default function QuoteDetailPage() {
                                                 >
                                                     <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.85rem' }}>{c.company_name || c.razon_social}</div>
                                                     <div style={{ fontSize: '0.74rem', color: '#64748B' }}>
-                                                        NIT: {c.nit || 'Sin NIT'} &bull; {c.contact_name} &bull; {c.phone} {c.latitude && c.longitude ? '📍 Con GPS' : '⚠️ Sin GPS'}
+                                                        NIT: {c.nit || 'Sin NIT'} &bull; {c.contact_name} &bull; {c.phone} {c.latitude && c.longitude ? 'Con GPS' : '️ Sin GPS'}
                                                     </div>
                                                 </div>
                                             ))}

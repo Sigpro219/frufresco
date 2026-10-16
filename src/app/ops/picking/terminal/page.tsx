@@ -229,7 +229,7 @@ export default function PickingTerminal() {
 
                 {!loading && tasks.length === 0 && (
                     <div className="text-center p-20 flex flex-col items-center">
-                        <div className="text-6xl mb-4">🎉</div>
+                        <div className="text-6xl mb-4"></div>
                         <h3 className="text-2xl font-bold text-green-400">¡Todo Listo!</h3>
                         <p className="text-gray-400">No hay pendientes en {selectedCell}</p>
                         <button onClick={() => setSelectedCell(null)} className="mt-8 text-blue-400 underline">Cambiar Célula</button>

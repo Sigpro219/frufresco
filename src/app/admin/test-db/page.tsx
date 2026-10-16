@@ -8,7 +8,7 @@ export default function TestPage() {
 
     useEffect(() => {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        console.log('🔍 Testing Supabase connection to:', url);
+        console.log('Testing Supabase connection to:', url);
         
         async function runTest() {
             const supabase = createClient();
@@ -19,11 +19,11 @@ export default function TestPage() {
                     .limit(1);
                 
                 if (error) {
-                    console.error('❌ Supabase Error:', error);
+                    console.error('Supabase Error:', error);
                     setError(`Error ${error.code}: ${error.message} (HTTP ${httpStatus})`);
                     setStatus('Failed');
                 } else {
-                    console.log('✅ Connection Success!', data);
+                    console.log('Connection Success!', data);
                     setStatus('Success: ' + (data?.length || 0) + ' settings found');
                 }
             } catch (err: any) {
@@ -31,7 +31,7 @@ export default function TestPage() {
                     console.log('ℹ️ Request was aborted (common in Dev mode)');
                     return;
                 }
-                console.error('💥 Exception:', err);
+                console.error('Exception:', err);
                 setError(err.message || 'Unknown error');
                 setStatus('Exception');
             }

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         const { data: { user }, error: userError } = await supabase.auth.getUser()
 
         if (userError || !user) {
-            console.warn('⚠️ No se encontró usuario en cookies para actualizar contraseña:', userError?.message)
+            console.warn('️ No se encontró usuario en cookies para actualizar contraseña:', userError?.message)
             return NextResponse.json(
                 { success: false, error: 'Sesión de recuperación no encontrada o expirada. Solicita un nuevo enlace.' },
                 { status: 401 }
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         })
 
         if (updateError) {
-            console.error('❌ Error actualizando contraseña vía admin:', updateError.message)
+            console.error('Error actualizando contraseña vía admin:', updateError.message)
             return NextResponse.json(
                 { success: false, error: updateError.message },
                 { status: 500 }
@@ -68,11 +68,11 @@ export async function POST(request: Request) {
             .update({ needs_password_change: false })
             .eq('id', user.id)
 
-        console.log('✅ Contraseña actualizada exitosamente en servidor para:', user.email)
+        console.log('Contraseña actualizada exitosamente en servidor para:', user.email)
         return NextResponse.json({ success: true })
 
     } catch (err: any) {
-        console.error('❌ Error inesperado en api/auth/update-password:', err)
+        console.error('Error inesperado en api/auth/update-password:', err)
         return NextResponse.json(
             { success: false, error: err.message || 'Error interno del servidor' },
             { status: 500 }

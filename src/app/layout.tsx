@@ -82,7 +82,7 @@ export default function RootLayout({
 
           window.addEventListener('unhandledrejection', (e) => {
             if (isAuthError(e.reason)) {
-              console.warn('🚨 Error de Sesión - Reiniciando...');
+              console.warn('Error de Sesión - Reiniciando...');
               localStorage.clear();
               window.location.href = '/login?error=reset';
               return;

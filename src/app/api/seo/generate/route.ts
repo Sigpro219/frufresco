@@ -17,7 +17,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Faltan datos de geocerca' }, { status: 400 });
         }
 
-        console.log(`🚀 [SEO Engine] Iniciando generación HÍBRIDA para zona: ${zone_key}`);
+        console.log(`[SEO Engine] Iniciando generación HÍBRIDA para zona: ${zone_key}`);
 
         // 1. Obtener nombre del municipio usando Reverse Geocoding (Esto funciona perfecto siempre)
         const refPoint = poly[0];
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         const geminiKey = getGeminiApiKey();
         if (geminiKey) {
             try {
-                console.log(`📡 Intentando optimización con IA (${PRIMARY_AI_MODEL})...`);
+                console.log(`Intentando optimización con IA (${PRIMARY_AI_MODEL})...`);
                 const seoPrompt = `Eres experto en SEO. Genera JSON con: meta_title (max 60 car), meta_description (max 160 car) y keywords (array 5) para FruFresco en ${municipality} para ${audience}.`;
 
                 const aiResult = await executeWithObsolescenceGuard(
@@ -103,10 +103,10 @@ export async function POST(req: Request) {
 
                 if (aiResult) {
                     seoData = { ...seoData, ...aiResult };
-                    console.log(`✅ IA optimizó los metadatos exitosamente.`);
+                    console.log(`IA optimizó los metadatos exitosamente.`);
                 }
             } catch (aiErr) {
-                console.warn(`⚠️ Error de IA ignorado. Usando motor híbrido de seguridad.`);
+                console.warn(`Error de IA ignorado. Usando motor híbrido de seguridad.`);
             }
         }
 
@@ -135,7 +135,7 @@ export async function POST(req: Request) {
         });
 
     } catch (error: any) {
-        console.error('❌ [SEO Engine] Error Final:', error.message);
+        console.error('[SEO Engine] Error Final:', error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

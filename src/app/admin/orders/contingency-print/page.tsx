@@ -1396,7 +1396,7 @@ function ContingencyPrintContent() {
                                     {/* Poka-Yoke Banner Venta Empleado Nómina (NO COBRAR EN PUERTA) */}
                                     {order.payment_method === 'payroll_deduction' && (
                                         <div style={{ backgroundColor: '#FEF2F2', border: '1.5px solid #DC2626', padding: '4px 9px', borderRadius: '4px', marginBottom: '4px', fontSize: '7.2pt', color: '#991B1B', fontWeight: 900, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span>⚠️ ATENCIÓN TRANSPORTADOR: NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA.</span>
+                                            <span>️ ATENCIÓN TRANSPORTADOR: NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA.</span>
                                             <span style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '1px 6px', borderRadius: '3px', fontSize: '6.2pt' }}>
                                                 PAGO POR NÓMINA ($0 EN ENTREGA)
                                             </span>
@@ -1504,7 +1504,7 @@ function ContingencyPrintContent() {
                                                         <th style={{ width: '10%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>IVA</th>
                                                         <th style={{ width: '11%', textAlign: 'right', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>TOTAL</th>
                                                         <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>KG-UN RECIBE</th>
-                                                        <th style={{ width: '7%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>[✓]</th>
+                                                        <th style={{ width: '7%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>[]</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -1810,7 +1810,7 @@ function ContingencyPrintContent() {
                                                                     letterSpacing: '0.03em',
                                                                     marginBottom: '2px'
                                                                 }}>
-                                                                    ★ Excepcional
+                                                                    Excepcional
                                                                 </div>
                                                                 <div style={{ fontSize: '8.2pt', fontWeight: '900', color: '#78350F', lineHeight: 1.15 }}>
                                                                     {slotInfo.slot}

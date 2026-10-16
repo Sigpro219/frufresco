@@ -88,7 +88,7 @@ async function handleSync(request: Request) {
         const syncResults: any[] = [];
 
         for (const model of modelsToSync) {
-            console.log(`🚀 Starting pricing sync for model: ${model.name} (${model.id})`);
+            console.log(`Starting pricing sync for model: ${model.name} (${model.id})`);
             const isB2C = model.name === 'Clientes Hogar' || model.name === 'Clientes B2C' || model.is_base_model;
 
             // If called automatically (no model_id query parameter), check the autosync_days schedule
@@ -273,11 +273,11 @@ async function handleSync(request: Request) {
                 });
             });
 
-            console.log(`📊 Calculated prices for ${updates.length} products in model ${model.name}`);
+            console.log(`Calculated prices for ${updates.length} products in model ${model.name}`);
 
             // 8. Update base_price in products table if this is the B2C model (main web store)
             if (isB2C && updates.length > 0) {
-                console.log(`💾 Writing ${updates.length} prices to products.base_price...`);
+                console.log(`Writing ${updates.length} prices to products.base_price...`);
                 const BATCH_SIZE = 50;
                 for (let i = 0; i < updates.length; i += BATCH_SIZE) {
                     const batch = updates.slice(i, i + BATCH_SIZE);
@@ -291,7 +291,7 @@ async function handleSync(request: Request) {
             }
 
             // 9. Recalculate and update cache in pricing_model_prices
-            console.log(`🔄 Triggering db recalculation RPC for model ${model.name}`);
+            console.log(`Triggering db recalculation RPC for model ${model.name}`);
             const { error: rpcError } = await supabase.rpc('recalculate_model_prices', {
                 p_model_id: model.id
             });
@@ -322,7 +322,7 @@ async function handleSync(request: Request) {
         });
 
     } catch (err: any) {
-        console.error('❌ Sync API Error:', err);
+        console.error('Sync API Error:', err);
         return NextResponse.json({ error: err.message || 'Unknown error' }, { status: 500 });
     }
 }

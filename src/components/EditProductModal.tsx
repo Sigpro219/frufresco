@@ -2748,7 +2748,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                 type="button"
                                                 onClick={() => {
                                                     const confirmed = window.confirm(
-                                                        '⚠️ ATENCIÓN: Modificar la tipología estructural alterará las reglas de venta web, unidades permitidas y validaciones de este producto.\n\n¿Estás seguro de que deseas desbloquear y cambiar la tipología comercial?'
+                                                        '️ ATENCIÓN: Modificar la tipología estructural alterará las reglas de venta web, unidades permitidas y validaciones de este producto.\n\n¿Estás seguro de que deseas desbloquear y cambiar la tipología comercial?'
                                                     );
                                                     if (confirmed) {
                                                         setIsTypologyUnlocked(true);

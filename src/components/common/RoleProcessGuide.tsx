@@ -137,7 +137,7 @@ const GUIDES_BY_ROLE: Record<SystemRoleType, GuideContent> = {
             ]
         },
         differentialRule: {
-            title: '⚖️ Diagnóstico Diferencial: ¿Error de Montaje o Error de Picking?',
+            title: '️ Diagnóstico Diferencial: ¿Error de Montaje o Error de Picking?',
             explanation: 'Contrasta la orden original de compra (WhatsApp/Portal) contra el albarán impreso de bodega:\n• Si el albarán decía "Tomate Chonto" y bodega empacó "Tomate Chonto", pero el cliente había pedido "Tomate Larga Vida": Falla 100% de MONTAJE (Comercial).\n• Si el albarán decía "Tomate Larga Vida" y bodega empacó "Tomate Chonto": Falla 100% de PICKING (Bodega).'
         },
         sla: 'SLA de resolución comercial: Menos de 60 minutos hábiles.'

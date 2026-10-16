@@ -16,7 +16,7 @@ export interface AgreementItem {
     client_proposed_price: number; // Oferta del cliente
     prima_cop?: number; // Para Nutresa: Prima pactada
     our_counterproposal: number; // Nuestra contrapropuesta
-    suggested_price: number; // Sugerido inteligente ⚡
+    suggested_price: number; // Sugerido inteligente
     status_change?: 'SUBIÓ' | 'BAJÓ' | 'IGUAL';
     notes?: string;
 }

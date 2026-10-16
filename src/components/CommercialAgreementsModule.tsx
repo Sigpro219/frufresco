@@ -3742,7 +3742,7 @@ export default function CommercialAgreementsModule() {
                                                                         borderRadius: '4px', 
                                                                         fontWeight: '800' 
                                                                     }}>
-                                                                        ⚡ Lista Maestra Compartida
+                                                                        Lista Maestra Compartida
                                                                     </span>
                                                                     <button
                                                                         type="button"
@@ -5253,7 +5253,7 @@ export default function CommercialAgreementsModule() {
                                                 <span style={{ color: '#64748B', fontSize: '0.72rem' }}>({rec.label})</span>
                                             </div>
                                             <span style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: rec.selected ? '#166534' : '#94A3B8' }}>
-                                                {rec.selected ? '✓ Incluido' : 'Omitido'}
+                                                {rec.selected ? 'Incluido' : 'Omitido'}
                                             </span>
                                         </label>
                                     ))}
@@ -5267,7 +5267,7 @@ export default function CommercialAgreementsModule() {
                                         {emailModalMode === 'PRICE_UPDATE_DIFF' ? 'Tabla Comparativa Diff a Despachar (Sin SKU):' : 'Catálogo Completo a Despachar (Sin SKU):'}
                                     </span>
                                     <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#166534', backgroundColor: '#DCFCE7', padding: '2px 6px', borderRadius: '4px' }}>
-                                        ✓ Membrete Remisión Sincronizado
+                                        Membrete Remisión Sincronizado
                                     </span>
                                 </div>
                                 <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', maxHeight: '220px', overflowY: 'auto' }}>
@@ -6280,7 +6280,7 @@ export default function CommercialAgreementsModule() {
                                             }}>
                                                 <span>
                                                     {selectedClientIds.length > 0 
-                                                        ? `✓ ${selectedClientIds.length} Casas Matrices seleccionadas para la lista Institucional General` 
+                                                        ? `${selectedClientIds.length} Casas Matrices seleccionadas para la lista Institucional General` 
                                                         : 'Selecciona al menos una Casa Matriz para continuar'}
                                                 </span>
                                                 {selectedClientIds.length > 0 && (
@@ -6547,7 +6547,7 @@ export default function CommercialAgreementsModule() {
                                                                     </div>
                                                                     <div style={{ fontSize: '0.8rem', color: isSucursal ? '#0284C7' : '#047857', marginTop: '2px' }}>
                                                                         {isSucursal ? (
-                                                                            <span>🏢 Dependiente de Casa Matriz: <strong>{selectedClient.parentName}</strong> {selectedClient?.nit ? `• NIT: ${selectedClient.nit}` : ''}</span>
+                                                                            <span>Dependiente de Casa Matriz: <strong>{selectedClient.parentName}</strong> {selectedClient?.nit ? `• NIT: ${selectedClient.nit}` : ''}</span>
                                                                         ) : (
                                                                             <span>{selectedClient?.nit ? `NIT: ${selectedClient.nit}` : ''} {selectedClient?.phone ? `• Tel: ${selectedClient.phone}` : ''}</span>
                                                                         )}
@@ -6807,7 +6807,7 @@ export default function CommercialAgreementsModule() {
                                                     }}
                                                     style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontSize: '0.72rem', color: '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
-                                                    📅 1 del Mes Actual
+                                                    1 del Mes Actual
                                                 </button>
                                                 <button
                                                     type="button"
@@ -6821,7 +6821,7 @@ export default function CommercialAgreementsModule() {
                                                     }}
                                                     style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontSize: '0.72rem', color: '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
-                                                    📅 Hoy
+                                                    Hoy
                                                 </button>
                                                 <button
                                                     type="button"
@@ -6839,7 +6839,7 @@ export default function CommercialAgreementsModule() {
                                                     }}
                                                     style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontSize: '0.72rem', color: '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
-                                                    📅 1 del Próximo Mes
+                                                    1 del Próximo Mes
                                                 </button>
                                             </div>
                                         </div>
@@ -6905,7 +6905,7 @@ export default function CommercialAgreementsModule() {
                                                     onClick={() => { setDurationValue(1); setDurationUnit('months'); }}
                                                     style={{ padding: '3px 8px', borderRadius: '6px', border: Number(durationValue) === 1 && durationUnit === 'months' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: Number(durationValue) === 1 && durationUnit === 'months' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: Number(durationValue) === 1 && durationUnit === 'months' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
-                                                    ⚡ 1 Mes (Mensual)
+                                                    1 Mes (Mensual)
                                                 </button>
                                                 <button
                                                     type="button"
@@ -6974,7 +6974,7 @@ export default function CommercialAgreementsModule() {
                                                         </span>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
                                                             <span style={{ fontSize: '0.85rem', color: '#334155' }}>Desde: <strong>{formattedStart}</strong></span>
-                                                            <span style={{ fontSize: '0.85rem', color: '#64748B' }}>➔</span>
+                                                            <span style={{ fontSize: '0.85rem', color: '#64748B' }}></span>
                                                             <strong style={{ color: '#1E3A8A', fontSize: '0.95rem', textTransform: 'capitalize' }}>
                                                                 Vence el {formattedExpiry}
                                                             </strong>
@@ -6990,7 +6990,7 @@ export default function CommercialAgreementsModule() {
                                                         fontSize: '0.75rem', 
                                                         color: '#1E40AF' 
                                                     }}>
-                                                        ⚡ <strong>Efecto Cascada Simultáneo:</strong> Esta vigencia rige idénticamente para todas las Casas Matrices y sucursales vinculadas. Al llegar la fecha de vencimiento, expirará en simultáneo para todas las sedes asociadas.
+                                                        <strong>Efecto Cascada Simultáneo:</strong> Esta vigencia rige idénticamente para todas las Casas Matrices y sucursales vinculadas. Al llegar la fecha de vencimiento, expirará en simultáneo para todas las sedes asociadas.
                                                     </div>
                                                 )}
                                             </div>
@@ -10358,7 +10358,7 @@ export default function CommercialAgreementsModule() {
                             }}>
                                 <span>
                                     {editableLinkedClientIds.length > 0
-                                        ? `✓ ${editableLinkedClientIds.length} clientes/sucursales recibirán los precios de este acuerdo central`
+                                        ? `${editableLinkedClientIds.length} clientes/sucursales recibirán los precios de este acuerdo central`
                                         : 'Sin clientes vinculados. Marca al menos uno para activar el efecto cascada.'}
                                 </span>
                             </div>

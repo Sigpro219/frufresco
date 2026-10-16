@@ -635,7 +635,7 @@ export default function StrategyControlTower() {
 
             const fileName = `FruFresco_BI_${areaKey.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`;
             XLSX.writeFile(wb, fileName);
-            (window as any).showToast?.(`Reporte BI ${fileName} exportado con éxito ✓`, 'success');
+            (window as any).showToast?.(`Reporte BI ${fileName} exportado con éxito `, 'success');
         } catch (err) {
             console.error('Error generating excel export:', err);
             alert('Error al generar la descarga en Excel');
@@ -1149,7 +1149,7 @@ export default function StrategyControlTower() {
                         <AreaKPICard
                             title="Embudo Comercial Global"
                             value={`${crmMetrics.globalConversionPct}%`}
-                            subtitle={`${crmMetrics.leadsCount} Prospectos ➔ ${crmMetrics.buyersCount} Compradores`}
+                            subtitle={`${crmMetrics.leadsCount} Prospectos ${crmMetrics.buyersCount} Compradores`}
                             icon={<Compass size={20} color="#0D7A57" />}
                             badgeText="Conversión"
                             badgeBg="#ECFDF5"
@@ -1780,7 +1780,7 @@ function BIFunnelChart({ stages }: { stages: any[] }) {
 
                     {i < stages.length - 1 && (
                         <div style={{ width: '65px', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textAlign: 'right' }}>
-                            ➔ {stages[i + 1].pct}% conv
+                            {stages[i + 1].pct}% conv
                         </div>
                     )}
                 </div>

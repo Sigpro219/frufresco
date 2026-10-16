@@ -390,7 +390,7 @@ export default function DeliveryConfirmationPage() {
                         : `[Conductor] Cancelación Total en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`;
 
                     const desc = isReplacement
-                        ? `⚠️ [ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente canceló la entrega. NO volver a reprogramar despacho; compensar mediante Nota Crédito.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
+                        ? `️ [ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente canceló la entrega. NO volver a reprogramar despacho; compensar mediante Nota Crédito.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
                         : `El conductor reportó cancelación total de la entrega en sitio.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`;
 
                     await supabase.from('customer_service_pqrs').insert({
@@ -478,7 +478,7 @@ export default function DeliveryConfirmationPage() {
                             : `[Conductor] Rechazo Parcial en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`;
 
                         const desc = isReplacement
-                            ? `⚠️ [ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente devolvió parcialmente los productos. NO volver a reprogramar; liquidar los kilos rechazados como Nota Crédito.\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
+                            ? `️ [ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente devolvió parcialmente los productos. NO volver a reprogramar; liquidar los kilos rechazados como Nota Crédito.\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
                             : `El conductor registró devolución de producto(s) en sitio:\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`;
 
                         await supabase.from('customer_service_pqrs').insert({

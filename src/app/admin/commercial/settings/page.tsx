@@ -143,9 +143,9 @@ export default function PricingSettingsPage({
 
             // Lógica de ordenamiento personalizado
             const sortedData = [...data].sort((a, b) => {
-                // 1. Prioridad para General Institucional (1) y Clientes Hogar / B2C (2)
-                if (a.name === 'General Institucional') return -1;
-                if (b.name === 'General Institucional') return 1;
+                // 1. Prioridad para General institucional dinámico (1) y Clientes Hogar / B2C (2)
+                if (a.id === GENERAL_INSTITUCIONAL_ID || a.name === 'General institucional dinámico' || a.name === 'General Institucional') return -1;
+                if (b.id === GENERAL_INSTITUCIONAL_ID || b.name === 'General institucional dinámico' || b.name === 'General Institucional') return 1;
                 if (a.name === 'Clientes Hogar' || a.name === 'Clientes B2C') return -1;
                 if (b.name === 'Clientes Hogar' || b.name === 'Clientes B2C') return 1;
 
@@ -1304,61 +1304,126 @@ export default function PricingSettingsPage({
                             </div>
                         )}
 
-                        <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
-                            {loadingModels ? <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando modelos...</div> : models.map(m => (
-                                <div
-                                    key={m.id}
-                                    onClick={() => setSelectedModel(m)}
-                                    style={{
-                                        padding: '0.85rem 1.15rem',
-                                        borderBottom: `1px solid ${THEME.colors.border}`,
-                                        cursor: 'pointer',
-                                        backgroundColor: selectedModel?.id === m.id ? '#F0FDF4' : 'white',
-                                        borderLeft: selectedModel?.id === m.id ? `4px solid ${THEME.colors.primary}` : '4px solid transparent',
-                                        transition: 'background 0.2s'
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ flex: 1, paddingRight: '0.75rem' }}>
-                                            <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain, marginBottom: '0.15rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                {m.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#10B981" /></span>}
-                                                {m.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#F59E0B" /></span>}
-                                                {m.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#EF4444" /></span>}
-                                                <div>
-                                                    {(() => {
-                                                        const parts = m.name.split(/(\d+\s*días)/i);
-                                                        return parts.map((part, i) => (
-                                                            <span key={i} style={{ 
-                                                                color: /(\d+\s*días)/i.test(part) ? '#0D7A57' : 'inherit',
-                                                                fontSize: /(\d+\s*días)/i.test(part) ? '0.95em' : 'inherit'
-                                                            }}>
-                                                                {part}
-                                                            </span>
-                                                        ));
-                                                    })()}
+                        {/* PINNED BASE MODEL OR LIST */}
+                        {(() => {
+                            const isBaseModel = (m: any) => m.id === GENERAL_INSTITUCIONAL_ID || m.name === 'General institucional dinámico' || m.name === 'General Institucional';
+                            const baseModel = models.find(isBaseModel);
+                            const otherModels = models.filter(m => !isBaseModel(m));
+
+                            return (
+                                <div>
+                                    {/* DOCKED TOP CARD: General institucional dinámico */}
+                                    {baseModel && (
+                                        <div style={{ borderBottom: `2px solid ${THEME.colors.border}`, backgroundColor: '#FAFAFA' }}>
+                                            <div style={{ padding: '0.4rem 1.15rem 0.2rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <span style={{ fontSize: '0.62rem', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', color: '#0D7A57', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <Crown size={12} color="#0D7A57" /> Modelo Base Maestro
+                                                </span>
+                                            </div>
+                                            <div
+                                                onClick={() => setSelectedModel(baseModel)}
+                                                style={{
+                                                    padding: '0.75rem 1.15rem 0.9rem',
+                                                    cursor: 'pointer',
+                                                    backgroundColor: selectedModel?.id === baseModel.id ? '#ECFDF5' : '#FAFAFA',
+                                                    borderLeft: selectedModel?.id === baseModel.id ? `4px solid ${THEME.colors.primary}` : '4px solid #10B981',
+                                                    transition: 'all 0.2s',
+                                                    borderTop: '1px solid #F1F5F9'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div style={{ flex: 1, paddingRight: '0.75rem' }}>
+                                                        <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain, marginBottom: '0.15rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            {baseModel.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#10B981" /></span>}
+                                                            {baseModel.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#F59E0B" /></span>}
+                                                            {baseModel.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#EF4444" /></span>}
+                                                            <div style={{ color: '#0F172A' }}>
+                                                                {baseModel.name}
+                                                            </div>
+                                                        </div>
+                                                        {baseModel.description && (
+                                                            <div style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
+                                                                {baseModel.description}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div style={{
+                                                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                                        backgroundColor: selectedModel?.id === baseModel.id ? '#D1FAE5' : '#E2E8F0',
+                                                        padding: '0.35rem 0.6rem', borderRadius: '8px', minWidth: '65px'
+                                                    }}>
+                                                        <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.03em', color: selectedModel?.id === baseModel.id ? '#065F46' : '#64748B' }}>PROMEDIO</span>
+                                                        <span style={{ fontWeight: '900', fontSize: '1.1rem', color: selectedModel?.id === baseModel.id ? '#0D7A57' : '#1E293B' }}>
+                                                            {formatNumber(modelAverages[baseModel.id] !== undefined ? modelAverages[baseModel.id] : (baseModel.base_margin_percent || 0), 1)}%
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            {m.description && (
-                                                <div style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
-                                                    {m.description}
-                                                </div>
-                                            )}
                                         </div>
+                                    )}
 
-                                        <div style={{
-                                            display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                            backgroundColor: selectedModel?.id === m.id ? '#D1FAE5' : '#F3F4F6',
-                                            padding: '0.35rem 0.6rem', borderRadius: '8px', minWidth: '65px'
-                                        }}>
-                                            <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.03em', color: selectedModel?.id === m.id ? '#065F46' : '#64748B' }}>PROMEDIO</span>
-                                            <span style={{ fontWeight: '900', fontSize: '1.1rem', color: selectedModel?.id === m.id ? '#0D7A57' : '#1E293B' }}>
-                                                {formatNumber(modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0), 1)}%
-                                            </span>
-                                        </div>
+                                    {/* SCROLLABLE DERIVED MODELS LIST */}
+                                    <div style={{ maxHeight: baseModel ? 'calc(100vh - 310px)' : 'calc(100vh - 220px)', overflowY: 'auto' }}>
+                                        {loadingModels ? (
+                                            <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando modelos...</div>
+                                        ) : otherModels.map(m => (
+                                            <div
+                                                key={m.id}
+                                                onClick={() => setSelectedModel(m)}
+                                                style={{
+                                                    padding: '0.85rem 1.15rem',
+                                                    borderBottom: `1px solid ${THEME.colors.border}`,
+                                                    cursor: 'pointer',
+                                                    backgroundColor: selectedModel?.id === m.id ? '#F0FDF4' : 'white',
+                                                    borderLeft: selectedModel?.id === m.id ? `4px solid ${THEME.colors.primary}` : '4px solid transparent',
+                                                    transition: 'background 0.2s'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div style={{ flex: 1, paddingRight: '0.75rem' }}>
+                                                        <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain, marginBottom: '0.15rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            {m.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#10B981" /></span>}
+                                                            {m.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#F59E0B" /></span>}
+                                                            {m.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#EF4444" /></span>}
+                                                            <div>
+                                                                {(() => {
+                                                                    const parts = m.name.split(/(\d+\s*días)/i);
+                                                                    return parts.map((part: string, i: number) => (
+                                                                        <span key={i} style={{ 
+                                                                            color: /(\d+\s*días)/i.test(part) ? '#0D7A57' : 'inherit',
+                                                                            fontSize: /(\d+\s*días)/i.test(part) ? '0.95em' : 'inherit'
+                                                                        }}>
+                                                                            {part}
+                                                                        </span>
+                                                                    ));
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                        {m.description && (
+                                                            <div style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
+                                                                {m.description}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div style={{
+                                                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                                        backgroundColor: selectedModel?.id === m.id ? '#D1FAE5' : '#F3F4F6',
+                                                        padding: '0.35rem 0.6rem', borderRadius: '8px', minWidth: '65px'
+                                                    }}>
+                                                        <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.03em', color: selectedModel?.id === m.id ? '#065F46' : '#64748B' }}>PROMEDIO</span>
+                                                        <span style={{ fontWeight: '900', fontSize: '1.1rem', color: selectedModel?.id === m.id ? '#0D7A57' : '#1E293B' }}>
+                                                            {formatNumber(modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0), 1)}%
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            );
+                        })()}
                     </div>
 
                     {/* --- RIGHT: PRICING MATRIX VIEW --- */}

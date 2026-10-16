@@ -97,7 +97,7 @@ export default function AdminStrategyPage() {
                 );
             
             if (!error) {
-                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Geocerca guardada con éxito ✓', 'success');
+                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Geocerca guardada con éxito ', 'success');
                 await fetchData();
                 return true;
             }
@@ -117,7 +117,7 @@ export default function AdminStrategyPage() {
         }]);
 
         if (!error) {
-            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Solicitud enviada ✓`, 'success');
+            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Solicitud enviada `, 'success');
             await fetchData();
         }
     };
@@ -134,7 +134,7 @@ export default function AdminStrategyPage() {
             });
             const data = await res.json();
             if (data.success) {
-                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Estrategia SEO generada ✓`, 'success');
+                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Estrategia SEO generada `, 'success');
                 await fetchData();
             }
         } finally {
@@ -431,7 +431,7 @@ function HierarchyView({ products, onFix }: { products: any[], onFix: () => void
             ) : (
                 <div style={{ padding: '3rem 1.5rem', textAlign: 'center', backgroundColor: '#F4F9F6', borderRadius: THEME.radius.lg, border: '1px solid #E0EFE7' }}>
                     <p style={{ fontSize: '1rem', fontWeight: '900', color: '#065F46', margin: '0 0 4px' }}>
-                        ✓ Catálogo de Jerarquía 100% Calibrado
+                        Catálogo de Jerarquía 100% Calibrado
                     </p>
                     <p style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, margin: 0 }}>
                         Todos los productos derivados tienen factores de conversión calculados correctamente frente a sus unidades maestras.

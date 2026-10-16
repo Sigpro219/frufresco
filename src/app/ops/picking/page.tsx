@@ -116,9 +116,9 @@ export default function PickingExecutionPage() {
                 const day = String(nowBogota.getUTCDate()).padStart(2, '0');
                 const targetDate = `${year}-${month}-${day}`;
                 query = query.eq('delivery_date', targetDate);
-                console.log(`🔍 Picking filtered for operational date: ${targetDate}`);
+                console.log(`Picking filtered for operational date: ${targetDate}`);
             } else {
-                console.log("🛑 Cutoff Rules DISABLED: Fetching ALL active orders for Picking.");
+                console.log("Cutoff Rules DISABLED: Fetching ALL active orders for Picking.");
             }
 
             if (signal) query = query.abortSignal(signal);
@@ -359,15 +359,15 @@ export default function PickingExecutionPage() {
 
     // Establish persistent Realtime Channel for broadcasting
     useEffect(() => {
-        console.log('🔌 Estableciendo canal de comunicación...');
+        console.log('Estableciendo canal de comunicación...');
         const channel = supabase.channel('picking-realtime');
         channel.subscribe((status) => {
-             console.log('📡 Estado de conexión (Capitán):', status);
+             console.log('Estado de conexión (Capitán):', status);
         });
         setRealtimeChannel(channel);
 
         return () => {
-            console.log('🔌 Desconectando canal...');
+            console.log('Desconectando canal...');
             supabase.removeChannel(channel);
         };
     }, []);
@@ -528,7 +528,7 @@ export default function PickingExecutionPage() {
                     type: 'broadcast',
                     event: 'refresh',
                     payload: { id: exceptionItem.id, qty }
-                }).then(() => console.log('🚀 Broadcast enviado con éxito'));
+                }).then(() => console.log('Broadcast enviado con éxito'));
             }
             
             handleCloseExceptionModal();
@@ -1022,7 +1022,7 @@ export default function PickingExecutionPage() {
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontSize: '1rem', fontWeight: '800', color: '#F8FAFC' }}>{task.company_name?.toUpperCase() || 'CLIENTE SIN NOMBRE'}</div>
-                                        {task.zone && <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'bold' }}>📍 RUTA: {task.zone.toUpperCase()}</div>}
+                                        {task.zone && <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'bold' }}>RUTA: {task.zone.toUpperCase()}</div>}
                                     </div>
                                     <button 
                                         onClick={() => setShowCompleted(!showCompleted)}
@@ -1371,7 +1371,7 @@ export default function PickingExecutionPage() {
                                             color: '#EF4444', fontWeight: 'bold', fontSize: '0.85rem',
                                             border: '1px solid rgba(239,68,68,0.3)', textAlign: 'center'
                                         }}>
-                                            ❌ La cantidad supera el stock disponible en inventario ({exceptionItem.available_stock || 0} {exceptionItem.unit}).
+                                            La cantidad supera el stock disponible en inventario ({exceptionItem.available_stock || 0} {exceptionItem.unit}).
                                         </div>
                                     )}
 
@@ -1381,7 +1381,7 @@ export default function PickingExecutionPage() {
                                             color: '#FBBF24', fontWeight: 'bold', fontSize: '0.85rem',
                                             border: '1px solid rgba(234,179,8,0.3)', textAlign: 'center'
                                         }}>
-                                            ⚠️ Estás registrando una entrega parcial.
+                                            Estás registrando una entrega parcial.
                                         </div>
                                     )}
                                 </div>

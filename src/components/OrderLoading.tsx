@@ -68,7 +68,7 @@ export default function OrderLoading() {
         let active = true;
         
         const fetchOrders = async () => {
-            console.log('🔄 FETCHING ORDERS - SIMPLE VERSION');
+            console.log('FETCHING ORDERS - SIMPLE VERSION');
             setLoading(true);
             
             try {
@@ -85,10 +85,10 @@ export default function OrderLoading() {
 
                 const { data, error } = await query;
                 
-                console.log('📦 Response:', { error, count: data?.length });
+                console.log('Response:', { error, count: data?.length });
                 
                 if (error) {
-                    console.error('❌ Error:', error);
+                    console.error('Error:', error);
                     return;
                 }
 
@@ -96,7 +96,7 @@ export default function OrderLoading() {
                     setOrders(data || []);
                 }
             } catch (err) {
-                console.error('❌ Exception:', err);
+                console.error('Exception:', err);
             } finally {
                 if (active) {
                     setLoading(false);
@@ -142,7 +142,7 @@ export default function OrderLoading() {
             <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
                 <div style={{ marginBottom: '2rem' }}>
                     <h1 style={{ fontSize: '2rem', fontWeight: '800', color: '#0F172A' }}>
-                        📋 Cargue de Pedidos - MODO ESTABLE
+                        Cargue de Pedidos - MODO ESTABLE
                     </h1>
                 </div>
 
@@ -218,7 +218,7 @@ export default function OrderLoading() {
                 {/* Loading */}
                 {loading && (
                     <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: '16px' }}>
-                        <div style={{ fontSize: '3rem' }}>⏳</div>
+                        <div style={{ fontSize: '3rem' }}></div>
                         <div style={{ color: '#64748B', fontWeight: '600' }}>Cargando...</div>
                     </div>
                 )}
@@ -226,7 +226,7 @@ export default function OrderLoading() {
                 {/* Empty */}
                 {!loading && filteredOrders.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: '16px' }}>
-                        <div style={{ fontSize: '4rem' }}>📭</div>
+                        <div style={{ fontSize: '4rem' }}></div>
                         <div style={{ color: '#64748B', fontWeight: '600' }}>No hay pedidos</div>
                     </div>
                 )}
@@ -262,10 +262,10 @@ export default function OrderLoading() {
                                             <td style={{ padding: '1rem' }}>
                                                  {(() => {
                                                      const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
-                                                     if (notes.includes('[origin: web]') || order.type === 'b2c_wompi') return '🌐';
-                                                     if (notes.includes('[origin: whatsapp]')) return '💬';
-                                                     if (notes.includes('[origin: phone]')) return '📞';
-                                                     return '❓';
+                                                     if (notes.includes('[origin: web]') || order.type === 'b2c_wompi') return '';
+                                                     if (notes.includes('[origin: whatsapp]')) return '';
+                                                     if (notes.includes('[origin: phone]')) return '';
+                                                     return '';
                                                  })()}
                                             </td>
                                             <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '700', color: '#059669' }}>

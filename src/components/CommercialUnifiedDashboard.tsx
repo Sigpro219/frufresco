@@ -490,6 +490,7 @@ export default function CommercialUnifiedDashboard({
         freshCount: 0,
         noRefCount: 0,
         totalCount: 0,
+        slaExpiredCount: 0,
         criticalExpiredNames: [] as string[]
     });
 
@@ -1101,8 +1102,11 @@ export default function CommercialUnifiedDashboard({
             criticalExpiredItems.sort((a, b) => b.quantity - a.quantity);
             const criticalNames = criticalExpiredItems.map(it => it.name);
 
+            const totalRequiringRecotization = expiredCount + noRefCount;
+
             setCostAlertStats({
-                expiredCount,
+                expiredCount: totalRequiringRecotization,
+                slaExpiredCount: expiredCount,
                 dueSoonCount,
                 freshCount,
                 noRefCount,
@@ -1115,17 +1119,17 @@ export default function CommercialUnifiedDashboard({
             const today = new Date();
 
             // 1. Alertas de costos vencidos con alta prioridad
-            if (expiredCount > 0) {
+            if (totalRequiringRecotization > 0) {
                 const highVolumeExpired = criticalExpiredItems.filter(i => i.quantity > 0);
                 generatedAlerts.push({
                     id: 'alert-cost-matrix-expired-urgent',
                     type: 'cost_expired',
                     severity: 'critical',
-                    title: `${expiredCount} SKUs Requieren Recotización Urgente`,
+                    title: `${totalRequiringRecotization} SKUs Requieren Recotización Urgente`,
                     subtitle: highVolumeExpired.length > 0
                         ? `Alerta de margen: ${highVolumeExpired.slice(0, 3).map(x => `${x.name} (${x.quantity} Kg)`).join(', ')} tienen costo desactualizado.`
-                        : `Productos con costo de compra vencido (>SLA de perecibilidad). Requieren actualizar precio de Corabastos.`,
-                    dateInfo: `${expiredCount} SKUs fuera de SLA`,
+                        : `Productos con costo de compra vencido (>SLA o sin referencia base). Requieren actualizar precio en Corabastos.`,
+                    dateInfo: `${expiredCount} por SLA + ${noRefCount} sin referencia`,
                     linkUrl: '/admin/commercial?tab=operations&subtab=cost-matrix',
                     linkText: 'Recotizar en Matriz'
                 });
@@ -1687,7 +1691,7 @@ export default function CommercialUnifiedDashboard({
                                         display: 'inline-block'
                                     }} />
                                     <AlertTriangle size={14} color="#DC2626" />
-                                    <span>{costAlertStats.expiredCount} SLA Vencido</span>
+                                    <span>{costAlertStats.expiredCount} Vencidos</span>
                                 </button>
 
                                 {/* POPOVER FLOTANTE EN HOVER: ALERTA SLA */}
@@ -1719,11 +1723,11 @@ export default function CommercialUnifiedDashboard({
                                                         Alerta Operativa de Precios
                                                     </h4>
                                                     <span style={{ fontSize: '0.65rem', fontWeight: '800', backgroundColor: '#DC2626', color: 'white', padding: '1px 6px', borderRadius: '4px' }}>
-                                                        SLA Vencido
+                                                        Costos Vencidos
                                                     </span>
                                                 </div>
                                                 <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                                                    {costAlertStats.expiredCount} productos requieren recotización
+                                                    {costAlertStats.expiredCount} productos requieren recotización ({costAlertStats.slaExpiredCount} caducados + {costAlertStats.noRefCount} sin costo inicial)
                                                 </span>
                                             </div>
                                         </div>
@@ -1914,139 +1918,6 @@ export default function CommercialUnifiedDashboard({
                         <span style={{ color: '#7C3AED', fontWeight: '800' }}>
                             {kpis.totalClientsCount > 0 ? Math.round((kpis.activeClientsCount / kpis.totalClientsCount) * 100) : 0}% Penetración
                         </span>
-                    </div>
-                </div>
-
-                {/* CARD 5: ALERTAS DE COTIZACIÓN URGENTE (COSTOS VENCIDOS) */}
-                <div style={{ 
-                    backgroundColor: costAlertStats.expiredCount > 0 ? '#FEF2F2' : '#F0FDF4', 
-                    padding: '1.15rem 1.25rem', 
-                    minHeight: '148px', 
-                    borderRadius: THEME.radius.lg, 
-                    border: `1px solid ${costAlertStats.expiredCount > 0 ? '#FCA5A5' : '#86EFAC'}`, 
-                    boxShadow: THEME.shadow.sm, 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    justifyContent: 'space-between' 
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ 
-                                    fontSize: '0.72rem', 
-                                    fontWeight: '900', 
-                                    color: costAlertStats.expiredCount > 0 ? '#991B1B' : '#065F46', 
-                                    textTransform: 'uppercase', 
-                                    letterSpacing: '0.05em' 
-                                }}>
-                                    Recotización Urgente
-                                </span>
-                                {costAlertStats.expiredCount > 0 ? (
-                                    <span style={{ 
-                                        fontWeight: '800', 
-                                        color: '#B91C1C', 
-                                        backgroundColor: '#FEE2E2', 
-                                        padding: '1px 6px', 
-                                        borderRadius: '8px', 
-                                        fontSize: '0.67rem', 
-                                        display: 'inline-flex', 
-                                        alignItems: 'center', 
-                                        gap: '2px', 
-                                        whiteSpace: 'nowrap' 
-                                    }}>
-                                        SLA Vencido
-                                    </span>
-                                ) : (
-                                    <span style={{ 
-                                        fontWeight: '800', 
-                                        color: '#15803D', 
-                                        backgroundColor: '#DCFCE7', 
-                                        padding: '1px 6px', 
-                                        borderRadius: '8px', 
-                                        fontSize: '0.67rem', 
-                                        whiteSpace: 'nowrap' 
-                                    }}>
-                                        Al Día
-                                    </span>
-                                )}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '0.35rem 0 0 0', flexWrap: 'nowrap' }}>
-                                <span style={{ 
-                                    fontSize: '1.75rem', 
-                                    fontWeight: '900', 
-                                    color: costAlertStats.expiredCount > 0 ? '#DC2626' : '#15803D', 
-                                    letterSpacing: '-0.02em', 
-                                    lineHeight: 1.2 
-                                }}>
-                                    {loading ? '...' : costAlertStats.expiredCount}
-                                </span>
-                                <span style={{ 
-                                    fontSize: '0.85rem', 
-                                    fontWeight: '800', 
-                                    color: costAlertStats.expiredCount > 0 ? '#B91C1C' : '#065F46', 
-                                    whiteSpace: 'nowrap' 
-                                }}>
-                                    SKUs por Recotizar
-                                </span>
-                            </div>
-                        </div>
-                        <div style={{ 
-                            width: '38px', 
-                            height: '38px', 
-                            borderRadius: '10px', 
-                            backgroundColor: costAlertStats.expiredCount > 0 ? '#FEE2E2' : '#DCFCE7', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            flexShrink: 0 
-                        }}>
-                            {costAlertStats.expiredCount > 0 ? (
-                                <AlertTriangle size={20} color="#DC2626" />
-                            ) : (
-                                <CheckCircle2 size={20} color="#15803D" />
-                            )}
-                        </div>
-                    </div>
-                    
-                    <div style={{ 
-                        marginTop: '0.75rem', 
-                        paddingTop: '0.65rem', 
-                        borderTop: `1px solid ${costAlertStats.expiredCount > 0 ? '#FECACA' : '#BBF7D0'}`, 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center', 
-                        fontSize: '0.72rem' 
-                    }}>
-                        <span style={{ 
-                            color: costAlertStats.expiredCount > 0 ? '#991B1B' : '#14532D', 
-                            fontWeight: '700' 
-                        }}>
-                            {costAlertStats.freshCount} vigentes ({costAlertStats.totalCount > 0 ? Math.round((costAlertStats.freshCount / costAlertStats.totalCount) * 100) : 0}%)
-                        </span>
-                        <button 
-                            type="button"
-                            onClick={() => {
-                                if (onNavigateToCostMatrix) {
-                                    onNavigateToCostMatrix();
-                                } else {
-                                    window.location.href = '/admin/commercial?tab=operations&subtab=cost-matrix';
-                                }
-                            }}
-                            style={{ 
-                                background: 'transparent',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: 0,
-                                color: costAlertStats.expiredCount > 0 ? '#DC2626' : THEME.colors.primary, 
-                                fontWeight: '800', 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '3px',
-                                fontSize: '0.72rem'
-                            }}
-                        >
-                            Recotizar en Matriz <ChevronRight size={13} />
-                        </button>
                     </div>
                 </div>
 

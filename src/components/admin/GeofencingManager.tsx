@@ -365,18 +365,18 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     gap: '4px' 
                                 }}>
                                     <AlertCircle size={11} /> 
-                                    {selectedPoint.channel === 'b2b' ? '🟢 Rechazo B2B HORECA' : '🔴 Rechazo B2C Hogares'}
+                                    {selectedPoint.channel === 'b2b' ? 'Rechazo B2B HORECA' : 'Rechazo B2C Hogares'}
                                 </div>
                                 <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>
                                     {selectedPoint.municipality || 'Fuera de Cobertura'}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '2px' }}>
-                                    📍 {selectedPoint.address}
+                                    {selectedPoint.address}
                                 </div>
                                 {selectedPoint.customer_name && (
                                     <div style={{ fontSize: '0.72rem', color: '#1E293B', marginTop: '6px', fontWeight: '700', borderTop: '1px solid #E2E8F0', paddingTop: '4px' }}>
-                                        👤 {selectedPoint.customer_name}
-                                        {selectedPoint.customer_phone && <div style={{ color: '#0D7A57', fontWeight: '600' }}>📱 WA: {selectedPoint.customer_phone}</div>}
+                                        {selectedPoint.customer_name}
+                                        {selectedPoint.customer_phone && <div style={{ color: '#0D7A57', fontWeight: '600' }}>WA: {selectedPoint.customer_phone}</div>}
                                     </div>
                                 )}
                             </div>

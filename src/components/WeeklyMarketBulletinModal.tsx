@@ -910,7 +910,7 @@ export default function WeeklyMarketBulletinModal({
                           padding: '2px 8px',
                           borderRadius: '6px'
                         }}>
-                          🟢 PICO DE COSECHA & ABUNDANCIA
+                          PICO DE COSECHA & ABUNDANCIA
                         </span>
                         <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '900', color: '#0F172A', fontFamily: 'Outfit, sans-serif' }}>
                           Oportunidades de Cosecha ({harvestItems.length})
@@ -985,7 +985,7 @@ export default function WeeklyMarketBulletinModal({
                           padding: '2px 8px',
                           borderRadius: '6px'
                         }}>
-                          🔴 ALERTA DE PLAZA & CONTINUIDAD DE MENÚ
+                          ALERTA DE PLAZA & CONTINUIDAD DE MENÚ
                         </span>
                         <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '900', color: '#0F172A', fontFamily: 'Outfit, sans-serif' }}>
                           Alertas de Escasez & Sustitutos ({scarcityItems.length})
@@ -1057,7 +1057,7 @@ export default function WeeklyMarketBulletinModal({
                                       {sub.checked ? <CheckSquare size={15} /> : <Square size={15} />}
                                     </div>
                                     <strong style={{ fontSize: '0.82rem', color: '#1E293B' }}>
-                                      👉 {sub.name} <span style={{ color: '#64748B', fontWeight: '500' }}>({sub.unit})</span>
+                                      {sub.name} <span style={{ color: '#64748B', fontWeight: '500' }}>({sub.unit})</span>
                                     </strong>
                                     {sub.ratio_description && (
                                       <span style={{ fontSize: '0.72rem', backgroundColor: '#FEF2F2', color: '#991B1B', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>
@@ -1222,7 +1222,7 @@ export default function WeeklyMarketBulletinModal({
                   {/* Excluded notice */}
                   {excludedClientsCount > 0 && (
                     <div style={{ fontSize: '0.75rem', color: '#64748B', textAlign: 'center', padding: '6px' }}>
-                      🛡️ <strong>{excludedClientsCount} cuentas</strong> fueron excluidas automáticamente por cero consumo de estos productos específicos.
+                      ️ <strong>{excludedClientsCount} cuentas</strong> fueron excluidas automáticamente por cero consumo de estos productos específicos.
                     </div>
                   )}
 

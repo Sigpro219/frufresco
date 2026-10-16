@@ -224,7 +224,7 @@ export default function OpsControlCajaPage() {
                         budgetId: `orphan-${orph.buyerId || orph.buyerName}`,
                         buyerId: orph.buyerId,
                         buyerName: orph.buyerName,
-                        zone: '⚠️ Sin Fondo Asignado Previo',
+                        zone: '️ Sin Fondo Asignado Previo',
                         assignedAmount: 0,
                         cashPurchasesTotal: cashTotal,
                         creditPurchasesTotal: creditTotal,
@@ -679,7 +679,7 @@ export default function OpsControlCajaPage() {
                                                             border: '1px solid rgba(56, 189, 248, 0.2)', fontSize: '0.7rem', fontWeight: '700'
                                                         }}
                                                     >
-                                                        📷 {b.cashPurchasesCount}
+                                                        {b.cashPurchasesCount}
                                                     </button>
 
                                                     {isOrphan ? (
@@ -692,11 +692,11 @@ export default function OpsControlCajaPage() {
                                                                 display: 'inline-flex', alignItems: 'center', gap: '3px'
                                                             }}
                                                         >
-                                                            ⚠️ Asignar
+                                                            ️ Asignar
                                                         </button>
                                                     ) : isClosed ? (
                                                         <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#10B981', padding: '3px 6px', borderRadius: '6px', backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
-                                                            ✓ Recibido
+                                                            Recibido
                                                         </span>
                                                     ) : (
                                                         <button 

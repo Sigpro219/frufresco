@@ -94,17 +94,17 @@ export function getColombianHolidays(year: number): ColombianHoliday[] {
     viernesSanto.setDate(easter.getDate() - 2);
     holidays.push({ date: formatDateKey(viernesSanto), name: 'Viernes Santo', type: 'pascua' });
 
-    // Ascensión del Señor (Pascua + 43 días ➔ Lunes)
+    // Ascensión del Señor (Pascua + 43 días Lunes)
     const ascension = new Date(easter);
     ascension.setDate(easter.getDate() + 43);
     holidays.push({ date: formatDateKey(ascension), name: 'Ascensión del Señor', type: 'pascua' });
 
-    // Corpus Christi (Pascua + 64 días ➔ Lunes)
+    // Corpus Christi (Pascua + 64 días Lunes)
     const corpus = new Date(easter);
     corpus.setDate(easter.getDate() + 64);
     holidays.push({ date: formatDateKey(corpus), name: 'Corpus Christi', type: 'pascua' });
 
-    // Sagrado Corazón de Jesús (Pascua + 71 días ➔ Lunes)
+    // Sagrado Corazón de Jesús (Pascua + 71 días Lunes)
     const sagradoCorazon = new Date(easter);
     sagradoCorazon.setDate(easter.getDate() + 71);
     holidays.push({ date: formatDateKey(sagradoCorazon), name: 'Sagrado Corazón de Jesús', type: 'pascua' });

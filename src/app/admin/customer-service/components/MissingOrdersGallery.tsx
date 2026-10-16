@@ -392,10 +392,8 @@ export default function MissingOrdersGallery({
     // 11. Helper to generate the Gemba reminder text
     const buildMessageText = (item: MissingOrderItem) => {
         const contactName = item.profile.contact_name?.trim() || item.profile.company_name?.trim() || 'Estimado Cliente';
-        return `🍅 ¡Hola ${contactName}!
-¡Mañana salimos de ruta! 🚚
-Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. 🕒
-✉️ Esperamos tu pedido: pedidos@frufresco.com
+        return `¡Hola ${contactName}!
+¡Mañana salimos de ruta! Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. ️ Esperamos tu pedido: pedidos@frufresco.com
 Quedamos atentos`;
     };
 

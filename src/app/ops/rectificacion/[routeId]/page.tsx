@@ -558,10 +558,10 @@ export default function RouteRectificationDetailPage() {
             setShowCertificationModal(false);
             
             const shortageMsg = allShortages.length > 0
-                ? `\n\n⚠️ Se radicaron automáticamente ${allShortages.length} novedades de escasez en Gestión de Calidad (RCA: Agotado en Plaza) y se ajustaron las remisiones para facturación neta.`
+                ? `\n\nSe radicaron automáticamente ${allShortages.length} novedades de escasez en Gestión de Calidad (RCA: Agotado en Plaza) y se ajustaron las remisiones para facturación neta.`
                 : '';
 
-            alert(`🛡️ ¡CERTIFICACIÓN EXITOSA!\n\nLa ruta ${vehiclePlate} ha sido validada por ${checkerName || 'el usuario'} y liberada a Transporte.${shortageMsg}`);
+            alert(`¡CERTIFICACIÓN EXITOSA!\n\nLa ruta ${vehiclePlate} ha sido validada por ${checkerName || 'el usuario'} y liberada a Transporte.${shortageMsg}`);
             router.push('/ops/driver');
         } catch (e) {
             console.error('Error finalizando certificación de ruta:', e);
@@ -776,7 +776,7 @@ export default function RouteRectificationDetailPage() {
                                         borderRadius: '8px',
                                         letterSpacing: '0.04em'
                                     }}>
-                                        📦 CANASTILLAS: {stop.crates_count}
+                                        CANASTILLAS: {stop.crates_count}
                                     </span>
 
                                     {stop.has_shortages && (
@@ -812,7 +812,7 @@ export default function RouteRectificationDetailPage() {
                                         justifyContent: 'space-between',
                                         gap: '8px'
                                     }}>
-                                        <span>⚠️ Este pedido contiene producto(s) no alistados por escasez. La remisión viajará con el valor neto ajustado.</span>
+                                        <span>Este pedido contiene producto(s) no alistados por escasez. La remisión viajará con el valor neto ajustado.</span>
                                     </div>
                                 )}
                             </div>
@@ -892,7 +892,7 @@ export default function RouteRectificationDetailPage() {
                                                 {/* Detalle si es faltante */}
                                                 {item.is_shortage && (
                                                     <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#FCD34D', marginTop: '1px' }}>
-                                                        ⚠️ Agotado en Plaza · Cargado: {item.actual_quantity} {item.unit} (Faltante: {item.quantity - (item.actual_quantity || 0)} {item.unit})
+                                                        Agotado en Plaza · Cargado: {item.actual_quantity} {item.unit} (Faltante: {item.quantity - (item.actual_quantity || 0)} {item.unit})
                                                     </div>
                                                 )}
                                             </div>
@@ -1216,7 +1216,7 @@ export default function RouteRectificationDetailPage() {
                             color: '#BAE6FD',
                             lineHeight: '1.35'
                         }}>
-                            💡 <strong>Garantía de Facturación Exacta:</strong> Al confirmar, la remisión física se recalculará por las cantidades reales despachadas para su reimpresión inmediata en bodega, y se radicará automáticamente la novedad en Gestión de Calidad imputada a Compras.
+                            <strong>Garantía de Facturación Exacta:</strong> Al confirmar, la remisión física se recalculará por las cantidades reales despachadas para su reimpresión inmediata en bodega, y se radicará automáticamente la novedad en Gestión de Calidad imputada a Compras.
                         </div>
 
                         {/* Botones de Acción */}
@@ -1316,7 +1316,7 @@ export default function RouteRectificationDetailPage() {
                                     Responsable del Chequeo *
                                 </label>
                                 <span style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--ops-primary)', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: '6px' }}>
-                                    ✓ Sesión Activa
+                                    Sesión Activa
                                 </span>
                             </div>
                             <div style={{ position: 'relative' }}>
@@ -1476,21 +1476,21 @@ export default function RouteRectificationDetailPage() {
                             gap: '0.65rem'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>👤 AUDITOR EN MUELLE:</span>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>AUDITOR EN MUELLE:</span>
                                 <span style={{ color: 'var(--ops-primary)', fontWeight: '900' }}>{checkerName || 'Usuario en Sesión'}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>🚚 VEHÍCULO Y CONDUCTOR:</span>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>VEHÍCULO Y CONDUCTOR:</span>
                                 <span style={{ color: 'var(--ops-text)', fontWeight: '900' }}>{vehiclePlate} ({driverName})</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>📷 MÉTODO DE CHEQUEO:</span>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>MÉTODO DE CHEQUEO:</span>
                                 <span style={{ color: paperPhotoUrl ? '#F59E0B' : '#10B981', fontWeight: '900' }}>
                                     {paperPhotoUrl ? 'Planilla Física (Foto Adjunta)' : 'Checklist Digital en Muelle'}
                                 </span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>📦 PEDIDOS RECTIFICADOS:</span>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>PEDIDOS RECTIFICADOS:</span>
                                 <span style={{ color: 'var(--ops-primary)', fontWeight: '900' }}>{stops.length} de {stops.length} Paradas</span>
                             </div>
                         </div>
@@ -1557,8 +1557,8 @@ export default function RouteRectificationDetailPage() {
                                 </div>
 
                                 <div style={{ fontSize: '0.7rem', color: '#FCD34D', marginTop: '0.6rem', lineHeight: '1.3' }}>
-                                    ✓ Se insertará ticket en Calidad (RCA: <em>Desabastecimiento en Plaza</em>) imputado a Compras.<br/>
-                                    ✓ La facturación se generará por el valor neto exacto sin requerir notas crédito posteriores.
+                                    Se insertará ticket en Calidad (RCA: <em>Desabastecimiento en Plaza</em>) imputado a Compras.<br/>
+                                    La facturación se generará por el valor neto exacto sin requerir notas crédito posteriores.
                                 </div>
                             </div>
                         )}
@@ -1627,7 +1627,7 @@ export default function RouteRectificationDetailPage() {
                                     boxShadow: certifiedAgreed ? '0 4px 14px rgba(0,0,0,0.4)' : 'none'
                                 }}
                             >
-                                <Truck size={16} /> {submittingCertification ? 'CERTIFICANDO Y RADICANDO...' : '✓ CONFIRMAR Y ENVIAR A TRANSPORTE'}
+                                <Truck size={16} /> {submittingCertification ? 'CERTIFICANDO Y RADICANDO...' : 'CONFIRMAR Y ENVIAR A TRANSPORTE'}
                             </button>
                         </div>
                     </div>

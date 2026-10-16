@@ -61,7 +61,7 @@ export default function LoginPage() {
             const params = new URLSearchParams(window.location.search);
             const errParam = params.get('error');
             if (errParam === 'deactivated') {
-                setError('⚠️ Tu cuenta de acceso ha sido desactivada. Por favor, contacta al administrador de talento humano.');
+                setError('Tu cuenta de acceso ha sido desactivada. Por favor, contacta al administrador de talento humano.');
             } else if (errParam) {
                 const desc = params.get('error_description') || errParam;
                 const cleanDesc = decodeURIComponent(desc).replace(/\+/g, ' ');
@@ -71,7 +71,7 @@ export default function LoginPage() {
             // 1. Manejar PKCE code exchange (?code=xxxx) enviándolo al servidor para canje con @supabase/ssr
             const code = params.get('code');
             if (code) {
-                console.log('🔄 Redirigiendo código PKCE al manejador de servidor /auth/callback...');
+                console.log('Redirigiendo código PKCE al manejador de servidor /auth/callback...');
                 window.location.replace(`/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent('/login?mode=recovery')}`);
                 return;
             }
@@ -80,7 +80,7 @@ export default function LoginPage() {
             const tokenHash = params.get('token_hash');
             const tokenType = params.get('type');
             if (tokenHash) {
-                console.log('🔄 Redirigiendo token_hash al manejador de servidor /auth/callback...');
+                console.log('Redirigiendo token_hash al manejador de servidor /auth/callback...');
                 window.location.replace(`/auth/callback?token_hash=${encodeURIComponent(tokenHash)}&type=${encodeURIComponent(tokenType || 'recovery')}&next=${encodeURIComponent('/login?mode=recovery')}`);
                 return;
             }
@@ -95,15 +95,15 @@ export default function LoginPage() {
 
                 if (accessToken && refreshToken) {
                     try {
-                        console.log('🔄 Restaurando sesión de recuperación desde hash tokens...');
+                        console.log('Restaurando sesión de recuperación desde hash tokens...');
                         const { data, error: sessionError } = await supabase.auth.setSession({
                             access_token: accessToken,
                             refresh_token: refreshToken
                         });
                         if (sessionError) {
-                            console.warn('⚠️ Error estableciendo sesión desde hash:', sessionError.message);
+                            console.warn('Error estableciendo sesión desde hash:', sessionError.message);
                         } else if (data.session) {
-                            console.log('✅ Sesión establecida exitosamente vía Hash tokens para:', data.session.user.email);
+                            console.log('Sesión establecida exitosamente vía Hash tokens para:', data.session.user.email);
                             if (type === 'recovery' || params.get('mode') === 'recovery') {
                                 setIsRecoveryMode(true);
                                 setShowForceChangePassword(true);
@@ -120,7 +120,7 @@ export default function LoginPage() {
             if (params.get('mode') === 'recovery' || window.location.hash.includes('type=recovery')) {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session) {
-                    console.log('✅ Sesión existente confirmada en modo recovery:', session.user.email);
+                    console.log('Sesión existente confirmada en modo recovery:', session.user.email);
                 }
                 setIsRecoveryMode(true);
                 setShowForceChangePassword(true);
@@ -134,7 +134,7 @@ export default function LoginPage() {
     useEffect(() => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isRecoveryMode)) {
-                console.log('🔔 Evento de autenticación detectado:', event);
+                console.log('Evento de autenticación detectado:', event);
                 setIsRecoveryMode(true);
                 // Si el usuario ya está completando el flujo de 6 dígitos en pantalla, no sobreescribir la vista
                 if (!showForgotPassword) {
@@ -155,10 +155,10 @@ export default function LoginPage() {
                              targetProfile.role === 'client';
 
         if (isClientRole) {
-            console.log('🛒 Redirigiendo cliente institucional a /b2b/dashboard');
+            console.log('Redirigiendo cliente institucional a /b2b/dashboard');
             router.push('/b2b/dashboard');
         } else {
-            console.log('🏢 Redirigiendo colaborador a /admin/dashboard');
+            console.log('Redirigiendo colaborador a /admin/dashboard');
             if (redirectUrl && redirectUrl.startsWith('/admin')) {
                 router.push(redirectUrl);
             } else {
@@ -171,7 +171,7 @@ export default function LoginPage() {
     useEffect(() => {
         if (profile && !showWorkspaceSelector && !showForceChangePassword && !showForgotPassword) {
             if (profile.needs_password_change) {
-                console.log('🔒 El usuario requiere cambio de contraseña obligatorio antes de ingresar');
+                console.log('El usuario requiere cambio de contraseña obligatorio antes de ingresar');
                 setShowForceChangePassword(true);
                 return;
             }
@@ -192,13 +192,13 @@ export default function LoginPage() {
         setError('');
 
         if (newPassword.length < 6) {
-            setError('⚠️ La contraseña debe tener al menos 6 caracteres.');
+            setError('La contraseña debe tener al menos 6 caracteres.');
             setLoading(false);
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            setError('⚠️ Las contraseñas ingresadas no coinciden.');
+            setError('Las contraseñas ingresadas no coinciden.');
             setLoading(false);
             return;
         }
@@ -214,7 +214,7 @@ export default function LoginPage() {
             const data = await res.json().catch(() => ({}));
 
             if (res.ok && data.success) {
-                console.log('✅ Contraseña restablecida exitosamente vía API de Servidor');
+                console.log('Contraseña restablecida exitosamente vía API de Servidor');
                 setChangeSuccess(true);
                 setTimeout(() => {
                     window.location.href = '/login';
@@ -233,7 +233,7 @@ export default function LoginPage() {
                             .update({ needs_password_change: false })
                             .eq('id', session.user.id);
                     }
-                    console.log('✅ Contraseña restablecida con éxito vía Supabase Client');
+                    console.log('Contraseña restablecida con éxito vía Supabase Client');
                     setChangeSuccess(true);
                     setTimeout(() => {
                         window.location.href = '/login';
@@ -244,14 +244,14 @@ export default function LoginPage() {
 
             // Si ambos fallaron, mostrar el error más informativo
             const errorMsg = data.error || 'La sesión de recuperación no está activa o el enlace ya expiró. Por favor solicita un nuevo enlace.';
-            setError(`⚠️ ${errorMsg}`);
+            setError(`${errorMsg}`);
             setLoading(false);
 
         } catch (err: any) {
-            console.error('❌ Error al actualizar contraseña:', err);
+            console.error('Error al actualizar contraseña:', err);
             let msg = err.message || 'Error inesperado al cambiar la contraseña';
             if (msg.includes('Auth session missing') || msg.includes('PKCE code verifier not found')) {
-                msg = '⚠️ La sesión de autenticación no está activa o el enlace expiró. Por favor solicita un nuevo enlace de recuperación.';
+                msg = 'La sesión de autenticación no está activa o el enlace expiró. Por favor solicita un nuevo enlace de recuperación.';
             }
             setError(msg);
             setLoading(false);
@@ -266,13 +266,13 @@ export default function LoginPage() {
 
         const cleanEmail = forgotEmail.trim().toLowerCase();
         if (!cleanEmail) {
-            setForgotError('⚠️ Por favor ingresa tu correo electrónico.');
+            setForgotError('Por favor ingresa tu correo electrónico.');
             setForgotLoading(false);
             return;
         }
 
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-            setForgotError('⚠️ Por favor ingresa un correo electrónico válido.');
+            setForgotError('Por favor ingresa un correo electrónico válido.');
             setForgotLoading(false);
             return;
         }
@@ -283,7 +283,7 @@ export default function LoginPage() {
                 : (process.env.NEXT_PUBLIC_SITE_URL || 'https://frufresco-liard.vercel.app');
 
             const redirectUrl = `${baseOrigin.replace(/\/$/, '')}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
-            console.log('📨 Solicitando código OTP de recuperación con redirectUrl:', redirectUrl);
+            console.log('Solicitando código OTP de recuperación con redirectUrl:', redirectUrl);
 
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
                 redirectTo: redirectUrl,
@@ -295,7 +295,7 @@ export default function LoginPage() {
             setRecoveryStep('otp');
             setResendCooldown(60);
         } catch (err: any) {
-            console.error('❌ Error en recuperación de contraseña:', err);
+            console.error('Error en recuperación de contraseña:', err);
             setForgotError(mapRecoveryErrorMessage(err));
         } finally {
             setForgotLoading(false);
@@ -310,13 +310,13 @@ export default function LoginPage() {
 
         const cleanEmail = forgotEmail.trim().toLowerCase();
         if (!cleanEmail) {
-            setForgotError('⚠️ Por favor ingresa tu correo electrónico.');
+            setForgotError('Por favor ingresa tu correo electrónico.');
             setForgotLoading(false);
             return;
         }
 
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-            setForgotError('⚠️ Por favor ingresa un correo electrónico válido.');
+            setForgotError('Por favor ingresa un correo electrónico válido.');
             setForgotLoading(false);
             return;
         }
@@ -327,7 +327,7 @@ export default function LoginPage() {
                 : (process.env.NEXT_PUBLIC_SITE_URL || 'https://frufresco-liard.vercel.app');
 
             const redirectUrl = `${baseOrigin.replace(/\/$/, '')}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
-            console.log('📨 Reenviando código OTP de recuperación con redirectUrl:', redirectUrl);
+            console.log('Reenviando código OTP de recuperación con redirectUrl:', redirectUrl);
 
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
                 redirectTo: redirectUrl,
@@ -336,9 +336,9 @@ export default function LoginPage() {
             if (resetError) throw resetError;
 
             setResendCooldown(60);
-            setForgotSuccess('✅ Se ha enviado un nuevo código de 6 dígitos a tu correo.');
+            setForgotSuccess('Se ha enviado un nuevo código de 6 dígitos a tu correo.');
         } catch (err: any) {
-            console.error('❌ Error al reenviar código OTP:', err);
+            console.error('Error al reenviar código OTP:', err);
             setForgotError(mapRecoveryErrorMessage(err));
         } finally {
             setForgotLoading(false);
@@ -361,7 +361,7 @@ export default function LoginPage() {
             });
 
             if (!result.success) {
-                setForgotError(result.error || '⚠️ Error al verificar el código o actualizar la contraseña');
+                setForgotError(result.error || 'Error al verificar el código o actualizar la contraseña');
                 setForgotLoading(false);
                 return;
             }
@@ -382,7 +382,7 @@ export default function LoginPage() {
             }, 2500);
 
         } catch (err: any) {
-            console.error('❌ Error inesperado en recuperación con OTP:', err);
+            console.error('Error inesperado en recuperación con OTP:', err);
             setForgotError(mapRecoveryErrorMessage(err));
             setForgotLoading(false);
         }
@@ -414,20 +414,20 @@ export default function LoginPage() {
         try {
             const cleanEmail = email.trim().toLowerCase();
             const cleanPassword = password.trim();
-            console.log('🔑 Intentando ingresar con:', cleanEmail);
+            console.log('Intentando ingresar con:', cleanEmail);
 
             // 1. Autenticar con Supabase Auth
             const { error: signInError } = await signIn(cleanEmail, cleanPassword);
 
             if (signInError) {
                 clearTimeout(safetyTimeout);
-                console.warn('⚠️ Error de autenticación:', signInError.message);
+                console.warn('Error de autenticación:', signInError.message);
                 
                 let errorMsg = signInError.message;
                 if (errorMsg.includes('Invalid login credentials')) {
-                    errorMsg = '⚠️ Correo o contraseña incorrectos. Por favor verifica tus datos o restablece tu clave.';
+                    errorMsg = 'Correo o contraseña incorrectos. Por favor verifica tus datos o restablece tu clave.';
                 } else if (errorMsg.includes('Email not confirmed')) {
-                    errorMsg = '⚠️ Tu correo no ha sido confirmado. Revisa tu bandeja de entrada.';
+                    errorMsg = 'Tu correo no ha sido confirmado. Revisa tu bandeja de entrada.';
                 }
                 
                 setError(errorMsg);
@@ -444,7 +444,7 @@ export default function LoginPage() {
                 .ilike('email', cleanEmail);
 
             if (siblingProfiles && siblingProfiles.length > 1) {
-                console.log('👥 Múltiples identidades detectadas para este correo:', siblingProfiles.length);
+                console.log('Múltiples identidades detectadas para este correo:', siblingProfiles.length);
                 setDiscoveredProfiles(siblingProfiles);
                 setShowWorkspaceSelector(true);
                 setLoading(false);
@@ -455,7 +455,7 @@ export default function LoginPage() {
             setLoading(false);
         } catch (err: unknown) {
             clearTimeout(safetyTimeout);
-            console.error('❌ Error inesperado en submit:', err);
+            console.error('Error inesperado en submit:', err);
             setError(err instanceof Error ? err.message : 'Error inesperado');
             setLoading(false);
         }
@@ -1095,11 +1095,11 @@ export default function LoginPage() {
                                                     onClick={() => {
                                                         const cleanEmail = forgotEmail.trim().toLowerCase();
                                                         if (!cleanEmail) {
-                                                            setForgotError('⚠️ Ingresa primero tu correo electrónico para verificar el código.');
+                                                            setForgotError('Ingresa primero tu correo electrónico para verificar el código.');
                                                             return;
                                                         }
                                                         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-                                                            setForgotError('⚠️ Por favor ingresa un correo electrónico válido.');
+                                                            setForgotError('Por favor ingresa un correo electrónico válido.');
                                                             return;
                                                         }
                                                         setForgotEmail(cleanEmail);

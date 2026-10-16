@@ -37,7 +37,7 @@ export async function POST(request: Request) {
             }
             const { data: recent } = await query.limit(1);
             if (recent && recent.length > 0) {
-                console.log('📍 Ignored duplicate out-of-bounds request within 3m');
+                console.log('Ignored duplicate out-of-bounds request within 3m');
                 return NextResponse.json({ success: true, duplicate: true });
             }
         }
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
                 updated_at: new Date().toISOString()
             }, { onConflict: 'key' });
 
-        console.log('📍 Demanda Rechazada registrada exitosamente:', newRecord.id);
+        console.log('Demanda Rechazada registrada exitosamente:', newRecord.id);
         return NextResponse.json({ success: true, record: newRecord });
     } catch (err: any) {
         console.error('API Out of bounds error:', err);

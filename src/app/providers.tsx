@@ -31,7 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 msg.includes('invalid refresh token') ||
                 msg.includes('jwt')
             ) {
-                console.warn('🚨 Auth/JWT Error detected. Resetting session and redirecting...');
+                console.warn('Auth/JWT Error detected. Resetting session and redirecting...');
                 if (typeof window !== 'undefined') {
                     localStorage.clear();
                     // Clear all supabase auth tokens
@@ -119,7 +119,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''} 
             libraries={['places', 'marker', 'geometry']}
             onError={(err) => {
-                console.warn('⚠️ Google Maps API failed to load (likely blocked by network or ad-blocker).', err);
+                console.warn('️ Google Maps API failed to load (likely blocked by network or ad-blocker).', err);
             }}
         >
             <AuthProvider>

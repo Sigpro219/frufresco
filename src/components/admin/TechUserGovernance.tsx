@@ -582,8 +582,7 @@ export default function TechUserGovernance() {
                                                 padding: '2px'
                                             }}
                                         >
-                                            ✕
-                                        </button>
+                                            </button>
                                     )}
                                 </div>
                             </div>

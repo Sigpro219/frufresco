@@ -1077,7 +1077,7 @@ export default function CheckoutPage() {
             if (Array.isArray(profileBeneficiaries) && profileBeneficiaries.length > 0) {
                 setBeneficiaries(profileBeneficiaries);
             }
-            console.log('👤 profile found, filling member data...');
+            console.log('profile found, filling member data...');
         }
     }, [profile]);
 
@@ -1169,7 +1169,7 @@ export default function CheckoutPage() {
     };
 
     const handleSubmit = async () => {
-        console.log('🚀 Finalizing order. Date:', date);
+        console.log('Finalizing order. Date:', date);
 
         if (storeStatus === 'closed') {
             handleSaveCartForReopen();
@@ -1346,7 +1346,7 @@ export default function CheckoutPage() {
                 profile_id: isValidUuid(matchedProfileId) ? matchedProfileId : null,
                 payment_method: paymentMethod,
                 payment_status: paymentMethod === 'payroll_deduction' ? 'payroll_authorized' : 'Pendiente',
-                special_notes: `${paymentMethod === 'payroll_deduction' ? '[⚠️ NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA]\n' : ''}${clientNotesHeader}${deliveryNoteTag}${packagingNoteTag}\n[ORIGIN: web]${isCollaborator ? `\n[COLABORADOR FRUFRESCO: ${collaboratorInfo?.contact_name || name} (Doc: ${collaboratorInfo?.document_id || finalIdentification}) - Beneficio 5% Descuento Aplicado]` : ''}${specialNotes ? `\n[RECOMENDACIÓN / NOTA DE ENTREGA: ${specialNotes}]` : ''}`
+                special_notes: `${paymentMethod === 'payroll_deduction' ? '[NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA]\n' : ''}${clientNotesHeader}${deliveryNoteTag}${packagingNoteTag}\n[ORIGIN: web]${isCollaborator ? `\n[COLABORADOR FRUFRESCO: ${collaboratorInfo?.contact_name || name} (Doc: ${collaboratorInfo?.document_id || finalIdentification}) - Beneficio 5% Descuento Aplicado]` : ''}${specialNotes ? `\n[RECOMENDACIÓN / NOTA DE ENTREGA: ${specialNotes}]` : ''}`
             };
 
             const orderItemsData = items.map(item => ({
@@ -1395,14 +1395,14 @@ export default function CheckoutPage() {
                 } catch {
                     if (rawText) errorMsg = rawText;
                 }
-                console.error('❌ Error insertando pedido:', errorMsg);
+                console.error('Error insertando pedido:', errorMsg);
                 throw new Error(`Error al crear el pedido: ${errorMsg}`);
             }
 
             const { order: orderData } = await result.json();
 
             if (!orderData) throw new Error('No se recibió confirmación del pedido.');
-            console.log('✅ Pedido creado:', orderData.id);
+            console.log('Pedido creado:', orderData.id);
 
             if (paymentMethod === 'contra_entrega' || paymentMethod === 'payroll_deduction') {
                 console.log(`3️⃣ ${paymentMethod} selected. Redirecting directly to success result page...`);
@@ -1430,7 +1430,7 @@ export default function CheckoutPage() {
 
             for (let i = 0; i < maxRetries; i++) {
                 try {
-                    if (i > 0) console.log(`🔄 Reintentando conexión con pasarela de pagos (Intento ${i + 1}/${maxRetries})...`);
+                    if (i > 0) console.log(`Reintentando conexión con pasarela de pagos (Intento ${i + 1}/${maxRetries})...`);
                     
                     const controller = new AbortController();
                     // 25s timeout por intento (total seguriad < 60s global mental)
@@ -1491,7 +1491,7 @@ export default function CheckoutPage() {
             window.location.href = wompiUrl;
 
         } catch (err: unknown) {
-            console.error('❌ Checkout Failed:', err);
+            console.error('Checkout Failed:', err);
             
             let userMsg = locale === 'es' ? 'Error al procesar el pedido.' : 'Error processing the order.';
             
@@ -1806,7 +1806,7 @@ export default function CheckoutPage() {
                                     </div>
                                     <div>
                                         <div style={{ fontSize: '0.78rem', fontWeight: '900', color: '#065F46' }}>
-                                            👥 Colaborador FruFresco — Beneficio Activo
+                                            Colaborador FruFresco — Beneficio Activo
                                         </div>
                                         <div style={{ fontSize: '0.68rem', color: '#047857', fontWeight: '600' }}>
                                             {collaboratorInfo?.contact_name || name} {collaboratorInfo?.role ? `• ${collaboratorInfo.role}` : ''} | <strong>5% de descuento directo</strong> aplicado en tus alimentos
@@ -3854,12 +3854,12 @@ export default function CheckoutPage() {
                                 <div>
                                     <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.95rem' }}>
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                            👥 {locale === 'es' ? 'Beneficio Colaborador FruFresco — Deducción por Nómina Quincenal' : 'Employee Benefit — Payroll Deduction'}
+                                            {locale === 'es' ? 'Beneficio Colaborador FruFresco — Deducción por Nómina Quincenal' : 'Employee Benefit — Payroll Deduction'}
                                         </span>
                                     </div>
                                     <div style={{ marginTop: '3px', color: '#047857', fontSize: '0.85rem', lineHeight: '1.45', fontWeight: '500' }}>
                                         {locale === 'es' 
-                                            ? `El total de $${finalOrderTotal.toLocaleString('es-CO')} COP será descontado directamente en tu próximo desprendible de nómina quincenal (Columna N). ⚠️ NO DEBES ENTREGAR NINGÚN DINERO AL REPARTIDOR en la puerta.`
+                                            ? `El total de $${finalOrderTotal.toLocaleString('es-CO')} COP será descontado directamente en tu próximo desprendible de nómina quincenal (Columna N). NO DEBES ENTREGAR NINGÚN DINERO AL REPARTIDOR en la puerta.`
                                             : `The total of $${finalOrderTotal.toLocaleString('en-US')} COP will be deducted on your next biweekly payroll. Do not hand any cash to the driver.`
                                         }
                                     </div>

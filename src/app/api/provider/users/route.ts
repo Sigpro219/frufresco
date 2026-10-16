@@ -177,7 +177,7 @@ export async function POST(request: Request) {
                     return NextResponse.json({ error: 'Este correo electrónico ya está asociado a otro colaborador.' }, { status: 400 });
                 }
 
-                console.log(`🔄 Transicionando usuario de auth existente con email ${email} a colaborador.`);
+                console.log(`Transicionando usuario de auth existente con email ${email} a colaborador.`);
 
                 // Update password in Auth and set metadata
                 const { error: updateAuthError } = await adminSupabase.auth.admin.updateUserById(

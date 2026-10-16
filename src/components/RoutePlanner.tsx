@@ -2172,7 +2172,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             <button
                                 onClick={() => {
                                     const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
-                                    let text = `🚚 *MANIFIESTO DE DESPACHO - FRUFRESCO*\n*Fecha:* ${dateStr}\n\n*Rutas Confirmadas:*\n`;
+                                    let text = `*MANIFIESTO DE DESPACHO - FRUFRESCO*\n*Fecha:* ${dateStr}\n\n*Rutas Confirmadas:*\n`;
                                     confirmedManifest.forEach((r, i) => {
                                         text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${r.total_kilos.toLocaleString()} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;
                                         if (r.stops && r.stops.length > 0) {
@@ -2184,7 +2184,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         }
                                         text += `\n`;
                                     });
-                                    text += `----------------------------------------\n\n_¡Listos para cargar! 🚀_`;
+                                    text += `----------------------------------------\n\n_¡Listos para cargar! _`;
                                     
                                     navigator.clipboard.writeText(text);
                                     setCopiedWhatsApp(true);

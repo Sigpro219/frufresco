@@ -489,7 +489,7 @@ export default function B2BDashboard() {
             const newTotal = Math.round((exists.quantity + numericModalQty) * 100) / 100;
             updateQuantity(exists.id, newTotal);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast(`🛒 Se adicionaron ${numericModalQty} ${exists.unit} a ${finalName}. Nuevo total en pedido: ${newTotal} ${exists.unit}`, 'info');
+                (window as any).showToast(`Se adicionaron ${numericModalQty} ${exists.unit} a ${finalName}. Nuevo total en pedido: ${newTotal} ${exists.unit}`, 'info');
             }
         } else {
             const agreementPrice = agreementPricesMap[product.id];
@@ -509,7 +509,7 @@ export default function B2BDashboard() {
             };
             setOrderItems(prev => [...prev, newItem]);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast(`✅ ${finalName} (${numericModalQty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
+                (window as any).showToast(`${finalName} (${numericModalQty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
             }
         }
 
@@ -535,7 +535,7 @@ export default function B2BDashboard() {
             const newTotal = Math.round((exists.quantity + qty) * 100) / 100;
             updateQuantity(exists.id, newTotal);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast(`🛒 Se adicionaron ${qty} ${exists.unit} a ${baseName}. Nuevo total en pedido: ${newTotal} ${exists.unit}`, 'info');
+                (window as any).showToast(`Se adicionaron ${qty} ${exists.unit} a ${baseName}. Nuevo total en pedido: ${newTotal} ${exists.unit}`, 'info');
             }
         } else {
             const agreementPrice = agreementPricesMap[product.id];
@@ -554,7 +554,7 @@ export default function B2BDashboard() {
             };
             setOrderItems(prev => [...prev, newItem]);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast(`✅ ${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
+                (window as any).showToast(`${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
             }
         }
     };
@@ -1020,7 +1020,7 @@ export default function B2BDashboard() {
             setOrderItems([]);
             setConfirmClearCart(false);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('🗑️ Pedido vaciado correctamente', 'info');
+                (window as any).showToast('️ Pedido vaciado correctamente', 'info');
             }
         } else {
             setConfirmClearCart(true);
@@ -1131,7 +1131,7 @@ export default function B2BDashboard() {
             await supabase.from('order_items').insert(itemsToInsert);
 
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('🎉 ' + (t.b2b?.dashboard?.successMsg || 'Pedido institucional radicado exitosamente'), 'success');
+                (window as any).showToast('' + (t.b2b?.dashboard?.successMsg || 'Pedido institucional radicado exitosamente'), 'success');
             }
             setIsSummaryModalOpen(false);
             router.push('/');
@@ -1139,7 +1139,7 @@ export default function B2BDashboard() {
             console.error('Error submitting B2B order:', error);
             setSubmitError(error.message || 'Error al radicar el pedido');
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('❌ Error: ' + error.message, 'error');
+                (window as any).showToast('Error: ' + error.message, 'error');
             }
         } finally {
             setSubmitting(false);
@@ -1364,7 +1364,7 @@ export default function B2BDashboard() {
                         boxShadow: '0 2px 8px rgba(30, 64, 175, 0.06)'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                            <span style={{ fontSize: '1.4rem' }}>🧪</span>
+                            <span style={{ fontSize: '1.4rem' }}></span>
                             <div>
                                 <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: '800', color: '#1E40AF' }}>
                                     Modo Sandbox (Fase de Construcción)
@@ -1505,7 +1505,7 @@ export default function B2BDashboard() {
                                                         fontSize: '0.6rem',
                                                         zIndex: 2
                                                     }}
-                                                >✕</button>
+                                                ></button>
                                             )}
 
                                             {/* FLOATING AUTOCOMPLETE DROPDOWN (DESPLEGABLE IDÉNTICO A LA IMAGEN 2) */}
@@ -2831,7 +2831,7 @@ export default function B2BDashboard() {
                                             ${Math.round(consumptionKpis.totalKg).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')} Kg
                                         </h3>
                                         <span style={{ fontSize: '0.72rem', color: '#3B82F6', fontWeight: '700', marginTop: '4px', display: 'block' }}>
-                                            ⚖ Peso total abastecido
+                                            Peso total abastecido
                                         </span>
                                     </div>
 
@@ -2979,7 +2979,7 @@ export default function B2BDashboard() {
                                                                     <strong style={{ color: '#047857' }}>${Math.round(activeHoverPoint.cop).toLocaleString('es-CO')}</strong>
                                                                 </div>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
-                                                                    <span style={{ color: '#64748B' }}>⚖ Masa:</span>
+                                                                    <span style={{ color: '#64748B' }}>Masa:</span>
                                                                     <strong style={{ color: '#2563EB' }}>{Math.round(activeHoverPoint.kg).toLocaleString('es-CO')} Kg</strong>
                                                                 </div>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
@@ -3722,7 +3722,7 @@ export default function B2BDashboard() {
                                     {(activeProfile as any)?.crate_balance || 0} <span style={{ fontSize: '0.9rem', fontWeight: '700' }}>und</span>
                                 </div>
                                 <div style={{ fontSize: '0.72rem', color: '#047857', fontWeight: '700', marginTop: '4px' }}>
-                                    {((activeProfile as any)?.crate_balance || 0) > 40 ? '⚠️ Retención Alta (Supera 40 canastillas)' : '🟢 Saldo en rango normal'}
+                                    {((activeProfile as any)?.crate_balance || 0) > 40 ? 'Retención Alta (Supera 40 canastillas)' : 'Saldo en rango normal'}
                                 </div>
                             </div>
 
@@ -3948,7 +3948,7 @@ export default function B2BDashboard() {
                                     <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
                                     <div>
                                         <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
-                                            🛒 Insumo ya incluido en tu pedido
+                                            Insumo ya incluido en tu pedido
                                         </div>
                                         <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
                                             Ya tienes <strong style={{ color: '#B45309' }}>{formatQuantity(currentQty)} {existingInCart.unit}</strong> de {locale === 'en' ? (selectedProductForModal.name_en || selectedProductForModal.name) : selectedProductForModal.name} en tu pedido.
@@ -4340,7 +4340,7 @@ export default function B2BDashboard() {
                                             </div>
                                             <div style={{ fontSize: '0.82rem', lineHeight: '1.4' }}>
                                                 <strong style={{ fontSize: '0.88rem', fontWeight: '900', color: '#78350F', display: 'block', marginBottom: '2px' }}>
-                                                    ⚠️ Verificación Requerida: Cantidad Inusual Detectada ({unusualItems.length} {unusualItems.length === 1 ? 'insumo' : 'insumos'})
+                                                    Verificación Requerida: Cantidad Inusual Detectada ({unusualItems.length} {unusualItems.length === 1 ? 'insumo' : 'insumos'})
                                                 </strong>
                                                 {unusualItems.map(i => {
                                                     const pastPurchases = historicalOrders.flatMap(o => o.order_items || o.items || []).filter((h: any) => (h.product_id && h.product_id === i.product_id) || (h.product_name && h.product_name === i.product_name));

@@ -47,10 +47,10 @@ export async function logAuthEvent(action: 'LOGIN' | 'LOGOUT', userEmail?: strin
         });
 
         if (rpcError) {
-            console.warn('⚠️ Error al registrar evento de auditoría vía RPC:', rpcError.message);
+            console.warn('Error al registrar evento de auditoría vía RPC:', rpcError.message);
         }
     } catch (err) {
-        console.warn('⚠️ No se pudo registrar la auditoría de autenticación:', err);
+        console.warn('No se pudo registrar la auditoría de autenticación:', err);
     }
 }
 
@@ -75,11 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Network pre-check
         if (typeof window !== 'undefined' && !navigator.onLine) {
-            console.warn('⚠️ Se intentó cargar perfil pero el navegador está OFFLINE. Esperando reconexión...');
+            console.warn('Se intentó cargar perfil pero el navegador está OFFLINE. Esperando reconexión...');
             return;
         }
 
-        console.log('🔄 Cargando perfil para ID:', activeProfileId);
+        console.log('Cargando perfil para ID:', activeProfileId);
         // Timeout de seguridad de 6 segundos si no se provee signal
         const internalController = !signal ? new AbortController() : null;
         const effectiveSignal = signal || internalController?.signal;
@@ -99,15 +99,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (error) {
                 const isNetworkError = error.message?.toLowerCase().includes('fetch') || error.message?.toLowerCase().includes('abort');
                 if (isNetworkError) {
-                    console.warn('⚠️ Falla de Red o Timeout en Supabase al cargar perfil. Continuando con sesión local...');
+                    console.warn('Falla de Red o Timeout en Supabase al cargar perfil. Continuando con sesión local...');
                 } else {
-                    console.error('❌ Error de Base de Datos al cargar perfil:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+                    console.error('Error de Base de Datos al cargar perfil:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
                 }
                 logError('authContext fetchProfile', error);
             } else if (data) {
                 if (effectiveSignal?.aborted) return;
                 if (data.is_active === false) {
-                    console.warn('🔒 El perfil de usuario está INACTIVO. Cerrando sesión...');
+                    console.warn('El perfil de usuario está INACTIVO. Cerrando sesión...');
                     setProfile(null);
                     setUser(null);
                     await supabase.auth.signOut();
@@ -117,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                     return;
                 }
-                console.log('✅ Perfil activo cargado:', data.role, data.company_name || 'Personal');
+                console.log('Perfil activo cargado:', data.role, data.company_name || 'Personal');
                 const profileData = {
                     ...data,
                     pricing_model_id: data.parent_id ? data.parent?.pricing_model_id : data.pricing_model_id
@@ -139,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
             } else {
-                console.warn('⚠️ Perfil no encontrado en la tabla profiles para ID:', activeProfileId);
+                console.warn('Perfil no encontrado en la tabla profiles para ID:', activeProfileId);
                 // Si el activeProfileId falló pero no era el userId, intentar con userId
                 if (activeProfileId !== userId) {
                     localStorage.removeItem('frufresco_active_profile_id');
@@ -148,9 +148,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         } catch (err: any) {
             if (err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')) {
-                console.warn('⏱️ fetchProfile excedió el tiempo límite (6s). Manteniendo perfil en caché.');
+                console.warn('️ fetchProfile excedió el tiempo límite (6s). Manteniendo perfil en caché.');
             } else {
-                console.error('❌ Excepción crítica en fetchProfile:', err);
+                console.error('Excepción crítica en fetchProfile:', err);
                 logError('authContext fetchProfile exception', err);
             }
         } finally {
@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                          (typeof window !== 'undefined' && !navigator.onLine);
 
                     if (!isNetworkErr) {
-                        console.error('❌ Sesión inválida detectada:', sessionError.message);
+                        console.error('Sesión inválida detectada:', sessionError.message);
                         // Solo resetear si es un error fatal de token (no un fallo de red)
                         if (sessionError.message?.includes('invalid_grant') || sessionError.message?.includes('refresh_token_not_found')) {
                             await supabase.auth.signOut();
@@ -180,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             return;
                         }
                     } else {
-                        console.warn('⚠️ Error de red al iniciar sesión. Manteniendo sesión local offline...');
+                        console.warn('Error de red al iniciar sesión. Manteniendo sesión local offline...');
                     }
                 }
 
@@ -216,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     } else {
                         // Intentar recuperar de caché si el navegador está temporalmente offline
                         if (typeof window !== 'undefined' && !navigator.onLine) {
-                            console.log('📡 Modo Offline: Preservando estado de autenticación previo');
+                            console.log('Modo Offline: Preservando estado de autenticación previo');
                         } else {
                             setProfile(null);
                         }
@@ -226,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
                     if (!isMounted) return;
-                    console.log(`🔐 Evento Auth detectado [${event}]:`, session?.user?.email || 'Sin sesión');
+                    console.log(`Evento Auth detectado [${event}]:`, session?.user?.email || 'Sin sesión');
 
                     const newUser = session?.user ?? null;
                     if (newUser) {
@@ -235,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         setLoading(false);
                     } else if (event === 'SIGNED_OUT') {
                         // Confirmed sign out action por el usuario
-                        console.log('🚪 Cierre de sesión confirmado (SIGNED_OUT)');
+                        console.log('Cierre de sesión confirmado (SIGNED_OUT)');
                         setUser(null);
                         setProfile(null);
                         setLoading(false);
@@ -243,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         // Evento transitorio de refresco de token o cambio de pestaña:
                         // NUNCA expulsar inmediatamente. Esperar y verificar con reintentos.
                         if (typeof window !== 'undefined' && !navigator.onLine) {
-                            console.warn('⚠️ Navegador Offline durante refresco de auth. Preservando sesión.');
+                            console.warn('Navegador Offline durante refresco de auth. Preservando sesión.');
                             setLoading(false);
                             return;
                         }
@@ -255,11 +255,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                 const { data: checkData } = await supabase.auth.getSession();
                                 if (isMounted) {
                                     if (checkData.session?.user) {
-                                        console.log('🔄 Sesión recuperada tras refresco:', checkData.session.user.email);
+                                        console.log('Sesión recuperada tras refresco:', checkData.session.user.email);
                                         setUser(checkData.session.user);
                                         fetchProfile(checkData.session.user.id);
                                     } else {
-                                        console.warn('⚠️ Sesión expirada confirmada tras verificación');
+                                        console.warn('Sesión expirada confirmada tras verificación');
                                         setUser(null);
                                         setProfile(null);
                                     }
@@ -276,7 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // Reconexión automática al volver a tener internet
                 const handleOnline = async () => {
                     if (!isMounted) return;
-                    console.log('🌐 Conexión a internet restaurada. Sincronizando sesión...');
+                    console.log('Conexión a internet restaurada. Sincronizando sesión...');
                     const { data: onlineData } = await supabase.auth.getSession();
                     if (onlineData.session?.user) {
                         setUser(onlineData.session.user);
@@ -288,7 +288,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 return subscription;
             } catch (err) {
-                console.error('❌ Error crítico auth:', err);
+                console.error('Error crítico auth:', err);
                 setLoading(false);
             }
         };
@@ -302,12 +302,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const signIn = async (email: string, password: string) => {
-        console.log('🗝️ Iniciando sign-in para:', email);
+        console.log('Iniciando sign-in para:', email);
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
-            console.warn('⚠️ Error en supabase.auth.signIn:', error.message);
+            console.warn('Error en supabase.auth.signIn:', error.message);
         } else {
-            console.log('✅ Sign-in de Supabase completado con éxito');
+            console.log('Sign-in de Supabase completado con éxito');
             const loggedUser = data?.user;
             logAuthEvent('LOGIN', email, loggedUser?.id);
         }

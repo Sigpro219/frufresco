@@ -418,7 +418,7 @@ export default function OrderDetailPage() {
                 throw new Error(result.error || 'Error al persistir cambios');
             }
 
-            alert(`✅ Cambios guardados exitosamente por ${userEmail || 'Usuario'}`);
+            alert(`Cambios guardados exitosamente por ${userEmail || 'Usuario'}`);
 
             setIsEditing(false);
             fetchOrderDetails();

@@ -403,23 +403,23 @@ export default function PickingDashboard() {
             }
         })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, (payload) => {
-                console.log('⚡ DB Update (Debouncing...):', payload);
+                console.log('DB Update (Debouncing...):', payload);
                 debouncedLoadData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-                console.log('⚡ Order Update (Debouncing...):', payload);
+                console.log('Order Update (Debouncing...):', payload);
                 debouncedLoadData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_stocks' }, (payload) => {
-                console.log('⚡ Instant Stock Update Received:', payload);
+                console.log('Instant Stock Update Received:', payload);
                 loadData(undefined, true);
             })
             .on('broadcast', { event: 'refresh' }, (payload) => {
-                console.log('🚀 INSTANT BROADCAST RECEIVED:', payload);
+                console.log('INSTANT BROADCAST RECEIVED:', payload);
                 loadData(undefined, true);
             })
             .subscribe((status) => {
-                console.log('📡 REALTIME STATUS:', status);
+                console.log('REALTIME STATUS:', status);
                 setIsConnected(status === 'SUBSCRIBED');
             });
 
@@ -765,7 +765,7 @@ export default function PickingDashboard() {
     completedZones.forEach(zone => {
         bannerAlerts.push({
             type: 'critical',
-            msg: `🚨 ¡CAMIÓN ${zone.name.toUpperCase()} AL 100%! PROCEDER CON DESPACHO INMEDIATO 🚨`
+            msg: `¡CAMIÓN ${zone.name.toUpperCase()} AL 100%! PROCEDER CON DESPACHO INMEDIATO `
         });
     });
 
@@ -1226,7 +1226,7 @@ export default function PickingDashboard() {
                                                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center', cursor: 'pointer' }}
                                                 title="Ir a Rectificación de Cargue LIFO"
                                             >
-                                                <span>✓ {zone.name.toUpperCase()}</span>
+                                                <span>{zone.name.toUpperCase()}</span>
                                                 <span style={{
                                                     background: '#10B981',
                                                     color: '#fff',
@@ -1239,7 +1239,7 @@ export default function PickingDashboard() {
                                                     letterSpacing: '0.5px',
                                                     boxShadow: '0 0 10px rgba(16, 185, 129, 0.4)'
                                                 }}>
-                                                    RECTIFICAR CARGUE 📋
+                                                    RECTIFICAR CARGUE 
                                                 </span>
                                             </span>
                                         ) : (
@@ -1255,7 +1255,7 @@ export default function PickingDashboard() {
                                                         fontWeight: 'bold',
                                                         border: '1px solid rgba(255,255,255,0.1)'
                                                     }}>
-                                                        ⏰ {zone.departureTime}
+                                                        {zone.departureTime}
                                                     </span>
                                                 )}
                                             </span>
@@ -1381,9 +1381,9 @@ export default function PickingDashboard() {
                                                         whiteSpace: 'nowrap',
                                                         color: complete ? '#34D399' : '#fff'
                                                     }}>
-                                                        {complete ? '✓ ' : ''}{getClientShortName(client.company_name)}
+                                                        {complete ? '' : ''}{getClientShortName(client.company_name)}
                                                         <span style={{ opacity: 0 }}>------</span>
-                                                        {complete ? '✓ ' : ''}{getClientShortName(client.company_name)}
+                                                        {complete ? '' : ''}{getClientShortName(client.company_name)}
                                                     </div>
                                                 </div>
                                             )}
@@ -1510,7 +1510,7 @@ export default function PickingDashboard() {
                                                         fontWeight: prodComplete ? 'bold' : 'normal',
                                                         animation: productsWithAlerts.has(product.id) ? 'pulseAlert 2s infinite' : 'none'
                                                     }} title={product.name}>
-                                                        {prodComplete ? '✓ ' : ''}{product.name}
+                                                        {prodComplete ? '' : ''}{product.name}
                                                         <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: prodComplete ? '#10B981' : '#555' }}>
                                                             {product.unit_of_measure}
                                                         </span>
@@ -1527,7 +1527,7 @@ export default function PickingDashboard() {
                                                             alignItems: 'center', 
                                                             gap: '3px' 
                                                         }}>
-                                                            📦 {(product.current_stock || 0).toLocaleString('es-CO')} {product.unit_of_measure || 'Kg'}
+                                                            {(product.current_stock || 0).toLocaleString('es-CO')} {product.unit_of_measure || 'Kg'}
                                                         </span>
                                                         {isRedRow && (
                                                             <span style={{ 
@@ -1541,7 +1541,7 @@ export default function PickingDashboard() {
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center'
                                                             }}>
-                                                                ⚠️ SIN STOCK
+                                                                SIN STOCK
                                                             </span>
                                                         )}
                                                     </td>

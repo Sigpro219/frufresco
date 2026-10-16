@@ -11,11 +11,11 @@ interface ActivityType {
 }
 
 const ACTIVITIES: ActivityType[] = [
-    { id: 'operation', label: 'Operación', icon: '⚡', color: '#10B981' },
-    { id: 'refuel', label: 'Tanqueo', icon: '⛽', color: '#F59E0B' },
-    { id: 'workshop', label: 'Taller', icon: '🛠️', color: '#6366F1' },
-    { id: 'lunch', label: 'Almuerzo', icon: '🥣', color: '#10B981' },
-    { id: 'break', label: 'Receso', icon: '⏸️', color: '#94A3B8' },
+    { id: 'operation', label: 'Operación', icon: '', color: '#10B981' },
+    { id: 'refuel', label: 'Tanqueo', icon: '', color: '#F59E0B' },
+    { id: 'workshop', label: 'Taller', icon: '', color: '#6366F1' },
+    { id: 'lunch', label: 'Almuerzo', icon: '', color: '#10B981' },
+    { id: 'break', label: 'Receso', icon: '️', color: '#94A3B8' },
     { id: 'park', label: 'Parquear', icon: '🅿️', color: '#1F2937' }
 ];
 
@@ -204,7 +204,7 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
             setActiveActivity(nextActivity);
             localStorage.setItem(`active_activity_${plate}`, JSON.stringify(nextActivity));
 
-            alert(`⚠️ GPS NO DISPONIBLE: Se cambió el estado a ${newType.toUpperCase()} pero no se pudo auditar la distancia. Por favor, activa el GPS si es posible.`);
+            alert(`GPS NO DISPONIBLE: Se cambió el estado a ${newType.toUpperCase()} pero no se pudo auditar la distancia. Por favor, activa el GPS si es posible.`);
         } finally {
             setLoading(false);
         }
@@ -222,7 +222,7 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
                         fontWeight: '900', border: `1px solid ${gpsActive ? '#3B82F640' : '#EF444440'}`,
                         display: 'flex', alignItems: 'center', gap: '4px'
                     }}>
-                        {gpsActive ? '🛰️ GPS ACTIVO' : '📵 GPS OFF'}
+                        {gpsActive ? '️ GPS ACTIVO' : 'GPS OFF'}
                     </div>
                     <div style={{ 
                         fontSize: '0.65rem', padding: '4px 12px', borderRadius: '20px', 
@@ -261,7 +261,7 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
 
             <div style={{ marginTop: '1rem', padding: '0.6rem', backgroundColor: '#111827', borderRadius: '12px', border: '1px solid #374151', textAlign: 'center' }}>
                 <span style={{ fontSize: '0.7rem', color: '#9CA3AF', fontWeight: '700' }}>
-                    📐 DISTANCIA TEÓRICA ACUMULADA: 
+                    DISTANCIA TEÓRICA ACUMULADA: 
                     <span style={{ color: 'white', marginLeft: '5px' }}>
                         {theoreticalOdo.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KM
                     </span>

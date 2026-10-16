@@ -257,7 +257,7 @@ export default function OpsHome() {
                             color: stats.pendingAudits > 0 ? '#D97706' : 'var(--ops-text-muted)', 
                             fontWeight: stats.pendingAudits > 0 ? 700 : 'normal' 
                         }}>
-                            {stats.pendingAudits > 0 ? `⚠️ ${stats.pendingAudits} CONTEO(S) SOLICITADO(S)` : 'Operaciones de Piso'}
+                            {stats.pendingAudits > 0 ? `️ ${stats.pendingAudits} CONTEO(S) SOLICITADO(S)` : 'Operaciones de Piso'}
                         </div>
                     </div>
                 </Link>

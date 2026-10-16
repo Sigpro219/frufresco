@@ -9,7 +9,7 @@ import {
     Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, 
     Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
     Settings, Plus, Package, Filter, User, ExternalLink, Clock, ShoppingCart,
-    ZoomIn, ZoomOut, RotateCw, RefreshCw, Calculator, Lock, Unlock 
+    ZoomIn, ZoomOut, RotateCw, RefreshCw, Calculator, Lock, Unlock, FileSpreadsheet, Star
 } from 'lucide-react';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
@@ -698,7 +698,7 @@ const GmailMessageViewer = ({
             html = html.replace(new RegExp(`(src=["']?)cid:[^"'>\\s]*${escapedName}[^"'>\\s]*(["']?)`, 'gi'), `$1${att.url}$2`);
           }
         } catch (cidErr) {
-          console.warn('⚠️ Error al resolver CID en HTML:', cidErr);
+          console.warn('Error al resolver CID en HTML:', cidErr);
         }
       });
 
@@ -735,13 +735,13 @@ const GmailMessageViewer = ({
       // Si hay adjuntos disponibles en el pedido, las referencias inline no resueltas son firmas o gráficos secundarios
       html = html.replace(
         /<img[^>]*src=["']?cid:[^"'>\s]+["']?[^>]*>/gi,
-        `<div style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;"><span>🖼️</span> <span>[Gráfico / Firma inline no disponible · Consulta la pestaña Adjunto para el documento principal]</span></div>`
+        `<div style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;"> <span>[Gráfico / Firma inline no disponible · Consulta la pestaña Adjunto para el documento principal]</span></div>`
       );
     } else {
       // Para cualquier CID huérfano restante (correos históricos recibidos antes de la actualización de ingesta sin bytes guardados):
       html = html.replace(
         /<img[^>]*src=["']?cid:[^"'>\s]+["']?[^>]*>/gi,
-        `<div style="border:1.5px dashed #CBD5E1;background:#F8FAFC;border-radius:8px;padding:16px;margin:12px 0;text-align:center;color:#475569;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:540px;"><div style="font-size:22px;margin-bottom:4px;">🖼️</div><div style="font-size:12px;font-weight:700;color:#1E293B;">Imagen de pedido no disponible en este borrador histórico</div><div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.4;">Este correo se recibió antes de la actualización del servidor (los bytes no fueron guardados en su momento). Para visualizar la imagen y extraer los productos automáticamente, <strong>reenvía este correo a pedidos@frufresco.com</strong>.</div></div>`
+        `<div style="border:1.5px dashed #CBD5E1;background:#F8FAFC;border-radius:8px;padding:16px;margin:12px 0;text-align:center;color:#475569;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:540px;"><div style="font-size:12px;font-weight:700;color:#1E293B;">Imagen de pedido no disponible en este borrador histórico</div><div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.4;">Este correo se recibió antes de la actualización del servidor (los bytes no fueron guardados en su momento). Para visualizar la imagen y extraer los productos automáticamente, <strong>reenvía este correo a pedidos@frufresco.com</strong>.</div></div>`
       );
     }
 
@@ -886,7 +886,7 @@ const GmailMessageViewer = ({
         {resolvedHtml ? (
           <div style={{ width: '100%', minHeight: '260px' }}>
             <iframe
-              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#202124;line-height:1.6;margin:0;padding:12px;background:#FFFFFF;}table,div,p,span{max-width:100% !important;box-sizing:border-box !important;}img{max-width:100% !important;width:auto !important;height:auto !important;object-fit:contain !important;display:block !important;margin:8px auto !important;border-radius:4px !important;box-shadow:0 1px 3px rgba(0,0,0,0.08);}.img-broken-notice{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;}</style><script>document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("img").forEach(function(img){img.addEventListener("error",function(){if(!this.dataset.handled){this.dataset.handled="true";var span=document.createElement("div");span.className="img-broken-notice";span.innerHTML="<span>🖼️</span> <span>[Imagen inline no disponible]</span>";this.parentNode.insertBefore(span,this);this.style.display="none";}});});});</script></head><body>${resolvedHtml}</body></html>`}
+              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#202124;line-height:1.6;margin:0;padding:12px;background:#FFFFFF;}table,div,p,span{max-width:100% !important;box-sizing:border-box !important;}img{max-width:100% !important;width:auto !important;height:auto !important;object-fit:contain !important;display:block !important;margin:8px auto !important;border-radius:4px !important;box-shadow:0 1px 3px rgba(0,0,0,0.08);}.img-broken-notice{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;}</style><script>document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("img").forEach(function(img){img.addEventListener("error",function(){if(!this.dataset.handled){this.dataset.handled="true";var span=document.createElement("div");span.className="img-broken-notice";span.innerHTML=" <span>[Imagen inline no disponible]</span>";this.parentNode.insertBefore(span,this);this.style.display="none";}});});});</script></head><body>${resolvedHtml}</body></html>`}
               style={{ width: '100%', minHeight: '380px', border: 'none', backgroundColor: 'transparent' }}
               sandbox="allow-same-origin allow-popups"
             />
@@ -2533,10 +2533,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         <div class="sheet-container" id="sheet-${sIdx}" style="${sIdx > 0 ? 'display: none;' : ''}">
           <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
             <div style="font-size: 0.95rem; font-weight: 800; color: #0D7A57;">
-              📄 Hoja: ${sheet.sheetName} · <span style="color: #10B981;">${sheet.countWithQty} ítems con pedido</span> / ${sheet.totalRows} filas
+              Hoja: ${sheet.sheetName} · <span style="color: #10B981;">${sheet.countWithQty} ítems con pedido</span> / ${sheet.totalRows} filas
             </div>
             <div style="font-size: 0.8rem; color: #64748B;">
-              ${sheet.countWithQty > 0 ? '🟢 Filas con cantidad resaltadas en verde' : ''}
+              ${sheet.countWithQty > 0 ? 'Filas con cantidad resaltadas en verde' : ''}
             </div>
           </div>
           <table class="sheets-table">
@@ -2600,16 +2600,16 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       </head>
       <body>
         <div class="topbar">
-          <h1>📊 Documento Excel: ${currentName} · <span style="font-weight: 500; font-size: 0.95rem; opacity: 0.9;">${clientName}</span></h1>
+          <h1>Documento Excel: ${currentName} · <span style="font-weight: 500; font-size: 0.95rem; opacity: 0.9;">${clientName}</span></h1>
           <div class="topbar-actions">
-            <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir Hoja</button>
+            <button class="btn btn-outline" onclick="window.print()">Imprimir Hoja</button>
             <a class="btn btn-white" href="${currentUrl}" download="${currentName}">⬇️ Descargar .xlsx Original</a>
           </div>
         </div>
         ${sheetsToRender.length > 1 ? `
           <div class="tabs-bar">
             ${sheetsToRender.map((s: any, idx: number) => `
-              <button class="tab-btn ${idx === 0 ? 'active' : ''}" onclick="showSheet(${idx})">📄 ${s.sheetName} (${s.countWithQty} pedidos)</button>
+              <button class="tab-btn ${idx === 0 ? 'active' : ''}" onclick="showSheet(${idx})">${s.sheetName} (${s.countWithQty} pedidos)</button>
             `).join('')}
           </div>
         ` : ''}
@@ -3296,7 +3296,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     setEditableItems(newEdits);
     setCustomizingModalItem(null);
-    showToast(`Producto ${product.name} actualizado ✅`, 'success');
+    showToast(`Producto ${product.name} actualizado`, 'success');
 
     setTimeout(() => {
       const nextIdx = rowIndex + 1;
@@ -5339,7 +5339,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     if (matchedProfile && !deliveryRestrictionStatus.isValid) {
       const confirmExcepcion = window.confirm(
-        `⚠️ ADVERTENCIA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA:\n\n` +
+        `ADVERTENCIA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA:\n\n` +
         `${deliveryRestrictionStatus.message}\n\n` +
         `Fecha de entrega seleccionada: ${deliveryDate}\n\n` +
         `¿Deseas autorizar esta entrega como un DESPACHO EXCEPCIONAL fuera de la política habitual de la sucursal?`
@@ -5816,7 +5816,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     if (currentMatchedProfile && !deliveryRestrictionStatus.isValid) {
       const confirmExcepcion = window.confirm(
-        `⚠️ ADVERTENCIA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA:\n\n` +
+        `ADVERTENCIA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA:\n\n` +
         `${deliveryRestrictionStatus.message}\n\n` +
         `Fecha de entrega seleccionada: ${deliveryDate}\n\n` +
         `¿Deseas autorizar esta entrega como un DESPACHO EXCEPCIONAL fuera de la política habitual de la sucursal?`
@@ -6141,7 +6141,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             .from('admin_tasks')
             .insert([{
               type: 'price_extension_request',
-              title: `🚨 ASIGNAR PRECIO URGENTE: Remisión ${remSeq} (${clientName})`,
+              title: `ASIGNAR PRECIO URGENTE: Remisión ${remSeq} (${clientName})`,
               description: `La remisión ${remSeq} del cliente "${clientName}" fue despachada con precio $0 COP en ${isSplitScenario || isOnlyOffAgreement ? offAgreementItemsData.length : unpricedItems.length} producto(s) fuera del acuerdo (${unpricedNames}) para entrega el ${deliveryDate}. Debes asignar el precio comercial antes del cierre del corte de facturación.`,
               priority: 'critical',
               status: 'pending',
@@ -7750,13 +7750,13 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       const newDate = e.target.value;
                       if (newDate) {
                         if (newDate < minDeliveryDate) {
-                          showToast(`⛔ Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
+                          showToast(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
                           setDeliveryDate(minDeliveryDate);
                           return;
                         }
                         const check = isValidDeliveryDate(newDate, false, false);
                         if (!check.valid) {
-                          showToast(`⛔ ${check.reason || 'Día no habilitado para entregas.'}`, 'error');
+                          showToast(`${check.reason || 'Día no habilitado para entregas.'}`, 'error');
                           const nextV = getNextValidDeliveryDate(newDate, false, false);
                           setDeliveryDate(formatDateToYYYYMMDD(nextV));
                           return;
@@ -8097,7 +8097,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               }}>
                 <AlertTriangle size={18} style={{ color: '#DC2626', flexShrink: 0 }} />
                 <div>
-                  <span style={{ fontWeight: '900', color: '#991B1B' }}>⚠️ Restricción Logística de Entrega: </span>
+                  <span style={{ fontWeight: '900', color: '#991B1B' }}>Restricción Logística de Entrega: </span>
                   <span style={{ fontWeight: '600', color: '#7F1D1D' }}>
                     {deliveryRestrictionStatus.message}
                   </span>
@@ -8625,7 +8625,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                     <tfoot>
                                       <tr>
                                         <td colSpan={currentSheet.activeCols ? currentSheet.activeCols.length + 2 : 12} style={{ padding: '16px 20px 32px 20px', textAlign: 'center', backgroundColor: '#F1F5F9', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, borderTop: '2px solid #CBD5E1' }}>
-                                          ✓ Fin del documento · {currentSheet.countWithQty} ítems con cantidad de {filteredRows.length} filas totales
+                                          Fin del documento · {currentSheet.countWithQty} ítems con cantidad de {filteredRows.length} filas totales
                                         </td>
                                       </tr>
                                     </tfoot>
@@ -8657,7 +8657,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                               <div className="premium-scrollbar" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#F1F5F9', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
                                 <div style={{ width: '100%', maxWidth: '850px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', fontSize: '0.74rem', color: '#64748B' }}>
                                   <span style={{ fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span>📑</span> Documento Continuo Apilado ({allImageAtts.length} capturas)
+                                    Documento Continuo Apilado ({allImageAtts.length} capturas)
                                   </span>
                                   <button
                                     type="button"
@@ -8758,7 +8758,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                       boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
                                     }}
                                   >
-                                    <span>📑</span> Ver Documento Apilado ({allImageAtts.length})
+                                    Ver Documento Apilado ({allImageAtts.length})
                                   </button>
                                 </div>
                               )}
@@ -9072,7 +9072,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                   title="Personalizar variantes / equivalencias"
                                 >
                                   <CheckCircle2 size={10} color="#15803D" /> {item.isConfirmed ? 'Confirmado' : 'Match'}
-                                  {clientFrequentProductIds.includes(matchedProd.id) && <span style={{ marginLeft: '2px', color: '#D97706' }}>⭐ Habitual</span>}
+                                  {clientFrequentProductIds.includes(matchedProd.id) && <span style={{ marginLeft: '2px', color: '#D97706', display: 'inline-flex', alignItems: 'center', gap: '2px' }}><Star size={11} className="fill-amber-500 text-amber-500" /> Habitual</span>}
                                 </span>
                               ) : (
                                 <span style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 5px', borderRadius: '5px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
@@ -9263,7 +9263,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                         onMouseDown={(e) => {
                                           e.preventDefault();
                                           if (isScarcityLocked) {
-                                            showToast(`🚫 "${p.name}" no se puede agregar: Insumo bloqueado por escasez en el mercado.`, 'error');
+                                            showToast(`"${p.name}" no se puede agregar: Insumo bloqueado por escasez en el mercado.`, 'error');
                                             return;
                                           }
                                           selectProduct(p, i);
@@ -9314,7 +9314,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                                 gap: '3px',
                                                 border: isFocused ? '1px solid #6366F1' : '1px solid #C7D2FE'
                                               }}>
-                                                📄 Convenio
+                                                Convenio
                                               </span>
                                             ) : (
                                               <span style={{ 
@@ -9329,7 +9329,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                                 gap: '3px',
                                                 border: '1px solid #E5E7EB'
                                               }}>
-                                                📦 Catálogo Libre
+                                                Catálogo Libre
                                               </span>
                                             )
                                           )}
@@ -9346,7 +9346,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                               gap: '3px',
                                               border: isFocused ? '1px solid #22C55E' : '1px solid #86EFAC'
                                             }}>
-                                              ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
+                                              Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
                                             </span>
                                           )}
                                           {exc?.preferred_options && typeof exc.preferred_options === 'object' && Object.keys(exc.preferred_options).length > 0 && (
@@ -11363,13 +11363,13 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       const newDate = e.target.value;
                       if (!newDate) return;
                       if (newDate < minDeliveryDate) {
-                        showToast(`⛔ Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
+                        showToast(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
                         setDeliveryDate(minDeliveryDate);
                         return;
                       }
                       const check = isValidDeliveryDate(newDate, false, false);
                       if (!check.valid) {
-                        showToast(`⛔ ${check.reason || 'Día no habilitado para entregas.'}`, 'error');
+                        showToast(`${check.reason || 'Día no habilitado para entregas.'}`, 'error');
                         const nextV = getNextValidDeliveryDate(newDate, false, false);
                         setDeliveryDate(formatDateToYYYYMMDD(nextV));
                         return;
@@ -11560,14 +11560,14 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '0.86rem', fontWeight: '800', color: '#991B1B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>⚠️ Ítems sin precio registrado ({unpricedItemsInModal.length})</span>
+                        <span>Ítems sin precio registrado ({unpricedItemsInModal.length})</span>
                       </div>
                       <div style={{ fontSize: '0.78rem', color: '#B91C1C', marginTop: '2px', lineHeight: '1.4' }}>
                         <strong>Productos afectados:</strong> {unpricedNames}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: allowZeroPriceDispatch ? '#7F1D1D' : '#991B1B', marginTop: '3px', lineHeight: '1.4', fontWeight: allowZeroPriceDispatch ? '700' : '400' }}>
                         {allowZeroPriceDispatch
-                          ? '✓ AUTORIZADO: El pedido pasará a alistamiento con precio $0 COP para no retrasar la entrega física. Se enviará tarea prioritaria al Área Comercial para fijar el precio y Facturación retendrá la emisión fiscal.'
+                          ? 'AUTORIZADO: El pedido pasará a alistamiento con precio $0 COP para no retrasar la entrega física. Se enviará tarea prioritaria al Área Comercial para fijar el precio y Facturación retendrá la emisión fiscal.'
                           : 'Autorizo enviar a alistamiento con precio $0 (Pendiente fijar tarifa comercial).'}
                       </div>
                     </div>

@@ -6321,11 +6321,11 @@ export default function BillingDashboard() {
                                                 fontWeight: '800'
                                             }}
                                         >
-                                            🔒 Aislamiento Contractual Activo (No altera el Acuerdo Comercial)
+                                            Aislamiento Contractual Activo (No altera el Acuerdo Comercial)
                                         </span>
                                     </div>
                                     <h3 style={{ margin: '6px 0 2px 0', fontSize: '1.05rem', fontWeight: '900', color: '#7F1D1D' }}>
-                                        🏷️ Asignar Tarifa Comercial — Remisiones Fuera de Acuerdo ($0)
+                                        Asignar Tarifa Comercial — Remisiones Fuera de Acuerdo ($0)
                                     </h3>
                                     <p style={{ margin: 0, fontSize: '0.74rem', color: '#991B1B', fontWeight: '600' }}>
                                         Asigna el precio unitario negociado para los SKU despachados en remisión a $0 del día ({selectedBillingDate === 'all' ? 'Todas las fechas' : selectedBillingDate}). Una vez valorizadas, quedarán listas para facturar en el corte.
@@ -6348,7 +6348,7 @@ export default function BillingDashboard() {
                                         fontWeight: '800'
                                     }}
                                 >
-                                    ✕
+                                    
                                 </button>
                             </div>
 
@@ -6393,7 +6393,7 @@ export default function BillingDashboard() {
                                             return (
                                                 <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '12px', padding: '0.85rem 1rem' }}>
                                                     <div style={{ fontSize: '0.72rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '8px' }}>
-                                                        ⚡ Asignación Rápida por SKU para el Día ({uniqueSkus.length} SKU fuera de acuerdo)
+                                                        Asignación Rápida por SKU para el Día ({uniqueSkus.length} SKU fuera de acuerdo)
                                                     </div>
                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px' }}>
                                                         {uniqueSkus.map(skuInfo => (
@@ -6644,7 +6644,7 @@ export default function BillingDashboard() {
                                 }}
                             >
                                 <div style={{ fontSize: '0.70rem', color: '#475569', fontWeight: '600' }}>
-                                    💡 Al confirmar, se cerrará la tarea urgente en el Dashboard Comercial y la remisión pasará a estado facturable.
+                                    Al confirmar, se cerrará la tarea urgente en el Dashboard Comercial y la remisión pasará a estado facturable.
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <button

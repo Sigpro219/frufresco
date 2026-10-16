@@ -449,8 +449,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E5E7EB'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
                 >
-                    ✕
-                </button>
+                    </button>
 
                 <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem' }}>
                     <div style={{
@@ -783,7 +782,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             border: '1px solid #FEE2E2',
                             marginBottom: '0.5rem'
                         }}>
-                                                         ⚠️ {t.notAvailableAlt}
+                                                         ️ {t.notAvailableAlt}
                         </div>
                     )}
                     <button

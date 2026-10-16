@@ -90,7 +90,7 @@ No incluyas markdown, solo el JSON puro.
         }
 
     } catch (error: any) {
-        console.error('❌ [Product AI Engine] Error:', error.message);
+        console.error('[Product AI Engine] Error:', error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

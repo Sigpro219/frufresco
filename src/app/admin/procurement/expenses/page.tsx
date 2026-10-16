@@ -240,7 +240,7 @@ export default function ExpensesPage() {
                                 <div style={{ fontSize: '0.72rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{cat.name}</div>
                                 <div style={{ fontSize: '1.35rem', fontWeight: '800', color: THEME.colors.textMain, margin: '2px 0' }}>{formatMoney(cat.value)}</div>
                                 <div style={{ fontSize: '0.7rem', color: selectedCategory === cat.key ? cat.color : THEME.colors.textSecondary, fontWeight: '600' }}>
-                                    {selectedCategory === cat.key ? 'Filtrando categoría ✓' : 'Clic para filtrar'}
+                                    {selectedCategory === cat.key ? 'Filtrando categoría ' : 'Clic para filtrar'}
                                 </div>
                             </div>
                         </div>

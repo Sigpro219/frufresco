@@ -2165,7 +2165,7 @@ export default function HRManagement() {
                                                                                                         fontSize: '0.68rem',
                                                                                                         border: '1px solid #BFDBFE'
                                                                                                     }}>
-                                                                                                        💳 PAGADO ONLINE (WOMPI) — $0 A DESCONTAR
+                                                                                                        PAGADO ONLINE (WOMPI) — $0 A DESCONTAR
                                                                                                     </span>
                                                                                                     <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
                                                                                                         {item.raw.notes}

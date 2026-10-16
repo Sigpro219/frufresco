@@ -1788,8 +1788,7 @@ purchases: groups[key]
                         }}
                         onClick={() => setShowVoucherZoom(false)}
                     >
-                        ✕
-                    </button>
+                        </button>
                 </div>
             )}
 
@@ -1868,8 +1867,7 @@ purchases: groups[key]
                                 e.currentTarget.style.color = '#94A3B8';
                             }}
                         >
-                            ✕
-                        </button>
+                            </button>
 
                         {/* Step Content */}
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>

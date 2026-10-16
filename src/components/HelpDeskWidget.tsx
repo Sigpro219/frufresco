@@ -6,11 +6,11 @@ import { useAuth } from '@/lib/authContext';
 
 // ─── TICKET CATEGORIES ────────────────────────────────────────────────
 const CATEGORIES = [
-    { value: 'technical',   label: '🔧 Problema técnico' },
-    { value: 'permissions', label: '🔐 Solicitud de acceso' },
-    { value: 'geocerca',    label: '📍 Modificación de geocerca' },
-    { value: 'billing',     label: '💳 Facturación / Pagos' },
-    { value: 'general',     label: '💬 Consulta general' },
+    { value: 'technical',   label: 'Problema técnico' },
+    { value: 'permissions', label: 'Solicitud de acceso' },
+    { value: 'geocerca',    label: 'Modificación de geocerca' },
+    { value: 'billing',     label: 'Facturación / Pagos' },
+    { value: 'general',     label: 'Consulta general' },
 ];
 
 const PRIORITIES = [
@@ -119,7 +119,7 @@ export default function HelpDeskWidget() {
                 onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1.08)'; }}
                 onMouseLeave={e => { e.currentTarget.style.opacity = isOpen ? '1' : '0.72'; e.currentTarget.style.transform = 'scale(1)'; }}
             >
-                {isOpen ? '✕' : '🎧'}
+                {isOpen ? '' : ''}
             </button>
 
             {/* PANEL */}
@@ -148,7 +148,7 @@ export default function HelpDeskWidget() {
                     color: 'white',
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '1.3rem' }}>🎧</span>
+                        <span style={{ fontSize: '1.3rem' }}></span>
                         <h3 style={{ margin: 0, fontWeight: '900', fontSize: '1rem', letterSpacing: '-0.02em' }}>
                             Mesa de Ayuda
                         </h3>
@@ -163,7 +163,7 @@ export default function HelpDeskWidget() {
                     {step === 'success' ? (
                         // SUCCESS STATE
                         <div style={{ textAlign: 'center', padding: '20px 10px' }}>
-                            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>✅</div>
+                            <div style={{ fontSize: '3rem', marginBottom: '12px' }}></div>
                             <h4 style={{ fontWeight: '900', color: '#111827', margin: '0 0 8px 0', fontSize: '1.1rem' }}>
                                 ¡Ticket registrado!
                             </h4>
@@ -281,7 +281,7 @@ export default function HelpDeskWidget() {
                                     boxShadow: form.subject.trim() ? '0 4px 12px rgba(0,0,0,0.15)' : 'none'
                                 }}
                             >
-                                {submitting ? '📨 Enviando...' : '📨 Enviar Solicitud'}
+                                {submitting ? 'Enviando...' : 'Enviar Solicitud'}
                             </button>
                         </div>
                     )}

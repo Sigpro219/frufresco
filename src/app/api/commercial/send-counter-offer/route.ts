@@ -117,7 +117,7 @@ export async function POST(req: Request) {
 
       ${acceptedItems.length > 0 ? `
         <h3 style="font-size: 15px; color: #15803D; margin: 28px 0 8px 0; font-weight: 800;">
-          ✓ Productos Aceptados al 100% (${acceptedItems.length} ítems)
+          Productos Aceptados al 100% (${acceptedItems.length} ítems)
         </h3>
         <table>
           <thead>

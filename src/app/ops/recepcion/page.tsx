@@ -273,16 +273,16 @@ export default function ReceptionPage() {
             setAttemptCount(0); // Reset
             // Aquí podríamos pasar directo a una vista de "Calidad",
             // por ahora usamos un flag o estado visual en el modal
-            setValidationMessage('✅ Cantidad Correcta. Verifique Calidad.');
+            setValidationMessage('Cantidad Correcta. Verifique Calidad.');
         } else {
             // Caso: Déficit (Falta mercancía)
             if (attemptCount === 0) {
                 setAttemptCount(1);
-                setValidationMessage('⚠️ Diferencia detectada. Por favor, pese nuevamente.');
+                setValidationMessage('Diferencia detectada. Por favor, pese nuevamente.');
                 setInputQty(''); // Limpiar para obligar a re-escribir
             } else {
                 // Segundo fallo
-                setValidationMessage('🛑 Diferencia confirmada. Proceda con validación de excepción.');
+                setValidationMessage('Diferencia confirmada. Proceda con validación de excepción.');
             }
         }
     };
@@ -1011,7 +1011,7 @@ export default function ReceptionPage() {
                                                 textShadow: pct === 100 && !isActive ? "0 0 8px rgba(16, 185, 129, 0.4)" : "none",
                                             }}
                                         >
-                                            {pct === 100 ? "✓ 100% LISTO" : `${pct}% listo`}
+                                            {pct === 100 ? "100% LISTO" : `${pct}% listo`}
                                         </span>
                                     )}
                                 </button>
@@ -1551,7 +1551,7 @@ export default function ReceptionPage() {
                                     // FASE 2: CALIDAD
                                     <div style={{ animation: 'fadeIn 0.3s' }}>
                                         <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10B981', padding: '1rem', borderRadius: '12px', fontWeight: 'bold', marginBottom: '2rem', textAlign: 'center' }}>
-                                            ✅ Cantidad Correcta
+                                            Cantidad Correcta
                                         </div>
 
                                         <h3 style={{ textAlign: 'center', marginBottom: '1rem', color: 'var(--ops-text)' }}>Validar Calidad</h3>
@@ -1725,7 +1725,7 @@ export default function ReceptionPage() {
                                 e.currentTarget.style.color = '#94A3B8';
                             }}
                         >
-                            ✕
+                            
                         </button>
 
                         {/* Step Content */}

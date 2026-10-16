@@ -232,11 +232,11 @@ export default function AdminSettingsPage() {
         });
         
         if (!result.ok) {
-            (window as any).showToast?.('⚠️ Error de conexión: ' + result.error, 'error');
+            (window as any).showToast?.('Error de conexión: ' + result.error, 'error');
         } else if (!result.storageOk) {
-            (window as any).showToast?.('⚠️ Base de datos OK, pero Storage no responde', 'warning');
+            (window as any).showToast?.('Base de datos OK, pero Storage no responde', 'warning');
         } else {
-            (window as any).showToast?.('⚡ Conexión exitosa (' + result.latency + ')', 'success');
+            (window as any).showToast?.('Conexión exitosa (' + result.latency + ')', 'success');
         }
     };
 
@@ -411,11 +411,11 @@ export default function AdminSettingsPage() {
                                 updated_at: new Date().toISOString()
                             })
                             .eq('id', fleet.id);
-                        console.log('✅ Registro de Flota actualizado proactivamente');
+                        console.log('Registro de Flota actualizado proactivamente');
                     }
                 } catch (fleetErr) {
                     // Silencioso si falla (en tenantes hijos la tabla no existe)
-                    console.warn('💡 Entorno independiente (Hijo) o sin tabla de flota. Sincronización maestro omitida.', fleetErr);
+                    console.warn('Entorno independiente (Hijo) o sin tabla de flota. Sincronización maestro omitida.', fleetErr);
                 }
             }
 
@@ -428,7 +428,7 @@ export default function AdminSettingsPage() {
                 }
             });
             setPersisted(true);
-            (window as any).showToast?.('Cambio guardado ✓', 'success');
+            (window as any).showToast?.('Cambio guardado ', 'success');
         }
         setSaving(false);
     };

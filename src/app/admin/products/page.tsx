@@ -181,7 +181,7 @@ export default function AdminProductsPage() {
                 .eq('id', product.id);
 
             if (error) throw error;
-            showToast(newStatus ? `🔍 SKU ${product.sku || product.name} marcado como REVISADO (DEV)` : `⏳ SKU ${product.sku || product.name} marcado como PENDIENTE (DEV)`, 'info');
+            showToast(newStatus ? `SKU ${product.sku || product.name} marcado como REVISADO (DEV)` : `SKU ${product.sku || product.name} marcado como PENDIENTE (DEV)`, 'info');
         } catch (e: any) {
             setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: isCurrentlyVerified } : p));
             showToast('Error actualizando revisión DEV: ' + e.message, 'error');
@@ -584,7 +584,7 @@ export default function AdminProductsPage() {
 
         setIsSyncingPrices(true);
         try {
-            console.log('🚀 Iniciando sincronización de tienda...');
+            console.log('Iniciando sincronización de tienda...');
             const token = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
             const res = await fetch(`/api/products/sync-prices?token=${token}`, {
                 method: 'POST'
@@ -2633,7 +2633,7 @@ export default function AdminProductsPage() {
                                                         title={canEdit ? (isVerified ? "Dev: SKU Revisado (Click para marcar pendiente)" : "Dev: Pendiente (Click para marcar revisado)") : "Modo Vista"}
                                                     >
                                                         <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerified ? '#10B981' : '#F59E0B' }}></div>
-                                                        <span>{isVerified ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                                                        <span>{isVerified ? 'REVISADO' : 'PENDIENTE'}</span>
                                                     </button>
                                                 );
                                             })()}

@@ -47,13 +47,13 @@ export default function LoadVerificationPage() {
 
         // Block if completely unpicked
         if (items.length > 0 && !hasStartedPicking) {
-            alert(`❌ ERROR DE CARGUE: El pedido de ${stop.orders?.customer_name} no ha sido alistado en bodega (todos los artículos están en 0). Por favor, espera a que el equipo de alistamiento termine.`);
+            alert(`ERROR DE CARGUE: El pedido de ${stop.orders?.customer_name} no ha sido alistado en bodega (todos los artículos están en 0). Por favor, espera a que el equipo de alistamiento termine.`);
             return;
         }
 
         // Warn if partially unpicked (when checking for the first time)
         if (hasPendingItems && !loadedStops.has(id)) {
-            if (!confirm(`⚠️ ALERTA: El pedido de ${stop.orders?.customer_name} tiene artículos sin alistar (0 Kg). ¿Confirmas que deseas cargarlo de todas formas?`)) {
+            if (!confirm(`ALERTA: El pedido de ${stop.orders?.customer_name} tiene artículos sin alistar (0 Kg). ¿Confirmas que deseas cargarlo de todas formas?`)) {
                 return;
             }
         }
@@ -200,12 +200,12 @@ export default function LoadVerificationPage() {
         }
 
         if (!isBypass && !isCertified && routeStatus !== 'rectified') {
-            alert('🔒 VETO DE DESPACHO: La ruta no ha sido certificada ni precintada en muelle de salida (/ops/rectificacion).');
+            alert('VETO DE DESPACHO: La ruta no ha sido certificada ni precintada en muelle de salida (/ops/rectificacion).');
             return;
         }
 
         if (isBypass) {
-            if (!confirm('⚡ MODO PRUEBAS / SANDBOX:\n¿Deseas forzar el inicio de la ruta sin esperar la certificación física en muelle? Esta acción quedará registrada en auditoría.')) {
+            if (!confirm('MODO PRUEBAS / SANDBOX:\n¿Deseas forzar el inicio de la ruta sin esperar la certificación física en muelle? Esta acción quedará registrada en auditoría.')) {
                 return;
             }
         }
@@ -314,7 +314,7 @@ export default function LoadVerificationPage() {
                     }}>
                         <Lock size={22} style={{ color: '#EF4444', flexShrink: 0 }} />
                         <div>
-                            <div style={{ fontWeight: '800', color: '#F87171', marginBottom: '2px' }}>🔒 VETO DE DESPACHO EN MUELLE</div>
+                            <div style={{ fontWeight: '800', color: '#F87171', marginBottom: '2px' }}>VETO DE DESPACHO EN MUELLE</div>
                             <div style={{ opacity: 0.9 }}>Ruta pendiente de rectificación física y precinto numerado de seguridad (/ops/rectificacion).</div>
                         </div>
                     </div>
@@ -412,7 +412,7 @@ export default function LoadVerificationPage() {
                                                 padding: '2px 8px', 
                                                 borderRadius: '6px'
                                             }}>
-                                                📦 CANASTILLAS: {stop.orders.crates_count}
+                                                CANASTILLAS: {stop.orders.crates_count}
                                             </div>
                                         )}
                                     </div>
@@ -470,7 +470,7 @@ export default function LoadVerificationPage() {
                         }}
                     >
                         <Zap size={16} />
-                        <span>⚡ FORZAR INICIO DE RUTA (BYPASS MODO PRUEBAS)</span>
+                        <span>FORZAR INICIO DE RUTA (BYPASS MODO PRUEBAS)</span>
                     </button>
                 )}
 

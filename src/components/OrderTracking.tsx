@@ -94,13 +94,13 @@ export default function OrderTracking() {
                 </form>
 
                 {error && (
-                    <span style={{ color: '#FCA5A5', fontSize: '0.7rem', fontWeight: '600' }}>⚠️ {error}</span>
+                    <span style={{ color: '#FCA5A5', fontSize: '0.7rem', fontWeight: '600' }}>️ {error}</span>
                 )}
 
                 {trackingData && (
                     <div style={{ display: 'flex', gap: '1.2rem', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: '0.4rem 1rem', borderRadius: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>🚛</span>
+                            <span style={{ fontSize: '0.8rem', opacity: 0.6 }}></span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '850' }}>
                                 {Array.isArray(trackingData.routes) ? trackingData.routes[0]?.vehicle_plate : trackingData.routes?.vehicle_plate}
                             </span>

@@ -415,28 +415,28 @@ export default function InventoryAdminPage() {
 
     const renderCellLucideIcon = (iconKey?: string, size = 15, strokeWidth = 2) => {
         const key = (iconKey || '').toLowerCase().trim();
-        if (key === '🥬' || key === 'sprout' || key.includes('hortaliza')) {
+        if (key === '' || key === 'sprout' || key.includes('hortaliza')) {
             return <Sprout size={size} strokeWidth={strokeWidth} />;
         }
-        if (key === '🥦' || key === 'carrot' || key.includes('verdura')) {
+        if (key === '' || key === 'carrot' || key.includes('verdura')) {
             return <Carrot size={size} strokeWidth={strokeWidth} />;
         }
-        if (key === '🍎' || key === 'apple' || key.includes('fruta')) {
+        if (key === '' || key === 'apple' || key.includes('fruta')) {
             return <Apple size={size} strokeWidth={strokeWidth} />;
         }
-        if (key === '🧀' || key === 'boxes' || key.includes('abarrote')) {
+        if (key === '' || key === 'boxes' || key.includes('abarrote')) {
             return <Boxes size={size} strokeWidth={strokeWidth} />;
         }
-        if (key === '🥔' || key === 'layers' || key.includes('papa') || key.includes('tubérculo') || key.includes('tomate') || key.includes('aguacate')) {
+        if (key === '' || key === 'layers' || key.includes('papa') || key.includes('tubérculo') || key.includes('tomate') || key.includes('aguacate')) {
             return <Layers size={size} strokeWidth={strokeWidth} />;
         }
-        if (key === 'wheat' || key === '🌾' || key.includes('grano')) {
+        if (key === 'wheat' || key === '' || key.includes('grano')) {
             return <Wheat size={size} strokeWidth={strokeWidth} />;
         }
-        if (key === 'milk' || key === '🥛' || key.includes('lácteo')) {
+        if (key === 'milk' || key === '' || key.includes('lácteo')) {
             return <Milk size={size} strokeWidth={strokeWidth} />;
         }
-        if (key === 'beef' || key === '🥩' || key.includes('carne')) {
+        if (key === 'beef' || key === '' || key.includes('carne')) {
             return <Beef size={size} strokeWidth={strokeWidth} />;
         }
         return <Package size={size} strokeWidth={strokeWidth} />;

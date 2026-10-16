@@ -404,7 +404,7 @@ export default function ProvidersPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al procesar la carga masiva');
 
-            setBulkSuccess(`✓ Carga masiva ejecutada con éxito. Total registros procesados: ${data.total}. (Insertados/Actualizados: ${data.created || validItems.length})`);
+            setBulkSuccess(`Carga masiva ejecutada con éxito. Total registros procesados: ${data.total}. (Insertados/Actualizados: ${data.created || validItems.length})`);
             setBulkLoading(false);
             fetchProviders();
         } catch (err: any) {

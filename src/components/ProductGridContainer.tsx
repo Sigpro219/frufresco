@@ -386,7 +386,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
                     border: '2px solid var(--primary)',
                     boxShadow: '0 10px 25px rgba(26, 77, 46, 0.08)'
                 }}>
-                    ✨ No encontramos resultados exactos para "{q}", pero aquí tienes nuestra sección de <strong>{fallbackCategoryName}</strong>
+                    No encontramos resultados exactos para "{q}", pero aquí tienes nuestra sección de <strong>{fallbackCategoryName}</strong>
                 </div>
             )}
             

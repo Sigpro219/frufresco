@@ -212,7 +212,7 @@ export default function DriverDashboard() {
         }
 
         if (val < odometer) {
-            alert('❌ ERROR DE VALIDACIÓN: El kilometraje ingresado es inferior al último registro del sistema. Por favor, verifica el tablero del vehículo e ingresa el valor correcto.');
+            alert('ERROR DE VALIDACIÓN: El kilometraje ingresado es inferior al último registro del sistema. Por favor, verifica el tablero del vehículo e ingresa el valor correcto.');
             return;
         }
 

@@ -5,7 +5,7 @@ import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 export const dynamic = 'force-dynamic';
 
 /**
- * ⚡ Endpoint: Liquidación de Precios a Costo Vigente para Pedidos sobre Lista Abierta a Consumo ($0 COP)
+ * Endpoint: Liquidación de Precios a Costo Vigente para Pedidos sobre Lista Abierta a Consumo ($0 COP)
  * Recibe: { orderIds: string[] } | { orderId: string }
  * Actualiza los ítems con unit_price === 0 al costo activo de commercial_cost_matrix (o modelo General Institucional)
  * y recalcula subtotal, impuestos y total de las órdenes.

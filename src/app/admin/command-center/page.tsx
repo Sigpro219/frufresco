@@ -525,7 +525,7 @@ export default function CommandCenter() {
 
             if (!deployData.success) {
                 const detail = deployData.results
-                    ?.map((r: { branch: string; success: boolean; message: string }) => `${r.branch}: ${r.success ? '✅' : '❌ ' + r.message}`)
+                    ?.map((r: { branch: string; success: boolean; message: string }) => `${r.branch}: ${r.success ? '' : '' + r.message}`)
                     .join(' | ') || deployData.error;
                 showToast(`Deploy de código falló: ${detail}`, 'error');
                 return;
@@ -779,7 +779,7 @@ export default function CommandCenter() {
                         </div>
                     </div>
                     <div style={{ backgroundColor: '#F0F9FF', borderRadius: '20px', padding: '1.2rem 1.5rem', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '1.2rem' }}>💡</span>
+                        <span style={{ fontSize: '1.2rem' }}></span>
                         <p style={{ fontSize: '0.75rem', color: '#0369A1', margin: 0, fontWeight: '600' }}>Nivel <strong>Chief Engineer</strong> activo.</p>
                     </div>
                 </div>
@@ -804,7 +804,7 @@ export default function CommandCenter() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                             <section style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', padding: '2rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
-                                    <span style={{ fontSize: '1.4rem' }}>📏</span>
+                                    <span style={{ fontSize: '1.4rem' }}></span>
                                     <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>Gobernanza de Unidades</h2>
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
@@ -886,7 +886,7 @@ export default function CommandCenter() {
                             </section>
 
                             <section id="roles-section" style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #E5E7EB' }}>
-                                <h2 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '1.5rem' }}>👔 Gobernanza de Roles</h2>
+                                <h2 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '1.5rem' }}>Gobernanza de Roles</h2>
                                 <div style={{ border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                                         <thead style={{ backgroundColor: '#F9FAFB' }}>
@@ -929,7 +929,7 @@ export default function CommandCenter() {
                                 </div>
                                 <div style={{ marginTop: '1.5rem', padding: '1.5rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1.5px dashed #CBD5E1' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '900' }}>{isEditing ? '🛠️ Editando Rol Técnico' : '➕ Crear Nuevo Rol'}</h3>
+                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '900' }}>{isEditing ? 'Editando Rol Técnico' : 'Crear Nuevo Rol'}</h3>
                                         {isEditing && <button onClick={() => { setIsEditing(false); setNewRole({ label: '', value: '', color: '#64748B', permissions: [] }); }} style={{ background: 'none', border: 'none', color: '#64748B', fontWeight: '700', cursor: 'pointer' }}>Cancelar</button>}
                                     </div>
                                     
@@ -941,7 +941,7 @@ export default function CommandCenter() {
 
                                     <div style={{ padding: '1rem', backgroundColor: '#ECFDF5', borderRadius: '12px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #10B98133' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <span style={{ fontSize: '1.2rem' }}>💎</span>
+                                            <span style={{ fontSize: '1.2rem' }}></span>
                                             <div>
                                                 <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#065F46' }}>ACCESO MAESTRO (ALL ACCESS)</div>
                                                 <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '600' }}>Acceso total a la plataforma operativa (Excluye Command Center)</div>
@@ -994,7 +994,7 @@ export default function CommandCenter() {
                             <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #E5E7EB' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                                     <div>
-                                        <h2 style={{ fontSize: '1.25rem', fontWeight: '900', margin: '0 0 4px 0' }}>⚙️ Gobernanza de Atributos Maestros</h2>
+                                        <h2 style={{ fontSize: '1.25rem', fontWeight: '900', margin: '0 0 4px 0' }}>Gobernanza de Atributos Maestros</h2>
                                         <p style={{ fontSize: '0.8rem', color: '#6B7280', margin: 0 }}>Define los atributos base (calibre, maduración, empaque, etc.) y valores recomendados para el catálogo de productos.</p>
                                     </div>
                                     <button 
@@ -1022,7 +1022,7 @@ export default function CommandCenter() {
                             {/* SECCIÓN: ENRUTAMIENTO DE CORREOS (WEBHOOKS) */}
                             <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #E5E7EB' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
-                                    <span style={{ fontSize: '1.4rem' }}>📯</span>
+                                    <span style={{ fontSize: '1.4rem' }}></span>
                                     <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>Enrutamiento de Correos (Webhooks)</h2>
                                 </div>
                                 <p style={{ fontSize: '0.8rem', color: '#6B7280', marginBottom: '1.5rem' }}>
@@ -1155,11 +1155,11 @@ export default function CommandCenter() {
                     {activeTab === 'fleet' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h2>🚢 Control de Flota SaaS</h2>
+                                <h2>Control de Flota SaaS</h2>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <button onClick={handleSync} disabled={selectedIds.length === 0 || !!syncing} style={{ background: '#111827', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '12px', border: 'none', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', opacity: selectedIds.length > 0 ? 1 : 0.5, whiteSpace: 'nowrap' }}>
                                     <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-                                    {syncing ? 'Desplegando...' : `🚀 Deploy a ${selectedIds.length} Instancias`}
+                                    {syncing ? 'Desplegando...' : `Deploy a ${selectedIds.length} Instancias`}
                                 </button>
                             </div>
                             </div>
@@ -1191,7 +1191,7 @@ export default function CommandCenter() {
                     {activeTab === 'geofencing' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h2>📍 Control Maestro de Geocercas</h2>
+                                <h2>Control Maestro de Geocercas</h2>
                                 <p style={{ fontSize: '0.8rem', color: '#6B7280', margin: 0 }}>Define los perímetros globales de operación B2B y B2C.</p>
                             </div>
                             <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', border: '1px solid #E5E7EB' }}>
@@ -1209,7 +1209,7 @@ export default function CommandCenter() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {/* Banner Informativo sobre Políticas de Retención */}
                             <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #10B98133', borderRadius: '12px', padding: '0.6rem 1rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                <span style={{ fontSize: '1.1rem' }}>🛡️</span>
+                                <span style={{ fontSize: '1.1rem' }}></span>
                                 <div>
                                     <h4 style={{ margin: 0, fontWeight: '800', color: '#065F46', fontSize: '0.72rem' }}>CONSOLA DE AUDITORÍA MASTER (ACCESO TÉCNICO COMPLETO IRRESTRICTO)</h4>
                                     <p style={{ margin: '2px 0 0 0', fontSize: '0.68rem', color: '#047857', fontWeight: '600' }}>
@@ -1223,7 +1223,7 @@ export default function CommandCenter() {
                                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                     {/* Título */}
                                     <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-                                        🔍 Super Buscador
+                                        Super Buscador
                                     </h3>
 
                                     {/* Entrada de búsqueda */}

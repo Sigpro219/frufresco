@@ -7,7 +7,7 @@ import {
 } from '@/lib/ai/aiModelConfig';
 
 /**
- * 🛠️ Sanitizador de Texto Inteligente para OCR/PDF/Email
+ * Sanitizador de Texto Inteligente para OCR/PDF/Email
  * Normaliza caracteres homóglifos (ej. Beta 'Β' a 'B'), colapsa espacios por kerning y remueve tildes.
  */
 export function sanitizeDocText(text: string): string {
@@ -30,7 +30,7 @@ export function sanitizeDocText(text: string): string {
 }
 
 /**
- * ⚡ Extractor IA con Gobernanza Central y Centinela de Obsolescencia Poka-Yoke
+ * Extractor IA con Gobernanza Central y Centinela de Obsolescencia Poka-Yoke
  */
 export async function fetchGeminiExtraction(
   apiKey: string,
@@ -97,7 +97,7 @@ export async function fetchGeminiExtraction(
         throw new Error(`El modelo ${modelName} no devolvió texto en la respuesta.`);
       }
 
-      console.log(`[OrderParserEngine] ✅ Extracción exitosa con modelo ${modelName}`);
+      console.log(`[OrderParserEngine] Extracción exitosa con modelo ${modelName}`);
       return { rawText: text, modelUsed: modelName };
     },
     {
@@ -146,7 +146,7 @@ export async function fetchGeminiExtraction(
 }
 
 /**
- * 🎯 Resolutor Multicanal de Perfil de Cliente
+ * Resolutor Multicanal de Perfil de Cliente
  * Capa 1: NIT -> Capa 2: Emails / Aliases -> Capa 3: Razón Social -> Capa 4: Texto de Firma
  */
 export function resolveClientProfile(
@@ -311,7 +311,7 @@ export interface ProductMatchResult {
 }
 
 /**
- * 📦 Buscador Detallado de Productos con Nivel de Confianza
+ * Buscador Detallado de Productos con Nivel de Confianza
  */
 export function findBestProductMatchDetails(
   rawName: string,
@@ -415,7 +415,7 @@ export function findBestProductMatchDetails(
 }
 
 /**
- * 📦 Buscador Inteligente de Productos con Memoria Histórica (Compatibilidad)
+ * Buscador Inteligente de Productos con Memoria Histórica (Compatibilidad)
  */
 export function findBestProductMatch(
   rawName: string,
@@ -426,7 +426,7 @@ export function findBestProductMatch(
 }
 
 /**
- * 💾 Guardar Coincidencia Confirmada en la Memoria Histórica del Cliente
+ * Guardar Coincidencia Confirmada en la Memoria Histórica del Cliente
  */
 export async function recordLearningMemory(
   supabaseClient: any,
@@ -454,7 +454,7 @@ export async function recordLearningMemory(
 }
 
 /**
- * 🔍 Extractor Heurístico y Regex de Orden de Compra (OC / OCC / PO / SOLPED)
+ * Extractor Heurístico y Regex de Orden de Compra (OC / OCC / PO / SOLPED)
  * Permite capturar números de OC desde el asunto del correo, cabeceras o texto libre.
  */
 export function extractPurchaseOrderFromText(text: string): string | null {

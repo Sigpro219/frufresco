@@ -10,7 +10,7 @@ const supabaseAnonKey = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const isUrlValid = supabaseUrl.startsWith('http');
 
 if (!isUrlValid && typeof window !== 'undefined') {
-    console.warn('⚠️ Supabase URL is missing or invalid. Check your Environment Variables.');
+    console.warn('️ Supabase URL is missing or invalid. Check your Environment Variables.');
 }
 
 const createSafeClient = () => {

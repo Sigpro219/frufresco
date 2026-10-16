@@ -5,7 +5,7 @@ import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 export const dynamic = 'force-dynamic';
 
 /**
- * 🏷️ Endpoint SDD Escenario 221:
+ * ️ Endpoint SDD Escenario 221:
  * Gestión y Asignación Comercial de Precios para Remisiones Fuera de Acuerdo ($0 COP).
  *
  * - GET: Consulta todas las remisiones/pedidos despachados sin precio (Fuera de Acuerdo a $0)

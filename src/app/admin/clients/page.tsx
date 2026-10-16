@@ -237,7 +237,7 @@ export default function AdminClientsPage() {
 
             // Segunda confirmación (Énfasis en la criticidad)
             const confirm2 = window.confirm(
-                `⚠️ ATENCIÓN: Esta acción es CRÍTICA.\n\n` +
+                `ATENCIÓN: Esta acción es CRÍTICA.\n\n` +
                 `El cambio de modelo re-estructurará cómo se calculan los precios para este cliente. ¿Estás absolutamente seguro de proceder?`
             );
             if (!confirm2) return;
@@ -277,7 +277,7 @@ export default function AdminClientsPage() {
                 .eq('id', clientId);
         }
 
-        window.showToast?.(isVerified ? '✓ Cliente marcado como REVISADO (Dev)' : '⏳ Cliente marcado como PENDIENTE (Dev)', 'success');
+        window.showToast?.(isVerified ? 'Cliente marcado como REVISADO (Dev)' : 'Cliente marcado como PENDIENTE (Dev)', 'success');
     };
 
     const handleUpdateLeadContact = async (id: string, contactMade: boolean = true) => {
@@ -1113,7 +1113,7 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                         title="Etapa Dev: Click para cambiar estado de revisión del cliente"
                     >
                         <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
-                        <span>{isVerifiedDev ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                        <span>{isVerifiedDev ? 'REVISADO' : 'PENDIENTE'}</span>
                     </button>
                 )}
 
@@ -1197,7 +1197,7 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                     <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '600', paddingLeft: '1.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <MapPin size={12} strokeWidth={1.5} />
                         <span>{profileData.latitude.toFixed(4)}, {profileData.longitude.toFixed(4)}</span>
-                        <span style={{ marginLeft: '8px', color: '#059669' }}>✓ Geo</span>
+                        <span style={{ marginLeft: '8px', color: '#059669' }}>Geo</span>
                     </div>
                 )}
                 {isB2B && profileData && (
@@ -1634,7 +1634,7 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                                                 title="Etapa Dev: Click para cambiar estado de revisión del cliente"
                                             >
                                                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerified ? '#10B981' : '#F59E0B' }} />
-                                                <span>{isVerified ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                                                <span>{isVerified ? 'REVISADO' : 'PENDIENTE'}</span>
                                             </button>
                                         )}
                                     </td>
@@ -1785,7 +1785,7 @@ function ClientDetailsModal({ client, onClose, pricingModels, onUpdateDevVerifie
                                 title="Etapa Dev: Click para cambiar estado de revisión del cliente"
                             >
                                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
-                                <span>{isVerifiedDev ? '🔍 REVISADO (DEV)' : '⏳ PENDIENTE (DEV)'}</span>
+                                <span>{isVerifiedDev ? 'REVISADO (DEV)' : 'PENDIENTE (DEV)'}</span>
                             </button>
                         )}
                     </header>
@@ -2069,7 +2069,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, availabl
                                 <FormField label="Latitud" type="number" step="any" value={formData.latitude} onChange={(v: string) => setFormData({...formData, latitude: v})} />
                                 <FormField label="Longitud" type="number" step="any" value={formData.longitude} onChange={(v: string) => setFormData({...formData, longitude: v})} />
                                 <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: '0.7rem', color: '#0369A1', fontWeight: '600' }}>
-                                    💡 Las coordenadas permiten optimizar las rutas de despacho automáticamente.
+                                    Las coordenadas permiten optimizar las rutas de despacho automáticamente.
                                 </p>
                             </div>
                         </div>

@@ -276,7 +276,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
             setMessages(prev => [
                 ...prev,
-                { id: Date.now(), text: `📍 Ubicación confirmada: ${addressInput || 'Bogotá'}`, sender: 'user' }
+                { id: Date.now(), text: `Ubicación confirmada: ${addressInput || 'Bogotá'}`, sender: 'user' }
             ]);
 
             setIsTyping(true);
@@ -286,7 +286,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     ...prev,
                     { 
                         id: Date.now() + 1, 
-                        text: `📍 ¡Ubicación confirmada en zona de cobertura activa! Paso 3 de 3: ¿A dónde enviamos tu pre-cotización en PDF y propuesta de precios?`, 
+                        text: `¡Ubicación confirmada en zona de cobertura activa! Paso 3 de 3: ¿A dónde enviamos tu pre-cotización en PDF y propuesta de precios?`, 
                         sender: 'bot' 
                     }
                 ]);
@@ -308,7 +308,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
             setMessages(prev => [
                 ...prev,
-                { id: Date.now(), text: `📍 Ubicación verificada fuera de zona principal.`, sender: 'user' }
+                { id: Date.now(), text: `Ubicación verificada fuera de zona principal.`, sender: 'user' }
             ]);
 
             setIsTyping(true);

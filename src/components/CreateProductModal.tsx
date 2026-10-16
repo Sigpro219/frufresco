@@ -461,8 +461,8 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                 border: '1px solid #E5E7EB'
             }}>
                 <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #f3f4f6', paddingBottom: '0.8rem' }}>
-                    <h2 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>✨ Nuevo SKU Maestro</h2>
-                    <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '1.8rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}>✕</button>
+                    <h2 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>Nuevo SKU Maestro</h2>
+                    <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '1.8rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}></button>
                 </header>
 
                 <form onSubmit={handleSubmit}>
@@ -670,7 +670,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                             }}
                                             style={{ padding: '0.6rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', color: '#EF4444', fontWeight: '800', fontSize: '0.8rem' }}
                                         >
-                                            ❌ Ninguno (Producto Independiente)
+                                            Ninguno (Producto Independiente)
                                         </div>
                                         {allProducts
                                             .filter(p => p.name.toLowerCase().includes(parentSearch.toLowerCase()) || (p.accounting_id && p.accounting_id.toString().includes(parentSearch)) || (p.sku && p.sku.toLowerCase().includes(parentSearch.toLowerCase())))
@@ -699,7 +699,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 <div style={{ padding: '1rem', backgroundColor: '#EFF6FF', borderRadius: '14px', border: '1px solid #BFDBFE', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E40AF', fontWeight: '800', fontSize: '0.75rem' }}>
-                                            <span>📊 HIJO FRACCIONADO</span>
+                                            <span>HIJO FRACCIONADO</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span style={{ fontSize: '0.65rem', fontWeight: '800', color: formData.inherit_price ? '#2563EB' : '#6B7280' }}>
@@ -743,7 +743,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         disabled={generatingAI}
                                         style={{ padding: '3px 8px', borderRadius: '6px', border: 'none', backgroundColor: '#EEF2FF', color: '#4F46E5', fontSize: '0.65rem', fontWeight: '800', cursor: 'pointer' }}
                                     >
-                                        {generatingAI ? '...' : '✨ IA'}
+                                        {generatingAI ? '...' : 'IA'}
                                     </button>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
@@ -879,7 +879,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                                             onClick={() => setFormData({ ...formData, tags: formData.tags.filter((_, i) => i !== idx) })}
                                                             style={{ background: 'none', border: 'none', color: '#EA580C', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
                                                         >
-                                                            ✕
+                                                            
                                                         </button>
                                                     </div>
                                                 ))}
@@ -921,7 +921,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         {previewUrl ? (
                                             <Image src={previewUrl} alt="" width={80} height={80} style={{ height: '70px', width: 'auto', borderRadius: '8px' }} />
                                         ) : (
-                                            <span style={{ fontSize: '1.5rem' }}>📸</span>
+                                            <span style={{ fontSize: '1.5rem' }}></span>
                                         )}
                                         <input type="file" accept="image/*" onChange={handleFileChange} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
                                     </div>
@@ -963,7 +963,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                                 {options.map((opt, idx) => (
                                     <div key={idx} style={{ padding: '0.8rem', backgroundColor: '#F3F4F6', borderRadius: '10px', position: 'relative' }}>
-                                        <button type="button" onClick={() => removeOption(idx)} style={{ position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', color: '#EF4444', fontWeight: '900', cursor: 'pointer' }}>✕</button>
+                                        <button type="button" onClick={() => removeOption(idx)} style={{ position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', color: '#EF4444', fontWeight: '900', cursor: 'pointer' }}></button>
                                         
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.5rem' }}>
                                             <select
@@ -994,7 +994,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 )}
 
                                 {options.length > 0 && (
-                                    <button type="button" onClick={generateVariants} style={{ padding: '0.6rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '0.8rem' }}>🔄 Combinar</button>
+                                    <button type="button" onClick={generateVariants} style={{ padding: '0.6rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '0.8rem' }}>Combinar</button>
                                 )}
 
                                 {variants.length > 0 && (
@@ -1038,7 +1038,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
                             }}
                         >
-                            {loading || uploading ? '...' : '🚀 Crear SKU Maestro'}
+                            {loading || uploading ? '...' : 'Crear SKU Maestro'}
                         </button>
                     </footer>
                 </form>

@@ -61,7 +61,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             // We only clear if there was a previous user (Logout)
             // or if we want a fresh start on every login too.
             if (prevUserRef.current !== null) {
-                console.log('🛒 Sesión cambiada: Vacíando carrito por seguridad.');
+                console.log('Sesión cambiada: Vacíando carrito por seguridad.');
                 setItems([]);
                 localStorage.removeItem('frufresco_cart');
                 localStorage.removeItem('logistics_pro_cart');

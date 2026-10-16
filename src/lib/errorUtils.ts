@@ -6,10 +6,10 @@ export function diagnoseStorageError(error: any, bucketName: string) {
     if (!error) return null;
     
     const message = error.message || String(error);
-    console.error(`🚨 Storage Error [${bucketName}]:`, error);
+    console.error(`Storage Error [${bucketName}]:`, error);
 
     if (message.includes('Unexpected token') || message.includes('<html')) {
-        const diagnosis = `💡 DIAGNOSIS: The server returned HTML instead of JSON. 
+        const diagnosis = `DIAGNOSIS: The server returned HTML instead of JSON. 
         Possible causes:
         1. The bucket "${bucketName}" does not exist in Supabase.
         2. The bucket "${bucketName}" is private but being accessed without a session.
@@ -21,7 +21,7 @@ export function diagnoseStorageError(error: any, bucketName: string) {
     }
 
     if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('Load failed')) {
-        const diagnosis = `🌐 NETWORK DIAGNOSIS: The browser failed to reach the Supabase Storage API.
+        const diagnosis = `NETWORK DIAGNOSIS: The browser failed to reach the Supabase Storage API.
         Possible causes:
         1. An ad-blocker or tracker blocker is preventing the request.
         2. Your internet connection is unstable or DNS is failing.
@@ -45,11 +45,11 @@ export function diagnoseDatabaseError(error: any, table: string, operation: stri
     const message = error.message || String(error);
     const code = error.code || '';
     
-    console.error(`🚨 Database Error [${table} - ${operation}]:`, error);
+    console.error(`Database Error [${table} - ${operation}]:`, error);
 
     // Common RLS error code is 42501 (insufficient_privilege)
     if (code === '42501' || message.includes('permission denied') || message.includes('policy')) {
-        const diagnosis = `⚠️ DIAGNOSIS DE INFRAESTRUCTURA: Error de permisos (RLS). 
+        const diagnosis = `DIAGNOSIS DE INFRAESTRUCTURA: Error de permisos (RLS). 
         CAUSA: La tabla "${table}" no tiene políticas de escritura permitidas para este usuario/tenant.
         SOLUCIÓN: Debes ejecutar un script SQL en el panel de Supabase de este Tenant para habilitar ${operation}.
         EJEMPLO SQL: "CREATE POLICY \"Allow ${operation}\" ON ${table} FOR ${operation.toUpperCase()} USING (true) WITH CHECK (true);"`;
@@ -93,7 +93,7 @@ export function logError(context: string, err: unknown) {
     
     // Better object representation for the console 
     if (err instanceof Error) {
-        console.error(`❌ [${context}]`, {
+        console.error(`[${context}]`, {
             message: err.message,
             name: err.name,
             stack: err.stack,
@@ -106,11 +106,11 @@ export function logError(context: string, err: unknown) {
             Object.getOwnPropertyNames(err).forEach(key => {
                 detailed[key] = (err as any)[key];
             });
-            console.error(`❌ [${context}]`, detailed);
+            console.error(`[${context}]`, detailed);
         } catch (e) {
-            console.error(`❌ [${context}]`, err);
+            console.error(`[${context}]`, err);
         }
     } else {
-        console.error(`❌ [${context}]`, err);
+        console.error(`[${context}]`, err);
     }
 }

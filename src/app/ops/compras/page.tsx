@@ -25,7 +25,21 @@ import {
   Clock,
   HelpCircle,
   Pencil,
-  Coins
+  Coins,
+  Sparkles,
+  Trophy,
+  Flag,
+  Zap,
+  X,
+  Check,
+  CheckCircle2,
+  Truck,
+  Image as ImageIcon,
+  Ban,
+  CreditCard,
+  Banknote,
+  Rocket,
+  LayoutGrid
 } from 'lucide-react';
 
 interface ProcurementTask {
@@ -580,7 +594,7 @@ export default function ProcurementPage() {
           formatted = formatted.filter(t => t.category === finalCategory);
         }
 
-        // 8. Sorting by Alert Severity (🔴 > 🟠 > 🟡 > partial > pending > completed)
+        // 8. Sorting by Alert Severity (Rechazo > Faltante > Calidad > partial > pending > completed)
         formatted.sort((a, b) => {
           // Status order priority
           const getTaskSeverity = (t: ProcurementTask): number => {
@@ -980,7 +994,7 @@ export default function ProcurementPage() {
                 type: 'queja',
                 priority: 'urgent',
                 status: 'pending',
-                subject: `[🚨 Quiebre en Plaza: Requiere Acción Inmediata] ${selectedTask.product_name} (${ordItem.quantity} ${selectedTask.unit})`,
+                subject: `[ALERTA: Quiebre en Plaza - Requiere Acción Inmediata] ${selectedTask.product_name} (${ordItem.quantity} ${selectedTask.unit})`,
                 description: `El comprador en Corabastos reportó quiebre de abastecimiento ("NO LO HAY") a las ${new Date().toLocaleTimeString('es-CO')}.\nMotivo: ${shortageReason}.\n\nSe requiere contactar al cliente de inmediato para acordar: 1) Sustitución de SKU en bodega, 2) Retiro limpio de remisión (Col K), o 3) Anexión a próximo pedido (D+1).`,
                 defect_category_l1: 'comercial_cliente',
                 defect_subtype_l2: 'producto_agotado_plaza',
@@ -1022,29 +1036,29 @@ export default function ProcurementPage() {
 
     // Validación de campos obligatorios con mensajes específicos
     if (!qty) {
-      setFormError("⚠️ Indica la cantidad de la compra");
+      setFormError("Indica la cantidad de la compra");
       return;
     }
     if (!price) {
-      setFormError("⚠️ Indica el precio unitario");
+      setFormError("Indica el precio unitario");
       return;
     }
     if (isQuickProvider && !newProviderName) {
-      setFormError("⚠️ Indica el nombre del nuevo proveedor");
+      setFormError("Indica el nombre del nuevo proveedor");
       return;
     }
     if (!isQuickProvider && !selectedProvider) {
-      setFormError("⚠️ Selecciona un proveedor de la lista");
+      setFormError("Selecciona un proveedor de la lista");
       return;
     }
     if (!voucherFile) {
       setFormError(
-        "⚠️ Es obligatorio tomar una foto de la evidencia (Vale/Factura)",
+        "Es obligatorio tomar una foto de la evidencia (Vale/Factura)",
       );
       return;
     }
     if (pickupTimeMinutes === null) {
-      setFormError("⚠️ Selecciona una hora estimada de recogida");
+      setFormError("Selecciona una hora estimada de recogida");
       return;
     }
 
@@ -1181,7 +1195,7 @@ export default function ProcurementPage() {
         .eq("id", item.id);
       if (error) throw error;
 
-      alert("🏁 Faltante cerrado con éxito!");
+      alert("Faltante cerrado con éxito!");
       fetchTasks(undefined, filterCategory, selectedDate);
     } catch (e: any) {
       alert("Error cerrando faltante: " + e.message);
@@ -1791,7 +1805,7 @@ export default function ProcurementPage() {
                 transition: "all 0.2s ease",
               }}
             >
-              {showFilterGrid ? "✕" : "⊞"}
+              {showFilterGrid ? <X size={16} /> : <LayoutGrid size={16} />}
             </button>
           )}
         </div>
@@ -1855,7 +1869,7 @@ export default function ProcurementPage() {
                   <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: "flex", alignItems: "center", gap: "4px" }}>
                     {cat === "Ver Todo" ? <span style={{ display: "inline-flex", alignItems: "center" }}><List size={13} style={{ marginRight: "4px" }} /> Ver Todo</span> : (
                       <>
-                        {cat} {pct === 100 && <span style={{ fontSize: "0.85rem", filter: "drop-shadow(0 0 2px rgba(16,185,129,0.5))" }}>✨</span>}
+                        {cat} {pct === 100 && <Sparkles size={14} className="inline-block text-emerald-500 ml-1" />}
                       </>
                     )}
                   </span>
@@ -1871,7 +1885,7 @@ export default function ProcurementPage() {
                         textShadow: pct === 100 && !isActive ? "0 0 8px rgba(16, 185, 129, 0.4)" : "none",
                       }}
                     >
-                      {pct === 100 ? "✓ 100% LISTO" : `${pct}% listo`}
+                      {pct === 100 ? "100% LISTO" : `${pct}% listo`}
                     </span>
                   )}
                 </button>
@@ -1938,7 +1952,7 @@ export default function ProcurementPage() {
           border: "1px dashed rgba(16, 185, 129, 0.2)",
           margin: "0 0.5rem"
         }}>
-          <div style={{ fontSize: "3.5rem", marginBottom: "1.5rem" }}>✨</div>
+          <div className="flex justify-center mb-6"><Sparkles size={48} className="text-emerald-500" /></div>
           <h3 style={{ color: "var(--ops-primary)", fontSize: "1.5rem", fontWeight: "900", margin: "0 0 0.5rem 0" }}>
             ¡Todo bajo control!
           </h3>
@@ -1960,7 +1974,7 @@ export default function ProcurementPage() {
               boxShadow: "0 0 20px rgba(16, 185, 129, 0.2)",
               animation: "popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
             }}>
-              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏆</div>
+              <div className="flex justify-center mb-2"><Trophy size={40} className="text-amber-500" /></div>
               <h2 style={{ margin: 0, color: "#10B981", fontSize: "1.4rem", fontWeight: "900" }}>
                 ¡Misión Cumplida!
               </h2>
@@ -2095,7 +2109,7 @@ export default function ProcurementPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
                       <span style={{ fontSize: "0.68rem", color: "var(--ops-text-muted)", fontWeight: "900", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        {group.category} • {formatDateFriendly(group.delivery_date)} {isDone && "✓"}
+                        {group.category} • {formatDateFriendly(group.delivery_date)} {isDone && "(Listo)"}
                       </span>
                       <h2 style={{ margin: "0.2rem 0", fontSize: "1.15rem", fontWeight: "900", color: isDone ? "var(--ops-text-muted)" : "var(--ops-text)" }}>
                         {group.product_name_base}
@@ -2110,7 +2124,7 @@ export default function ProcurementPage() {
                           backgroundColor: "rgba(239, 68, 68, 0.15)", color: "#EF4444", border: "1px solid #EF4444",
                           animation: "pulse-red 2s infinite", display: "flex", alignItems: "center", gap: "3px"
                         }}>
-                          🔴 DEVOLUCIÓN
+                          DEVOLUCIÓN
                         </span>
                       )}
                       {group.hasDeficit && (
@@ -2119,7 +2133,7 @@ export default function ProcurementPage() {
                           backgroundColor: "rgba(245, 158, 11, 0.15)", color: "#F59E0B", border: "1px solid #F59E0B",
                           animation: "pulse-orange 2s infinite", display: "flex", alignItems: "center", gap: "3px"
                         }}>
-                          🟠 FALTANTE
+                          FALTANTE
                         </span>
                       )}
                       {group.hasWarning && (
@@ -2128,7 +2142,7 @@ export default function ProcurementPage() {
                           backgroundColor: "rgba(234, 179, 8, 0.15)", color: "#EAB308", border: "1px solid #EAB308",
                           animation: "pulse-yellow 2s infinite", display: "flex", alignItems: "center", gap: "3px"
                         }}>
-                          🟡 ALERTA CALIDAD
+                          ALERTA CALIDAD
                         </span>
                       )}
                       {!group.hasRejection && !group.hasDeficit && !group.hasWarning && (
@@ -2255,7 +2269,7 @@ export default function ProcurementPage() {
                                   fontWeight: "800",
                                   border: "1px solid rgba(16, 185, 129, 0.3)"
                                 }}>
-                                  ✓ COMPRADO
+                                  COMPRADO
                                 </span>
                               )}
                               {/* Shortfall close fast action */}
@@ -2269,7 +2283,7 @@ export default function ProcurementPage() {
                                     fontSize: "0.7rem", fontWeight: "bold", cursor: "pointer"
                                   }}
                                 >
-                                  🏁
+                                  <Flag size={14} />
                                 </button>
                               )}
                               {/* Fast purchase action */}
@@ -2317,7 +2331,7 @@ export default function ProcurementPage() {
                                         .eq("id", item.id);
                                       if (tErr) throw tErr;
 
-                                      alert("⚡ Compra rápida registrada con éxito!");
+                                      alert("Compra rápida registrada con éxito!");
                                       fetchTasks(undefined, filterCategory, selectedDate);
                                     } catch (err: any) {
                                       alert("Error en compra rápida: " + err.message);
@@ -2330,7 +2344,7 @@ export default function ProcurementPage() {
                                     fontSize: "0.7rem", fontWeight: "bold", cursor: "pointer"
                                   }}
                                 >
-                                  ⚡
+                                  <Zap size={14} />
                                 </button>
                               )}
                             </div>
@@ -2463,7 +2477,7 @@ export default function ProcurementPage() {
                   fontSize: "1.5rem",
                 }}
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
 
@@ -2476,7 +2490,7 @@ export default function ProcurementPage() {
                 }}
               >
                 <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>
-                  {selectedTask.status === "completed" ? "🎉" : "🛒"}
+                  {selectedTask.status === "completed" ? <CheckCircle2 size={24} className="text-emerald-500" /> : <ShoppingCart size={24} className="text-blue-500" />}
                 </div>
                 <h3
                   style={{
@@ -2509,9 +2523,7 @@ export default function ProcurementPage() {
                   borderRadius: "16px",
                 }}
               >
-                <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>
-                  ✅
-                </div>
+                <div className="flex justify-center mb-4"><CheckCircle2 size={40} className="text-emerald-500" /></div>
                 <h3
                   style={{
                     color: "var(--ops-primary)",
@@ -2552,7 +2564,7 @@ export default function ProcurementPage() {
                           gap: "0.4rem"
                         }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
-                            <span>👤 {purchase.provider?.name || "Proveedor Desconocido"}</span>
+                            <span className="flex items-center gap-1.5"><User size={14} /> {purchase.provider?.name || "Proveedor Desconocido"}</span>
                             <span style={{ color: "var(--ops-primary)" }}>+{formatNumber(purchase.quantity)} {purchase.purchase_unit || "Kg"}</span>
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ops-text-muted)", fontSize: "0.75rem" }}>
@@ -2561,7 +2573,7 @@ export default function ProcurementPage() {
                           </div>
                           {purchase.estimated_pickup_time && (
                             <div style={{ fontSize: "0.75rem", color: "#F59E0B" }}>
-                              🕒 Hora Estimada Recogida: {new Date(purchase.estimated_pickup_time).toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })}
+                              Hora Estimada Recogida: {new Date(purchase.estimated_pickup_time).toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })}
                             </div>
                           )}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem", borderTop: "1px dashed var(--ops-border)", paddingTop: "0.25rem" }}>
@@ -2570,22 +2582,22 @@ export default function ProcurementPage() {
                               {(() => {
                                 switch (purchase.status) {
                                   case 'received_ok':
-                                    return <span style={{ fontWeight: "bold", color: "var(--ops-primary)" }}>Recibido Conforme ✓</span>;
+                                    return <span style={{ fontWeight: "bold", color: "var(--ops-primary)" }} className="inline-flex items-center gap-1">Recibido Conforme <Check size={14} /></span>;
                                   case 'received_partial':
-                                    return <span style={{ fontWeight: "bold", color: "var(--ops-primary)" }}>Recibido Parcial ✓</span>;
+                                    return <span style={{ fontWeight: "bold", color: "var(--ops-primary)" }} className="inline-flex items-center gap-1">Recibido Parcial <Check size={14} /></span>;
                                   case 'received_rejected':
-                                    return <span style={{ fontWeight: "bold", color: "#EF4444" }}>Rechazado en Recepción 🔴</span>;
+                                    return <span style={{ fontWeight: "bold", color: "#EF4444" }} className="inline-flex items-center gap-1">Rechazado en Recepción <AlertCircle size={14} /></span>;
                                   case 'rejected':
-                                    return <span style={{ fontWeight: "bold", color: "#EF4444" }}>Rechazado en Recogida 🔴</span>;
+                                    return <span style={{ fontWeight: "bold", color: "#EF4444" }} className="inline-flex items-center gap-1">Rechazado en Recogida <AlertCircle size={14} /></span>;
                                   case 'picked_up':
-                                    return <span style={{ fontWeight: "bold", color: "#3B82F6" }}>En Tránsito / Recogido 🚚</span>;
+                                    return <span style={{ fontWeight: "bold", color: "#3B82F6" }} className="inline-flex items-center gap-1">En Tránsito / Recogido <Truck size={14} /></span>;
                                   case 'partial_pickup':
-                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }}>Recogida Parcial ⏳</span>;
+                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }} className="inline-flex items-center gap-1">Recogida Parcial <Clock size={14} /></span>;
                                   case 'receiving':
-                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }}>En Recepción 🏢</span>;
+                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }}>En Recepción</span>;
                                   case 'pending_pickup':
                                   default:
-                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }}>Pendiente Recogida ⏳</span>;
+                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }} className="inline-flex items-center gap-1">Pendiente Recogida <Clock size={14} /></span>;
                                 }
                               })()}
                             </span>
@@ -2593,7 +2605,7 @@ export default function ProcurementPage() {
                               <a href={purchase.voucher_image_url} target="_blank" rel="noreferrer" style={{
                                 fontSize: "0.7rem", color: "var(--ops-primary)", fontWeight: "bold", textDecoration: "underline"
                               }}>
-                                Ver Vale 🖼️
+                                Ver Vale
                               </a>
                             )}
                           </div>
@@ -2868,9 +2880,7 @@ export default function ProcurementPage() {
                               </div>
                             );
                           })()}
-                          <span style={{ color: "var(--ops-text-muted)", fontSize: "0.9rem", fontWeight: "bold", marginLeft: "10px" }}>
-                            ✕
-                          </span>
+                          <span style={{ color: "var(--ops-text-muted)", marginLeft: "10px", display: "inline-flex", alignItems: "center" }}><X size={14} /></span>
                         </div>
                       ) : (
                         <>
@@ -3413,7 +3423,7 @@ export default function ProcurementPage() {
                         gap: "6px"
                       }}
                     >
-                      💵 En Efectivo
+                      En Efectivo
                     </button>
                     <button
                       type="button"
@@ -3433,7 +3443,7 @@ export default function ProcurementPage() {
                         gap: "6px"
                       }}
                     >
-                      📑 A Crédito
+                      A Crédito
                     </button>
                   </div>
                 </div>
@@ -3524,7 +3534,7 @@ export default function ProcurementPage() {
                       marginTop: "0.5rem",
                     }}
                   >
-                    <span>🚫</span> {formError}
+                    <Ban size={16} className="inline-block text-rose-500 mr-1" /> {formError}
                   </div>
                 )}
 
@@ -3721,7 +3731,7 @@ export default function ProcurementPage() {
                 e.currentTarget.style.color = '#94A3B8';
               }}
             >
-              ✕
+              <X size={18} />
             </button>
 
             {/* Step Content */}
@@ -3795,7 +3805,7 @@ export default function ProcurementPage() {
                 {guideStep === 0 && "¡Bienvenido a Compras!"}
                 {guideStep === 1 && "Fórmula de Neteo Inteligente"}
                 {guideStep === 2 && "Semáforo y Burbuja de Alertas"}
-                {guideStep === 3 && "Acciones Rápidas (⚡ / 🏁)"}
+                {guideStep === 3 && "Acciones Rápidas (Compra Rápida / Cierre)"}
                 {guideStep === 4 && "Resolución de Novedades"}
               </h4>
 
@@ -3803,8 +3813,8 @@ export default function ProcurementPage() {
               <p style={{ margin: 0, fontSize: '0.85rem', color: '#94A3B8', lineHeight: '1.5', minHeight: '60px' }}>
                 {guideStep === 0 && "Esta interfaz te permite ver qué productos comprar para mañana de acuerdo a la demanda real consolidada. Se calcula cruzando stock, pedidos y existencias de seguridad."}
                 {guideStep === 1 && "La meta neta se calcula restando el stock de bodega de forma secuencial. El stock mínimo de seguridad se añade únicamente a la primera variante del producto para no duplicar compras."}
-                {guideStep === 2 && "Las devoluciones 🔴, faltantes 🟠 y advertencias de calidad 🟡 se propagan automáticamente aquí y elevan la tarjeta al inicio para que tomes acción inmediata sin demoras."}
-                {guideStep === 3 && "Usa el botón ⚡ para comprar al instante con tu último proveedor usando memoria inteligente. Usa 🏁 para cerrar la meta si hay una entrega parcial aceptada."}
+                {guideStep === 2 && "Las devoluciones, faltantes y advertencias de calidad se propagan automáticamente aquí y elevan la tarjeta al inicio para que tomes acción inmediata sin demoras."}
+                {guideStep === 3 && "Usa el botón de rayo para comprar al instante con tu último proveedor usando memoria inteligente. Usa la bandera para cerrar la meta si hay una entrega parcial aceptada."}
                 {guideStep === 4 && "Cuando hay una novedad, el formulario se bloquea temporalmente. Elige reprogramar la recogida, comprar a otro proveedor, o aceptar la entrega parcial cerrando la brecha."}
               </p>
 
@@ -3868,7 +3878,7 @@ export default function ProcurementPage() {
                       boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
                     }}
                   >
-                    Comenzar 🚀
+                    Comenzar
                   </button>
                 )}
               </div>

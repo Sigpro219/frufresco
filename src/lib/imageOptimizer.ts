@@ -90,7 +90,7 @@ export async function optimizeImageForUpload(
                         );
 
                         console.log(
-                            `⚡ [Image Optimizer] ${file.name} (${Math.round(file.size / 1024)} KB) -> ` +
+                            `[Image Optimizer] ${file.name} (${Math.round(file.size / 1024)} KB) -> ` +
                             `${optimizedFile.name} (${Math.round(optimizedFile.size / 1024)} KB) ` +
                             `[${width}x${height}px, ${(100 - (optimizedFile.size / file.size) * 100).toFixed(1)}% reducido]`
                         );

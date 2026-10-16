@@ -1,13 +1,13 @@
-# onFRU — Supply Chain Operating System (SCOS)
+﻿# onFRU — Supply Chain Operating System (SCOS)
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.198 (Checkout Web B2C y Deducción de Nómina Pre-Autorizada en Colaboradores, Control Dual en Talento Humano y Compensación ACID — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.202 (Tooltips Explicativos e Indicadores Micro-Visuales en Encabezados de Acuerdos Especiales — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 229 Escenarios BDD Ininterrumpidos (1..229)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 234 Escenarios BDD Ininterrumpidos (1..234)
 
 ---
 
@@ -23,12 +23,12 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230, 231, 232, 233, 234 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223 (§39.1 - §39.6) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **229 Escenarios Canónicos (1..229)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **234 Escenarios Canónicos (1..234)** | **🟢 100%** |
 
 ---
 
@@ -1133,7 +1133,7 @@ Se formaliza contractualmente que la implementación actual de `/admin/commercia
 #### A. Modelos Semilla Intocables & Estructura de Márgenes
 El sistema gobierna la fijación de tarifas institucionales mediante modelos de margen bruto (`/admin/commercial/settings` $\to$ Modelos de Precios):
 1. **Modelos Canónicos Afinados en Producción:**
-   - **General Institucional** (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`): Línea base maestra para el 100% de clientes B2B. Los demás modelos se derivan de aquí (Margen promedio real: **34,5%**).
+   - **General institucional dinámico** (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`): Línea base maestra para el 100% de clientes B2B. Los demás modelos se derivan de aquí (Margen promedio real: **34,5%**).
    - **Clientes Hogar / B2C** (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`): Modelo B2C minorista. Ajuste `+10%` sobre línea base, filtrado estrictamente por productos activos con `show_on_web: true` (Margen promedio real: **33,2%**).
    - **Grande:** Cliente institucional corporativo de alto volumen. Ajuste `-3%` sobre la línea base general (Margen promedio real: **31,2%**).
    - **Mediano:** Cliente institucional mediano. Ajuste `-2%` sobre la línea base general (Margen promedio real: **32,1%**).
@@ -1144,6 +1144,9 @@ El sistema gobierna la fijación de tarifas institucionales mediante modelos de 
 3. **Materialización & Sincronización Desatendida:**
    - Programador de recálculo nocturno a medianoche con conmutador de días hábiles (`D L M M J V S`) para absorber variaciones de compras físicas en Corabastos y actualizar matrices sin interrumpir la operación diurna.
    - La función `batchRecalculateAndSyncPrices` regenera los precios proyectados aplicando merma teórica y redondeo obligatorio a $50 COP.
+4. **Arquitectura de Docking y Anclaje Fijo del Modelo Base Maestro en UI:**
+   - En la consola `/admin/commercial/settings` (o pestaña embebida de acuerdos y modelos), la galería lateral izquierda aísla a **General institucional dinámico** fijándolo permanentemente en el tope (`Modelo Base Maestro` con ícono `<Crown />` y borde esmeralda `#10B981`).
+   - Los modelos derivados y secundarios se alojan en un contenedor con scroll independiente (`maxHeight: calc(100vh - 310px)`), garantizando que el modelo matriz permanezca siempre a la vista sin importar el desplazamiento vertical del listado.
 
 #### B. Preformas & Plantillas de Cotización Rápida (`quote_templates`, `quote_template_items`)
 Para acelerar la emisión de propuestas a prospectos institucionales:
@@ -1178,8 +1181,9 @@ El Dashboard Comercial centraliza la inteligencia de negocios (BI) de ventas, re
 4. **Desempeño de KAMs & Cumplimiento de Cuotas:** Trazabilidad de cuentas asignadas, volumen facturado y tasa de retención por ejecutivo de cuenta.
 5. **Filtros Temporales Reactivos:** `Hoy`, `7 días`, `15 días`, `30 días`, `Mes en curso`, `Histórico total`.
 
-#### D. Centro de Tareas Tácticas Semanales & Asistente de Despacho de Boletín de Mercado (HITL)
-1. **Misión & Ubicación en Dashboard:**
+#### D. Centro de Tareas Tácticas Semanales, Centinelas Hover Tácticos & Asistente de Despacho de Boletín de Mercado (HITL)
+1. **Misión, Arquitectura de Centinelas Hover Tácticos & Ubicación en Dashboard:**
+   - **Micro-Centinelas Tácticos Desacoplados (Header BI):** La cabecera superior derecha del Cockpit BI (`CommercialUnifiedDashboard.tsx`) aloja dos píldoras compactas no invasivas con telemetría reactiva: `[🟢 Boletín Semanal (NC / NA)]` y `[🔴 618 SLA Vencido]`. Al pasar el cursor (`onMouseEnter`), cada píldora despliega un popover flotante oscuro de alta fidelidad (*Obsidian Titanium* zIndex 1000) con la radiografía del estado, estadísticas de cosechas/alertas de plaza y botón de acción directa hacia el asistente de despacho o hacia la Matriz de Costos filtrada, sin invadir el lienzo visual de las gráficas analíticas.
    - Un widget / tarjeta táctica destacada en la cabecera del Dashboard Comercial (`CommercialUnifiedDashboard.tsx`), con diseño de alta precisión industrial (*Swiss Precision Slate & Obsidian Titanium* - Skin 1). Sincroniza la inteligencia agronómica y de plaza con la estrategia comercial semanal.
    - **Indicador de Estado Semanal:** Muestra el estado del ciclo corriente (*"Pendiente de envío esta semana"* con badge ámbar, o *"Despachado exitosamente el [Fecha] por [Usuario]"* con badge verde esmeralda).
    - **Disparador Principal:** Botón `[🚀 Iniciar Despacho de Boletín Semanal de Cosechas & Escasez]`.
@@ -2516,6 +2520,10 @@ El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico acti
 
 5. **Iconografía Vectorial Exclusiva (100% Lucide React):**
    - Prohibición absoluta de emojis Unicode en la interfaz. Toda señalización de estado, subidas/bajadas de precio y analítica utiliza íconos vectoriales oficiales (`TrendingUp`, `TrendingDown`, `Sparkles`, `AlertTriangle`, `FileSpreadsheet`, `Bot`).
+
+6. **Ergonomía Cognitiva de Encabezados con Tooltips Explicativos y Micro-Indicadores:**
+   - En la galería de acuerdos especiales (SpecialAgreementsModule.tsx), los encabezados de tabla implementan documentación funcional contextual en hover.
+   - Cada columna combina: a) Rótulo claro con su función contractual (ej. SKU FRUFRESCO (HOMOLOGADO)), b) Micro-icono vectorizado <HelpCircle size={12} /> para señalizar auto-descubrimiento, y c) Atributo 	itle exhaustivo que clarifica origen del dato (ERP del cliente, Corabastos, SIPSA DANE, ML) y su impacto financiero en la negociación.
 
 #### Escenario 6: Navegación y Búsqueda Ágil en Galería de Acuerdos
 - **Given** un operador comercial navegando en la pestaña "Acuerdos Institucionales" con más de 20 acuerdos listados.
@@ -10422,6 +10430,98 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
       - **Línea 2 Sticky (Thead / Column Headers):** Declarado explícitamente en cada celda `<th>` con `position: 'sticky'`, `top: embedded ? '190px' : '133px'`, `zIndex: 65`, `backgroundColor: '#F8FAFC'` sólido, `borderBottom: '2px solid #E2E8F0'`.
       - **Fórmula de Continuidad Matemática (0px Gap):** $\text{top}_{\text{Thead}} = 142\text{px} + 48\text{px} = 190\text{px}$. Acople magnético hermético sin filtrado de filas al scrollear.
       - **Regla Anti-Secuestro de Scroll:** Contenedor de tarjeta con `overflow: 'visible'` y tabla Chromium con `borderCollapse: 'separate', borderSpacing: 0`.
+
+
+#### Escenario 231: Monitor Diario Comercial & BI de Pedidos (Triple Vista Analítica, Poka-Yoke de Anomalías & Boxing 6 Meses) (SDD v1.9.199)
+- **Given** el módulo comercial en `/admin/commercial` con la pestaña maestra canónica `📊 Monitor Diario BI` (`tab=daily-monitor`).
+- **When** el director comercial, analista de precios o asesor institucional accede al monitor diario de despacho:
+- **Then**:
+  1. **Sidebar Cronológico de Despacho & Política de Boxing (180 Días / 6 Meses):**
+     - Presenta un selector dinámico de ventana temporal que permite auditar cualquier fecha de despacho dentro de una ventana deslizante de 6 meses (~180 días) sin sobrecargar memoria del cliente.
+     - Agrupa las fechas cronológicamente con contador numérico de órdenes del día (`📅 dd/mmm (N pedidos)`).
+     - Al seleccionar una fecha, ejecuta una consulta optimizada y paginada en Supabase sobre las órdenes de esa jornada con sus `order_items` y cruce con `commercial_cost_matrix`.
+  2. **Triada de Banners Poka-Yoke Operativos (Detección Temprana de Riesgo Comercial):**
+     - 🔴 **Revisión Valores Iguales:** Detecta y resalta sucursales que cuenten con dos o más pedidos en la misma fecha con idéntico valor monetario exacto (mitigación de pedidos duplicados por error humano).
+     - 🟣 **Más de un Pedido por Sucursal:** Alerta sedes que registran dos o más pedidos con valores diferentes en la misma jornada (mitigación de fraccionamiento logístico involuntario).
+     - 🟠 **Revisión Pedidos Bajo Mínimo:** Alerta pedidos despachados por debajo del umbral mínimo de compra configurado para la zona de entrega.
+     - Cada banner actúa como filtro interactivo instantáneo sobre la tabla activa con iconos Lucide (`Check`, `X`).
+  3. **Triple Dimensión Analítica (Vistas Interconmutables):**
+     - **Vista 1: Ventas por Cliente:**
+       * Consecutivo de orden, Cliente / Sucursal receptora, Zona logística, Tipo (Institucional B2B / Hogar B2C / Empleado), Documento (Factura / Remisión), Medio de Pago (Crédito, Contado, Wompi, Nómina), Total Facturado ($), Total KG, Total UN y Margen de Utilidad Bruta Ponderada ($ y %).
+     - **Vista 2: Ventas por Producto (Consolidado Diario de Demanda):**
+       * Consolidado de demanda de cada SKU solicitado en la fecha: Nombre del producto, Cantidad total demandada (KG / UN), Precio Promedio Facturado ($/unidad de medida), Costo Base de Matriz y Margen Bruto Total ($ y %).
+     - **Vista 3: Producto por Cliente (Drill-Down / "¿Quién pidió este producto hoy?"):**
+       * Buscador omnibox de productos con sugerencias. Al seleccionar un producto (ej. Papa Pastusa Lavada), despliega la radiografía granular: Pedido consecutivo, Razón Social / Sucursal compradora, Cantidad exacta solicitada, Precio unitario facturado al cliente y Margen individual.
+  4. **Exportación Dinámica a Excel (.xlsx):**
+     - Incorpora el botón `[ 📥 Exportar Vista Activa a Excel ]` que genera un libro `.xlsx` formateado con los encabezados, totales, precios facturados y márgenes exactos de la vista en pantalla sin truncamientos.
+
+---
+
+#### Escenario 232: Unificación de Escala Temporal y Consistencia Matemática de Costos Vencidos en Cockpit BI (SDD v1.9.200)
+- **Given** el módulo `Cockpit Comercial & Telemetría BI` en `/admin/commercial?tab=dashboard`.
+- **When** el analista comercial consulta los indicadores de facturación, márgenes y la alerta operativa de recotización urgente de costos:
+- **Then**:
+  1. **Erradicación de Redundancia Temporal (Escala Continua de Ventanas Móviles):**
+     - Se suprime la ambigüedad generada por la coexistencia de `[30 Días]` y `[Mes Actual]` que provocaba sobrecarga cognitiva y lecturas idénticas a fin de mes.
+     - Se establece la secuencia canónica de 6 ventanas temporales puras:
+       `[ Hoy ]  [ 7 Días ]  [ 15 Días ]  [ 30 Días ]  [ 90 Días ]  [ Histórico ]`
+     - **Horizonte Trimestral (90 Días):** Implementado con comparación porcentual automática frente al trimestre previo (180d a 90d) para auditar la estacionalidad de cosechas y precios de Corabastos.
+  2. **Consistencia y Paridad Matemática de Costos Vencidos (Regla de los 618 SKUs):**
+     - Se erradica la discrepancia entre el Dashboard BI (424) y la Matriz Comercial de Costos (618).
+     - **Definición Canónica del Universo de Recotización:**
+       $$\text{SKUs por Recotizar (618)} = \text{SLA Caducado (424)} + \text{Sin Referencia de Costo (194)}$$
+     - Se preserva la identidad matemática con el catálogo activo de 620 SKUs:
+       $$620 \text{ Total Catálogo} = 618 \text{ Por Recotizar (99.7%)} + 2 \text{ Vigentes (0.3%)}$$
+     - El badge superior del Cockpit (`⚠️ 618 SLA Vencido`) y la tarjeta Hero (`618 SKUs por Recotizar`) enlazan directamente a la Matriz de Costos con `lifecycleFilter = 'vencido'`, desplegando exactamente los mismos 618 ítems.
+  3. **Identidad Visual Oficial de Espacios Corporativos B2B:**
+     - Integración de los logos vectoriales/raster oficiales de alta resolución:
+       * Grupo Nutresa: `public/logos/nutresa.jpg` (725x423 px)
+       * Caja de Compensación Colsubsidio: `public/logos/colsubsidio.jpg` (1050x590 px)
+     - Encapsulados en contenedores con preservación de relación de aspecto (`objectFit: 'contain'`), bordes sutiles `#E2E8F0` y fondo blanco neutro.
+---
+
+#### Escenario 233: Gobernanza del Modelo Base "General institucional dinámico", Docking Fijo Maestro y Centinelas Hover Tácticos en Cockpit BI (SDD v1.9.201)
+- **Given** la consola de configuración de Modelos de Precios (`/admin/commercial/settings`) y el Cockpit Comercial & Telemetría BI (`/admin/commercial?tab=dashboard`).
+- **When** el director comercial, analista de precios o administrador consulta o edita las reglas de rentabilidad y la telemetría operativa:
+- **Then**:
+  1. **Consagración Canónica del Nombre de Modelo:**
+     - El modelo de precios matriz (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) queda bautizado formalmente como **`General institucional dinámico`** en la base de datos Supabase (`pricing_models`), en los comparadores relacionales de código (`pricingUtils.ts`, `page.tsx`) y en este contrato canónico.
+  2. **Arquitectura de Docking y Anclaje Fijo del Modelo Maestro en UI:**
+     - En la barra lateral izquierda de la galería de modelos, **General institucional dinámico** se desacopla del flujo deslizante y se ancla de forma fija e inamovible en la parte superior como **`Modelo Base Maestro`** con insignia dorada/esmeralda (`<Crown />`) y realce cromático.
+     - Los modelos secundarios y derivados (Grande, Mediano, Pequeño, Clientes Hogar, Familia Cortés) se disponen inmediatamente debajo dentro de un contenedor con scroll vertical independiente (`maxHeight: calc(100vh - 310px)`), erradicando la pérdida de contexto visual del modelo base al explorar listas extensas.
+  3. **Micro-Centinelas Tácticos Pulsantes con Popover Flotante (Hover):**
+     - En el Cockpit BI, se implementa el patrón de micro-cápsulas compactas de telemetría reactiva en la cabecera (`hoveredSentinel`), reemplazando tarjetas estáticas voluminosas por disparadores ágiles con revelación flotante enriquecida en hover (*Obsidian Titanium* `zIndex: 1000`).
+     - Al retirar el cursor, el popover se oculta suavemente, preservando el 100% de la visibilidad y protagonismo del mapa georreferenciado y las curvas de facturación y margen.
+  4. **Blindaje de Iconografía Canónica (Estándar Lucide Puro):**
+     - Toda la consola y submódulos comerciales garantizan cero presencia de íconos no certificados, empleando exclusivamente la librería canónica `lucide-react` (`Crown`, `Sparkles`, `Sprout`, `CircleDot`, `AlertTriangle`).
+
+---
+
+#### Escenario 234: Ergonomía Cognitiva de Tooltips Explicativos e Indicadores Micro-Visuales en Encabezados de Galería de Acuerdos Especiales (SDD v1.9.202)
+- **Given** la galería comparativa multidimensional de **Acuerdos Especiales** (SpecialAgreementsModule.tsx en /admin/commercial?subtab=agreements).
+- **When** el analista comercial, director o negociador sitúa el cursor (*hover*) sobre cualquiera de los encabezados de columna de la tabla (<th>):
+- **Then**:
+  1. **Superación del Rótulo Trivial de Ordenamiento:**
+     - Se erradica la experiencia confusa donde el hover únicamente mostraba *Ordenar por SKU FruFresco* o mensajes genéricos idénticos a la acción de clic.
+     - Cada columna despliega un texto explicativo profundo sobre la naturaleza técnica, contractual y financiera del dato:
+       * **CÓD / MAT**: *Código interno o número de material con el que el cliente identifica este producto en su ERP (SAP/Oracle). Haz clic para ordenar.*
+       * **PRODUCTO EN PLANILLA**: *Nombre original del producto tal como fue cargado en la planilla de licitación del cliente junto con su equivalencia estandarizada. Haz clic para ordenar.*
+       * **SKU FRUFRESCO (HOMOLOGADO)**: *Homologación Inteligente (Machine Learning): Código SKU maestro del catálogo oficial de FruFresco vinculado automáticamente al producto del cliente. Haz clic para ordenar.*
+       * **CADENA / MARCA DESTINO** (Nutresa): *Marca o cadena comercial destino dentro del grupo corporativo (ej: El Corral, Leños & Carbón, Beer Station, Papa John's, Schlotzsky's).*
+       * **CONSUMO ESTIMADO MES**: *Volumen proyectado de consumo mensual en kilogramos o unidades pactadas según el histórico de abastecimiento del cliente. Haz clic para ordenar.*
+       * **COSTO CORABASTOS**: *Costo de compra en Corabastos Bogotá (fuente de abastecimiento matriz). Es el costo piso base para calcular nuestro margen de rentabilidad. Haz clic para ordenar.*
+       * **SIPSA DANE**: *Precio oficial de referencia del boletín SIPSA DANE para el mercado mayorista de Bogotá. Usado como fórmula de indexación de prima. Haz clic para ordenar.*
+       * **PROPUESTA CLIENTE**: *Tarifa máxima unitaria que el cliente solicita pagar según su pliego o planilla de cotización inicial. Haz clic para ordenar.*
+       * **PRECIO SUGERIDO**: *Tarifa calculada inteligentemente por el sistema: garantiza un margen mínimo del 15% sobre Corabastos o aplica la fórmula SIPSA + Prima contractual. Haz clic para ordenar.*
+       * **NUESTRA CONTRAPROPUESTA**: *Tarifa final que FruFresco ofertará oficialmente al cliente en este acuerdo. Es un campo editable por el equipo comercial. Haz clic para ordenar.*
+       * **IMPACTO MES ($)**: *Delta Financiero Mensual en pesos ($): (Nuestra Contrapropuesta - Propuesta Cliente) × Consumo Mes. Mide la ganancia o defensa de margen lograda en la negociación. Haz clic para ordenar.*
+  2. **Micro-Indicadores Visuales de Auto-Descubrimiento (HelpCircle):**
+     - Cada celda de encabezado incorpora un ícono micro-visual <HelpCircle size={12} /> adyacente al título de la columna.
+     - Comunica al usuario que el elemento contiene documentación funcional contextual accesible al posar el cursor, sin saturar el espacio visual ni competir con las flechas de ordenamiento (ArrowUpDown, ArrowUp, ArrowDown).
+  3. **Preservación Inalterada de Accesibilidad y Sorting:**
+     - La presencia del tooltip y del icono HelpCircle no interfiere con el evento onClick={() => handleSort(field)}.
+     - Se mantiene la compatibilidad con lectores de pantalla y directivas ARIA de navegación de tablas en Chromium.
+
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad

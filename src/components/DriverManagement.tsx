@@ -46,7 +46,7 @@ export default function DriverManagement() {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
                 <div style={{ textAlign: 'center', color: THEME.colors.textSecondary }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔄</div>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}></div>
                     <div>Cargando conductores...</div>
                 </div>
             </div>
@@ -79,13 +79,13 @@ export default function DriverManagement() {
                         boxShadow: THEME.shadow.sm
                     }}
                 >
-                    <span>🔄</span> Actualizar Lista
+                    <span></span> Actualizar Lista
                 </button>
             </div>
 
             {drivers.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#F9FAFB', borderRadius: THEME.radius.lg, border: `1px dashed ${THEME.colors.border}` }}>
-                    <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🚛</div>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}></div>
                     <div style={{ fontSize: '1rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.4rem' }}>
                         No hay conductores registrados.
                     </div>
@@ -130,7 +130,7 @@ export default function DriverManagement() {
                                     {driver.contact_name || 'Sin nombre'}
                                 </div>
                                 <div style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary, fontWeight: '600', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                    <span>📞</span> {driver.phone || 'N/A'}
+                                    <span></span> {driver.phone || 'N/A'}
                                 </div>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>

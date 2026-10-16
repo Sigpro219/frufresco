@@ -357,10 +357,10 @@ export async function POST(request: Request) {
             if (cachedOAuthToken && cachedOAuthToken.expiresAt > Date.now() + 60000) {
                 accessToken = cachedOAuthToken.token;
                 projectId = cachedOAuthToken.projectId;
-                console.log("⚡ [Optimizer] Reusing cached GCP OAuth2 token (expires in", Math.round((cachedOAuthToken.expiresAt - Date.now()) / 1000), "s)");
+                console.log("[Optimizer] Reusing cached GCP OAuth2 token (expires in", Math.round((cachedOAuthToken.expiresAt - Date.now()) / 1000), "s)");
             } else if (hasServiceAccount && serviceAccountData) {
                 try {
-                    console.log("🔑 [Optimizer] Generating fresh GCP OAuth2 token via Service Account credentials...");
+                    console.log("[Optimizer] Generating fresh GCP OAuth2 token via Service Account credentials...");
                     const keyData = serviceAccountData;
                     projectId = keyData.project_id || projectId;
                     
@@ -426,13 +426,13 @@ export async function POST(request: Request) {
                         expiresAt: Date.now() + 3300 * 1000,
                         projectId: projectId
                     };
-                    console.log("🔑 [Optimizer] Fresh OAuth2 token generated and cached successfully!");
+                    console.log("[Optimizer] Fresh OAuth2 token generated and cached successfully!");
                 } catch (oauthErr: any) {
                     console.error("OAuth token generation failed, falling back to API Key if configured:", oauthErr);
                 }
             }
 
-            console.log(`🚀 [Optimizer] Calling real Google Cloud Optimization API for Project: ${projectId}`);
+            console.log(`[Optimizer] Calling real Google Cloud Optimization API for Project: ${projectId}`);
             
             // Build target URL
             const url = `https://routeoptimization.googleapis.com/v1/projects/${projectId}:optimizeTours` + (accessToken ? '' : `?key=${gcpApiKey}`);
@@ -455,7 +455,7 @@ export async function POST(request: Request) {
                 });
             } catch (fetchErr: any) {
                 gcpFetchError = fetchErr;
-                console.warn(`⚠️ [Optimizer] GCP RouteOptimization fetch failed (${fetchErr.name === 'AbortError' ? 'Timeout 8s' : fetchErr.message}). Falling back to internal simulation heuristic. RequestId: ${requestId}`);
+                console.warn(`[Optimizer] GCP RouteOptimization fetch failed (${fetchErr.name === 'AbortError' ? 'Timeout 8s' : fetchErr.message}). Falling back to internal simulation heuristic. RequestId: ${requestId}`);
             } finally {
                 clearTimeout(gcpTimeout);
             }
@@ -552,7 +552,7 @@ export async function POST(request: Request) {
                 }, { status: 200, headers: { 'x-request-id': requestId } });
             } else {
                 const errText = gcpResponse ? await gcpResponse.text() : String(gcpFetchError?.message || 'Network / Timeout Error');
-                console.warn(`⚠️ [Optimizer] GCP RouteOptimization API non-OK response: ${errText}. RequestId: ${requestId}. Cascading to simulation fallback heuristic.`);
+                console.warn(`[Optimizer] GCP RouteOptimization API non-OK response: ${errText}. RequestId: ${requestId}. Cascading to simulation fallback heuristic.`);
             }
         }
         
@@ -737,11 +737,11 @@ INSTRUCCIONES DE REDACCIÓN:
    - Consolidación de flota: por qué se seleccionaron esos camiones específicos y el ahorro de costos fijos al dejar otros libres.
    - Agrupamiento geográfico: si hay entregas concentradas en un mismo sector o centro comercial.
    - Seguridad: cumplimiento de límites de peso y capacidad de canastillas.
-5. Inicia cada viñeta con un emoji correspondiente (ej: 🚚, ⚖️, 📍, 💰).
+5. Inicia cada viñeta con un emoji correspondiente (ej: , , , ).
 6. El texto debe ser de lectura rápida y ejecutiva para el despachador.`;
 
         if (unassignedOrders && unassignedOrders.length > 0) {
-            summaryText += `\n\n⚠️ ¡ATENCIÓN! PEDIDOS QUE NO SE PUDIERON PROGRAMAR (SKIPPED):
+            summaryText += `\n\n¡ATENCIÓN! PEDIDOS QUE NO SE PUDIERON PROGRAMAR (SKIPPED):
 ${unassignedOrders.map(o => `- Pedido #${o.id} para ${o.customer_name} (${o.total_weight_kg}kg, Canastillas: ${o.crates_count || 1}, Ventana: ${o.manual_delivery_time || 'flexible'})`).join('\n')}
 
 INSTRUCCIÓN ADICIONAL CRÍTICA:
@@ -785,20 +785,20 @@ Menciona explícitamente y al inicio del informe que NO se pudieron programar to
                 return v ? v.plate : vid;
             });
 
-        let programmaticExplanation = `### 🚚 Resumen de Planeación de Ruta (Generado Automáticamente)
+        let programmaticExplanation = `### Resumen de Planeación de Ruta (Generado Automáticamente)
 
-* 📦 Se han distribuido **${totalAssignedOrders} pedidos** de forma automática utilizando el algoritmo de optimización de capacidad y rutas.
-* 🚛 Se activaron **${activeVehicles.length} camiones** (${activeVehicles.join(', ')}) para esta operación, minimizando costos fijos al mantener el resto de la flota libre.
-* ⚖️ Las asignaciones se realizaron asegurando el cumplimiento estricto de los límites de peso (**kg**) y capacidad de canastillas de cada vehículo.
-* 📍 El agrupamiento de entregas se calculó minimizando las distancias geográficas y optimizando los tiempos estimados de llegada.
+* Se han distribuido **${totalAssignedOrders} pedidos** de forma automática utilizando el algoritmo de optimización de capacidad y rutas.
+* Se activaron **${activeVehicles.length} camiones** (${activeVehicles.join(', ')}) para esta operación, minimizando costos fijos al mantener el resto de la flota libre.
+* Las asignaciones se realizaron asegurando el cumplimiento estricto de los límites de peso (**kg**) y capacidad de canastillas de cada vehículo.
+* El agrupamiento de entregas se calculó minimizando las distancias geográficas y optimizando los tiempos estimados de llegada.
 
 *(Nota: El modelo de Inteligencia Artificial ya no está vigente o requiere actualización. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo. Sin embargo, la optimización física de rutas se completó con éxito).*`;
 
         if (unassignedOrders && unassignedOrders.length > 0) {
-            programmaticExplanation = `### ⚠️ ATENCIÓN: Planificación Incompleta (Pedidos Sin Asignar)
+            programmaticExplanation = `### ATENCIÓN: Planificación Incompleta (Pedidos Sin Asignar)
 
-* 🛑 **No se pudieron programar todos los pedidos**. Quedaron **${unassignedOrders.length} pedidos sin asignar** debido a restricciones duras de ventanas de tiempo o límites de capacidad de los vehículos activos.
-* 📋 **Pedidos sin asignar**: ${unassignedOrders.map(o => `**${o.customer_name}** (Pedido #${o.id}, ${o.total_weight_kg}kg, Ventana: ${o.manual_delivery_time || 'flexible'})`).join(', ')}.
+* **No se pudieron programar todos los pedidos**. Quedaron **${unassignedOrders.length} pedidos sin asignar** debido a restricciones duras de ventanas de tiempo o límites de capacidad de los vehículos activos.
+* **Pedidos sin asignar**: ${unassignedOrders.map(o => `**${o.customer_name}** (Pedido #${o.id}, ${o.total_weight_kg}kg, Ventana: ${o.manual_delivery_time || 'flexible'})`).join(', ')}.
 
 ---
 
@@ -809,14 +809,14 @@ Menciona explícitamente y al inicio del informe que NO se pudieron programar to
         
     } catch (e: any) {
         console.error('Error in generateAiExplanation wrapper:', e);
-        let errorFallback = `### 🚚 Resumen de Planeación de Ruta (Generado Automáticamente)
-* 📦 Se completó la optimización de rutas de forma correcta.
-* 🚛 Los pedidos fueron asignados según capacidades y cercanía geográfica.
+        let errorFallback = `### Resumen de Planeación de Ruta (Generado Automáticamente)
+* Se completó la optimización de rutas de forma correcta.
+* Los pedidos fueron asignados según capacidades y cercanía geográfica.
 *(Nota: El servidor de IA no está respondiendo temporalmente).*`;
 
         if (unassignedOrders && unassignedOrders.length > 0) {
-            errorFallback = `### ⚠️ ATENCIÓN: Planificación Incompleta
-* 🛑 **Hay ${unassignedOrders.length} pedidos sin asignar** debido a restricciones de capacidad/horario.
+            errorFallback = `### ATENCIÓN: Planificación Incompleta
+* **Hay ${unassignedOrders.length} pedidos sin asignar** debido a restricciones de capacidad/horario.
 ---
 ` + errorFallback;
         }

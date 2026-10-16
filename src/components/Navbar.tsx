@@ -842,8 +842,8 @@ export default function Navbar() {
                                             {availableProfiles.map(p => {
                                                 const isClient = p.role === 'b2b_client' || p.role === 'b2c_client' || p.role === 'client';
                                                 const label = isClient 
-                                                    ? `🛒 ${p.company_name || 'Cliente B2B'}`
-                                                    : `🏢 ${p.role || 'Colaborador'}`;
+                                                    ? `${p.company_name || 'Cliente B2B'}`
+                                                    : `${p.role || 'Colaborador'}`;
                                                 return (
                                                     <option key={p.id} value={p.id}>
                                                         {label}

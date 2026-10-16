@@ -125,14 +125,14 @@ interface InventoryDashboardProps {
 
 export const renderCellIcon = (cellIdOrIcon?: string, color: string = '#0D7A57', size: number = 18) => {
     const key = (cellIdOrIcon || '').toLowerCase();
-    if (key.includes('hortaliza') || key === 'sprout' || key === '🥬') return <Sprout size={size} strokeWidth={2.2} style={{ color }} />;
-    if (key.includes('verdura') || key === 'carrot' || key === '🥦') return <Carrot size={size} strokeWidth={2.2} style={{ color }} />;
-    if (key.includes('papa') || key.includes('tubérculo') || key.includes('tomate') || key === 'layers' || key === '🥔') return <Layers size={size} strokeWidth={2.2} style={{ color }} />;
-    if (key.includes('fruta') || key === 'apple' || key === '🍎') return <Apple size={size} strokeWidth={2.2} style={{ color }} />;
-    if (key.includes('abarrote') || key === 'boxes' || key === '🧀') return <Boxes size={size} strokeWidth={2.2} style={{ color }} />;
-    if (key.includes('grano') || key === 'wheat' || key === '🌾') return <Wheat size={size} strokeWidth={2.2} style={{ color }} />;
-    if (key.includes('lacteo') || key.includes('lácteo') || key === 'milk' || key === '🥛') return <Milk size={size} strokeWidth={2.2} style={{ color }} />;
-    if (key.includes('carne') || key === 'beef' || key === '🥩') return <Beef size={size} strokeWidth={2.2} style={{ color }} />;
+    if (key.includes('hortaliza') || key === 'sprout' || key === '') return <Sprout size={size} strokeWidth={2.2} style={{ color }} />;
+    if (key.includes('verdura') || key === 'carrot' || key === '') return <Carrot size={size} strokeWidth={2.2} style={{ color }} />;
+    if (key.includes('papa') || key.includes('tubérculo') || key.includes('tomate') || key === 'layers' || key === '') return <Layers size={size} strokeWidth={2.2} style={{ color }} />;
+    if (key.includes('fruta') || key === 'apple' || key === '') return <Apple size={size} strokeWidth={2.2} style={{ color }} />;
+    if (key.includes('abarrote') || key === 'boxes' || key === '') return <Boxes size={size} strokeWidth={2.2} style={{ color }} />;
+    if (key.includes('grano') || key === 'wheat' || key === '') return <Wheat size={size} strokeWidth={2.2} style={{ color }} />;
+    if (key.includes('lacteo') || key.includes('lácteo') || key === 'milk' || key === '') return <Milk size={size} strokeWidth={2.2} style={{ color }} />;
+    if (key.includes('carne') || key === 'beef' || key === '') return <Beef size={size} strokeWidth={2.2} style={{ color }} />;
     return <Package size={size} strokeWidth={2.2} style={{ color }} />;
 };
 
@@ -1526,7 +1526,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </div>
                         </div>
                         <div style={{ paddingTop: '0.4rem', borderTop: '1px solid #FCA5A5', fontSize: '0.68rem', color: '#991B1B', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
-                            {floorConciliation.missingKg === 0 ? '🟢 Balance en línea (Cero faltantes)' : '⚠️ Requiere auditoría de mermas'}
+                            {floorConciliation.missingKg === 0 ? 'Balance en línea (Cero faltantes)' : 'Requiere auditoría de mermas'}
                         </div>
                     </div>
 
@@ -1557,7 +1557,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </div>
                         </div>
                         <div style={{ paddingTop: '0.4rem', borderTop: '1px solid #86EFAC', fontSize: '0.68rem', color: '#166534', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
-                            {floorConciliation.surplusKg === 0 ? '🟢 Sin excedentes no registrados' : 'ℹ️ Mercancía física adicional en piso'}
+                            {floorConciliation.surplusKg === 0 ? 'Sin excedentes no registrados' : 'ℹ️ Mercancía física adicional en piso'}
                         </div>
                     </div>
 

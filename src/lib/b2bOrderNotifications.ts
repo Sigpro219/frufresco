@@ -18,7 +18,7 @@ interface B2BOrderEmailPayload {
 }
 
 export async function sendB2BOrderConfirmationEmail(payload: B2BOrderEmailPayload): Promise<{ success: boolean; messageId?: string }> {
-  console.log(`📧 [EMAIL NOTIFICATION STUB] Preparando envío de confirmación de pedido B2B:`, {
+  console.log(`[EMAIL NOTIFICATION STUB] Preparando envío de confirmación de pedido B2B:`, {
     orderId: payload.orderId,
     client: payload.clientName,
     email: payload.clientEmail || 'correo_registrado@cliente.com',

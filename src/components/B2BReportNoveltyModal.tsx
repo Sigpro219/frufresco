@@ -94,7 +94,7 @@ export default function B2BReportNoveltyModal({
             const msg = 'Por favor ingresa una breve descripción del problema.';
             setModalError(msg);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('⚠️ ' + msg, 'warning');
+                (window as any).showToast('️ ' + msg, 'warning');
             }
             return;
         }
@@ -104,7 +104,7 @@ export default function B2BReportNoveltyModal({
                 const msg = 'Por favor selecciona el producto afectado.';
                 setModalError(msg);
                 if (typeof window !== 'undefined' && (window as any).showToast) {
-                    (window as any).showToast('⚠️ ' + msg, 'warning');
+                    (window as any).showToast('️ ' + msg, 'warning');
                 }
                 return;
             }
@@ -112,7 +112,7 @@ export default function B2BReportNoveltyModal({
                 const msg = 'Por favor especifica la cantidad afectada.';
                 setModalError(msg);
                 if (typeof window !== 'undefined' && (window as any).showToast) {
-                    (window as any).showToast('⚠️ ' + msg, 'warning');
+                    (window as any).showToast('️ ' + msg, 'warning');
                 }
                 return;
             }
@@ -120,7 +120,7 @@ export default function B2BReportNoveltyModal({
                 const msg = `La cantidad afectada no puede ser mayor a la cantidad despachada (${selectedItem.quantity} ${selectedItem.products?.unit_of_measure || ''}).`;
                 setModalError(msg);
                 if (typeof window !== 'undefined' && (window as any).showToast) {
-                    (window as any).showToast('⚠️ ' + msg, 'warning');
+                    (window as any).showToast('️ ' + msg, 'warning');
                 }
                 return;
             }
@@ -238,7 +238,7 @@ export default function B2BReportNoveltyModal({
             const msg = 'Error al registrar la novedad: ' + (err.message || 'Intente nuevamente.');
             setModalError(msg);
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('❌ ' + msg, 'error');
+                (window as any).showToast('' + msg, 'error');
             }
         } finally {
             setSubmitting(false);

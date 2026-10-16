@@ -190,7 +190,7 @@ export default function RegisterB2C() {
                                     fontWeight: '600',
                                     border: '1px solid rgba(220, 38, 38, 0.3)'
                                 }}>
-                                    ⚠️ {error}
+                                    ️ {error}
                                 </div>
                             )}
 

@@ -34,9 +34,9 @@ export const translations = {
     searchHelper: "Buscar productos... (ej: yuca, @kg, @und)",
     allCategories: "Todo el Catálogo",
     valueProps: [
-      { icon: '⏱️', title: 'Entrega Puntual', desc: 'Tu operación no puede detenerse. Garantizamos entregas antes de la apertura de tu cocina.' },
-      { icon: '🥬', title: 'Frescura Absoluta', desc: 'Seleccionamos producto a producto cada madrugada. Lo que recibes hoy, se cosechó ayer.' },
-      { icon: '💎', title: 'Precios Competitivos', desc: 'Sin intermediarios innecesarios. Optimizamos la cadena para darte el mejor margen.' }
+      { icon: '', title: 'Entrega Puntual', desc: 'Tu operación no puede detenerse. Garantizamos entregas antes de la apertura de tu cocina.' },
+      { icon: '', title: 'Frescura Absoluta', desc: 'Seleccionamos producto a producto cada madrugada. Lo que recibes hoy, se cosechó ayer.' },
+      { icon: '', title: 'Precios Competitivos', desc: 'Sin intermediarios innecesarios. Optimizamos la cadena para darte el mejor margen.' }
     ],
     // Checkout
     checkoutTitle: "Resumen de Compra",
@@ -88,7 +88,7 @@ export const translations = {
     unavailable: "No disponible",
     notAvailableAlt: "Combinación no disponible actualmente",
     outOfStock: "Agotado",
-    searchTip: "💡 Tip: Puedes buscar múltiples productos separando por comas.",
+    searchTip: "Tip: Puedes buscar múltiples productos separando por comas.",
     orderTracking: "Rastrear Pedido",
     orderIdPlaceholder: "ID de Pedido...",
     trackingError: "No encontramos información de despacho para este pedido. Puede que aún esté en alistamiento.",
@@ -151,7 +151,7 @@ export const translations = {
         outOfZoneEmail: "¿Y tu correo electrónico?",
         outOfZoneSuccess: "¡Registrado! Hemos guardado tu contacto y ubicación en nuestra lista de espera. Gracias por tu interés.",
         placeholder: "Escribe aquí...",
-        btnMap: "👆 Haz clic arriba en el mapa"
+        btnMap: "Haz clic arriba en el mapa"
       },
       dashboard: {
         title: "Panel Institucional",
@@ -175,7 +175,7 @@ export const translations = {
         totalItems: "Total de artículos",
         totalWeight: "Peso total estimado",
         placeOrder: "Enviar Pedido Institucional",
-        successMsg: "✅ ¡Pedido recibido con éxito! Tu entrega ha sido programada.",
+        successMsg: "¡Pedido recibido con éxito! Tu entrega ha sido programada.",
         loadingOrder: "Cargando tu pedido...",
         searching: "Buscando...",
         add: "Agregar",
@@ -213,7 +213,7 @@ export const translations = {
         noAgreements: "Sin acuerdos activos",
         noAgreementsDesc: "Actualmente no tienes un modelo de precios fijo vinculado.",
         contactAdvisor: "Contacta a tu asesor comercial para activar beneficios institucionales.",
-        minQtyWarning: "⚠️ Agrega cantidades mayores a 0 para continuar",
+        minQtyWarning: "Agrega cantidades mayores a 0 para continuar",
         submitting: "Emitiendo...",
         modalTitle: "Personaliza tu selección:",
         addBtn: "Agregar al pedido",
@@ -263,9 +263,9 @@ export const translations = {
     searchHelper: "Search products... (e.g., avocado, @kg, @und)",
     allCategories: "All Categories",
     valueProps: [
-      { icon: '⏱️', title: 'On-time delivery', desc: 'Your operation cannot stop. We guarantee deliveries before your kitchen opens.' },
-      { icon: '🥬', title: 'Absolute Freshness', desc: 'We select product by product every morning. What you receive today was harvested yesterday.' },
-      { icon: '💎', title: 'Competitive Prices', desc: 'No unnecessary middlemen. We optimize the chain to give you the best margin.' }
+      { icon: '', title: 'On-time delivery', desc: 'Your operation cannot stop. We guarantee deliveries before your kitchen opens.' },
+      { icon: '', title: 'Absolute Freshness', desc: 'We select product by product every morning. What you receive today was harvested yesterday.' },
+      { icon: '', title: 'Competitive Prices', desc: 'No unnecessary middlemen. We optimize the chain to give you the best margin.' }
     ],
     // Checkout
     checkoutTitle: "Order Summary",
@@ -317,7 +317,7 @@ export const translations = {
     unavailable: "Not available",
     notAvailableAlt: "Combination currently unavailable",
     outOfStock: "Out of Stock",
-    searchTip: "💡 Tip: You can search multiple products separating by commas.",
+    searchTip: "Tip: You can search multiple products separating by commas.",
     orderTracking: "Track Order",
     orderIdPlaceholder: "Order ID...",
     trackingError: "We couldn't find tracking info for this order. It might still be in preparation.",
@@ -378,7 +378,7 @@ export const translations = {
         outOfZoneEmail: "And your email?",
         outOfZoneSuccess: "Registered! We have saved your contact and location in our waitlist. Thank you for your interest.",
         placeholder: "Type here...",
-        btnMap: "👆 Click on the map above"
+        btnMap: "Click on the map above"
       },
       dashboard: {
         title: "Institutional Portal",
@@ -402,7 +402,7 @@ export const translations = {
         totalItems: "Total items",
         totalWeight: "Estimated total weight",
         placeOrder: "Send Institutional Order",
-        successMsg: "✅ Order received successfully! Your delivery has been scheduled.",
+        successMsg: "Order received successfully! Your delivery has been scheduled.",
         loadingOrder: "Loading your order...",
         searching: "Searching...",
         add: "Add",
@@ -440,7 +440,7 @@ export const translations = {
         noAgreements: "No active agreements",
         noAgreementsDesc: "You currently do not have a fixed pricing model linked.",
         contactAdvisor: "Contact your commercial advisor to activate institutional benefits.",
-        minQtyWarning: "⚠️ Add quantities greater than 0 to continue",
+        minQtyWarning: "Add quantities greater than 0 to continue",
         submitting: "Submitting...",
         modalTitle: "Customize your selection:",
         addBtn: "Add to order",

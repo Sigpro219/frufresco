@@ -154,7 +154,7 @@ async function FeaturedSection({ locale }: { locale: Locale }) {
                         letterSpacing: '-0.02em',
                         lineHeight: 1.15
                     }}>
-                        {t.featuredTitle.replace('🔥', '').trim()} <span className="editorial-serif" style={{ color: 'var(--secondary, #d4a373)', fontWeight: 400 }}>{locale === 'en' ? 'fresh arrivals' : 'frescura viva'}</span>
+                        {t.featuredTitle.replace('', '').trim()} <span className="editorial-serif" style={{ color: 'var(--secondary, #d4a373)', fontWeight: 400 }}>{locale === 'en' ? 'fresh arrivals' : 'frescura viva'}</span>
                     </h2>
                 </div>
                 <FeaturedProductsCarousel products={featuredProducts} />
@@ -426,7 +426,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
               borderRadius: '9999px',
               border: '1px solid rgba(16, 185, 129, 0.25)'
             }}>
-              <span>✦ {locale === 'en' ? 'DAILY HARVEST · ORIGIN SELECTION' : 'COSECHA DIARIA · SELECCIÓN DE ORIGEN'}</span>
+              <span>{locale === 'en' ? 'DAILY HARVEST · ORIGIN SELECTION' : 'COSECHA DIARIA · SELECCIÓN DE ORIGEN'}</span>
             </div>
 
             <h1 style={{ 
@@ -465,9 +465,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
               fontWeight: 600,
               flexWrap: 'wrap'
             }}>
-              <span>✦ {locale === 'en' ? 'Dawn Harvest' : 'Cosecha de Madrugada'}</span>
-              <span>✦ {locale === 'en' ? 'Early Delivery' : 'Despacho 5:00 AM - 8:00 AM'}</span>
-              <span>✦ {locale === 'en' ? 'Zero Waste' : 'Cero Mermas Ocultas'}</span>
+              <span>{locale === 'en' ? 'Dawn Harvest' : 'Cosecha de Madrugada'}</span>
+              <span>{locale === 'en' ? 'Early Delivery' : 'Despacho 5:00 AM - 8:00 AM'}</span>
+              <span>{locale === 'en' ? 'Zero Waste' : 'Cero Mermas Ocultas'}</span>
             </div>
 
             <ReorderHeroBanner />

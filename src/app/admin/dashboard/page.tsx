@@ -321,7 +321,7 @@ export default function AdminDashboard() {
                     table: 'orders' 
                 }, 
                 (payload: any) => {
-                    console.log('🛍️ Radar detectó movimiento:', payload.eventType);
+                    console.log('️ Radar detectó movimiento:', payload.eventType);
                     fetchDashboardData(); 
                 }
             )

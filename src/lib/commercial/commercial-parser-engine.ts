@@ -38,7 +38,7 @@ export interface CommercialProposalExtraction {
 }
 
 /**
- * 🤖 Gemini Prompt especializado en extracción de Propuestas y Tarifas Comerciales
+ * Gemini Prompt especializado en extracción de Propuestas y Tarifas Comerciales
  */
 export async function extractCommercialProposalAI(
   apiKey: string,
@@ -186,7 +186,7 @@ export async function extractCommercialProposalAI(
 }
 
 /**
- * 📊 Motor Programático de Extracción de Tablas de Precios en Excel (XLSX)
+ * Motor Programático de Extracción de Tablas de Precios en Excel (XLSX)
  */
 export function parseExcelPriceProposal(buffer: Buffer): CommercialExtractedItem[] {
   try {
@@ -292,7 +292,7 @@ export function parseExcelPriceProposal(buffer: Buffer): CommercialExtractedItem
 }
 
 /**
- * ⚡ Enriquecedor de Precios, Costos y Márgenes contra la Base de Datos
+ * Enriquecedor de Precios, Costos y Márgenes contra la Base de Datos
  */
 export async function enrichCommercialProposal(
   items: CommercialExtractedItem[],

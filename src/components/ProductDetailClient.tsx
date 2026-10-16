@@ -527,7 +527,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                 <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
                                 <div>
                                     <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
-                                        🛒 {titleStr}
+                                        {titleStr}
                                     </div>
                                     <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
                                         {msgStr}
@@ -620,7 +620,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                         alignSelf: 'flex-start',
                                         marginTop: '4px'
                                     }}>
-                                        ⚡ {product.campaign_info.campaignName} ({product.campaign_info.adjustmentValue > 0 ? '+' : ''}{product.campaign_info.adjustmentValue}{product.campaign_info.type === 'margin_adjustment' ? '%' : '$'})
+                                        {product.campaign_info.campaignName} ({product.campaign_info.adjustmentValue > 0 ? '+' : ''}{product.campaign_info.adjustmentValue}{product.campaign_info.type === 'margin_adjustment' ? '%' : '$'})
                                     </span>
                                 </div>
                             ) : (
@@ -784,7 +784,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {/* Total Price & Availability */}
                     <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: isAvailable ? '#F3F4F6' : '#FEF2F2', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            {!isAvailable && <span style={{ color: '#EF4444', fontWeight: '800', fontSize: '0.9rem', display: 'block' }}>⚠️ {!isPriceValid ? (isEn ? 'Price on request' : 'Precio a consultar') : t.notAvailableAlt}</span>}
+                            {!isAvailable && <span style={{ color: '#EF4444', fontWeight: '800', fontSize: '0.9rem', display: 'block' }}>️ {!isPriceValid ? (isEn ? 'Price on request' : 'Precio a consultar') : t.notAvailableAlt}</span>}
                             <span style={{ fontSize: '1.1rem', fontWeight: '600', color: '#4B5563' }}>{t.subtotal}:</span>
                         </div>
                         <span style={{ fontSize: isPriceValid ? '1.8rem' : '1.2rem', fontWeight: '800', color: isAvailable ? 'var(--primary-dark)' : '#9CA3AF' }}>

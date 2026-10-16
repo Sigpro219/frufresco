@@ -161,7 +161,7 @@ export async function POST(request: Request) {
                 address: address || 'Bogotá',
                 municipality: municipality || 'Bogotá',
                 status: statusValue,
-                notes: `📍 GPS: ${latitude},${longitude} | MUN: ${municipality || 'Bogotá'}${catTag} | ORIG: ${address}${notesTag} | PASOS_3_V2.5 🚀`
+                notes: `GPS: ${latitude},${longitude} | MUN: ${municipality || 'Bogotá'}${catTag} | ORIG: ${address}${notesTag} | PASOS_3_V2.5 `
             }])
             .select('id')
             .single();

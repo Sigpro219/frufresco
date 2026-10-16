@@ -155,7 +155,7 @@ function SimulatorContent() {
                                 transition: 'opacity 0.2s'
                             }}
                         >
-                            ✅ {t.simulateSuccess}
+                            {t.simulateSuccess}
                         </button>
 
                         <button
@@ -173,7 +173,7 @@ function SimulatorContent() {
                                 transition: 'opacity 0.2s'
                             }}
                         >
-                            ❌ {t.simulateDecline}
+                            {t.simulateDecline}
                         </button>
 
                         <button
@@ -191,7 +191,7 @@ function SimulatorContent() {
                                 transition: 'opacity 0.2s'
                             }}
                         >
-                            ⚠️ {locale === 'es' ? 'Simular Error Técnico' : 'Simulate Technical Error'}
+                            ️ {locale === 'es' ? 'Simular Error Técnico' : 'Simulate Technical Error'}
                         </button>
                     </div>
                 )}

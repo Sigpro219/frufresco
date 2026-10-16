@@ -380,7 +380,7 @@ export default function RectificacionListPage() {
 
                                     {/* Nombre de Conductor e Info */}
                                     <div style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--ops-text-muted)', marginBottom: '1rem' }}>
-                                        👤 {route.driver_name}
+                                        {route.driver_name}
                                     </div>
 
                                     {/* Metadatos */}
@@ -416,7 +416,7 @@ export default function RectificacionListPage() {
                                         style={{ textDecoration: 'none' }}
                                         onClick={(e) => {
                                             if (isPickingIncomplete) {
-                                                if (!confirm(`⚠️ ALISTAMIENTO AL ${route.picking_pct}%: Este camión aún no ha completado el 100% de alistamiento en el Tablero. ¿Deseas ingresar a la lista de rectificación de todas formas?`)) {
+                                                if (!confirm(`️ ALISTAMIENTO AL ${route.picking_pct}%: Este camión aún no ha completado el 100% de alistamiento en el Tablero. ¿Deseas ingresar a la lista de rectificación de todas formas?`)) {
                                                     e.preventDefault();
                                                 }
                                             }

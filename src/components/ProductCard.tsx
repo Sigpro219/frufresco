@@ -371,7 +371,7 @@ export default function ProductCard({ product }: { product: Product }) {
                                                     alignSelf: 'flex-start',
                                                     marginTop: '2px'
                                                 }}>
-                                                    ⚡ {product.campaign_info.campaignName} ({product.campaign_info.adjustmentValue > 0 ? '+' : ''}{product.campaign_info.adjustmentValue}{product.campaign_info.type === 'margin_adjustment' ? '%' : '$'})
+                                                    {product.campaign_info.campaignName} ({product.campaign_info.adjustmentValue > 0 ? '+' : ''}{product.campaign_info.adjustmentValue}{product.campaign_info.type === 'margin_adjustment' ? '%' : '$'})
                                                 </span>
                                             </div>
                                         ) : (

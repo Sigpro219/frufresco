@@ -581,7 +581,7 @@ export default function BulkOrderPrintLabelsPage() {
                                                     letterSpacing: '0.02em',
                                                     lineHeight: 1.1
                                                 }}>
-                                                    ★ {lbl.specialAttention.printCode} CANASTA 1A
+                                                    {lbl.specialAttention.printCode} CANASTA 1A
                                                 </span>
                                             )}
                                         </div>

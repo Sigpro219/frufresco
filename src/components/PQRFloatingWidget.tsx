@@ -365,8 +365,7 @@ export default function PQRFloatingWidget() {
                                             style={{ border: 'none', background: 'none', color: '#EF4444', cursor: 'pointer', fontSize: '1rem', padding: '2px 6px', fontWeight: '700' }}
                                             title="Cambiar cliente"
                                         >
-                                            ✕
-                                        </button>
+                                            </button>
                                     </div>
                                 ) : (
                                     <>
@@ -592,8 +591,7 @@ export default function PQRFloatingWidget() {
                                             onClick={() => { setPrimaryPhoto(null); setPrimaryPhotoPreview(null); }}
                                             style={{ position: 'absolute', top: '2px', right: '2px', backgroundColor: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.65rem' }}
                                         >
-                                            ✕
-                                        </button>
+                                            </button>
                                     </div>
                                 ) : (
                                     <div 
@@ -619,7 +617,7 @@ export default function PQRFloatingWidget() {
                                     onClick={() => setShowAdvancedPhotos(prev => !prev)}
                                     style={{ border: 'none', background: 'none', color: '#0D7A57', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', alignSelf: 'flex-start' }}
                                 >
-                                    {showAdvancedPhotos ? '✕ Ocultar soporte adicional' : '➕ Agregar más fotos de soporte (hasta 7 más)'}
+                                    {showAdvancedPhotos ? 'Ocultar soporte adicional' : 'Agregar más fotos de soporte (hasta 7 más)'}
                                 </button>
                             )}
 
@@ -635,8 +633,7 @@ export default function PQRFloatingWidget() {
                                                         onClick={() => removeAdditionalPhoto(index)}
                                                         style={{ position: 'absolute', top: '1px', right: '1px', backgroundColor: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.55rem' }}
                                                     >
-                                                        ✕
-                                                    </button>
+                                                        </button>
                                                 </>
                                             ) : (
                                                 <div 
