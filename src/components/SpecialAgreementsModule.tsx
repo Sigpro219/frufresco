@@ -29,9 +29,13 @@ import {
     Info,
     Check,
     Cpu,
-    Bot
+    Bot,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { INITIAL_NUTRESA_ITEMS, INITIAL_COLSUBSIDIO_ITEMS } from '@/lib/agreementsData';
 
 export interface AgreementItem {
     id: string;
@@ -55,6 +59,9 @@ export interface AgreementItem {
     notes?: string;
 }
 
+export type SortField = 'code' | 'name' | 'sku' | 'consumption' | 'cost' | 'sipsa' | 'proposed' | 'suggested' | 'counter' | 'impact';
+export type SortDirection = 'asc' | 'desc';
+
 export default function SpecialAgreementsModule({ embedded = false }: { embedded?: boolean } = {}) {
     const [selectedClient, setSelectedClient] = useState<'nutresa' | 'colsubsidio'>('nutresa');
     const [activePeriod, setActivePeriod] = useState<string>('2026-10'); // Mes o Quincena
@@ -65,7 +72,19 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const [selectedChainFilter, setSelectedChainFilter] = useState<string>('all');
     const [isSaving, setIsSaving] = useState(false);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
+    const [sortField, setSortField] = useState<SortField>('name');
+    const [sortDir, setSortDir] = useState<SortDirection>('asc');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Conmutar ordenamiento por columna
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortDir('asc');
+        }
+    };
 
     // Cargar ítems predeterminados o guardados al cambiar de cliente
     useEffect(() => {
@@ -86,208 +105,11 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 prodMap.set(p.name.trim().toLowerCase(), p);
             });
 
-            // Si es Nutresa: inicializar con catálogo canónico auditado
+            // Cargar catálogo íntegro auditado de Nutresa (116) o Colsubsidio (80)
             if (client === 'nutresa') {
-                const sampleNutresa: AgreementItem[] = [
-                    {
-                        id: 'nut-1',
-                        client_code: 32,
-                        raw_name: 'AJOS',
-                        unified_name: 'Ajo',
-                        mapped_sku: 'VER-0012',
-                        chain_name: 'Beer Station',
-                        unit: 'KG',
-                        monthly_consumption_kg: 180,
-                        baseline_price: 11500,
-                        corabastos_cost: 9200,
-                        sipsa_price: 9346,
-                        prima_cop: 800,
-                        client_proposed_price: 10146,
-                        suggested_price: 10600,
-                        our_counterproposal: 10600
-                    },
-                    {
-                        id: 'nut-2',
-                        client_code: 33,
-                        raw_name: 'CEBOLLA CABEZONA',
-                        unified_name: 'Cebolla cabezona blanca',
-                        mapped_sku: 'VER-0045',
-                        chain_name: 'El Corral',
-                        unit: 'KG',
-                        monthly_consumption_kg: 3200,
-                        baseline_price: 3450,
-                        corabastos_cost: 2600,
-                        sipsa_price: 2317.4,
-                        prima_cop: 900,
-                        client_proposed_price: 3217.4,
-                        suggested_price: 3400,
-                        our_counterproposal: 3350
-                    },
-                    {
-                        id: 'nut-3',
-                        client_code: 34,
-                        raw_name: 'CILANTRO',
-                        unified_name: 'Cilantro',
-                        mapped_sku: 'VER-0078',
-                        chain_name: 'Leños & Carbón',
-                        unit: 'KG',
-                        monthly_consumption_kg: 450,
-                        baseline_price: 7800,
-                        corabastos_cost: 6100,
-                        sipsa_price: 6397.2,
-                        prima_cop: 900,
-                        client_proposed_price: 7297.2,
-                        suggested_price: 7600,
-                        our_counterproposal: 7500
-                    },
-                    {
-                        id: 'nut-4',
-                        client_code: 36,
-                        raw_name: 'LIMON',
-                        unified_name: 'Limón Tahití',
-                        mapped_sku: 'FRU-0102',
-                        chain_name: 'El Corral',
-                        unit: 'KG',
-                        monthly_consumption_kg: 2100,
-                        baseline_price: 4200,
-                        corabastos_cost: 3100,
-                        sipsa_price: 2896.4,
-                        prima_cop: 1000,
-                        client_proposed_price: 3896.4,
-                        suggested_price: 4100,
-                        our_counterproposal: 4050
-                    },
-                    {
-                        id: 'nut-5',
-                        client_code: 1180,
-                        raw_name: 'PIMENTON',
-                        unified_name: 'Pimentón Rojo',
-                        mapped_sku: 'VER-0210',
-                        chain_name: 'Corral Gourmet',
-                        unit: 'KG',
-                        monthly_consumption_kg: 850,
-                        baseline_price: 5800,
-                        corabastos_cost: 4400,
-                        sipsa_price: 4647.5,
-                        prima_cop: 1000,
-                        client_proposed_price: 5647.5,
-                        suggested_price: 5750,
-                        our_counterproposal: 5700
-                    },
-                    {
-                        id: 'nut-6',
-                        client_code: 1265,
-                        raw_name: 'AJI CHIVATO',
-                        unified_name: 'Ají Chivato',
-                        mapped_sku: 'VER-0015',
-                        chain_name: 'Beer Station',
-                        unit: 'KG',
-                        monthly_consumption_kg: 120,
-                        baseline_price: 9000,
-                        corabastos_cost: 7200,
-                        sipsa_price: 0,
-                        prima_cop: 8500,
-                        client_proposed_price: 8500,
-                        suggested_price: 8900,
-                        our_counterproposal: 8900
-                    }
-                ];
-                setAgreementItems(sampleNutresa);
+                setAgreementItems(INITIAL_NUTRESA_ITEMS);
             } else {
-                // Colsubsidio: inicializar con matriz de 1Q / 2Q
-                const sampleColsubsidio: AgreementItem[] = [
-                    {
-                        id: 'col-1',
-                        client_code: 646594,
-                        raw_name: 'CILANTRO 1000 GR',
-                        unified_name: 'Cilantro Atado 1Kg',
-                        mapped_sku: 'VER-0078',
-                        unit: 'KG',
-                        monthly_consumption_kg: 1400,
-                        baseline_price: 11000,
-                        corabastos_cost: 7800,
-                        client_proposed_price: 9500,
-                        suggested_price: 10200,
-                        our_counterproposal: 9800,
-                        status_change: 'SUBIÓ'
-                    },
-                    {
-                        id: 'col-2',
-                        client_code: 647081,
-                        raw_name: 'PEPINO RELLENAR 1000 GR',
-                        unified_name: 'Pepino Cohombro Rellenar',
-                        mapped_sku: 'VER-0199',
-                        unit: 'KG',
-                        monthly_consumption_kg: 890,
-                        baseline_price: 4900,
-                        corabastos_cost: 3600,
-                        client_proposed_price: 4600,
-                        suggested_price: 4800,
-                        our_counterproposal: 4700,
-                        status_change: 'SUBIÓ'
-                    },
-                    {
-                        id: 'col-3',
-                        client_code: 647168,
-                        raw_name: 'HABICHUELINA 1000 GR',
-                        unified_name: 'Habichuelina Especial',
-                        mapped_sku: 'VER-0145',
-                        unit: 'KG',
-                        monthly_consumption_kg: 320,
-                        baseline_price: 31000,
-                        corabastos_cost: 24500,
-                        client_proposed_price: 28700,
-                        suggested_price: 29500,
-                        our_counterproposal: 29200,
-                        status_change: 'SUBIÓ'
-                    },
-                    {
-                        id: 'col-4',
-                        client_code: 1080,
-                        raw_name: 'LIMON COMUN 1000 GR',
-                        unified_name: 'Limón Común',
-                        mapped_sku: 'FRU-0105',
-                        unit: 'KG',
-                        monthly_consumption_kg: 1850,
-                        baseline_price: 5800,
-                        corabastos_cost: 4400,
-                        client_proposed_price: 5500,
-                        suggested_price: 5650,
-                        our_counterproposal: 5600,
-                        status_change: 'SUBIÓ'
-                    },
-                    {
-                        id: 'col-5',
-                        client_code: 647060,
-                        raw_name: 'CALABAZA KG',
-                        unified_name: 'Calabaza Trozo Fresco',
-                        mapped_sku: 'VER-0038',
-                        unit: 'KG',
-                        monthly_consumption_kg: 750,
-                        baseline_price: 3100,
-                        corabastos_cost: 2200,
-                        client_proposed_price: 2900,
-                        suggested_price: 2950,
-                        our_counterproposal: 2900,
-                        status_change: 'SUBIÓ'
-                    },
-                    {
-                        id: 'col-6',
-                        client_code: 120330,
-                        raw_name: 'PATILLA 1000 GR',
-                        unified_name: 'Patilla Baby / Trozo',
-                        mapped_sku: 'FRU-0215',
-                        unit: 'KG',
-                        monthly_consumption_kg: 2400,
-                        baseline_price: 4100,
-                        corabastos_cost: 3000,
-                        client_proposed_price: 3800,
-                        suggested_price: 3950,
-                        our_counterproposal: 3900,
-                        status_change: 'SUBIÓ'
-                    }
-                ];
-                setAgreementItems(sampleColsubsidio);
+                setAgreementItems(INITIAL_COLSUBSIDIO_ITEMS);
             }
         } catch (err) {
             console.error('Error cargando datos de acuerdos:', err);
@@ -505,15 +327,46 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
         }
     };
 
-    // Filtros
+    // Filtros y Ordenamiento Multidimensional
     const chainsList = [...new Set(agreementItems.map(i => i.chain_name).filter(Boolean))];
-    const filteredItems = agreementItems.filter(item => {
-        const matchesSearch = item.raw_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.unified_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            String(item.client_code || '').includes(searchTerm);
-        const matchesChain = selectedChainFilter === 'all' || item.chain_name === selectedChainFilter;
-        return matchesSearch && matchesChain;
-    });
+    const filteredItems = agreementItems
+        .filter(item => {
+            const matchesSearch = item.raw_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.unified_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (item.mapped_sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                String(item.client_code || '').includes(searchTerm);
+            const matchesChain = selectedChainFilter === 'all' || item.chain_name === selectedChainFilter;
+            return matchesSearch && matchesChain;
+        })
+        .sort((a, b) => {
+            let res = 0;
+            if (sortField === 'code') {
+                const codeA = Number(a.client_code) || 0;
+                const codeB = Number(b.client_code) || 0;
+                res = codeA - codeB;
+            } else if (sortField === 'name') {
+                res = a.raw_name.localeCompare(b.raw_name, 'es');
+            } else if (sortField === 'sku') {
+                res = (a.mapped_sku || '').localeCompare(b.mapped_sku || '', 'es');
+            } else if (sortField === 'consumption') {
+                res = a.monthly_consumption_kg - b.monthly_consumption_kg;
+            } else if (sortField === 'cost') {
+                res = a.corabastos_cost - b.corabastos_cost;
+            } else if (sortField === 'sipsa') {
+                res = (a.sipsa_price || 0) - (b.sipsa_price || 0);
+            } else if (sortField === 'proposed') {
+                res = a.client_proposed_price - b.client_proposed_price;
+            } else if (sortField === 'suggested') {
+                res = a.suggested_price - b.suggested_price;
+            } else if (sortField === 'counter') {
+                res = a.our_counterproposal - b.our_counterproposal;
+            } else if (sortField === 'impact') {
+                const impactA = (a.our_counterproposal - a.client_proposed_price) * a.monthly_consumption_kg;
+                const impactB = (b.our_counterproposal - b.client_proposed_price) * b.monthly_consumption_kg;
+                res = impactA - impactB;
+            }
+            return sortDir === 'asc' ? res : -res;
+        });
 
     // Métricas totales de la mesa
     const totalVolumeKg = agreementItems.reduce((acc, i) => acc + (i.monthly_consumption_kg || 0), 0);
@@ -986,30 +839,112 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
                         <thead>
-                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, textAlign: 'left' }}>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary }}>CÓD / MAT</th>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary }}>PRODUCTO EN PLANILLA</th>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#047857' }}>
+                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, textAlign: 'left', userSelect: 'none' }}>
+                                <th 
+                                    onClick={() => handleSort('code')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'code' ? THEME.colors.primary : THEME.colors.textSecondary, cursor: 'pointer' }}
+                                    title="Ordenar por código"
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        CÓD / MAT
+                                        {sortField === 'code' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('name')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'name' ? THEME.colors.primary : THEME.colors.textSecondary, cursor: 'pointer' }}
+                                    title="Ordenar alfabéticamente por producto"
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        PRODUCTO EN PLANILLA
+                                        {sortField === 'name' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('sku')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'sku' ? '#047857' : '#047857', cursor: 'pointer' }}
+                                    title="Ordenar por SKU FruFresco"
+                                >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                         <Cpu size={14} color="#047857" /> SKU FRUFRESCO (ML)
+                                        {sortField === 'sku' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
                                 {selectedClient === 'nutresa' && (
                                     <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary }}>CADENA / MARCA</th>
                                 )}
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary, textAlign: 'right' }}>CONSUMO MES</th>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary, textAlign: 'right' }}>COSTO CORABASTOS</th>
-                                {selectedClient === 'nutresa' && (
-                                    <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#0284C7', textAlign: 'right' }}>SIPSA DANE</th>
-                                )}
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#DC2626', textAlign: 'right' }}>PROPUESTA CLIENTE</th>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#B45309', textAlign: 'right' }}>
+                                <th 
+                                    onClick={() => handleSort('consumption')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'consumption' ? THEME.colors.primary : THEME.colors.textSecondary, textAlign: 'right', cursor: 'pointer' }}
+                                    title="Ordenar por volumen de consumo"
+                                >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                        <Zap size={13} color="#B45309" /> SUGERIDO
+                                        CONSUMO MES
+                                        {sortField === 'consumption' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
                                     </div>
                                 </th>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.primary, textAlign: 'right' }}>NUESTRA CONTRAPROPUESTA</th>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary, textAlign: 'right' }}>IMPACTO MES ($)</th>
+                                <th 
+                                    onClick={() => handleSort('cost')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'cost' ? THEME.colors.primary : THEME.colors.textSecondary, textAlign: 'right', cursor: 'pointer' }}
+                                    title="Ordenar por costo Corabastos"
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                        COSTO CORABASTOS
+                                        {sortField === 'cost' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
+                                    </div>
+                                </th>
+                                {selectedClient === 'nutresa' && (
+                                    <th 
+                                        onClick={() => handleSort('sipsa')}
+                                        style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'sipsa' ? '#0369A1' : '#0284C7', textAlign: 'right', cursor: 'pointer' }}
+                                        title="Ordenar por precio SIPSA DANE"
+                                    >
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                            SIPSA DANE
+                                            {sortField === 'sipsa' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
+                                        </div>
+                                    </th>
+                                )}
+                                <th 
+                                    onClick={() => handleSort('proposed')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#DC2626', textAlign: 'right', cursor: 'pointer' }}
+                                    title="Ordenar por propuesta del cliente"
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                        PROPUESTA CLIENTE
+                                        {sortField === 'proposed' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('suggested')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#B45309', textAlign: 'right', cursor: 'pointer' }}
+                                    title="Ordenar por precio sugerido"
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                        <Zap size={13} color="#B45309" /> SUGERIDO
+                                        {sortField === 'suggested' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('counter')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.primary, textAlign: 'right', cursor: 'pointer' }}
+                                    title="Ordenar por nuestra contrapropuesta"
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                        NUESTRA CONTRAPROPUESTA
+                                        {sortField === 'counter' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('impact')}
+                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'impact' ? THEME.colors.primary : THEME.colors.textSecondary, textAlign: 'right', cursor: 'pointer' }}
+                                    title="Ordenar por impacto mensual en pesos"
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                        IMPACTO MES ($)
+                                        {sortField === 'impact' ? (sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={12} color="#94A3B8" />}
+                                    </div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
