@@ -877,7 +877,7 @@ export default function PqrAuditModal({
         }
 
         const updated = [...imputedEntities, newEntity];
-        const finalized = calculateEqualSplit(updated, caseCoQ);
+        const finalized = calculateEqualSplit(updated, nominalNoveltiesCoQ);
 
         setImputedEntities(finalized);
         setSelectedImputedToAdd('');
@@ -889,24 +889,25 @@ export default function PqrAuditModal({
             setImputedEntities([]);
             return;
         }
-        const finalized = calculateEqualSplit(remaining, caseCoQ);
+        const finalized = calculateEqualSplit(remaining, nominalNoveltiesCoQ);
         setImputedEntities(finalized);
     };
 
     const handleResetEqualSplit = () => {
         if (imputedEntities.length === 0) return;
-        const finalized = calculateEqualSplit(imputedEntities, caseCoQ);
+        const finalized = calculateEqualSplit(imputedEntities, nominalNoveltiesCoQ);
         setImputedEntities(finalized);
         showToast('Reparto equitativo aplicado: cada responsable asume exactamente el mismo valor en COP.', 'success');
     };
 
     const handleUpdateEntityPercent = (entityId: string, newPercent: number) => {
+        const baseAmountToSplit = nominalNoveltiesCoQ;
         if (imputedEntities.length <= 1) {
             const clamped = Math.max(0, Math.min(100, newPercent));
             const updated = imputedEntities.map(e => ({
                 ...e,
                 sharePercent: clamped,
-                deductionAmount: Math.round((caseCoQ * clamped) / 100)
+                deductionAmount: Math.round((baseAmountToSplit * clamped) / 100)
             }));
             setImputedEntities(updated);
             return;
@@ -915,8 +916,8 @@ export default function PqrAuditModal({
         if (imputedEntities.length === 2) {
             const clamped = Math.max(0, Math.min(100, newPercent));
             const otherPercent = Number((100 - clamped).toFixed(2));
-            const amountA = Math.round((caseCoQ * clamped) / 100);
-            const amountB = caseCoQ - amountA; // Sum of COP always equals caseCoQ
+            const amountA = Math.round((baseAmountToSplit * clamped) / 100);
+            const amountB = baseAmountToSplit - amountA; // Sum of COP always equals baseAmountToSplit
             const updated = imputedEntities.map(e => {
                 const isTarget = e.id === entityId;
                 return {
@@ -941,7 +942,7 @@ export default function PqrAuditModal({
                 return {
                     ...e,
                     sharePercent: clamped,
-                    deductionAmount: Math.round((caseCoQ * clamped) / 100)
+                    deductionAmount: Math.round((baseAmountToSplit * clamped) / 100)
                 };
             }
             return e;
@@ -2621,32 +2622,30 @@ export default function PqrAuditModal({
                                             <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#1E293B' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
                                         </div>
 
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: caseCoQ > 0 ? '#ECFDF5' : '#F1F5F9', padding: '6px 12px', borderRadius: '8px', border: `1px solid ${caseCoQ > 0 ? '#A7F3D0' : '#CBD5E1'}` }}>
-                                            <span style={{ fontSize: '0.7rem', color: caseCoQ > 0 ? '#065F46' : '#64748B', fontWeight: '600' }}>Impacto Liquidable:</span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: caseCoQ > 0 ? '#047857' : '#475569' }}>{formatMoney(caseCoQ)}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ECFDF5', padding: '6px 12px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
+                                            <span style={{ fontSize: '0.7rem', color: '#065F46', fontWeight: '600' }}>Impacto Imputado:</span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#047857' }}>{formatMoney(nominalNoveltiesCoQ)}</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                {caseCoQ === 0 && (
-                                    <div style={{
-                                        padding: '8px 12px',
-                                        backgroundColor: '#EFF6FF',
-                                        border: '1px solid #BFDBFE',
-                                        borderRadius: '8px',
-                                        fontSize: '0.72rem',
-                                        color: '#1E40AF',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        lineHeight: '1.4'
-                                    }}>
-                                        <Info size={16} style={{ flexShrink: 0, color: '#3B82F6' }} />
-                                        <span>
-                                            <strong>Caso en Dictamen Conforme / Formativo ($0 a Deducir):</strong> El valor físico de la novedad es <strong>{formatMoney(nominalNoveltiesCoQ)}</strong>. Al resolverse bajo Opción 1 (Cerrar Conforme sin Costo) o mientras no se seleccione Reposición/Nota Crédito en el Paso 3, la deducción salarial a colaboradores o cobro financiero se liquida en <u>estrictamente $0 COP</u>.
-                                        </span>
-                                    </div>
-                                )}
+                                <div style={{
+                                    padding: '8px 12px',
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '8px',
+                                    fontSize: '0.72rem',
+                                    color: '#334155',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    lineHeight: '1.4'
+                                }}>
+                                    <Info size={16} style={{ flexShrink: 0, color: '#0D7A57' }} />
+                                    <span>
+                                        <strong>Asignación de Responsabilidad Operativa:</strong> Se imputa la responsabilidad técnica sobre el valor total de la novedad (<strong>{formatMoney(nominalNoveltiesCoQ)}</strong>). En el <strong>Paso 3 (Resolución Comercial)</strong> se definirá si el valor se cobra al responsable (Reposición D+1 / Nota Crédito) o si se exonera en nómina al colaborador ($0 COP) en caso de cerrarse conforme sin costo.
+                                    </span>
+                                </div>
 
                                 {/* Selector to Add Entity */}
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -2764,16 +2763,18 @@ export default function PqrAuditModal({
 
                                                     {/* Calculated COP Deduction */}
                                                     <div style={{ textAlign: 'right', minWidth: '95px' }}>
-                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Deducción COP</span>
-                                                        {caseCoQ === 0 ? (
-                                                            <strong style={{ fontSize: '0.82rem', color: '#059669' }}>
-                                                                $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Sin Cobro)</span>
-                                                            </strong>
-                                                        ) : (
-                                                            <strong style={{ fontSize: '0.82rem', color: '#BE123C' }}>
-                                                                {formatMoney(entity.deductionAmount !== undefined ? entity.deductionAmount : Math.round((caseCoQ * (entity.sharePercent || 0)) / 100))}
-                                                            </strong>
-                                                        )}
+                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Cuota Imputada</span>
+                                                        <strong style={{ fontSize: '0.82rem', color: resolutionOption === 'opt1' ? '#059669' : '#BE123C' }}>
+                                                            {resolutionOption === 'opt1' ? (
+                                                                <>
+                                                                    $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Exonerado)</span>
+                                                                </>
+                                                            ) : (
+                                                                formatMoney(entity.deductionAmount !== undefined && entity.deductionAmount > 0 
+                                                                    ? entity.deductionAmount 
+                                                                    : Math.round((nominalNoveltiesCoQ * (entity.sharePercent || 0)) / 100))
+                                                            )}
+                                                        </strong>
                                                     </div>
 
                                                     <button
