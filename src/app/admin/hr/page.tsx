@@ -6,12 +6,13 @@ import {
     MapPin, Building2, Clock, CheckCircle2, AlertCircle, Trash2, Edit2, X, ChevronRight, 
     FileSpreadsheet, LayoutGrid, List, Truck, Eye, EyeOff, HelpCircle, Archive, FolderOpen,
     QrCode, Printer, RefreshCw, Shield, Save, Check, AlertTriangle, Sparkles,
-    DollarSign, ChevronDown, ChevronUp, Edit3
+    DollarSign, ChevronDown, ChevronUp, Edit3, ShoppingBag, ShieldAlert, CreditCard
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
+import { parseRcaFromRecord } from '@/lib/rcaTaxonomy';
 
 const styles = {
     th: {
@@ -224,6 +225,55 @@ export default function HRManagement() {
                 });
             });
 
+            // Consultar PQRs resueltas con imputación salarial a colaboradores para auditoría e integración en Talento Humano
+            const { data: resolvedPqrs } = await supabase
+                .from('customer_service_pqrs')
+                .select(`
+                    id, subject, status, resolution_notes, created_at, resolved_at, order_id,
+                    orders (sequence_id)
+                `)
+                .eq('status', 'resolved')
+                .ilike('resolution_notes', '%[RCA_METADATA:%')
+                .order('created_at', { ascending: false });
+
+            const syntheticPqrItems: any[] = [];
+            (resolvedPqrs || []).forEach((pqr: any) => {
+                const effDate = pqr.resolved_at || pqr.created_at;
+                if (effDate < startIso || effDate > endIso) return;
+
+                const rca = parseRcaFromRecord(pqr);
+                if (!rca.imputedEntities || rca.imputedEntities.length === 0) return;
+
+                // Excluir casos cerrados conforme sin impacto económico (Opción 1)
+                if ((pqr.resolution_notes || '').includes('Cerrado conforme sin impacto económico')) return;
+
+                rca.imputedEntities.forEach((entity: any, idx: number) => {
+                    const isCollaborator = !entity.entityType || ['employee', 'driver', 'sales_rep'].includes(entity.entityType);
+                    const amount = Number(entity.deductionAmount) || 0;
+                    if (isCollaborator && amount > 0 && entity.name) {
+                        const ordSeq = Array.isArray(pqr.orders) ? pqr.orders[0]?.sequence_id : pqr.orders?.sequence_id;
+                        syntheticPqrItems.push({
+                            id: `pqr_${pqr.id}_${entity.id || idx}`,
+                            product_id: null,
+                            quantity: 1,
+                            is_pqr_deduction: true,
+                            pqr_id: pqr.id,
+                            order_sequence: ordSeq,
+                            deduction_amount: amount,
+                            share_percent: Number(entity.sharePercent) || 100,
+                            notes: `[COBRO POR RECLAMACIÓN PQR #${pqr.id.substring(0, 8)}] ${ordSeq ? `Pedido #${ordSeq} | ` : ''}Empleado: ${entity.name} | Cuota Imputada (${entity.sharePercent || 100}%): $${amount.toLocaleString('es-CO')} | Valor Nómina: $${amount.toLocaleString('es-CO')} | Motivo: ${pqr.subject || 'Novedad de Calidad'}`,
+                            created_at: effDate,
+                            products: {
+                                name: `Reclamación PQR #${pqr.id.substring(0, 8)} — ${pqr.subject || 'Novedad Calidad'}`,
+                                sku: `PQR-${pqr.id.substring(0, 6).toUpperCase()}`,
+                                accounting_id: ordSeq ? `PED-${ordSeq}` : `PQR-${pqr.id.substring(0, 4).toUpperCase()}`,
+                                unit_of_measure: 'CASO'
+                            }
+                        });
+                    }
+                });
+            });
+
             const { data: costMatrix } = await supabase
                 .from('commercial_cost_matrix')
                 .select('product_id, manual_cost')
@@ -235,7 +285,7 @@ export default function HRManagement() {
                 }
             });
             setPayrollCostMap(costMap);
-            setPayrollSales([...(data || []), ...syntheticWompiItems]);
+            setPayrollSales([...(data || []), ...syntheticPqrItems, ...syntheticWompiItems]);
         } catch (err: any) {
             console.error('Error fetching payroll sales in HR:', err);
         } finally {
@@ -284,11 +334,16 @@ export default function HRManagement() {
 
             const qty = Math.abs(item.quantity || 0);
             const isWompiPaid = !!item.is_wompi_paid;
-            const unitCost = isWompiPaid ? (item.order_unit_price || 0) : (payrollCostMap.get(item.product_id) || 0);
+            const isPqrDeduction = !!item.is_pqr_deduction;
+            const unitCost = isPqrDeduction
+                ? (item.deduction_amount || 0)
+                : isWompiPaid
+                    ? (item.order_unit_price || 0)
+                    : (payrollCostMap.get(item.product_id) || 0);
             
             // Si fue pagado por Wompi, el total a deducir en nómina es estrictamente $0
-            let totalVal = isWompiPaid ? 0 : Math.round(qty * unitCost);
-            if (!isWompiPaid) {
+            let totalVal = isWompiPaid ? 0 : isPqrDeduction ? (item.deduction_amount || 0) : Math.round(qty * unitCost);
+            if (!isWompiPaid && !isPqrDeduction) {
                 const valMatch = notes.match(/Valor Nómina:\s*\$([0-9.,]+)/i);
                 if (valMatch) {
                     const parsed = parseInt(valMatch[1].replace(/\./g, ''), 10);
@@ -301,6 +356,7 @@ export default function HRManagement() {
                 employee,
                 isUnassigned,
                 isWompiPaid,
+                isPqrDeduction,
                 qty,
                 uom: item.products?.unit_of_measure || 'KG',
                 productName: item.products?.name || 'Producto Desconocido',
@@ -354,7 +410,7 @@ export default function HRManagement() {
     }, [parsedPayrollRows, payrollSearch]);
 
     const consolidatedPayroll = useMemo(() => {
-        const groups: { [key: string]: { employee: string; isUnassigned: boolean; totalDeduction: number; totalQty: number; txCount: number; creditCount: number; wompiCount: number; items: typeof parsedPayrollRows } } = {};
+        const groups: { [key: string]: { employee: string; isUnassigned: boolean; totalDeduction: number; totalQty: number; txCount: number; creditCount: number; pqrCount: number; wompiCount: number; items: typeof parsedPayrollRows } } = {};
 
         filteredPayrollRows.forEach(row => {
             const key = row.employee.trim();
@@ -366,15 +422,18 @@ export default function HRManagement() {
                     totalQty: 0,
                     txCount: 0,
                     creditCount: 0,
+                    pqrCount: 0,
                     wompiCount: 0,
                     items: []
                 };
             }
             groups[key].totalDeduction += row.totalVal;
-            groups[key].totalQty += row.qty;
+            groups[key].totalQty += row.isPqrDeduction ? 0 : row.qty;
             groups[key].txCount += 1;
             if (row.isWompiPaid) {
                 groups[key].wompiCount = (groups[key].wompiCount || 0) + 1;
+            } else if (row.isPqrDeduction) {
+                groups[key].pqrCount = (groups[key].pqrCount || 0) + 1;
             } else {
                 groups[key].creditCount = (groups[key].creditCount || 0) + 1;
             }
@@ -2069,16 +2128,24 @@ export default function HRManagement() {
                                                                 <span style={{ backgroundColor: '#F1F5F9', padding: '3px 9px', borderRadius: '8px', fontSize: '0.76rem' }}>
                                                                     {collab.txCount} {collab.txCount === 1 ? 'registro' : 'registros'}
                                                                 </span>
-                                                                {(collab.wompiCount > 0 || collab.creditCount > 0) && (
-                                                                    <div style={{ display: 'flex', gap: '4px', fontSize: '0.64rem', fontWeight: '800' }}>
+                                                                {(collab.wompiCount > 0 || collab.creditCount > 0 || collab.pqrCount > 0) && (
+                                                                    <div style={{ display: 'flex', gap: '4px', fontSize: '0.64rem', fontWeight: '800', flexWrap: 'wrap', justifyContent: 'center' }}>
                                                                         {collab.creditCount > 0 && (
-                                                                            <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '1px 5px', borderRadius: '4px' }}>
-                                                                                {collab.creditCount} Nómina
+                                                                            <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #A7F3D0' }}>
+                                                                                <ShoppingBag size={10} />
+                                                                                <span>{collab.creditCount} Compra Prod.</span>
+                                                                            </span>
+                                                                        )}
+                                                                        {collab.pqrCount > 0 && (
+                                                                            <span style={{ backgroundColor: '#FFF1F2', color: '#BE123C', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FECDD3' }}>
+                                                                                <ShieldAlert size={10} />
+                                                                                <span>{collab.pqrCount} Reclamación PQR</span>
                                                                             </span>
                                                                         )}
                                                                         {collab.wompiCount > 0 && (
-                                                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '1px 5px', borderRadius: '4px' }}>
-                                                                                {collab.wompiCount} Wompi
+                                                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #BFDBFE' }}>
+                                                                                <CreditCard size={10} />
+                                                                                <span>{collab.wompiCount} Wompi</span>
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -2119,7 +2186,7 @@ export default function HRManagement() {
                                                         </td>
                                                     </tr>
 
-                                                    {/* Subtabla Desplegable con los ítems adquiridos */}
+                                                    {/* Subtabla Desplegable con los ítems adquiridos o reclamaciones imputadas */}
                                                     {isExpanded && (
                                                         <tr>
                                                             <td colSpan={5} style={{ padding: '0.75rem 1.5rem 1.25rem 1.5rem', backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
@@ -2128,11 +2195,11 @@ export default function HRManagement() {
                                                                         <thead style={{ backgroundColor: '#F1F5F9', borderBottom: '1px solid #CBD5E1' }}>
                                                                             <tr>
                                                                                 <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Fecha</th>
-                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Producto</th>
+                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Concepto / Producto</th>
                                                                                 <th style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>Cantidad</th>
                                                                                 <th style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>Tarifa Unit.</th>
                                                                                 <th style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>Total Deducir</th>
-                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Asignación / Trazabilidad</th>
+                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Naturaleza & Trazabilidad</th>
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody>
@@ -2145,12 +2212,12 @@ export default function HRManagement() {
                                                                                             {item.productName}
                                                                                         </td>
                                                                                         <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700' }}>
-                                                                                            {item.qty.toFixed(2)} {item.uom}
+                                                                                            {item.isPqrDeduction ? `${item.raw.share_percent || 100}% Cuota` : `${item.qty.toFixed(2)} ${item.uom}`}
                                                                                         </td>
                                                                                         <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', color: '#64748B' }}>
                                                                                             ${formatNumber(item.unitPrice)}
                                                                                         </td>
-                                                                                        <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '800', color: '#0D7A57' }}>
+                                                                                        <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '800', color: item.isPqrDeduction ? '#BE123C' : '#0D7A57' }}>
                                                                                             ${item.totalVal.toLocaleString('es-CO')}
                                                                                         </td>
                                                                                         <td style={{ padding: '0.5rem 0.85rem' }}>
@@ -2163,9 +2230,34 @@ export default function HRManagement() {
                                                                                                         borderRadius: '6px', 
                                                                                                         fontWeight: '800', 
                                                                                                         fontSize: '0.68rem',
-                                                                                                        border: '1px solid #BFDBFE'
+                                                                                                        border: '1px solid #BFDBFE',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        gap: '4px'
                                                                                                     }}>
-                                                                                                        PAGADO ONLINE (WOMPI) — $0 A DESCONTAR
+                                                                                                        <CreditCard size={11} />
+                                                                                                        <span>COMPRA PRODUCTO (WOMPI) — $0 A DESCONTAR</span>
+                                                                                                    </span>
+                                                                                                    <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                                                                        {item.raw.notes}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            ) : item.isPqrDeduction ? (
+                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                                                    <span style={{ 
+                                                                                                        backgroundColor: '#FFF1F2', 
+                                                                                                        color: '#BE123C', 
+                                                                                                        padding: '2px 8px', 
+                                                                                                        borderRadius: '6px', 
+                                                                                                        fontWeight: '800', 
+                                                                                                        fontSize: '0.68rem',
+                                                                                                        border: '1px solid #FECDD3',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        gap: '4px'
+                                                                                                    }}>
+                                                                                                        <ShieldAlert size={11} />
+                                                                                                        <span>COBRO POR RECLAMACIÓN PQR</span>
                                                                                                     </span>
                                                                                                     <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
                                                                                                         {item.raw.notes}
@@ -2202,7 +2294,22 @@ export default function HRManagement() {
                                                                                                     </button>
                                                                                                 </div>
                                                                                             ) : (
-                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                                                    <span style={{ 
+                                                                                                        backgroundColor: '#ECFDF5', 
+                                                                                                        color: '#047857', 
+                                                                                                        padding: '2px 8px', 
+                                                                                                        borderRadius: '6px', 
+                                                                                                        fontWeight: '800', 
+                                                                                                        fontSize: '0.68rem',
+                                                                                                        border: '1px solid #A7F3D0',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        gap: '4px'
+                                                                                                    }}>
+                                                                                                        <ShoppingBag size={11} />
+                                                                                                        <span>COMPRA DE PRODUCTO (NÓMINA)</span>
+                                                                                                    </span>
                                                                                                     <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
                                                                                                         {item.raw.notes || 'Venta bodega'}
                                                                                                     </span>

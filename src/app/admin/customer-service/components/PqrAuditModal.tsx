@@ -1281,13 +1281,25 @@ export default function PqrAuditModal({
                     finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Opción 2 - Reponer D+1 ($0 COP) (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Pedido de reposición generado con folio #${newOrder.sequence_id}`;
                     redirectUrl = `/admin/orders/${newOrder.id}`;
 
-                } else if (resolutionOption === 'opt3') {
+                } else if (resolutionOption === 'opt3' || resolutionOption === 'opt4') {
+                    const prelimRcaTag = buildRcaMetadataTag({
+                        categoryL1: rcaCategoryL1,
+                        subtypeL2: rcaSubtypeL2,
+                        responsible: rcaResponsible,
+                        notes: rcaEvidenceNotes || '',
+                        isReplacementRejection: isReplacementRejection,
+                        imputedTargetType: imputedTargetType,
+                        imputedEntities: imputedEntities
+                    });
+                    const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
+                    const prelimNotes = `${cleanHumanResolutionNotes(resolutionNotes)}\n\n${prelimRcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
+                    await supabase
+                        .from('customer_service_pqrs')
+                        .update({ resolution_notes: prelimNotes })
+                        .eq('id', pqr.id);
+
                     setActionLoading(false);
-                    onOpenFinancialModal('credit_note');
-                    return;
-                } else if (resolutionOption === 'opt4') {
-                    setActionLoading(false);
-                    onOpenFinancialModal('invoice_adjustment');
+                    onOpenFinancialModal(resolutionOption === 'opt3' ? 'credit_note' : 'invoice_adjustment');
                     return;
                 }
             } else {
@@ -2673,9 +2685,8 @@ export default function PqrAuditModal({
                             </div>
                         </div>
                     )}
-                </div>
 
-                {/* ================= STEP 3: RCA & IMPUTABILITY ================= */}
+                    {/* ================= STEP 3: RCA & IMPUTABILITY ================= */}
                     {currentStep === 3 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {/* Macrocausa L1 & Subtype L2 Selection */}
@@ -3012,8 +3023,9 @@ export default function PqrAuditModal({
                             </div>
                         </div>
                     )}
+                </div>
 
-                    {/* 4. Modal Footer Navigation */}
+                {/* 4. Modal Footer Navigation */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',

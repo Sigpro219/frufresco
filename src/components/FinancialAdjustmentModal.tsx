@@ -88,6 +88,24 @@ export default function FinancialAdjustmentModal({
         setRcaCategoryL1(defaultRcaCategory);
         setRcaSubtypeL2(defaultRcaSubtype);
         setRcaResponsible(defaultRcaResponsible);
+        setImputedEntities(defaultImputedEntities || []);
+        setImputedTargetType(defaultImputedTargetType || 'none');
+
+        try {
+            const rawDraft = localStorage.getItem(`pqr_audit_draft_${pqr.id}`);
+            if (rawDraft) {
+                const draft = JSON.parse(rawDraft);
+                if (draft.rcaCategoryL1) setRcaCategoryL1(draft.rcaCategoryL1);
+                if (draft.rcaSubtypeL2) setRcaSubtypeL2(draft.rcaSubtypeL2);
+                if (draft.rcaResponsible) setRcaResponsible(draft.rcaResponsible);
+                if (draft.imputedTargetType) setImputedTargetType(draft.imputedTargetType);
+                if (Array.isArray(draft.imputedEntities) && draft.imputedEntities.length > 0) {
+                    setImputedEntities(draft.imputedEntities);
+                }
+            }
+        } catch (e) {
+            console.error('Error hydrating draft in FinancialAdjustmentModal:', e);
+        }
 
         // Pre-fill notes
         const defaultNote = mode === 'credit_note' 
@@ -294,12 +312,17 @@ export default function FinancialAdjustmentModal({
                 ? imputedEntities.map(e => `${e.name} (${e.role || 'Responsable'} - ${e.sharePercent}%)`).join(', ')
                 : primaryEntityName;
 
+            const finalizedEntities = (imputedEntities || []).map(e => ({
+                ...e,
+                deductionAmount: Math.round((calculatedCreditAmount * (Number(e.sharePercent) || 100)) / 100)
+            }));
+
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
                 subtypeL2: rcaSubtypeL2,
                 responsible: rcaResponsible as any,
                 imputedTargetType: imputedTargetType,
-                imputedEntities: imputedEntities,
+                imputedEntities: finalizedEntities,
                 imputedEntityId: primaryEntityId || undefined,
                 imputedEntityName: primaryEntityName || undefined,
                 imputedEvidenceNotes: defaultImputedEvidenceNotes || notes,
