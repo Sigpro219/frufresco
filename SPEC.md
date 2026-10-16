@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.202 (Tooltips Explicativos e Indicadores Micro-Visuales en Encabezados de Acuerdos Especiales — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.203 (Gobernanza del Costo en Tríada de Calidad, Imputación Operativa Dinámica y Cero Sesgo Dogmático de Rechazo — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 234 Escenarios BDD Ininterrumpidos (1..234)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 235 Escenarios BDD Ininterrumpidos (1..235)
 
 ---
 
@@ -25,10 +25,10 @@
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230, 231, 232, 233, 234 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **234 Escenarios Canónicos (1..234)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **235 Escenarios Canónicos (1..235)** | **🟢 100%** |
 
 ---
 
@@ -10521,6 +10521,23 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   3. **Preservación Inalterada de Accesibilidad y Sorting:**
      - La presencia del tooltip y del icono HelpCircle no interfiere con el evento onClick={() => handleSort(field)}.
      - Se mantiene la compatibilidad con lectores de pantalla y directivas ARIA de navegación de tablas en Chromium.
+
+---
+
+#### Escenario 235: Gobernanza del Costo en Tríada de Calidad, Imputación Operativa Dinámica y Cero Sesgo Dogmático de Rechazo (SDD v1.9.203)
+- **Given** el analista de Calidad, auditor SAC o supervisor gestionando una reclamación o devolución comercial en el modal de auditoría técnica (`PqrAuditModal.tsx`) en `/admin/customer-service`.
+- **When** navega secuencialmente a través de la tríada de pasos (Paso 1: Hecho & Evidencias -> Paso 2: Causa Raíz & Imputación -> Paso 3: Resolución Comercial):
+- **Then**:
+  1. **Consistencia Tridimensional del Costo Físico vs Liquidable (`nominalNoveltiesCoQ` vs `caseCoQ`):**
+     - En el **Paso 1 (Hecho & Evidencias)**, el valor económico real de los productos afectados (`nominalNoveltiesCoQ`) gobierna de forma absoluta el encabezado de novedades (`Impacto Total: {formatMoney(nominalNoveltiesCoQ)}`), erradicando que aparezca en $0 COP por preselecciones del paso final.
+     - En el **Paso 2 (Causa Raíz & Imputación)**, la cabecera proyecta en paralelo el **Valor Novedad: $X.XXX** (costo físico del producto dañado) y el **Impacto Liquidable: $Y.YYY** (monto sujeto a deducción salarial o descuento comercial).
+     - La imputación nominal a colaboradores, transportadores o proveedores calcula y exhibe las cuotas en pesos sobre el valor real del producto, garantizando total transparencia operativa.
+  2. **Erradicación del Sesgo Dogmático de Rechazo (Neutralidad en Paso 3):**
+     - Al aperturar un caso de calidad o avería, el sistema no preselecciona forzosamente la Opción 1 (Cerrar Conforme / Rechazar Queja), permitiendo que la decisión comercial inicie de forma neutral y abierta según el mérito de la reclamación (ej. Reposición D+1 o Nota Crédito).
+     - La tarjeta de **Opción 1: Cerrar Conforme (Sin Costo)** declara explícitamente su garantía laboral: *«El reclamo no procede o fue aclarado con el cliente. Se cobra el 100% de la factura original y no aplica deducción de nómina al colaborador ($0 COP)»*.
+  3. **Poka-Yoke de Exoneración Salarial al Colaborador (Justicia Laboral Escenario 213):**
+     - Únicamente si el auditor selecciona la Opción 1 (o si el caso ya fue desestimado/archivado sin costo), el sistema activa el salvaguarda de justicia laboral, conmutando la deducción salarial a **estrictamente $0 COP** e informando al auditor mediante el banner institucional azul zafiro.
+     - Si se selecciona Opción 2 (Reposición D+1 $0 COP), Opción 3 (Nota Crédito) u Opción 4 (Ajuste en Factura), el Impacto Liquidable se confirma plenamente y las cuotas de responsabilidad se transfieren a nómina o compras según corresponda.
 
 ---
 

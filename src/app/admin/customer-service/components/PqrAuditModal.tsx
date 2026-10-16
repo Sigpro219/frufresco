@@ -262,8 +262,11 @@ export default function PqrAuditModal({
             setResolutionOption('opt3');
         } else if (rawNotes.includes('Opción 4') || rawNotes.includes('Ajuste de Factura')) {
             setResolutionOption('opt4');
+        } else if (rawNotes.includes('Opción 1') || rawNotes.includes('Cerrar Conforme')) {
+            setResolutionOption('opt1');
         } else {
-            setResolutionOption(isReplacement ? 'opt3' : 'opt1');
+            // Sin sesgo dogmático de rechazo: los reclamos de avería/calidad inician abiertos en Reposición D+1 (opt2)
+            setResolutionOption(isReplacement ? 'opt3' : 'opt2');
         }
 
         // Check for progressive draft saved in localStorage
@@ -2854,7 +2857,7 @@ export default function PqrAuditModal({
                                             <span>Opción 1: Cerrar Conforme (Sin Costo)</span>
                                         </div>
                                         <p style={{ fontSize: '0.7rem', color: '#64748B', margin: 0, lineHeight: '1.3' }}>
-                                            El reclamo no procede o fue aclarado con el cliente. Se cobra el 100% de la factura original.
+                                            El reclamo no procede o fue aclarado con el cliente. Se cobra el 100% de la factura original y <strong>no aplica deducción de nómina al colaborador ($0 COP)</strong>.
                                         </p>
                                     </button>
 
