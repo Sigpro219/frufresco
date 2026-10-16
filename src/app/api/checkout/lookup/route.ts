@@ -49,6 +49,41 @@ export async function POST(request: Request) {
         } | null = null;
 
         let matchedProfile: any = null;
+        let matchedCollaborator: any = null;
+
+        // 0. Reconocimiento de Colaborador FruFresco (Escenario 229 SDD)
+        try {
+            let collabQuery = supabase
+                .from('collaborators')
+                .select('id, contact_name, document_id, role, phone, email, is_active')
+                .eq('is_active', true);
+
+            if (rawPhone && rawPhone.length >= 7) {
+                collabQuery = collabQuery.ilike('phone', '%' + rawPhone.slice(-7) + '%');
+            } else if (normalizedEmail) {
+                collabQuery = collabQuery.eq('email', normalizedEmail);
+            } else if (normalizedNit) {
+                collabQuery = collabQuery.eq('document_id', normalizedNit);
+            }
+
+            const { data: collabData } = await collabQuery.limit(1);
+            if (collabData && collabData.length > 0) {
+                matchedCollaborator = collabData[0];
+                if (!clientRecord) {
+                    clientRecord = {
+                        id: matchedCollaborator.id,
+                        name: matchedCollaborator.contact_name || '',
+                        address: '',
+                        phone: matchedCollaborator.phone || rawPhone,
+                        email: matchedCollaborator.email || undefined,
+                        latitude: null,
+                        longitude: null
+                    };
+                }
+            }
+        } catch (collabErr) {
+            console.warn('Error checking collaborator in lookup:', collabErr);
+        }
 
         // 1. Direct phone lookup (B2C primary fast-track)
         if (rawPhone && rawPhone.length >= 10) {
@@ -220,7 +255,14 @@ export async function POST(request: Request) {
                     email: clientRecord.email,
                     latitude: clientRecord.latitude,
                     longitude: clientRecord.longitude,
-                    beneficiaries: compiledBeneficiaries
+                    beneficiaries: compiledBeneficiaries,
+                    is_collaborator: !!matchedCollaborator,
+                    collaborator_info: matchedCollaborator ? {
+                        id: matchedCollaborator.id,
+                        contact_name: matchedCollaborator.contact_name,
+                        document_id: matchedCollaborator.document_id,
+                        role: matchedCollaborator.role
+                    } : null
                 });
             } else {
                 console.log(`Phone verification failed for: ${normalizedEmail}. Entered: ${clientEnteredPhone}, DB: ${dbPhone}`);

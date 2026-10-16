@@ -186,6 +186,44 @@ export default function HRManagement() {
 
             if (error) throw error;
 
+            // Consultar órdenes pagadas con Wompi por colaboradores para auditoría dual en Talento Humano
+            const { data: wompiOrders } = await supabase
+                .from('orders')
+                .select(`
+                    id, sequence_id, payment_method, total, special_notes, created_at,
+                    order_items (
+                        id, product_id, quantity, unit_price,
+                        products (id, name, sku, accounting_id, unit_of_measure)
+                    )
+                `)
+                .eq('payment_method', 'wompi')
+                .ilike('special_notes', '%[COLABORADOR FRUFRESCO:%')
+                .gte('created_at', startIso)
+                .lte('created_at', endIso)
+                .order('created_at', { ascending: false });
+
+            // Aplanar ítems de órdenes Wompi de colaborador para integrarlos en el tablero con $0 deducción
+            const syntheticWompiItems: any[] = [];
+            (wompiOrders || []).forEach((order: any) => {
+                const matchEmp = (order.special_notes || '').match(/\[COLABORADOR FRUFRESCO:\s*([^(\]]+)/i);
+                const empName = matchEmp ? matchEmp[1].trim() : 'Colaborador FruFresco';
+                
+                (order.order_items || []).forEach((item: any) => {
+                    syntheticWompiItems.push({
+                        id: `wompi_${order.id}_${item.id}`,
+                        product_id: item.product_id,
+                        quantity: -(item.quantity || 0),
+                        is_wompi_paid: true,
+                        order_sequence: order.sequence_id,
+                        order_total: order.total,
+                        notes: `[VENTA ONLINE WOMPI - $0 A DESCONTAR] Pedido #${order.sequence_id || order.id?.slice(0, 8)} | Empleado: ${empName} | Pagado Online por Wompi | Total Pedido: $${(order.total || 0).toLocaleString('es-CO')}`,
+                        created_at: order.created_at,
+                        products: item.products,
+                        order_unit_price: item.unit_price
+                    });
+                });
+            });
+
             const { data: costMatrix } = await supabase
                 .from('commercial_cost_matrix')
                 .select('product_id, manual_cost')
@@ -197,7 +235,7 @@ export default function HRManagement() {
                 }
             });
             setPayrollCostMap(costMap);
-            setPayrollSales(data || []);
+            setPayrollSales([...(data || []), ...syntheticWompiItems]);
         } catch (err: any) {
             console.error('Error fetching payroll sales in HR:', err);
         } finally {
@@ -245,19 +283,24 @@ export default function HRManagement() {
             }
 
             const qty = Math.abs(item.quantity || 0);
-            const unitCost = payrollCostMap.get(item.product_id) || 0;
+            const isWompiPaid = !!item.is_wompi_paid;
+            const unitCost = isWompiPaid ? (item.order_unit_price || 0) : (payrollCostMap.get(item.product_id) || 0);
             
-            let totalVal = Math.round(qty * unitCost);
-            const valMatch = notes.match(/Valor Nómina:\s*\$([0-9.,]+)/i);
-            if (valMatch) {
-                const parsed = parseInt(valMatch[1].replace(/\./g, ''), 10);
-                if (!isNaN(parsed)) totalVal = parsed;
+            // Si fue pagado por Wompi, el total a deducir en nómina es estrictamente $0
+            let totalVal = isWompiPaid ? 0 : Math.round(qty * unitCost);
+            if (!isWompiPaid) {
+                const valMatch = notes.match(/Valor Nómina:\s*\$([0-9.,]+)/i);
+                if (valMatch) {
+                    const parsed = parseInt(valMatch[1].replace(/\./g, ''), 10);
+                    if (!isNaN(parsed)) totalVal = parsed;
+                }
             }
 
             return {
                 raw: item,
                 employee,
                 isUnassigned,
+                isWompiPaid,
                 qty,
                 uom: item.products?.unit_of_measure || 'KG',
                 productName: item.products?.name || 'Producto Desconocido',
@@ -274,7 +317,7 @@ export default function HRManagement() {
                 })
             };
         });
-    }, [payrollSales]);
+    }, [payrollSales, payrollCostMap]);
 
     const filteredPayrollRows = useMemo(() => {
         if (!payrollSearch.trim()) return parsedPayrollRows;
@@ -311,7 +354,7 @@ export default function HRManagement() {
     }, [parsedPayrollRows, payrollSearch]);
 
     const consolidatedPayroll = useMemo(() => {
-        const groups: { [key: string]: { employee: string; isUnassigned: boolean; totalDeduction: number; totalQty: number; txCount: number; items: typeof parsedPayrollRows } } = {};
+        const groups: { [key: string]: { employee: string; isUnassigned: boolean; totalDeduction: number; totalQty: number; txCount: number; creditCount: number; wompiCount: number; items: typeof parsedPayrollRows } } = {};
 
         filteredPayrollRows.forEach(row => {
             const key = row.employee.trim();
@@ -322,12 +365,19 @@ export default function HRManagement() {
                     totalDeduction: 0,
                     totalQty: 0,
                     txCount: 0,
+                    creditCount: 0,
+                    wompiCount: 0,
                     items: []
                 };
             }
             groups[key].totalDeduction += row.totalVal;
             groups[key].totalQty += row.qty;
             groups[key].txCount += 1;
+            if (row.isWompiPaid) {
+                groups[key].wompiCount = (groups[key].wompiCount || 0) + 1;
+            } else {
+                groups[key].creditCount = (groups[key].creditCount || 0) + 1;
+            }
             groups[key].items.push(row);
         });
 
@@ -2015,9 +2065,25 @@ export default function HRManagement() {
                                                         </td>
 
                                                         <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: '700', color: '#475569' }}>
-                                                            <span style={{ backgroundColor: '#F1F5F9', padding: '3px 9px', borderRadius: '8px' }}>
-                                                                {collab.txCount} {collab.txCount === 1 ? 'compra' : 'compras'}
-                                                            </span>
+                                                            <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
+                                                                <span style={{ backgroundColor: '#F1F5F9', padding: '3px 9px', borderRadius: '8px', fontSize: '0.76rem' }}>
+                                                                    {collab.txCount} {collab.txCount === 1 ? 'registro' : 'registros'}
+                                                                </span>
+                                                                {(collab.wompiCount > 0 || collab.creditCount > 0) && (
+                                                                    <div style={{ display: 'flex', gap: '4px', fontSize: '0.64rem', fontWeight: '800' }}>
+                                                                        {collab.creditCount > 0 && (
+                                                                            <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                {collab.creditCount} Nómina
+                                                                            </span>
+                                                                        )}
+                                                                        {collab.wompiCount > 0 && (
+                                                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                {collab.wompiCount} Wompi
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </td>
 
                                                         <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: '800', color: '#1E293B', fontVariantNumeric: 'tabular-nums' }}>
@@ -2088,7 +2154,24 @@ export default function HRManagement() {
                                                                                             ${item.totalVal.toLocaleString('es-CO')}
                                                                                         </td>
                                                                                         <td style={{ padding: '0.5rem 0.85rem' }}>
-                                                                                            {isAssigningThis ? (
+                                                                                            {item.isWompiPaid ? (
+                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                                                    <span style={{ 
+                                                                                                        backgroundColor: '#EFF6FF', 
+                                                                                                        color: '#1D4ED8', 
+                                                                                                        padding: '2px 8px', 
+                                                                                                        borderRadius: '6px', 
+                                                                                                        fontWeight: '800', 
+                                                                                                        fontSize: '0.68rem',
+                                                                                                        border: '1px solid #BFDBFE'
+                                                                                                    }}>
+                                                                                                        💳 PAGADO ONLINE (WOMPI) — $0 A DESCONTAR
+                                                                                                    </span>
+                                                                                                    <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                                                                        {item.raw.notes}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            ) : isAssigningThis ? (
                                                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                                                                     <input
                                                                                                         type="text"

@@ -71,7 +71,9 @@ export default function CheckoutPage() {
     const { items, totalPrice, removeItem, clearCart, updateItemQuantity, addItem } = useCart();
     const [isMounted, setIsMounted] = useState(false);
     const [loadingLastOrder, setLoadingLastOrder] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState<'wompi' | 'contra_entrega'>('wompi');
+    const [paymentMethod, setPaymentMethod] = useState<'wompi' | 'contra_entrega' | 'payroll_deduction'>('wompi');
+    const [isCollaborator, setIsCollaborator] = useState(false);
+    const [collaboratorInfo, setCollaboratorInfo] = useState<{ id?: string; contact_name?: string; document_id?: string; role?: string } | null>(null);
     const [name, setName] = useState('');
     const [identification, setIdentification] = useState('');
     const [email, setEmail] = useState('');
@@ -348,8 +350,11 @@ export default function CheckoutPage() {
     const missingForFreeShipping = Math.max(0, minOrder - foodItemsTotalPrice);
     const freeShippingProgress = minOrder > 0 ? Math.min(100, Math.round((foodItemsTotalPrice / minOrder) * 100)) : 100;
 
+    // Beneficio Canónico Colaborador FruFresco: 5% de descuento en alimentos frescos (Escenario 229 SDD)
+    const collaboratorDiscountAmount = isCollaborator ? Math.round(foodItemsTotalPrice * 0.05) : 0;
+
     // Redondear el total final de compra hacia abajo al próximo múltiplo de 50 (beneficio al usuario)
-    const rawTotal = totalPrice + packagingFeeAmount + deliveryFeeAmount;
+    const rawTotal = Math.max(0, (totalPrice - collaboratorDiscountAmount) + packagingFeeAmount + deliveryFeeAmount);
     const finalOrderTotal = Math.floor(rawTotal / 50) * 50;
 
     // Estándar Lufthansa Fast-Track: detección ejecutiva de cliente recurrente con datos completos
@@ -630,7 +635,7 @@ export default function CheckoutPage() {
         }
     };
 
-    const handlePaymentMethodChange = (val: 'wompi' | 'contra_entrega') => {
+    const handlePaymentMethodChange = (val: 'wompi' | 'contra_entrega' | 'payroll_deduction') => {
         if (val === 'contra_entrega' && !isB2B && totalPrice > maxOrderHogarCod) {
             notify(locale === 'es' 
                 ? `Por políticas de seguridad, los pedidos para Hogar con pago contra entrega tienen un límite máximo de $${maxOrderHogarCod.toLocaleString('es-CO')}. Para pedidos superiores, por favor selecciona pago en línea con Wompi (PSE, Tarjeta o Nequi).`
@@ -789,6 +794,13 @@ export default function CheckoutPage() {
                                     selectBeneficiary(data.beneficiaries[0], 0);
                                 }
                             }
+                            if (data.is_collaborator) {
+                                setIsCollaborator(true);
+                                setCollaboratorInfo(data.collaborator_info || null);
+                            } else {
+                                setIsCollaborator(false);
+                                setCollaboratorInfo(null);
+                            }
                             setIsProfileMatched(false);
                         } else if (data.found) {
                             setIsProfileMatched(true);
@@ -817,6 +829,11 @@ export default function CheckoutPage() {
             if (currentEmail !== unlockedEmail || currentId !== unlockedId || currentPhone !== unlockedPhone) {
                 setMatchedProfileId(null);
                 setIsProfileUnlocked(false);
+                setIsCollaborator(false);
+                setCollaboratorInfo(null);
+                if (paymentMethod === 'payroll_deduction') {
+                    setPaymentMethod('wompi');
+                }
                 setName('');
                 setAddress('');
                 setLatitude(null);
@@ -1327,9 +1344,9 @@ export default function CheckoutPage() {
                 latitude: safeLat,
                 longitude: safeLng,
                 profile_id: isValidUuid(matchedProfileId) ? matchedProfileId : null,
-                payment_method: paymentMethod === 'wompi' ? 'wompi' : 'contra_entrega',
-                payment_status: 'Pendiente',
-                special_notes: `${clientNotesHeader}${deliveryNoteTag}${packagingNoteTag}\n[ORIGIN: web]${specialNotes ? `\n[RECOMENDACIÓN / NOTA DE ENTREGA: ${specialNotes}]` : ''}`
+                payment_method: paymentMethod,
+                payment_status: paymentMethod === 'payroll_deduction' ? 'payroll_authorized' : 'Pendiente',
+                special_notes: `${paymentMethod === 'payroll_deduction' ? '[⚠️ NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA]\n' : ''}${clientNotesHeader}${deliveryNoteTag}${packagingNoteTag}\n[ORIGIN: web]${isCollaborator ? `\n[COLABORADOR FRUFRESCO: ${collaboratorInfo?.contact_name || name} (Doc: ${collaboratorInfo?.document_id || finalIdentification}) - Beneficio 5% Descuento Aplicado]` : ''}${specialNotes ? `\n[RECOMENDACIÓN / NOTA DE ENTREGA: ${specialNotes}]` : ''}`
             };
 
             const orderItemsData = items.map(item => ({
@@ -1387,8 +1404,8 @@ export default function CheckoutPage() {
             if (!orderData) throw new Error('No se recibió confirmación del pedido.');
             console.log('✅ Pedido creado:', orderData.id);
 
-            if (paymentMethod === 'contra_entrega') {
-                console.log('3️⃣ Contra entrega selected. Redirecting directly to success result page...');
+            if (paymentMethod === 'contra_entrega' || paymentMethod === 'payroll_deduction') {
+                console.log(`3️⃣ ${paymentMethod} selected. Redirecting directly to success result page...`);
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('checkout_specialNotes');
                     localStorage.removeItem('checkout_is_gift');
@@ -1769,6 +1786,46 @@ export default function CheckoutPage() {
                                 </button>
                             </div>
                         </div>
+
+                        {/* BADGE DE COLABORADOR FRUFRESCO (ESCENARIO 229 SDD) */}
+                        {isCollaborator && (
+                            <div style={{
+                                marginBottom: '0.75rem',
+                                padding: '0.55rem 0.85rem',
+                                backgroundColor: '#ECFDF5',
+                                border: '1.5px solid #10B981',
+                                borderRadius: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '8px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ width: '24px', height: '24px', borderRadius: '6px', backgroundColor: '#059669', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Sparkles size={14} />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.78rem', fontWeight: '900', color: '#065F46' }}>
+                                            👥 Colaborador FruFresco — Beneficio Activo
+                                        </div>
+                                        <div style={{ fontSize: '0.68rem', color: '#047857', fontWeight: '600' }}>
+                                            {collaboratorInfo?.contact_name || name} {collaboratorInfo?.role ? `• ${collaboratorInfo.role}` : ''} | <strong>5% de descuento directo</strong> aplicado en tus alimentos
+                                        </div>
+                                    </div>
+                                </div>
+                                <span style={{
+                                    backgroundColor: '#059669',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '900',
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    letterSpacing: '0.03em'
+                                }}>
+                                    -5% DTO
+                                </span>
+                            </div>
+                        )}
 
                         {/* SELECTOR DE ELEGIDOS (BENEFICIARIOS GUARDADOS PARA REGALOS / OTRA PERSONA) */}
                         {isGiftForRecipient && beneficiaries.length > 0 && (
@@ -2798,6 +2855,51 @@ export default function CheckoutPage() {
                                     </div>
                                 );
                             })()}
+
+                            {/* Opción Exclusiva: Deducción de Nómina (Crédito Empleado) - Escenario 229 SDD */}
+                            {isCollaborator && (
+                                <div
+                                    onClick={() => handlePaymentMethodChange('payroll_deduction')}
+                                    style={{
+                                        padding: '0.75rem 0.95rem',
+                                        borderRadius: '12px',
+                                        border: `2px solid ${paymentMethod === 'payroll_deduction' ? '#047857' : '#10B981'}`,
+                                        backgroundColor: paymentMethod === 'payroll_deduction' ? '#ECFDF5' : '#F0FDF4',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '4px',
+                                        transition: 'all 0.15s ease',
+                                        boxShadow: paymentMethod === 'payroll_deduction' ? '0 0 0 1px #047857' : 'none'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{
+                                                width: '18px',
+                                                height: '18px',
+                                                borderRadius: '50%',
+                                                border: `2px solid ${paymentMethod === 'payroll_deduction' ? '#047857' : '#059669'}`,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: '#FFFFFF'
+                                            }}>
+                                                {paymentMethod === 'payroll_deduction' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#047857' }} />}
+                                            </div>
+                                            <span style={{ fontWeight: '900', fontSize: '0.86rem', color: '#064E3B', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                {locale === 'es' ? 'Deducción de Nómina' : 'Payroll Deduction'}
+                                            </span>
+                                        </div>
+                                        <span style={{ fontSize: '0.64rem', fontWeight: '800', backgroundColor: '#059669', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px' }}>
+                                            CRÉDITO
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: '0.7rem', color: '#047857' }}>
+                                        {locale === 'es' ? 'Descuento quincenal por nómina (Columna N). Sin desembolso hoy.' : 'Deducted directly from next paycheck.'}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -2948,6 +3050,27 @@ export default function CheckoutPage() {
                                     <span>{locale === 'es' ? 'Empaque Ecológico' : 'Eco Packaging'}</span>
                                     <span style={{ fontWeight: '700', color: packagingFeeAmount > 0 ? '#0F172A' : '#059669' }}>
                                         {packagingFeeAmount > 0 ? `+$${packagingFeeAmount.toLocaleString('es-CO')}` : '$0'}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Descuento Colaborador FruFresco (5%) */}
+                            {isCollaborator && collaboratorDiscountAmount > 0 && (
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '0.35rem 0.55rem',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#ECFDF5',
+                                    border: '1px solid #A7F3D0'
+                                }}>
+                                    <span style={{ color: '#065F46', fontWeight: '800', fontSize: '0.76rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <Sparkles size={13} color="#059669" />
+                                        {locale === 'es' ? 'Descuento Colaborador (5%)' : 'Employee Discount (5%)'}
+                                    </span>
+                                    <span style={{ fontWeight: '900', color: '#059669', fontSize: '0.82rem' }}>
+                                        -${collaboratorDiscountAmount.toLocaleString('es-CO')}
                                     </span>
                                 </div>
                             )}
@@ -3130,11 +3253,13 @@ export default function CheckoutPage() {
                                     <><MapPin size={15} /> {locale === 'es' ? 'Sin Cobertura en la Zona' : 'Out of coverage'}</>
                                 ) : (
                                     <>
-                                        {paymentMethod === 'wompi' ? <Zap size={16} /> : <Truck size={16} />}
+                                        {paymentMethod === 'wompi' ? <Zap size={16} /> : paymentMethod === 'payroll_deduction' ? <FileText size={16} /> : <Truck size={16} />}
                                         <span>
                                             {paymentMethod === 'wompi' 
                                                 ? (locale === 'es' ? 'Confirmar y Pagar Online' : 'Confirm & Pay Online')
-                                                : (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')}
+                                                : paymentMethod === 'payroll_deduction'
+                                                    ? (locale === 'es' ? 'Confirmar con Deducción de Nómina ($0 Hoy)' : 'Confirm with Payroll Deduction ($0 Today)')
+                                                    : (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')}
                                         </span>
                                     </>
                                 )}
@@ -3687,8 +3812,12 @@ export default function CheckoutPage() {
 
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#334155', marginBottom: '6px' }}>
                                         <span>{locale === 'es' ? 'Método de pago:' : 'Payment method:'}</span>
-                                        <span style={{ fontWeight: '700', color: paymentMethod === 'wompi' ? '#2563EB' : '#D97706' }}>
-                                            {paymentMethod === 'wompi' ? 'Wompi en línea' : (locale === 'es' ? 'Contra Entrega' : 'Cash on Delivery')}
+                                        <span style={{ fontWeight: '700', color: paymentMethod === 'wompi' ? '#2563EB' : paymentMethod === 'payroll_deduction' ? '#047857' : '#D97706' }}>
+                                            {paymentMethod === 'wompi' 
+                                                ? 'Wompi en línea' 
+                                                : paymentMethod === 'payroll_deduction'
+                                                    ? (locale === 'es' ? 'Deducción de Nómina (Crédito Empleado)' : 'Payroll Deduction')
+                                                    : (locale === 'es' ? 'Contra Entrega' : 'Cash on Delivery')}
                                         </span>
                                     </div>
                                 </div>
@@ -3707,6 +3836,36 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {paymentMethod === 'payroll_deduction' && (
+                            <div style={{
+                                marginTop: '1.25rem',
+                                backgroundColor: '#ECFDF5',
+                                border: '1.5px solid #A7F3D0',
+                                borderRadius: '16px',
+                                padding: '1.1rem 1.4rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '14px'
+                            }}>
+                                <div style={{ width: '42px', height: '42px', borderRadius: '12px', backgroundColor: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid #6EE7B7' }}>
+                                    <FileText size={22} color="#047857" />
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.95rem' }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            👥 {locale === 'es' ? 'Beneficio Colaborador FruFresco — Deducción por Nómina Quincenal' : 'Employee Benefit — Payroll Deduction'}
+                                        </span>
+                                    </div>
+                                    <div style={{ marginTop: '3px', color: '#047857', fontSize: '0.85rem', lineHeight: '1.45', fontWeight: '500' }}>
+                                        {locale === 'es' 
+                                            ? `El total de $${finalOrderTotal.toLocaleString('es-CO')} COP será descontado directamente en tu próximo desprendible de nómina quincenal (Columna N). ⚠️ NO DEBES ENTREGAR NINGÚN DINERO AL REPARTIDOR en la puerta.`
+                                            : `The total of $${finalOrderTotal.toLocaleString('en-US')} COP will be deducted on your next biweekly payroll. Do not hand any cash to the driver.`
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {paymentMethod === 'contra_entrega' && (
                             <div style={{
@@ -3729,7 +3888,7 @@ export default function CheckoutPage() {
                                     <div style={{ marginTop: '2px', color: '#78350F', fontSize: '0.85rem', lineHeight: '1.4' }}>
                                         {locale === 'es' 
                                             ? `Registraremos tu pedido inmediatamente. Pagarás el total de $${finalOrderTotal.toLocaleString('es-CO')} COP al repartidor en la puerta de tu domicilio en efectivo o transferencia (Nequi / Daviplata / PSE) al recibir.`
-                                            : `Your order will be registered immediately. You will pay $${finalOrderTotal.toLocaleString('en-US')} COP on delivery in cash or bank transfer.`
+                                             : `Your order will be registered immediately. You will pay $${finalOrderTotal.toLocaleString('en-US')} COP on delivery in cash or bank transfer.`
                                         }
                                     </div>
                                 </div>
@@ -3779,12 +3938,14 @@ export default function CheckoutPage() {
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                {loading ? <Loader2 size={20} className="animate-spin" /> : (paymentMethod === 'contra_entrega' ? <CheckCircle2 size={20} /> : <ShieldCheck size={20} />)}
+                                {loading ? <Loader2 size={20} className="animate-spin" /> : (paymentMethod === 'contra_entrega' || paymentMethod === 'payroll_deduction' ? <CheckCircle2 size={20} /> : <ShieldCheck size={20} />)}
                                 {loading 
                                     ? (locale === 'es' ? 'Procesando...' : 'Processing...') 
-                                    : paymentMethod === 'contra_entrega'
-                                        ? (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')
-                                        : (locale === 'es' ? 'Ir a Pagar Seguro (Wompi)' : 'Proceed to Secure Payment')
+                                    : paymentMethod === 'payroll_deduction'
+                                        ? (locale === 'es' ? 'Confirmar Pedido (Deducción Nómina $0 Hoy)' : 'Confirm Order (Payroll Deduction $0 Today)')
+                                        : paymentMethod === 'contra_entrega'
+                                            ? (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')
+                                            : (locale === 'es' ? 'Ir a Pagar Seguro (Wompi)' : 'Proceed to Secure Payment')
                                 }
                             </button>
                         </div>

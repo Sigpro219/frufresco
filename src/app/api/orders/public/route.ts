@@ -207,16 +207,18 @@ export async function POST(request: Request) {
                     if (pData) existingProfile = pData;
                 }
 
-                if (!existingProfile && (cPhone || cEmail || cId)) {
+                const cleanCPhone = cPhone ? cPhone.replace(/\D/g, '') : '';
+                if (!existingProfile && (cleanCPhone || cEmail || cId)) {
                     let query = supabase.from('profiles').select('id, contact_name, address, logistics_data').eq('role', 'b2c_client');
-                    if (cPhone) {
-                        query = query.eq('contact_phone', cPhone);
+                    if (cleanCPhone.length >= 7) {
+                        const phoneTail = cleanCPhone.slice(-10);
+                        query = query.or(`contact_phone.ilike.%${phoneTail}%,phone.ilike.%${phoneTail}%`);
                     } else if (cEmail) {
-                        query = query.eq('email', cEmail);
+                        query = query.ilike('email', cEmail.trim());
                     } else if (cId) {
-                        query = query.eq('nit', cId);
+                        query = query.eq('nit', cId.trim());
                     }
-                    const { data: matchedProfiles } = await query.maybeSingle();
+                    const { data: matchedProfiles } = await query.limit(1).maybeSingle();
                     if (matchedProfiles) {
                         existingProfile = matchedProfiles;
                     }
@@ -316,6 +318,19 @@ export async function POST(request: Request) {
                         if (!fbErr) newProfile = data;
                     }
 
+                    // Blindaje contra Race Conditions: Si la inserción falló por conflicto concurrente, re-consultar el perfil recién creado
+                    if (!newProfile && cleanCPhone.length >= 7) {
+                        const phoneTail = cleanCPhone.slice(-10);
+                        const { data: raceWinner } = await supabase
+                            .from('profiles')
+                            .select('id')
+                            .eq('role', 'b2c_client')
+                            .or(`contact_phone.ilike.%${phoneTail}%,phone.ilike.%${phoneTail}%`)
+                            .limit(1)
+                            .maybeSingle();
+                        if (raceWinner) newProfile = raceWinner;
+                    }
+
                     if (newProfile) {
                         order.profile_id = newProfile.id;
                     }
@@ -370,8 +385,55 @@ export async function POST(request: Request) {
             .insert(orderItemsData);
 
         if (itemsError) {
-            console.error('Error inserting public order items:', itemsError);
-            return NextResponse.json({ error: itemsError.message }, { status: 500 });
+            console.error('Error inserting public order items. Compensating by deleting orphan order:', itemsError);
+            // Compensación ACID: Eliminar orden huérfana para evitar registros corruptos sin productos
+            await supabase.from('orders').delete().eq('id', orderData.id);
+            return NextResponse.json({ error: `Error registrando los productos del pedido: ${itemsError.message}` }, { status: 500 });
+        }
+
+        // Escenario 229 (SDD): Si el pedido es de un colaborador con Deducción de Nómina (Crédito Empleado),
+        // registrar de forma atómica en inventory_movements para alimentar la Columna N y la vista de HR.
+        if (orderData.payment_method === 'payroll_deduction') {
+            try {
+                let warehouseId = null;
+                const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
+                if (whData?.id) warehouseId = whData.id;
+
+                const orderTag = orderData.sequence_id ? `#PED-${orderData.sequence_id}` : `#${orderData.id.slice(0, 6).toUpperCase()}`;
+                const deliveryIso = orderData.delivery_date ? `${orderData.delivery_date}T12:00:00.000Z` : new Date().toISOString();
+                
+                const collabName = orderData.logistics_data?.collaborator_name || customer_info?.name || 'Colaborador FruFresco';
+                const collabDocId = orderData.logistics_data?.collaborator_document_id || customer_info?.identification || 'S/N';
+
+                const payrollMovements = items.map((item: any) => {
+                    const qtyNum = parseFloat(item.quantity?.toString() || '0');
+                    const unitPrice = parseFloat(item.unit_price?.toString() || '0');
+                    const lineTotal = Math.round(qtyNum * unitPrice);
+                    const uom = item.unit || 'Kg';
+
+                    return {
+                        product_id: item.product_id,
+                        warehouse_id: warehouseId,
+                        quantity: -qtyNum,
+                        type: 'exit',
+                        reference_type: 'employee_sale',
+                        reference_id: orderData.id,
+                        notes: `[VENTA NÓMINA HOGAR WEB] Pedido ${orderTag} | Columna N: ${qtyNum.toFixed(2)} ${uom} | Empleado: ${collabName} (Doc: ${collabDocId}) | Valor Nómina: ${lineTotal.toLocaleString('es-CO')}`,
+                        created_at: deliveryIso
+                    };
+                });
+
+                if (payrollMovements.length > 0) {
+                    const { error: payrollErr } = await supabase
+                        .from('inventory_movements')
+                        .insert(payrollMovements);
+                    if (payrollErr) {
+                        console.error('Error insertando movimientos de nómina en pedido público:', payrollErr);
+                    }
+                }
+            } catch (payrollCatchErr) {
+                console.error('Exception registrando deducción de nómina en orden pública:', payrollCatchErr);
+            }
         }
 
         return NextResponse.json({ success: true, order: orderData });

@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.193 (Galería Centralizada de Control de Pedidos Pendientes, Detección Predictiva de Frecuencia y Recordatorios Asistidos por WhatsApp en Gestión de Calidad — 76/76 Pantallas Certificadas)  
-> **Fecha:** 15 de Octubre, 2026  
+> **Versión:** 1.9.198 (Checkout Web B2C y Deducción de Nómina Pre-Autorizada en Colaboradores, Control Dual en Talento Humano y Compensación ACID — 76/76 Pantallas Certificadas)  
+> **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 225 Escenarios BDD Ininterrumpidos (1..225)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 229 Escenarios BDD Ininterrumpidos (1..229)
 
 ---
 
@@ -17,18 +17,18 @@
 
 | Dominio | Nombre del Dominio | Pantallas | Capítulos SDD | Rango de Escenarios BDD | Cobertura |
 | :---: | :--- | :---: | :--- | :---: | :---: |
-| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224 (§40.1 - §40.8) | 🟢 100% |
+| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223 (§39.1 - §39.6) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224 (§42.1 - §42.7) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **224 Escenarios Canónicos (1..224)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **229 Escenarios Canónicos (1..229)** | **🟢 100%** |
 
 ---
 
@@ -1138,6 +1138,7 @@ El sistema gobierna la fijación de tarifas institucionales mediante modelos de 
    - **Grande:** Cliente institucional corporativo de alto volumen. Ajuste `-3%` sobre la línea base general (Margen promedio real: **31,2%**).
    - **Mediano:** Cliente institucional mediano. Ajuste `-2%` sobre la línea base general (Margen promedio real: **32,1%**).
    - **Pequeño:** Cliente institucional pequeño. Ajuste `-1%` sobre la línea base general (Margen promedio real: **33,2%**).
+   - **Familia Cortés - Costo Puro (0% Margen)** (`31c6d356-2d52-488f-81d6-abffaed295cf`): Modelo corporativo preferencial exclusivo para la Casa Matriz de Camilo Cortés Amaya y sus sucursales autorizadas. Facturación a costo puro del día (0% de utilidad comercial), vigencia contractual a 5 años (2026-2031) o permanente, recalculado diariamente contra la Matriz de Costos de Corabastos.
 2. **Matriz de Sobrescritura por Producto (`pricing_rules`):**
    - Permite ajustar el margen o markup específico de un SKU dentro de un modelo (`margin_adjustment`), con guardado reactivo in-situ y soporte de utilidades superiores al 100% en productos de bajo costo para absorción de fletes y empaques.
 3. **Materialización & Sincronización Desatendida:**
@@ -10302,8 +10303,87 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        ```
      - Al hacer clic en cualquiera de las dos acciones (`[Recordar]` o `[Copiar]`), el sistema marca automáticamente al cliente como `🟢 Recordatorio Enviado` en el estado de sesión / almacenamiento local con su marca de hora exacta para prevenir reprocesos entre operadores.
 
+#### Escenario 226: Protocolo Canónico B2B de Pedidos Express Same-Day Extemporáneos, Aislamiento Logístico Poka-Yoke y Régimen Inviolable de Despacho Remisionado (SDD v1.9.194)
+- **Given** la Creación Manual de Pedidos (`/admin/orders/create`), la Torre de Control y Galería Logística (`/admin/orders/loading`), el Portal de Clientes B2B (`/b2b/dashboard`) y el Motor Central de Fechas (`src/lib/colombianHolidays.ts`).
+- **When** un cliente institucional (B2B) requiere un despacho de extrema urgencia para la misma jornada de entrega ($D+0$):
+- **Then**:
+  1. **Supresión Absoluta en el Portal de Autogestión B2B (`/b2b/dashboard`):**
+     - Para salvaguardar la promesa de valor y evitar que la excepción de emergencia se convierta en hábito operativo o genere la falsa expectativa de *"compras hoy y te entregamos hoy"*, la opción de despacho para el mismo día queda **100% suprimida y bloqueada** en la interfaz de autogestión del cliente.
+     - El portal B2B mantiene de forma inquebrantable su regla de planeación estándar: despacho mínimo en $D+1$ (o $D+2$ si supera la hora de corte de las 5:00 PM), saltando domingos, festivos y recesos operativos.
+  2. **Ventana Horaria Asistida para la Mesa Comercial (`isB2BSameDayExpressAvailable`):**
+     - El pedido Same-Day solo puede ser radicado de forma asistida por un operador comercial autorizado en `/admin/orders/create`.
+     - **Franja Horaria Habilitada:** Se autoriza exclusivamente si el pedido ingresa entre las **20:00 (8:00 PM del día previo / cierre de tanda ordinaria)** y las **12:00 M (mediodía del día de entrega)**.
+     - **Salvaguarda de Calendario:** La fecha de hoy debe ser un día hábil de despacho (no domingo salvo parametrización explícita, no festivo Emiliani cerrado, no receso de vacaciones/Semana Santa).
+     - A las 12:01 PM en punto, la ventana express para el mismo día se clausura automáticamente.
+  3. **Régimen Documental Inviolable: 100% Remisionado:**
+     - Sin excepción alguna, todo pedido express Same-Day viaja amparado **exclusivamente con Remisión Oficial de Entrega** (`document_type_override: 'remission'`).
+     - Queda terminantemente prohibido exigir o emitir Factura Electrónica previa al despacho (`factura_pre_despacho`), evitando frenar el furgón o motorizado de emergencia por tiempos de ciclo DIAN/World Office. La causación fiscal y contable se difiere al corte contable regular.
+     - La orden se sella en metadatos con: `is_same_day: true`, `is_extemporaneous: true` y la leyenda en `admin_notes`: `[EXCEPCIÓN B2B SAME-DAY: Despacho Extemporáneo - Solo Remisión Oficial]`.
+  4. **Aislamiento Logístico de la Cadena de Suministro Estándar (Lean Gemba):**
+     - **Exclusión de Selección Masiva:** Al presionar *"Seleccionar Todos"* en `/admin/orders/loading`, los pedidos express extemporáneos **no se marcan automáticamente**. No se mezclan con la ola nocturna de compras mayoristas en Corabastos ni con las células de pesaje masivo para no romper el ritmo (*Takt Time*).
+     - **Impresión Unitaria de Remisión:** En la tarjeta del pedido se expone el botón de acción directa `[🖨️ Imprimir Remisión]` (`/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}`), permitiendo imprimir en 1 clic el documento individual para el conductor exprés.
+  5. **Resaltado Prioritario en Galería de Pedidos (`/admin/orders/loading`):**
+     - La tarjeta del pedido exhibe un marco de alta visibilidad ámbar (`border: 2px solid #F59E0B`, resplandor y fondo tenue `#FFFBEB`).
+     - Despliega el banner superior de alerta: `[ ⚡ PEDIDO EXPRESS EXTEMPORÁNEO (SAME-DAY) — DESPACHO PRIORITARIO ]`.
+     - El ordenamiento algorítmico sitúa este pedido con máxima precedencia (Score +30) en la galería.
+     - **Ciclo de Vida del Resaltado:** Permanece visible y priorizado durante los estados `pending_approval`, `approved`, `picking` e `in_transit`. La alerta y prioridad se apagan automáticamente en cuanto el pedido alcanza el estado **`delivered` (Entregado)** o `cancelled`.
+#### Escenario 227: Modelo Preferencial Familia Cortés al Costo Puro (0% Margen), Jerarquía Holding Matriz-Sucursales y Liquidación Dinámica Diaria (SDD v1.9.195)
+- **Given** el submódulo de Modelos de Precios (`/admin/commercial/settings`), el Directorio Corporativo de Clientes (`profiles`), el motor de tarificación (`src/lib/pricingUtils.ts`) y el endpoint de resolución de precios (`/api/orders/resolve-agreement-pricing`).
+- **When** se procesan órdenes o cotizaciones para el grupo corporativo de la Familia Cortés (titular: Camilo Cortés Amaya, NIT `1026562512`):
+- **Then**:
+  1. **Modelo Canónico a Costo Puro 0% de Utilidad (`pricing_models`):**
+     - El modelo `Familia Cortés - Costo Puro (0% Margen)` (`31c6d356-2d52-488f-81d6-abffaed295cf`) aplica matemáticamente un markup de 0% sobre el costo neto efectivo del día:
+       $$\text{Precio Unitario Antes de IVA} = \text{Costo Neto Efectivo} \times (1 + 0) = \mathbf{\text{Costo del Día}}$$
+     - **Dinamicidad Diaria:** A diferencia de un acuerdo comercial congelado, este modelo absorbe automáticamente las variaciones de compra de Corabastos registradas en `commercial_cost_matrix`, garantizando que la familia liquide siempre al costo real vigente de la fecha de entrega.
+     - **Vigencia Extendida:** Configurado con vigencia permanente / 5 años sin vencimientos prematuros.
+  2. **Estructura Holding Corporativa (Matriz y Sucursales Familiares):**
+     - **Casa Matriz:** Perfil `Camilo Cortes Amaya` (NIT `1026562512`, UUID `fb8e4580-a45e-47e9-837f-68b99bc8cf39`) declarado con `is_corporate_parent: true` y asignado al modelo de precios al costo.
+     - **Sucursales Vinculadas:** Todas las sedes de entrega autorizadas (ej. Sede Principal, residencias o familiares delegados) se vinculan a la matriz mediante `parent_id = fb8e4580-a45e-47e9-837f-68b99bc8cf39`.
+     - **Herencia Automática:** Por el principio de equivalencia operativa, cada sucursal hereda el modelo de precios al 0% y la facturación fiscal a nombre del titular Camilo Cortés, eliminando la duplicidad de configuración.
+  3. **Trazabilidad en Creación de Pedidos (`/admin/orders/create`):**
+     - Al seleccionar cualquiera de las sedes de Camilo Cortés, el asistente comercial detecta el modelo `Familia Cortés - Costo Puro (0% Margen)` con badge visual azul índigo, desplegando los SKUs valorizados a costo puro con redondeo institucional a $50 COP.
 ---
 
+#### Escenario 228: Protocolo Canónico de Pedidos para Colaboradores (Compras Hogar), Descuento Escalonado 5% / 10% y Enlace Automático con Deducciones de Nómina (SDD v1.9.196)
+- **Given** la Creación Manual de Pedidos (`/admin/orders/create`), el Directorio de Talento Humano y Deducciones de Nómina (`/admin/hr`), y la Columna N del Balance Diario de Masa.
+- **When** se crea un pedido del canal Hogar (`B2C`) para un Colaborador / Empleado de FruFresco registrado en el sistema:
+- **Then**:
+  1. **Detección y Reconocimiento del Colaborador:**
+     - El asistente de pedidos reconoce al cliente Hogar como Colaborador de FruFresco mediante vinculación de perfil (`profile_type = 'employee'`, cargo en `collaborators` o activación del switch comercial *"Es Colaborador FruFresco"*).
+     - Se despliega el badge visual esmeralda: `[ 👥 COLABORADOR FRUFRESCO — BENEFICIO ACTIVO ]`.
+  2. **Regla de Descuento Comercial Escalonado:**
+     - **Descuento Base Colaborador (5% Automático):** Todo pedido de colaborador disfruta automáticamente de un **5% de descuento** sobre el subtotal de productos Hogar.
+     - **Bonificación Adicional por Pago en Efectivo (+5%):** Si el método de pago seleccionado es `Efectivo Contraentrega` (`contra_entrega`), se otorga un **+5% de descuento adicional**, totalizando un **10% de descuento comercial**.
+     - **Opción Deducción de Nómina:** Si el colaborador elige pagar mediante deducción de nómina (`payroll_deduction`), mantiene su **5% de descuento base**, y el saldo resultante se envía a liquidación quincenal.
+  3. **Enlace Directo con el Módulo de Nómina (`/admin/hr` & Columna N):**
+     - Al confirmar un pedido de colaborador con método de pago `Deducción de Nómina`, el sistema estampa en `logistics_data` y `admin_notes` la trazabilidad de nómina del colaborador (nombre, cédula, valor a descontar).
+     - Se registra de inmediato el movimiento de cuenta por pagar / deducción en la fuente de verdad de nómina (`inventory_movements` con `reference_type = 'employee_sale'`), alimentando la Columna N del Balance Diario de Masa.
+     - En `/admin/hr` (pestaña *Deducciones de Nómina • Ventas Bodega (Col N)*), la compra se totaliza en el KPI de nómina, aparece discriminada en el desglose del empleado y se incluye en la descarga del archivo Excel (`XLSX`) para la liquidación quincenal de recursos humanos sin digitación manual.
+---
+
+
+
+#### Escenario 229: Checkout Web B2C para Colaboradores y Control Dual en Talento Humano (Wompi vs Nómina) (SDD v1.9.198)
+- **Given** el Checkout Web de la tienda FruFresco (/checkout), el módulo de Talento Humano (/admin/hr) y la Remisión de Entrega (/admin/orders/contingency-print).
+- **When** un colaborador de FruFresco ingresa su número de WhatsApp o correo en el Checkout:
+- **Then**:
+  1. El endpoint /api/checkout/lookup consulta la tabla collaborators y perfiles staff por documento, teléfono o email.
+  2. Si coincide, retorna is_collaborator: true con los datos del colaborador (contact_name, document_id, role).
+  3. En la interfaz del Checkout:
+     - Se exhibe el badge de colaborador con beneficio activo del 5% de descuento base sobre alimentos frescos (excluyendo canastillas e insumos).
+     - En el Paso 3 (Métodos de Pago), se habilita la tarjeta **📋 Deducción de Nómina (Crédito Empleado)** además de **💳 Pago Seguro Online (Wompi)** y **🚚 Contra Entrega**.
+     - Ergonomía y Transparencia Textual:
+       * El botón CTA primario conmute a `[ 📋 Confirmar con Deducción de Nómina ($0 Hoy) ]` erradicando cualquier ambigüedad de contraentrega.
+       * El modal de confirmación final proyecta un banner corporativo esmeralda: *«Beneficio Colaborador: El total de $X será descontado en tu próximo desprendible de nómina quincenal. No debes entregar dinero al repartidor.»*
+  4. Si el colaborador paga por **Wompi**:
+     - La orden se registra como pagada online con el 5% de descuento aplicado y payment_status = 'Aprobado'.
+     - En /admin/hr, se visualiza en el desglose del colaborador con etiqueta azul '💳 PAGADO ONLINE (WOMPI) — $0 A DESCONTAR', permitiendo auditoría y control integral de consumos sin inflar el pasivo quincenal de nómina.
+  5. Si el colaborador selecciona **Deducción de Nómina**:
+     - La orden se registra formalmente con payment_method = 'payroll_deduction' y **payment_status = 'payroll_authorized'** (crédito corporativo pre-autorizado, no 'Pendiente' de cobro al chofer).
+     - En `special_notes` se antepone el indicador: `[⚠️ NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA]`.
+     - En las remisiones de entrega impresas (`/admin/orders/contingency-print`), se proyecta el banner rojo Poka-Yoke: `⚠️ ATENCIÓN TRANSPORTADOR: NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA ($0 EN ENTREGA)`.
+     - Genera los movimientos correspondientes en inventory_movements (reference_type = 'employee_sale'), sumándose al Total a Descontar Nómina en /admin/hr y a la Columna N de inventario.
+---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
 

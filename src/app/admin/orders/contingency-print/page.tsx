@@ -63,6 +63,8 @@ interface OrderData {
     admin_notes?: string;
     special_notes?: string;
     profile_id?: string;
+    payment_method?: string;
+    payment_status?: string;
     special_attention?: SpecialClientAttentionState;
     profiles?: {
         id?: string;
@@ -572,6 +574,7 @@ function ContingencyPrintContent() {
                     .from('orders')
                     .select(`
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, profile_id,
+                        payment_method, payment_status,
                         total_weight_kg, crates_count, is_manual_delivery, manual_delivery_time, manual_delivery_margin, manual_delivery_note, logistics_data,
                         latitude, longitude, shipping_address, admin_notes, special_notes, warehouse_spaces,
                         profiles:profiles(id, created_at, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, document_type, remission_with_prices, needs_crates, crate_balance, parent:parent_id(id, company_name, document_type, remission_with_prices)),
@@ -1386,6 +1389,16 @@ function ContingencyPrintContent() {
                                             </span>
                                             <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', border: '1px solid #D8B4FE', padding: '1px 6px', borderRadius: '3px', fontWeight: 800, fontSize: '6.2pt', whiteSpace: 'nowrap' }}>
                                                 {b2cGift.isB2CGift ? 'OBSEQUIO $ 0' : 'CORTESÍA $0'}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* Poka-Yoke Banner Venta Empleado Nómina (NO COBRAR EN PUERTA) */}
+                                    {order.payment_method === 'payroll_deduction' && (
+                                        <div style={{ backgroundColor: '#FEF2F2', border: '1.5px solid #DC2626', padding: '4px 9px', borderRadius: '4px', marginBottom: '4px', fontSize: '7.2pt', color: '#991B1B', fontWeight: 900, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>⚠️ ATENCIÓN TRANSPORTADOR: NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA.</span>
+                                            <span style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '1px 6px', borderRadius: '3px', fontSize: '6.2pt' }}>
+                                                PAGO POR NÓMINA ($0 EN ENTREGA)
                                             </span>
                                         </div>
                                     )}

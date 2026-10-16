@@ -381,6 +381,11 @@ function CreateOrderContent() {
     const [isContractExpired, setIsContractExpired] = useState(false);
     const [activeEquivalenceRow, setActiveEquivalenceRow] = useState<number | null>(null);
 
+    // Escenario 228: Colaboradores FruFresco & Descuento Nómina / Efectivo
+    const [collaboratorsList, setCollaboratorsList] = useState<any[]>([]);
+    const [isCollaboratorOrder, setIsCollaboratorOrder] = useState(false);
+    const [selectedCollaboratorInfo, setSelectedCollaboratorInfo] = useState<any>(null);
+
     // Form State
     const [clientType, setClientType] = useState(searchParams.get('type')?.toUpperCase() === 'B2C' ? 'B2C' : 'B2B');
     const isB2B = clientType === 'B2B';
@@ -1382,7 +1387,13 @@ function CreateOrderContent() {
                 return { data: allConvs, error: null };
             })();
 
-            const [resB2B, resB2C, resConvs] = await Promise.all([fetchB2B, fetchB2C, fetchConversions]);
+            const fetchCollaborators = supabase
+                .from('collaborators')
+                .select('id, contact_name, document_id, role, specialty, phone, email, is_active')
+                .eq('is_active', true)
+                .order('contact_name', { ascending: true });
+
+            const [resB2B, resB2C, resConvs, resCollabs] = await Promise.all([fetchB2B, fetchB2C, fetchConversions, fetchCollaborators]);
 
             if (resB2B.error) console.error("Error B2B:", resB2B.error);
             else if (resB2B.data) setClients(resB2B.data);
@@ -1392,6 +1403,8 @@ function CreateOrderContent() {
 
             if (resConvs.error) console.error("Error Conversions:", resConvs.error);
             else if (resConvs.data) setConversions(resConvs.data);
+
+            if (resCollabs?.data) setCollaboratorsList(resCollabs.data);
 
             // 2. Productos
             const { data: prods, error: errorProds } = await supabase
@@ -1686,6 +1699,33 @@ function CreateOrderContent() {
             nit: client.nit || '',
             saveToDirectory: true
         });
+
+        // Escenario 228: Detección automática si el cliente Hogar es un colaborador
+        const matchedCollab = collaboratorsList.find(c => {
+            const docId = (c.document_id || '').toString().trim();
+            const clientNit = (client.nit || '').toString().trim();
+            if (docId && clientNit && docId === clientNit) return true;
+
+            const collabPhone = (c.phone || '').toString().replace(/\D/g, '');
+            const cPhone = (client.phone || client.contact_phone || '').toString().replace(/\D/g, '');
+            if (collabPhone && cPhone && collabPhone.length >= 7 && cPhone.includes(collabPhone)) return true;
+
+            const collabEmail = (c.email || '').toLowerCase().trim();
+            const cEmail = (client.email || '').toLowerCase().trim();
+            if (collabEmail && cEmail && collabEmail === cEmail) return true;
+
+            return false;
+        });
+
+        if (matchedCollab) {
+            setIsCollaboratorOrder(true);
+            setSelectedCollaboratorInfo(matchedCollab);
+            showToast(`👥 Colaborador Reconocido: ${matchedCollab.contact_name} (${matchedCollab.role || 'Personal FruFresco'}). Beneficio del 5% aplicado.`, 'success');
+        } else {
+            setIsCollaboratorOrder(false);
+            setSelectedCollaboratorInfo(null);
+        }
+
         if (client.latitude && client.longitude) {
             setLatitude(client.latitude);
             setLongitude(client.longitude);
@@ -2644,13 +2684,34 @@ function CreateOrderContent() {
         });
     };
 
-    const calculateTotal = () => {
+    // Escenario 228: Cálculo de porcentaje de descuento para colaboradores (5% base + 5% efectivo adicional)
+    const getCollaboratorDiscountPct = () => {
+        if (clientType !== 'B2C' || !isCollaboratorOrder) return 0;
+        const isCash = paymentMethod === 'contra_entrega';
+        return isCash ? 10 : 5; // 10% si paga contra entrega (efectivo), 5% si paga por nómina/transferencia/wompi
+    };
+
+    const calculateGrossTotal = () => {
         if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
             const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
             return acc + (unitPrice * qtyNum);
         }, 0);
+    };
+
+    const calculateCollaboratorDiscountAmount = () => {
+        const pct = getCollaboratorDiscountPct();
+        if (pct === 0) return 0;
+        const gross = calculateGrossTotal();
+        return Math.round(gross * (pct / 100));
+    };
+
+    const calculateTotal = () => {
+        if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
+        const gross = calculateGrossTotal();
+        const discount = calculateCollaboratorDiscountAmount();
+        return Math.max(0, gross - discount);
     };
 
     const calculateTotalWeight = () => {
@@ -2676,11 +2737,12 @@ function CreateOrderContent() {
 
     const calculateTotalTax = () => {
         if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
+        const discountFactor = 1 - (getCollaboratorDiscountPct() / 100);
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
             const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
             const rate = item.product.iva_rate !== null && item.product.iva_rate !== undefined ? Number(item.product.iva_rate) : 19;
-            const itemTotal = unitPrice * qtyNum;
+            const itemTotal = unitPrice * qtyNum * discountFactor;
             return acc + (itemTotal * (rate / (100 + rate)));
         }, 0);
     };
@@ -4812,9 +4874,13 @@ function CreateOrderContent() {
                 let sub = 0;
                 let tx = 0;
                 let wt = 0;
+                const collabDiscountPct = (clientType === 'B2C' && isCollaboratorOrder) ? getCollaboratorDiscountPct() : 0;
+                const discountMultiplier = 1 - (collabDiscountPct / 100);
+
                 for (const item of groupItems) {
                     const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                    const uPrice = forceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                    const rawPrice = forceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                    const uPrice = Math.round(rawPrice * discountMultiplier);
                     const lineSub = qtyNum * uPrice;
                     const lineIva = lineSub * ((item.product?.iva_rate || 0) / 100);
                     sub += lineSub;
@@ -4863,6 +4929,32 @@ function CreateOrderContent() {
 ${primaryAdminNotes}`.trim();
             }
 
+            // Escenario 228: Metadatos de Colaborador y Deducción de Nómina
+            const isCollabPayroll = clientType === 'B2C' && isCollaboratorOrder && paymentMethod === 'payroll_deduction';
+            const collabEmployeeName = selectedCollaboratorInfo?.contact_name || guestInfo.name || 'Colaborador FruFresco';
+            const collabDocId = selectedCollaboratorInfo?.document_id || guestInfo.nit || 'S/N';
+            const collabDiscountPct = (clientType === 'B2C' && isCollaboratorOrder) ? getCollaboratorDiscountPct() : 0;
+            const collabDiscountMultiplier = 1 - (collabDiscountPct / 100);
+
+            if (clientType === 'B2C' && isCollaboratorOrder) {
+                const payrollTag = isCollabPayroll 
+                    ? `[PEDIDO COLABORADOR - DEDUCCIÓN NÓMINA (COL N)] Empleado: ${collabEmployeeName} (Doc: ${collabDocId}) | Descuento: ${collabDiscountPct}% | Total Nómina: $${primaryFin.total.toLocaleString('es-CO')}`
+                    : `[PEDIDO COLABORADOR - BENEFICIO ${collabDiscountPct}% (PAGO ${paymentMethod.toUpperCase()})] Empleado: ${collabEmployeeName} (Doc: ${collabDocId})`;
+                primaryAdminNotes = `${payrollTag}\n${primaryAdminNotes}`.trim();
+            }
+
+            const enrichedLogisticsData = {
+                ...primaryLogisticsData,
+                ...(clientType === 'B2C' && isCollaboratorOrder ? {
+                    is_employee_order: true,
+                    collaborator_id: selectedCollaboratorInfo?.id || null,
+                    collaborator_name: collabEmployeeName,
+                    collaborator_document_id: collabDocId,
+                    collaborator_discount_pct: collabDiscountPct,
+                    is_payroll_deduction: isCollabPayroll
+                } : {})
+            };
+
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
@@ -4887,7 +4979,7 @@ ${primaryAdminNotes}`.trim();
                     manual_delivery_time: manualDeliveryTime || null,
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
-                    logistics_data: primaryLogisticsData,
+                    logistics_data: enrichedLogisticsData,
                     document_url: permanentDocumentUrl || documentUrl || null
                 })
                 .select()
@@ -4900,7 +4992,8 @@ ${primaryAdminNotes}`.trim();
 
             const itemsData = primaryCartItems.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                const unitPrice = primaryForceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                const rawPrice = primaryForceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                const unitPrice = (clientType === 'B2C' && isCollaboratorOrder) ? Math.round(rawPrice * collabDiscountMultiplier) : rawPrice;
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
@@ -4921,6 +5014,47 @@ ${primaryAdminNotes}`.trim();
                 console.error('Order Items Insert Error Detail:', itemsError);
                 await supabase.from('orders').delete().eq('id', order.id);
                 throw new Error(itemsError.message);
+            }
+
+            // Escenario 228: Si el colaborador paga vía Deducción de Nómina, generar los movimientos en inventory_movements vinculados a Nómina (Columna N / RRHH)
+            if (isCollabPayroll) {
+                try {
+                    let warehouseId = null;
+                    const { data: whData } = await supabase.from("warehouses").select("id").limit(1).single();
+                    if (whData?.id) warehouseId = whData.id;
+
+                    const orderTag = order.sequence_id ? `#PED-${order.sequence_id}` : `#${order.id.slice(0, 6).toUpperCase()}`;
+                    const deliveryIso = `${deliveryDate}T12:00:00.000Z`;
+
+                    const payrollMovements = primaryCartItems.map(item => {
+                        const qtyNum = parseFloat(item.qty.toString().replace(",", ".") || "0");
+                        const rawPrice = primaryForceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                        const unitPrice = Math.round(rawPrice * collabDiscountMultiplier);
+                        const lineTotal = Math.round(qtyNum * unitPrice);
+                        const uom = item.originalUnit || item.product?.unit_of_measure || "Kg";
+
+                        return {
+                            product_id: item.product.id,
+                            warehouse_id: warehouseId,
+                            quantity: -qtyNum,
+                            type: "exit",
+                            reference_type: "employee_sale",
+                            reference_id: order.id,
+                            notes: `[VENTA NÓMINA HOGAR] Pedido ${orderTag} | Columna N: ${formatNumber(qtyNum, 2)} ${uom} | Empleado: ${collabEmployeeName} (Doc: ${collabDocId}) | Valor Nómina: $${formatNumber(lineTotal)}`,
+                            created_at: deliveryIso
+                        };
+                    });
+
+                    const { error: payrollErr } = await supabase
+                        .from("inventory_movements")
+                        .insert(payrollMovements);
+
+                    if (payrollErr) {
+                        console.error("Error insertando movimientos de nómina de colaborador:", payrollErr);
+                    }
+                } catch (payrollCatchErr) {
+                    console.error("Catch error registrando deducción de nómina:", payrollCatchErr);
+                }
             }
 
             // Escenario 221: Si hubo partición mixta (Pedido A Acuerdo + Pedido B Remisión $0 Fuera de Acuerdo), crear Pedido B e insertar tarea urgente
@@ -6246,6 +6380,45 @@ ${primaryAdminNotes}`.trim();
                                                                     {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
                                                                 </div>
                                                             )}
+
+                                                            {/* Escenario 228: Badge & Switch de Colaborador FruFresco */}
+                                                            <div style={{ marginTop: '0.45rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                <label style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '6px',
+                                                                    backgroundColor: isCollaboratorOrder ? '#ECFDF5' : '#F1F5F9',
+                                                                    border: `1.5px solid ${isCollaboratorOrder ? '#10B981' : '#CBD5E1'}`,
+                                                                    padding: '3px 10px',
+                                                                    borderRadius: '20px',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: '800',
+                                                                    color: isCollaboratorOrder ? '#065F46' : '#475569',
+                                                                    transition: 'all 0.2s ease'
+                                                                }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isCollaboratorOrder}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.checked;
+                                                                            setIsCollaboratorOrder(val);
+                                                                            if (val) {
+                                                                                showToast('👥 Beneficio de Colaborador activado (5% base + 5% efectivo adicional).', 'success');
+                                                                            } else {
+                                                                                showToast('Beneficio de Colaborador desactivado.', 'info');
+                                                                            }
+                                                                        }}
+                                                                        style={{ accentColor: '#059669', cursor: 'pointer' }}
+                                                                    />
+                                                                    <span>{isCollaboratorOrder ? '👥 Colaborador FruFresco (Beneficio 5% Activo)' : '¿Es Colaborador FruFresco?'}</span>
+                                                                </label>
+                                                                {isCollaboratorOrder && selectedCollaboratorInfo && (
+                                                                    <span style={{ fontSize: '0.7rem', color: '#047857', fontWeight: '700' }}>
+                                                                        • {selectedCollaboratorInfo.role || 'Personal Planta'} (Doc: {selectedCollaboratorInfo.document_id})
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         <button
                                                             onClick={() => { setSelectedClientB2C(''); setGuestInfo({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '', saveToDirectory: true }); }}
@@ -10037,10 +10210,42 @@ ${primaryAdminNotes}`.trim();
                                                 cursor: 'pointer'
                                             }}
                                         >
-                                            <option value="contra_entrega">🚚 Contra Entrega (Efectivo / Datáfono)</option>
-                                            <option value="transferencia">🏦 Transferencia Anticipada</option>
-                                            <option value="wompi">💳 Wompi / Link Digital</option>
+                                            <option value="contra_entrega">🚚 Contra Entrega / Efectivo {isCollaboratorOrder ? '(10% Descuento Total)' : ''}</option>
+                                            {isCollaboratorOrder && (
+                                                <option value="payroll_deduction">📋 Deducción de Nómina (5% Descuento • Cuentas x Cobrar)</option>
+                                            )}
+                                            <option value="transferencia">🏦 Transferencia Anticipada {isCollaboratorOrder ? '(5% Descuento)' : ''}</option>
+                                            <option value="wompi">💳 Wompi / Link Digital {isCollaboratorOrder ? '(5% Descuento)' : ''}</option>
                                         </select>
+
+                                        {/* Escenario 228: Desglose Visual de Beneficio para Colaboradores */}
+                                        {isCollaboratorOrder && (
+                                            <div style={{
+                                                marginTop: '0.5rem',
+                                                padding: '0.5rem 0.75rem',
+                                                backgroundColor: '#ECFDF5',
+                                                border: '1px solid #A7F3D0',
+                                                borderRadius: '8px',
+                                                fontSize: '0.74rem',
+                                                lineHeight: 1.4,
+                                                color: '#065F46'
+                                            }}>
+                                                <div style={{ fontWeight: '800', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px', color: '#047857' }}>
+                                                    <CheckCircle2 size={13} color="#059669" />
+                                                    Beneficio Colaborador: {getCollaboratorDiscountPct()}% de Descuento
+                                                </div>
+                                                <div>
+                                                    • Descuento Base Empleado: <strong>5%</strong><br />
+                                                    {paymentMethod === 'contra_entrega' ? (
+                                                        <>• Bonificación Pago Efectivo: <strong>+5% adicional</strong> (Ahorras {formatMoney(calculateCollaboratorDiscountAmount())})</>
+                                                    ) : paymentMethod === 'payroll_deduction' ? (
+                                                        <>• Método Nómina: Se enviará a descuento quincenal en <strong>/admin/hr</strong> (Ahorras {formatMoney(calculateCollaboratorDiscountAmount())})</>
+                                                    ) : (
+                                                        <>• Ahorro aplicado: <strong>{formatMoney(calculateCollaboratorDiscountAmount())}</strong></>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* ALERTA POKA-YOKE SI EXCEDE TOPE HOGAR CONTRA ENTREGA */}
                                         {paymentMethod === 'contra_entrega' && calculateTotal() > maxOrderHogarCod && (
@@ -10059,7 +10264,7 @@ ${primaryAdminNotes}`.trim();
                                             }}>
                                                 <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px', color: '#DC2626' }} />
                                                 <span>
-                                                    <strong>Tope Excedido:</strong> Pedidos Hogar contra entrega aplican hasta {formatMoney(maxOrderHogarCod)}. Por favor cambia a <strong>Transferencia</strong> o <strong>Wompi</strong>.
+                                                    <strong>Tope Excedido:</strong> Pedidos Hogar contra entrega aplican hasta {formatMoney(maxOrderHogarCod)}. Por favor cambia a <strong>Transferencia</strong>, <strong>Wompi</strong>{isCollaboratorOrder ? ' o <strong>Deducción de Nómina</strong>' : ''}.
                                                 </span>
                                             </div>
                                         )}
@@ -12059,9 +12264,16 @@ ${primaryAdminNotes}`.trim();
                             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 {orderNature === 'replacement' ? 'Total Reposición' : 'Total a Pagar'}
                             </span>
-                            <span style={{ fontSize: '1.5rem', fontWeight: 950, color: orderNature === 'replacement' ? '#6D28D9' : '#059669' }}>
-                                {formatMoney(calculateTotal())}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                                <span style={{ fontSize: '1.5rem', fontWeight: 950, color: orderNature === 'replacement' ? '#6D28D9' : '#059669' }}>
+                                    {formatMoney(calculateTotal())}
+                                </span>
+                                {isCollaboratorOrder && (
+                                    <span style={{ fontSize: '0.68rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '6px', fontWeight: '800' }}>
+                                        -{getCollaboratorDiscountPct()}% DCTO
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
 
