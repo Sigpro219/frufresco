@@ -239,6 +239,11 @@ export default function PqrAuditModal({
         }
 
         const rawNotes = pqr.resolution_notes || '';
+        const anyPhysicalReturnInNovelties = novelties
+            .filter(n => n.order_id && n.order_id === pqr.order_id)
+            .some(n => n.has_physical_return || (n.notes || '').includes('RETORNO_FISICO: SI'));
+        setHasPhysicalReturn(anyPhysicalReturnInNovelties);
+
         // Pre-hydrate sanitary protocol template if saved in notes
         if (rawNotes.includes('PRODUCTO CONFORME ACEPTADO') || rawNotes.includes('producto_conforme_sin_baja') || rawNotes.includes('Cerrado conforme sin impacto económico')) {
             setSanitaryKey('producto_conforme_sin_baja');
@@ -246,12 +251,18 @@ export default function PqrAuditModal({
             setSanitaryKey('disposicion_cliente_sin_retorno');
         } else if (rawNotes.includes('BAJA TOTAL') || rawNotes.includes('destruccion_biologica')) {
             setSanitaryKey('destruccion_biologica');
+            setHasPhysicalReturn(true);
         } else if (rawNotes.includes('TRANSFORMACIÓN') || rawNotes.includes('transformacion_industrial')) {
             setSanitaryKey('transformacion_industrial');
+            setHasPhysicalReturn(true);
         } else if (rawNotes.includes('BANCO DE ALIMENTOS') || rawNotes.includes('donacion_banco_alimentos')) {
             setSanitaryKey('donacion_banco_alimentos');
+            setHasPhysicalReturn(true);
         } else if (rawNotes.includes('COMPOSTAJE') || rawNotes.includes('compostaje_agricola')) {
             setSanitaryKey('compostaje_agricola');
+            setHasPhysicalReturn(true);
+        } else {
+            setSanitaryKey(anyPhysicalReturnInNovelties ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno');
         }
 
         const isReplacement = rca.isReplacementRejection || 
@@ -1133,6 +1144,50 @@ export default function PqrAuditModal({
             showToast('Error al eliminar novedad: ' + e.message, 'error');
         } finally {
             setActionLoading(false);
+        }
+    };
+
+    const handleTogglePhysicalReturnCustody = async (newPhysicalReturn: boolean, specificReturnId?: string) => {
+        setHasPhysicalReturn(newPhysicalReturn);
+
+        const warehouseKeys = ['destruccion_biologica', 'transformacion_industrial', 'donacion_banco_alimentos', 'compostaje_agricola'];
+        let nextKey = sanitaryKey;
+        if (!newPhysicalReturn) {
+            nextKey = resolutionOption === 'opt1' ? 'producto_conforme_sin_baja' : 'disposicion_cliente_sin_retorno';
+        } else if (!warehouseKeys.includes(sanitaryKey)) {
+            nextKey = 'destruccion_biologica';
+        }
+
+        if (nextKey !== sanitaryKey) {
+            setSanitaryKey(nextKey);
+            const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
+            if (tmpl) {
+                setResolutionNotes(prev => {
+                    const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
+                    if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
+                    return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
+                });
+            }
+        }
+
+        const targets = specificReturnId
+            ? caseReturns.filter((r: any) => r.id === specificReturnId)
+            : caseReturns.filter((r: any) => !(r.reason || '').toLowerCase().includes('faltante'));
+
+        if (targets.length > 0) {
+            try {
+                for (const ret of targets) {
+                    const baseNotes = (ret.notes || '').replace(/\[RETORNO_FISICO:\s*(SI|NO)\]\s*/g, '').trim();
+                    const updatedNotes = `[RETORNO_FISICO: ${newPhysicalReturn ? 'SI' : 'NO'}] ${baseNotes}`.trim();
+                    await supabase
+                        .from('billing_returns')
+                        .update({ notes: updatedNotes })
+                        .eq('id', ret.id);
+                }
+                onResolved();
+            } catch (e) {
+                console.error('Error updating physical return custody:', e);
+            }
         }
     };
 
@@ -2338,18 +2393,57 @@ export default function PqrAuditModal({
                                                     </div>
                                                 </div>
 
-                                                <div style={{ paddingTop: '2px' }}>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: '700', color: hasPhysicalReturn ? '#0D7A57' : '#64748B', cursor: 'pointer' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={hasPhysicalReturn}
-                                                            onChange={e => setHasPhysicalReturn(e.target.checked)}
-                                                            style={{ width: '15px', height: '15px', accentColor: '#0D7A57', cursor: 'pointer' }}
-                                                        />
-                                                        <Package size={14} style={{ color: hasPhysicalReturn ? '#0D7A57' : '#64748B', flexShrink: 0 }} />
-                                                        <span>¿Retorna físicamente en el camión a bodega? (Ingresa a Cuarentena de Patio)</span>
-                                                    </label>
-                                                </div>
+                                                {noveltyType === 'averia' && (
+                                                    <div style={{ paddingTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                        <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#475569' }}>
+                                                            Custodia Física del Producto Afectado:
+                                                        </label>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleTogglePhysicalReturnCustody(false)}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '5px',
+                                                                    padding: '6px 8px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: !hasPhysicalReturn ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                    backgroundColor: !hasPhysicalReturn ? '#ECFDF5' : '#FFFFFF',
+                                                                    color: !hasPhysicalReturn ? '#065F46' : '#64748B',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <Store size={13} />
+                                                                <span>Se queda en Cliente (Sin Retorno)</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleTogglePhysicalReturnCustody(true)}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '5px',
+                                                                    padding: '6px 8px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: hasPhysicalReturn ? '1.5px solid #3730A3' : '1px solid #CBD5E1',
+                                                                    backgroundColor: hasPhysicalReturn ? '#E0E7FF' : '#FFFFFF',
+                                                                    color: hasPhysicalReturn ? '#3730A3' : '#64748B',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <Truck size={13} />
+                                                                <span>Devuelto en Camión (A Bodega)</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Registered Novelties Full-Width Table / List */}
@@ -2421,17 +2515,28 @@ export default function PqrAuditModal({
                                                                                 }}>
                                                                                     {isFaltante ? 'Faltante' : 'Avería'}
                                                                                 </span>
-                                                                                {isPhysical && (
-                                                                                    <span style={{
-                                                                                        fontSize: '0.62rem',
-                                                                                        fontWeight: '700',
-                                                                                        padding: '1px 6px',
-                                                                                        borderRadius: '4px',
-                                                                                        backgroundColor: '#E0E7FF',
-                                                                                        color: '#3730A3'
-                                                                                    }}>
-                                                                                        Retorno Físico
-                                                                                    </span>
+                                                                                {!isFaltante && (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleTogglePhysicalReturnCustody(!isPhysical, ret.id)}
+                                                                                        title="Haz clic para cambiar si el producto se quedó con el cliente o fue devuelto en el camión a bodega"
+                                                                                        style={{
+                                                                                            fontSize: '0.62rem',
+                                                                                            fontWeight: '700',
+                                                                                            padding: '1px 7px',
+                                                                                            borderRadius: '4px',
+                                                                                            backgroundColor: isPhysical ? '#E0E7FF' : '#ECFDF5',
+                                                                                            color: isPhysical ? '#3730A3' : '#065F46',
+                                                                                            border: isPhysical ? '1px solid #C7D2FE' : '1px solid #A7F3D0',
+                                                                                            cursor: 'pointer',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '4px'
+                                                                                        }}
+                                                                                    >
+                                                                                        {isPhysical ? <Truck size={10} /> : <Store size={10} />}
+                                                                                        <span>{isPhysical ? 'Devuelto en Camión (A Bodega)' : 'En Sede Cliente (Sin Retorno)'}</span>
+                                                                                    </button>
                                                                                 )}
                                                                                 <span style={{
                                                                                     fontSize: '0.62rem',
@@ -2521,14 +2626,16 @@ export default function PqrAuditModal({
                                         type="button"
                                         onClick={() => {
                                             setResolutionOption('opt1');
-                                            setSanitaryKey('producto_conforme_sin_baja');
-                                            const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === 'producto_conforme_sin_baja');
-                                            if (tmpl) {
-                                                setResolutionNotes(prev => {
-                                                    const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
-                                                    if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
-                                                    return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
-                                                });
+                                            if (!hasPhysicalReturn) {
+                                                setSanitaryKey('producto_conforme_sin_baja');
+                                                const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === 'producto_conforme_sin_baja');
+                                                if (tmpl) {
+                                                    setResolutionNotes(prev => {
+                                                        const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
+                                                        if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
+                                                        return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
+                                                    });
+                                                }
                                             }
                                         }}
                                         style={{
@@ -2659,25 +2766,63 @@ export default function PqrAuditModal({
                                 </div>
                             </div>
 
-                            {/* Sanitary Disposal Template */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-                                    <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                        2. Protocolo de Disposición Sanitaria (Invima Res. 2674/2013)
-                                    </label>
-                                    {sanitaryKey === 'producto_conforme_sin_baja' && (
-                                        <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#DBEAFE', padding: '2px 8px', borderRadius: '4px', border: '1px solid #93C5FD', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <ShieldCheck size={12} />
-                                            <span>Producto Conforme (Sin Baja Sanitaria)</span>
+                            {/* Sanitary Disposal Template Filtered by Physical Custody */}
+                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
+                                            2. Custodia Física del Producto & Protocolo Invima (Res. 2674/2013)
+                                        </label>
+                                        <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
+                                            El protocolo sanitario depende de si el producto se quedó donde el cliente o regresó en el furgón a FruFresco.
                                         </span>
-                                    )}
-                                    {sanitaryKey === 'disposicion_cliente_sin_retorno' && (
-                                        <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#047857', backgroundColor: '#D1FAE5', padding: '2px 8px', borderRadius: '4px', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    </div>
+                                    <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', padding: '3px', borderRadius: '8px', gap: '4px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTogglePhysicalReturnCustody(false)}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                padding: '5px 10px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.68rem',
+                                                fontWeight: '800',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                backgroundColor: !hasPhysicalReturn ? '#FFFFFF' : 'transparent',
+                                                color: !hasPhysicalReturn ? '#0D7A57' : '#475569',
+                                                boxShadow: !hasPhysicalReturn ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
+                                            }}
+                                        >
                                             <Store size={12} />
-                                            <span>Baja en Sitio por el Cliente (Sin Retorno a Bodega)</span>
-                                        </span>
-                                    )}
+                                            <span>Se queda en Cliente (Sin Retorno)</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTogglePhysicalReturnCustody(true)}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                padding: '5px 10px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.68rem',
+                                                fontWeight: '800',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                backgroundColor: hasPhysicalReturn ? '#FFFFFF' : 'transparent',
+                                                color: hasPhysicalReturn ? '#3730A3' : '#475569',
+                                                boxShadow: hasPhysicalReturn ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
+                                            }}
+                                        >
+                                            <Truck size={12} />
+                                            <span>Devuelto en Camión (En Bodega FruFresco)</span>
+                                        </button>
+                                    </div>
                                 </div>
+
                                 <SearchableSelect
                                     value={sanitaryKey}
                                     onChange={k => {
@@ -2696,23 +2841,28 @@ export default function PqrAuditModal({
                                     wrapOptions={true}
                                     placeholder="Seleccionar Protocolo Invima..."
                                     searchPlaceholder="Buscar protocolo sanitario..."
-                                    options={DISPOSICION_SANITARIA_TEMPLATES.map(tmpl => {
-                                        const IconComp = tmpl.id === 'producto_conforme_sin_baja' ? ShieldCheck :
-                                                         tmpl.id === 'disposicion_cliente_sin_retorno' ? Store :
-                                                         tmpl.id === 'destruccion_biologica' ? Trash2 :
-                                                         tmpl.id === 'transformacion_industrial' ? Layers :
-                                                         tmpl.id === 'donacion_banco_alimentos' ? HeartHandshake : Sparkles;
-                                        return {
-                                            value: tmpl.id,
-                                            label: tmpl.title,
-                                            sublabel: tmpl.summary || tmpl.textTemplate,
-                                            badge: tmpl.id === 'producto_conforme_sin_baja' ? 'Sin Baja' : tmpl.id === 'disposicion_cliente_sin_retorno' ? 'Sin Retorno' : undefined,
-                                            icon: <IconComp size={15} style={{ color: tmpl.id === 'producto_conforme_sin_baja' ? '#1D4ED8' : tmpl.id === 'disposicion_cliente_sin_retorno' ? '#0D7A57' : '#64748B' }} />
-                                        };
-                                    })}
+                                    options={DISPOSICION_SANITARIA_TEMPLATES
+                                        .filter(tmpl => {
+                                            const isClientSiteOption = tmpl.id === 'producto_conforme_sin_baja' || tmpl.id === 'disposicion_cliente_sin_retorno';
+                                            return hasPhysicalReturn ? !isClientSiteOption : isClientSiteOption;
+                                        })
+                                        .map(tmpl => {
+                                            const IconComp = tmpl.id === 'producto_conforme_sin_baja' ? ShieldCheck :
+                                                             tmpl.id === 'disposicion_cliente_sin_retorno' ? Store :
+                                                             tmpl.id === 'destruccion_biologica' ? Trash2 :
+                                                             tmpl.id === 'transformacion_industrial' ? Layers :
+                                                             tmpl.id === 'donacion_banco_alimentos' ? HeartHandshake : Sparkles;
+                                            return {
+                                                value: tmpl.id,
+                                                label: tmpl.title,
+                                                sublabel: tmpl.summary || tmpl.textTemplate,
+                                                badge: tmpl.id === 'producto_conforme_sin_baja' ? 'Cliente se queda con él (Sin Baja)' : tmpl.id === 'disposicion_cliente_sin_retorno' ? 'Cliente descarta en sitio' : 'En Bodega FruFresco',
+                                                icon: <IconComp size={15} style={{ color: tmpl.id === 'producto_conforme_sin_baja' ? '#1D4ED8' : tmpl.id === 'disposicion_cliente_sin_retorno' ? '#0D7A57' : '#3730A3' }} />
+                                            };
+                                        })}
                                 />
 
-                                {sanitaryKey === 'producto_conforme_sin_baja' && (
+                                {!hasPhysicalReturn && sanitaryKey === 'producto_conforme_sin_baja' && (
                                     <div style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -2726,12 +2876,12 @@ export default function PqrAuditModal({
                                     }}>
                                         <ShieldCheck size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
                                         <span>
-                                            <strong>Producto Conforme en Sitio:</strong> El producto cumple con las especificaciones de calidad o fue aceptado por el cliente para su consumo normal sin requerir destrucción ni retorno.
+                                            <strong>Sin Retorno — Cliente Aprovecha el Producto:</strong> El producto permanece en las instalaciones del cliente y es aprovechado normalmente sin requerir destrucción ni retorno a FruFresco.
                                         </span>
                                     </div>
                                 )}
 
-                                {sanitaryKey === 'disposicion_cliente_sin_retorno' && (
+                                {!hasPhysicalReturn && sanitaryKey === 'disposicion_cliente_sin_retorno' && (
                                     <div style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -2745,7 +2895,26 @@ export default function PqrAuditModal({
                                     }}>
                                         <Check size={14} style={{ color: '#059669', flexShrink: 0 }} />
                                         <span>
-                                            <strong>Disposición In Situ Confirmada:</strong> El cliente asume la destrucción en su cocina. Prohibido reingresar el producto afectado al camión para blindar la ruta contra contaminación cruzada de alimentos frescos.
+                                            <strong>Sin Retorno — Baja en Sitio por el Cliente:</strong> El producto averiado nunca regresa a FruFresco. El cliente asume el descarte físico en su cocina para proteger la ruta contra contaminación cruzada.
+                                        </span>
+                                    </div>
+                                )}
+
+                                {hasPhysicalReturn && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '8px 12px',
+                                        backgroundColor: '#EEF2FF',
+                                        border: '1px solid #C7D2FE',
+                                        borderRadius: '8px',
+                                        fontSize: '0.72rem',
+                                        color: '#3730A3'
+                                    }}>
+                                        <Truck size={14} style={{ color: '#4338CA', flexShrink: 0 }} />
+                                        <span>
+                                            <strong>Con Retorno Físico a Bodega FruFresco:</strong> El cliente devolvió físicamente el producto con el conductor. La mercancía ingresa a cuarentena en muelle para ejecutar la disposición seleccionada arriba.
                                         </span>
                                     </div>
                                 )}
