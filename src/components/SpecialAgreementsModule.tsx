@@ -631,33 +631,40 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 </div>
             </div>
 
-            {/* BARRA DE ACCIONES Y SINCRONIZACIÓN SODA/DANE */}
+            {/* BARRA DE ACCIONES Y SINCRONIZACIÓN SODA/DANE (LÍNEA 1 STICKY MAGNÉTICA) */}
             <div style={{
-                backgroundColor: 'white',
-                borderRadius: THEME.radius.lg,
-                border: `1px solid ${THEME.colors.border}`,
-                padding: '0.85rem 1.25rem',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '10px',
+                border: '1px solid #E2E8F0',
+                padding: '0.4rem 0.85rem',
+                minHeight: '48px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
-                gap: '1rem'
+                gap: '0.5rem',
+                position: 'sticky',
+                top: embedded ? '142px' : '85px',
+                zIndex: 75,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     {/* BUSCADOR */}
-                    <div style={{ position: 'relative', width: '260px' }}>
-                        <Search size={16} color={THEME.colors.textSecondary} style={{ position: 'absolute', left: '10px', top: '10px' }} />
+                    <div style={{ position: 'relative', width: '220px' }}>
+                        <Search size={14} color={THEME.colors.textSecondary} style={{ position: 'absolute', left: '9px', top: '9px' }} />
                         <input 
                             type="text"
-                            placeholder="Buscar SKU, producto o código..."
+                            placeholder="Buscar SKU o producto..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{
                                 width: '100%',
-                                padding: '0.45rem 0.5rem 0.45rem 2rem',
+                                height: '32px',
+                                padding: '0 0.5rem 0 1.85rem',
                                 border: `1px solid ${THEME.colors.border}`,
-                                borderRadius: THEME.radius.md,
-                                fontSize: '0.85rem'
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                outline: 'none'
                             }}
                         />
                     </div>
@@ -668,12 +675,15 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                             value={selectedChainFilter}
                             onChange={(e) => setSelectedChainFilter(e.target.value)}
                             style={{
-                                padding: '0.45rem 0.75rem',
+                                height: '32px',
+                                padding: '0 0.5rem',
                                 border: `1px solid ${THEME.colors.border}`,
-                                borderRadius: THEME.radius.md,
-                                fontSize: '0.85rem',
+                                borderRadius: '6px',
+                                fontSize: '0.78rem',
                                 backgroundColor: '#F8FAFC',
-                                fontWeight: 600
+                                fontWeight: 600,
+                                outline: 'none',
+                                maxWidth: '170px'
                             }}
                         >
                             <option value="all">Todas las Marcas ({agreementItems.length})</option>
@@ -684,50 +694,53 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     )}
 
                     {/* SELECTOR PERÍODO */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Calendar size={16} color={THEME.colors.textSecondary} />
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textSecondary }}>Período:</span>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', height: '32px' }}>
+                        <Calendar size={14} color={THEME.colors.textSecondary} />
+                        <span style={{ fontSize: '0.76rem', fontWeight: 700, color: THEME.colors.textSecondary }}>Período:</span>
                         <input 
                             type="text"
                             value={activePeriod}
                             onChange={(e) => setActivePeriod(e.target.value)}
                             style={{
-                                width: '90px',
-                                padding: '0.35rem 0.5rem',
+                                width: '78px',
+                                height: '28px',
+                                padding: '0 0.35rem',
                                 border: `1px solid ${THEME.colors.border}`,
-                                borderRadius: THEME.radius.md,
-                                fontSize: '0.8rem',
+                                borderRadius: '6px',
+                                fontSize: '0.76rem',
                                 fontWeight: 700,
-                                textAlign: 'center'
+                                textAlign: 'center',
+                                outline: 'none'
                             }}
                         />
                     </div>
                 </div>
 
-                {/* BOTONES OPERATIVOS */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {/* BOTONES OPERATIVOS COMPACTOS (OPTIMIZADOS EN EJE Y) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     {/* BOTÓN SODA SIPSA EN VIVO (PARA NUTRESA) */}
                     {selectedClient === 'nutresa' && (
                         <button
                             onClick={handleSyncSipsaOnline}
                             disabled={syncingSipsa}
                             style={{
-                                padding: '0.5rem 0.9rem',
-                                borderRadius: THEME.radius.md,
+                                height: '32px',
+                                padding: '0 0.65rem',
+                                borderRadius: '6px',
                                 border: '1px solid #0284C7',
                                 backgroundColor: '#E0F2FE',
                                 color: '#0369A1',
-                                fontSize: '0.82rem',
+                                fontSize: '0.76rem',
                                 fontWeight: 700,
                                 cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px'
+                                gap: '5px'
                             }}
                             title="Consulta el Web Service de SODA DANE de precios mayoristas de Corabastos"
                         >
-                            <RefreshCw size={14} className={syncingSipsa ? 'animate-spin' : ''} />
-                            {syncingSipsa ? 'Consultando SODA...' : 'Sincronizar SIPSA DANE'}
+                            <RefreshCw size={13} className={syncingSipsa ? 'animate-spin' : ''} />
+                            {syncingSipsa ? 'Consultando SODA...' : 'SIPSA DANE'}
                         </button>
                     )}
 
@@ -735,21 +748,22 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     <button
                         onClick={handleApplyAllSuggested}
                         style={{
-                            padding: '0.5rem 0.9rem',
-                            borderRadius: THEME.radius.md,
+                            height: '32px',
+                            padding: '0 0.65rem',
+                            borderRadius: '6px',
                             border: '1px solid #F59E0B',
                             backgroundColor: '#FEF3C7',
                             color: '#B45309',
-                            fontSize: '0.82rem',
+                            fontSize: '0.76rem',
                             fontWeight: 700,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px'
+                            gap: '5px'
                         }}
                     >
-                        <Zap size={14} />
-                        Aplicar Sugeridos de Equilibrio
+                        <Zap size={13} />
+                        Sugeridos
                     </button>
 
                     {/* INPUT HIDDEN PARA EXCEL */}
@@ -765,42 +779,44 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         style={{
-                            padding: '0.5rem 0.9rem',
-                            borderRadius: THEME.radius.md,
+                            height: '32px',
+                            padding: '0 0.65rem',
+                            borderRadius: '6px',
                             border: `1px solid ${THEME.colors.border}`,
                             backgroundColor: 'white',
                             color: THEME.colors.textMain,
-                            fontSize: '0.82rem',
+                            fontSize: '0.76rem',
                             fontWeight: 700,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px'
+                            gap: '5px'
                         }}
                     >
-                        <Upload size={14} />
-                        Importar Excel {selectedClient === 'nutresa' ? 'Nutresa' : 'Colsubsidio'}
+                        <Upload size={13} />
+                        Importar Excel
                     </button>
 
                     {/* BOTÓN EXPORTAR EXCEL OFICIAL */}
                     <button
                         onClick={handleExportCounterproposal}
                         style={{
-                            padding: '0.5rem 0.9rem',
-                            borderRadius: THEME.radius.md,
+                            height: '32px',
+                            padding: '0 0.65rem',
+                            borderRadius: '6px',
                             border: '1px solid #10B981',
                             backgroundColor: '#ECFDF5',
                             color: '#065F46',
-                            fontSize: '0.82rem',
+                            fontSize: '0.76rem',
                             fontWeight: 700,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px'
+                            gap: '5px'
                         }}
                     >
-                        <Download size={14} />
-                        Descargar Contrapropuesta (.xlsx)
+                        <Download size={13} />
+                        Descargar .xlsx
                     </button>
 
                     {/* BOTÓN CONSAGRAR ACUERDO */}
@@ -808,41 +824,54 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         onClick={handleConsagrateAgreement}
                         disabled={isSaving}
                         style={{
-                            padding: '0.5rem 1.1rem',
-                            borderRadius: THEME.radius.md,
+                            height: '32px',
+                            padding: '0 0.85rem',
+                            borderRadius: '6px',
                             border: 'none',
                             backgroundColor: THEME.colors.primary,
                             color: 'white',
-                            fontSize: '0.82rem',
+                            fontSize: '0.78rem',
                             fontWeight: 800,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 8px rgba(13, 122, 87, 0.25)'
+                            gap: '5px',
+                            boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
                         }}
                     >
-                        <Save size={14} />
-                        {isSaving ? 'Consagrando...' : 'Consagrar Acuerdo Vigente'}
+                        <Save size={13} />
+                        {isSaving ? 'Consagrando...' : 'Consagrar Acuerdo'}
                     </button>
                 </div>
             </div>
 
-            {/* TABLA COMPARADORA MULTI-DIMENSIONAL */}
+            {/* TABLA COMPARADORA MULTI-DIMENSIONAL (CON THEAD STICKY Y ANTI-SCROLL HIJACKING) */}
             <div style={{
                 backgroundColor: 'white',
-                borderRadius: THEME.radius.lg,
+                borderRadius: '12px',
                 border: `1px solid ${THEME.colors.border}`,
-                overflow: 'hidden',
+                overflow: 'visible',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
             }}>
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+                <div style={{ width: '100%', overflow: 'visible' }}>
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.84rem' }}>
                         <thead>
-                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, textAlign: 'left', userSelect: 'none' }}>
+                            <tr style={{ userSelect: 'none' }}>
                                 <th 
                                     onClick={() => handleSort('code')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'code' ? THEME.colors.primary : THEME.colors.textSecondary, cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: sortField === 'code' ? THEME.colors.primary : THEME.colors.textSecondary, 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        borderTopLeftRadius: '11px',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar por código"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -852,7 +881,18 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('name')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'name' ? THEME.colors.primary : THEME.colors.textSecondary, cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: sortField === 'name' ? THEME.colors.primary : THEME.colors.textSecondary, 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar alfabéticamente por producto"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -862,7 +902,18 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('sku')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'sku' ? '#047857' : '#047857', cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: '#047857', 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar por SKU FruFresco"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -871,11 +922,35 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                     </div>
                                 </th>
                                 {selectedClient === 'nutresa' && (
-                                    <th style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.textSecondary }}>CADENA / MARCA</th>
+                                    <th style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: THEME.colors.textSecondary,
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}>
+                                        CADENA / MARCA
+                                    </th>
                                 )}
                                 <th 
                                     onClick={() => handleSort('consumption')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'consumption' ? THEME.colors.primary : THEME.colors.textSecondary, textAlign: 'right', cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: sortField === 'consumption' ? THEME.colors.primary : THEME.colors.textSecondary, 
+                                        textAlign: 'right', 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar por volumen de consumo"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
@@ -885,7 +960,19 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('cost')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'cost' ? THEME.colors.primary : THEME.colors.textSecondary, textAlign: 'right', cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: sortField === 'cost' ? THEME.colors.primary : THEME.colors.textSecondary, 
+                                        textAlign: 'right', 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar por costo Corabastos"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
@@ -896,7 +983,19 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 {selectedClient === 'nutresa' && (
                                     <th 
                                         onClick={() => handleSort('sipsa')}
-                                        style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'sipsa' ? '#0369A1' : '#0284C7', textAlign: 'right', cursor: 'pointer' }}
+                                        style={{ 
+                                            padding: '0.65rem 0.85rem', 
+                                            fontWeight: 800, 
+                                            color: sortField === 'sipsa' ? '#0369A1' : '#0284C7', 
+                                            textAlign: 'right', 
+                                            cursor: 'pointer',
+                                            position: 'sticky',
+                                            top: embedded ? '190px' : '133px',
+                                            zIndex: 65,
+                                            backgroundColor: '#F8FAFC',
+                                            borderBottom: `2px solid ${THEME.colors.border}`,
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                        }}
                                         title="Ordenar por precio SIPSA DANE"
                                     >
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
@@ -907,7 +1006,19 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 )}
                                 <th 
                                     onClick={() => handleSort('proposed')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#DC2626', textAlign: 'right', cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: '#DC2626', 
+                                        textAlign: 'right', 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar por propuesta del cliente"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
@@ -917,7 +1028,19 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('suggested')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: '#B45309', textAlign: 'right', cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: '#B45309', 
+                                        textAlign: 'right', 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar por precio sugerido"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
@@ -927,7 +1050,19 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('counter')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: THEME.colors.primary, textAlign: 'right', cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: THEME.colors.primary, 
+                                        textAlign: 'right', 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar por nuestra contrapropuesta"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
@@ -937,7 +1072,20 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('impact')}
-                                    style={{ padding: '0.75rem 1rem', fontWeight: 800, color: sortField === 'impact' ? THEME.colors.primary : THEME.colors.textSecondary, textAlign: 'right', cursor: 'pointer' }}
+                                    style={{ 
+                                        padding: '0.65rem 0.85rem', 
+                                        fontWeight: 800, 
+                                        color: sortField === 'impact' ? THEME.colors.primary : THEME.colors.textSecondary, 
+                                        textAlign: 'right', 
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: 65,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        borderTopRightRadius: '11px',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}
                                     title="Ordenar por impacto mensual en pesos"
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>

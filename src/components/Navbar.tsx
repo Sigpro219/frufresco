@@ -6,7 +6,7 @@ import { useCart } from '../lib/cartContext';
 import { useAuth, checkUserPermission } from '../lib/authContext';
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
-import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, ClipboardList, Truck, DollarSign, ShoppingBag, Briefcase, Users, Archive, Brain, Factory, Menu, X as XIcon, MessageSquare, ShieldCheck, Layers, CheckCircle2, Printer } from 'lucide-react';
+import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, ClipboardList, Truck, DollarSign, ShoppingBag, Briefcase, Users, Archive, Brain, Factory, Menu, X as XIcon, MessageSquare, ShieldCheck, Layers, CheckCircle2, Printer, CalendarDays } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { config } from '@/lib/config';
 import { SYNC_METADATA } from '@/lib/sync-status';
@@ -604,6 +604,15 @@ export default function Navbar() {
                                                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                             <Briefcase size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navCommercial}
+                                                        </Link>
+                                                    )}
+                                                    {hasPermission('commercial') && (
+                                                        <Link href="/admin/commercial?tab=daily-monitor"
+                                                            onClick={() => setOperationsOpen(false)}
+                                                            style={dropdownLinkStyle}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                            <CalendarDays size={15} strokeWidth={1.5} style={dropdownIconStyle} color="#0D7A57" /> Monitor Diario BI (Despacho)
                                                         </Link>
                                                     )}
                                                     {hasPermission('customer_service') && (

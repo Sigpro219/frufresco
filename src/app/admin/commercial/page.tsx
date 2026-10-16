@@ -18,7 +18,8 @@ import {
     Loader2,
     TrendingUp,
     ClipboardList,
-    Handshake
+    Handshake,
+    CalendarDays
 } from 'lucide-react';
 
 function SubtabSkeleton({ title }: { title: string }) {
@@ -65,6 +66,11 @@ const CampaignsView = dynamic(() => import('./campaigns/page'), {
 
 const SpecialAgreementsView = dynamic(() => import('@/components/SpecialAgreementsModule'), {
     loading: () => <SubtabSkeleton title="Acuerdos Especiales Corporativos" />,
+    ssr: false
+});
+
+const CommercialDailyMonitorView = dynamic(() => import('@/components/CommercialDailyMonitorModule'), {
+    loading: () => <SubtabSkeleton title="Monitor Diario de Pedidos & Precios" />,
     ssr: false
 });
 
@@ -272,6 +278,27 @@ export default function CommercialPage() {
                     >
                         <Mail size={18} strokeWidth={1.5} style={{ color: activeMainTab === 'inbox' ? THEME.colors.primary : THEME.colors.textSecondary }} /> Buzón Comercial (CRM)
                     </button>
+
+                    <button 
+                        onClick={() => handleSelectMainTab('daily-monitor')}
+                        style={{
+                            padding: '1rem 0',
+                            border: 'none',
+                            background: 'transparent',
+                            color: activeMainTab === 'daily-monitor' ? THEME.colors.textMain : THEME.colors.textSecondary,
+                            fontWeight: activeMainTab === 'daily-monitor' ? '700' : '500',
+                            fontSize: '0.95rem',
+                            cursor: 'pointer',
+                            borderBottom: activeMainTab === 'daily-monitor' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s',
+                            fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif'
+                        }}
+                    >
+                        <CalendarDays size={18} strokeWidth={1.5} style={{ color: activeMainTab === 'daily-monitor' ? THEME.colors.primary : THEME.colors.textSecondary }} /> Monitor Diario BI
+                    </button>
                 </div>
             </div>
 
@@ -462,6 +489,12 @@ export default function CommercialPage() {
             {activeMainTab === 'inbox' && (
                 <div style={{ height: 'calc(100vh - 140px)' }}>
                     <CommercialInboxModule />
+                </div>
+            )}
+
+            {activeMainTab === 'daily-monitor' && (
+                <div style={{ minHeight: 'calc(100vh - 140px)', padding: '0 2rem' }}>
+                    <CommercialDailyMonitorView />
                 </div>
             )}
         </main>

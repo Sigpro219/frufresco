@@ -10417,6 +10417,11 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        * **Impacto Financiero Mensual ($):** $(\text{Precio Acordado} - \text{Precio Base}) \times \text{Consumo Mensual}$ para auditar la utilidad neta proyectada.
   4. **Consagración en 1 Clic como Acuerdo Vigente:**
      - Al concluir la ronda de negociación, el botón `[ 🏛️ Consagrar Acuerdo Vigente ]` actualiza las listas de precios activas del cliente en Supabase con su fecha de vigencia pactada sin digitación manual.
+   5. **Arquitectura Sticky Magnética de 2 Niveles & Optimización del Eje Y (`estandar-galerias-frufresco`):**
+      - **Línea 1 Sticky (Toolbar Acciones & Búsqueda):** `position: 'sticky'`, `top: embedded ? '142px' : '85px'`, `zIndex: 75`, `backgroundColor: '#FFFFFF'` sólido (100% opaco). Optimizado verticalmente en el eje Y a exactamente `48px` de altura compacta (`padding: 0.4rem 0.85rem`), condensando buscador, selector de marcas, período y 5 botones de acción en una sola fila sin quiebre de línea.
+      - **Línea 2 Sticky (Thead / Column Headers):** Declarado explícitamente en cada celda `<th>` con `position: 'sticky'`, `top: embedded ? '190px' : '133px'`, `zIndex: 65`, `backgroundColor: '#F8FAFC'` sólido, `borderBottom: '2px solid #E2E8F0'`.
+      - **Fórmula de Continuidad Matemática (0px Gap):** $\text{top}_{\text{Thead}} = 142\text{px} + 48\text{px} = 190\text{px}$. Acople magnético hermético sin filtrado de filas al scrollear.
+      - **Regla Anti-Secuestro de Scroll:** Contenedor de tarjeta con `overflow: 'visible'` y tabla Chromium con `borderCollapse: 'separate', borderSpacing: 0`.
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
