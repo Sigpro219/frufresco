@@ -7,7 +7,7 @@
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 243 Escenarios BDD Ininterrumpidos (1..243)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 244 Escenarios BDD Ininterrumpidos (1..244)
 
 ---
 
@@ -19,16 +19,16 @@
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 243 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 243 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 243 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243 (§42.1 - §42.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244 (§39.1 - §39.6) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **243 Escenarios Canónicos (1..243)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **244 Escenarios Canónicos (1..244)** | **🟢 100%** |
 
 ---
 
