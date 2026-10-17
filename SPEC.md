@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.209 (Certificación Responsive Integral Mobile/Tablet/Desktop: Landing Page, Login y Portal Institucional B2B — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.210 (Blindaje Integral del Pipeline de Reposición Física D+1 en PQR: Anti Ping-Pong Estructural, Fecha D+1 Bogotá, Peso Real en Picking y Visibilidad de Cobro — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 240 Escenarios BDD Ininterrumpidos (1..240)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 241 Escenarios BDD Ininterrumpidos (1..241)
 
 ---
 
@@ -17,18 +17,18 @@
 
 | Dominio | Nombre del Dominio | Pantallas | Capítulos SDD | Rango de Escenarios BDD | Cobertura |
 | :---: | :--- | :---: | :--- | :---: | :---: |
-| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229 (§40.1 - §40.8) | 🟢 100% |
-| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228 | 🟢 100% |
+| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240 (§40.1 - §40.8) | 🟢 100% |
+| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240 (§41.1 - §41.4) | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239 (§42.1 - §42.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241 (§39.1 - §39.6) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **239 Escenarios Canónicos (1..239)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **241 Escenarios Canónicos (1..241)** | **🟢 100%** |
 
 ---
 
@@ -10642,6 +10642,25 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - En `src/app/page.tsx`, los titulares de secciones secundarias adoptan escalado fluido `clamp(1.85rem, 4.5vw, 2.5rem)` y `clamp(1.95rem, 5vw, 3rem)`.
      - En `src/app/login/page.tsx`, la tarjeta `.login-card` y su contenedor glassmorphism aplican `padding: 'clamp(1.5rem, 5vw, 2.2rem) clamp(1.25rem, 5vw, 2.5rem)'`, permitiendo que el formulario completo encaje en `375x812` sin scroll vertical forzado.
      - En `src/components/Navbar.tsx` y `src/app/globals.css`, la píldora `.navbar-sync-pill` oculta la marca de fecha/hora (`.navbar-sync-date`) en móviles $\le 640\text{px}$, exhibiendo únicamente `• V2.3.75` en una sola línea (`white-space: nowrap`).
+---
+
+#### Escenario 241: Blindaje Integral del Pipeline de Reposición Física D+1 (Opción 2): Erradicación de Falsos Positivos Anti Ping-Pong, Fecha D+1 en Zona Horaria Bogotá, Peso Real y Estado Aprobado para Picking, Preservación de `[CONCEPTO]` y Visibilidad Monetaria en Tabla SAC (SDD v1.9.210)
+- **Given** una reclamación PQR procesada bajo el **Escenario 2 (`Opción 2: Reponer Físicamente D+1 — $0 COP`)** en `PqrAuditModal.tsx`, `src/lib/rcaTaxonomy.ts`, `src/app/admin/customer-service/page.tsx` y el acta oficial `src/app/admin/customer-service/rnc/[id]/print/page.tsx`.
+- **When** el auditor de Calidad y SAC evalúa el reclamo, selecciona la **Opción 2**, confirma la reposición D+1 después de las 19:00 hora Colombia o consulta la tabla principal de casos y el RNC impreso:
+- **Then**:
+  1. **Detección Estructural de la Regla Anti Ping-Pong (`parseRcaFromRecord` en `src/lib/rcaTaxonomy.ts` y Paso 2 de `PqrAuditModal.tsx`):**
+     - Queda prohibido inferir `isReplacementRejection = true` a partir de la aparición de la palabra `"reposición"` en el texto libre del cliente (`description` / `subject`) o del auditor.
+     - `isStructuralReplacementOrder` se determina **exclusivamente** por marcadores estructurales del pedido origen (`record.is_replacement_rejection`, `orders.admin_notes` con `[REPOSICIÓN DE GARANTÍA` o `[ANEXIÓN D+1`, `orders.origin_source === 'customer_service' && Number(orders.total) === 0`, `subject` con `PING-PONG` o `description` con `ALERTA CORTE DE BUCLE`).
+     - Cuando un pedido origen sí es una reposición de garantía rechazada (`isPingPongBlocked === true`), la tarjeta de **Opción 2** en el Paso 2 se bloquea visualmente con la insignia `Anti Ping-Pong` y alerta inmediata para liquidar mediante Nota Crédito u Opción 4.
+  2. **Cálculo de Fecha `delivery_date` D+1 en Zona Horaria de Bogotá (`America/Bogota`) y Creación Operativa del Pedido de Reposición:**
+     - Tanto en `handleResolvePqr` (`opt2`) como en `handleExecuteShortageAppendNextOrder`, la fecha `tomorrow` (D+1) se calcula tomando la fecha calendario local de Colombia (`new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })`) más 1 día calendario, erradicando el salto erróneo a `D+2` en auditorías nocturnas posteriores a las 19:00 COT (`00:00 UTC`).
+     - El pedido de reposición D+1 se inserta en `orders` con estado `status: 'approved'` (listo para entrar al corte de Picking y Ruteo de la madrugada sin quedar estancado en borrador) y con `total_weight_kg` igual a la suma exacta en kilogramos de `itemsToReprogram` (`replacementWeightKg`).
+  3. **Preservación Íntegra del Tag `[CONCEPTO: ...]` y Trazabilidad en el Acta RNC (PDF):**
+     - En `handleResolvePqr`, `cleanHumanResolutionNotes(resolutionNotes)` se ejecuta **antes** de concatenar el bloque `[CONCEPTO: ...]`, garantizando que `parseSanitaryAndHumanNotes` conserve siempre `commercialConcept` en el Acta Oficial RNC (`/admin/customer-service/rnc/[id]/print`) y que al reabrir un caso resuelto bajo Opción 1 (`Cerrado conforme`) u Opción 2 se restaure fielmente la opción comercial elegida.
+     - En la Sección 2 del Acta RNC (`src/app/admin/customer-service/rnc/[id]/print/page.tsx`), se imprime explícitamente el bloque `JUSTIFICACIÓN TÉCNICA DE CAUSA RAÍZ (INSPECCIÓN)` (`rca.notes`) debajo del relato del cliente.
+  4. **Desambiguación Heurística RCA frente a Nombres de Productos, Píldora Monetaria en Tabla SAC y Consulta de Proveedores:**
+     - En `parseRcaFromRecord`, las palabras clave explícitas del defecto (`magulla`, `golpe`, `aplastad`, `partid`, `faltante`, `moho`, `frio`, `calibre`) tienen prelación sobre la inferencia de maduración, y se eliminan los falsos positivos por nombres de producto que contienen `"verde"` (`Plátano verde`, `Manzana verde`, `Limón verde`) o `"cebolla"`.
+     - En `src/app/admin/customer-service/page.tsx`, la columna `IMPUTABILIDAD & COBRO` proyecta junto al área responsable la píldora monetaria del caso (`Cobro: $XX.XXX` en rojo cuando `totalImputedCop > 0` o `$0 Exonerado` en azul cuando el caso está cerrado sin cobro), y la consulta a `providers` selecciona `id, name, tax_id, phone` mapeando `nit: p.tax_id || ''` sin errores HTTP 400.
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
