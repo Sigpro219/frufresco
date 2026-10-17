@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.212 (Internacionalización Bilingüe `ES / EN` en `/b2b/register` + `LeadGenBotV2`, Liberación de Scroll Eje Y, Compactación Vertical de Barra Sticky de Catálogo y Fotografía Editorial Hiperrealista 16:9 HORECA — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.213 (Blindaje Integral del Liquidador de Nota Crédito y Ajuste de Factura en PQR: Sincronización en `billing_returns`, Preservación de Protocolo Invima, Referencia Fiscal World Office `NC/FV` y Trazabilidad en Pedido — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -10689,7 +10689,7 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   4. **Fotografía Editorial Hiperrealista 16:9 en `/b2b/register` (`public/b2b-bg.png`):** Se actualiza el fondo del hero institucional B2B con fotografía editorial 16:9 hiperrealista de cocina abierta e invernadero gastronómico HORECA con luz matutina dorada, ventanales en acero negro, olivos interiores y cosecha fresca sobre isla de roble y acero inoxidable.
 ---
 
-### Escenario 243: Blindaje Integral del Liquidador de Nota Crédito y Ajuste de Factura (`Opción 3` y `Opción 4`), Preservación de Protocolo Invima, Referencia Fiscal World Office (`NC/FV`) y Trazabilidad en Pedido (SDD v1.9.212)
+### Escenario 244: Blindaje Integral del Liquidador de Nota Crédito y Ajuste de Factura (`Opción 3` y `Opción 4`), Preservación de Protocolo Invima, Referencia Fiscal World Office (`NC/FV`) y Trazabilidad en Pedido (SDD v1.9.213)
 - **Given** una PQR con novedades declaradas resuelta bajo la **Opción 3 (`Emitir Nota Crédito Financiera`)** o la **Opción 4 (`Ajustar Factura`)** a través de `PqrAuditModal.tsx` y `FinancialAdjustmentModal.tsx`,
 - **When** el auditor avanza del Paso 3 al liquidador financiero y confirma la emisión de la Nota Crédito o el Ajuste de Factura,
 - **Then** el sistema garantiza la integridad contable, sanitaria y de trazabilidad en todas las capas:
