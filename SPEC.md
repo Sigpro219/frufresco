@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.207 (Certificación de Rendimiento Extremo Full-Stack: Lazy-Loading Dinámico de Librerías Pesadas, Diccionarios O(1), Bulk Upserts y Desuscripción Hermética — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.208 (Pipeline de Custodia Física del Producto en PQR: En Sede Cliente vs Retorno a Bodega, Filtrado Sanitario Invima y Cierre en Cascada — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 238 Escenarios BDD Ininterrumpidos (1..238)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 239 Escenarios BDD Ininterrumpidos (1..239)
 
 ---
 
@@ -23,12 +23,12 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230, 231, 232, 233, 234 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 237 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236 (§42.1 - §42.7) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237 (§7.1 - §7.18) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239 (§39.1 - §39.6) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **238 Escenarios Canónicos (1..238)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **239 Escenarios Canónicos (1..239)** | **🟢 100%** |
 
 ---
 
@@ -10608,6 +10608,28 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   4. **Desuscripción Hermética de Eventos Globales y Límites Defensivos de Consulta:**
      - En `src/lib/authContext.tsx`, el listener `window.addEventListener('online', handleOnline)` registrado durante la inicialización asíncrona se retorna y limpia herméticamente en el desmontaje del `useEffect` (`window.removeEventListener`), previniendo fugas de memoria.
      - En `src/app/admin/customer-service/rca/page.tsx`, las consultas históricas a `customer_service_pqrs` y `billing_returns` incorporan límite defensivo explícito (`.limit(500)`).
+---
+
+#### Escenario 239: Pipeline de Custodia Física del Producto (En Sede Cliente vs Retorno a Bodega), Filtrado Dinámico del Protocolo Sanitario Invima y Cierre Automático en Cascada (SDD v1.9.208)
+- **Given** una reclamación PQR abierta en `PqrAuditModal.tsx` con sus registros asociados en `pqr_returns` y su flujo de resolución comercial y de causa raíz.
+- **When** el auditor de Calidad y SAC inspecciona la custodia física de los productos reclamados en el Paso 1 o Paso 2, define el Protocolo de Disposición Sanitaria Invima (Resolución 2674/2013), evalúa el impacto financiero en el Paso 3 o emite un ajuste en `FinancialAdjustmentModal.tsx`:
+- **Then**:
+  1. **Gobernanza Dual de Custodia Física del Producto (`physical_return` en `pqr_returns`):**
+     - En la distribución mayorista B2B/B2C de alimentos perecederos, cuando se entrega un pedido y el cliente reporta una novedad posterior (madurez, calibre, daño mecánico o inconformidad visual), la regla por defecto es que **el producto permanece físicamente en la sede del cliente (`physical_return = false`)** y no regresa a las instalaciones de FruFresco, salvo que el conductor lo recoja físicamente en el muelle de entrega (`physical_return = true`).
+     - Tanto en el **Paso 1 (*1 — Hecho & Evidencias*)** (barra global y badge interactivo por ítem en la tabla de novedades) como en el **Paso 2 (*2 — Decisión Comercial*)**, el auditor dispone del selector interactivo **Custodia Física del Producto** con dos estados persistentes en tiempo real sobre `pqr_returns` (`handleTogglePhysicalReturnCustody`):
+       * **`En Sede Cliente (Sin Retorno)` (`physical_return = false`, `disposition_status = 'client_disposed'`):** El producto se queda en poder del cliente; no ingresa a cuarentena de bodega ni afecta el inventario físico de muelle.
+       * **`Retornó a Bodega (Cuarentena)` (`physical_return = true`, `disposition_status = 'pending_quarantine'`):** El transportador recogió físicamente el producto y lo retornó a la zona de cuarentena de FruFresco.
+  2. **Filtrado Dinámico Poka-Yoke del Protocolo Sanitario Invima (`DISPOSICION_SANITARIA_TEMPLATES` en `src/lib/rcaTaxonomy.ts`):**
+     - El selector de Protocolo Sanitario en el Paso 2 filtra dinámicamente las plantillas de `DISPOSICION_SANITARIA_TEMPLATES` según el estado real de custodia (`hasPhysicalReturn`):
+       * **Cuando `hasPhysicalReturn === false` (En Sede Cliente):** Prohibido mostrar actas de compostaje en planta, transformación en bodega o donación desde muelle sobre mercancía ausente. Solo se habilitan las 2 opciones físicamente coherentes in-situ:
+         1. `producto_conforme_sin_baja` (*Producto Conforme / Aceptado por el Cliente — Sin Baja Sanitaria*, auto-seleccionada al marcar la **Opción 1: Cerrar Conforme**).
+         2. `disposicion_cliente_sin_retorno` (*Disposición en Sede del Cliente — Sin Retorno Físico por Inocuidad/Flete*, auto-seleccionada al marcar las **Opciones 2, 3 o 4** sin retorno físico).
+       * **Cuando `hasPhysicalReturn === true` (Retornó a Bodega):** Se habilitan exclusivamente las 4 actas de manejo físico en muelle/cuarentena de FruFresco (`destruccion_biologica`, `transformacion_industrial`, `donacion_banco_alimentos`, `compostaje_agricola`).
+  3. **Reactividad Directa de Imputación en Paso 3 y Eliminación de Controles Redundantes:**
+     - En el **Paso 3 (*3 — Causa Raíz & Imputación*)**, la píldora superior `Impacto a Cobrar` y el banner de estado reflejan de forma inmediata y directa la decisión comercial tomada en el Paso 2 (`resolutionOption === 'opt1'` proyecta `$0 COP (Exonerado)` en azul corporativo `#1E40AF`; `opt2`, `opt3` y `opt4` proyectan el valor nominal imputable en rojo carmesí), sin depender de que el caso haya sido cerrado previamente.
+     - Se erradica del footer del Paso 3 el botón redundante `Rechazar Caso`, dejando un único botón primario contextual que ejecuta la opción comercial elegida (`Confirmar Cierre Conforme ($0 COP)`, `Confirmar Reposición D+1 ($0 COP)`, `Continuar a Emisión de Nota Crédito` o `Continuar a Ajuste de Factura`).
+  4. **Cierre Automático en Cascada (`FinancialAdjustmentModal` -> `PqrAuditModal`):**
+     - En `src/app/admin/customer-service/page.tsx`, al completarse exitosamente (`onSuccess`) la emisión de la Nota Crédito (Opción 3) o el Ajuste Directo de Factura (Opción 4) dentro de `FinancialAdjustmentModal`, el sistema limpia automáticamente el borrador local (`localStorage.removeItem('pqr_audit_draft_' + selectedAuditPqr.id)`), cierra el modal financiero y ejecuta `setSelectedAuditPqr(null)` para cerrar en cascada el `PqrAuditModal` padre y refrescar la bandeja de PQRs.
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
