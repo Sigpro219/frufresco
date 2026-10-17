@@ -2328,33 +2328,28 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     </div>
                 </div>
 
-                {/* Banner Pedagógico Interactivo de Columna (Tooltip enriquecido al pasar el cursor sobre cualquier encabezado) */}
-                {activeShrinkageTooltip && (
-                    <div style={{
-                        backgroundColor: '#0F172A',
-                        color: '#F8FAFC',
-                        padding: '0.6rem 0.95rem',
-                        borderRadius: THEME.radius.md,
-                        border: '1px solid #334155',
-                        fontSize: '0.76rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '0.75rem'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Info size={15} color="#34D399" style={{ flexShrink: 0 }} />
-                            <span>{activeShrinkageTooltip}</span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setActiveShrinkageTooltip(null)}
-                            style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '2px' }}
-                        >
-                            <X size={14} />
-                        </button>
+                {/* Barra Pedagógica de Altura Fija (Cero salto de layout al hacer hover en los encabezados) */}
+                <div style={{
+                    backgroundColor: activeShrinkageTooltip ? '#0F172A' : '#F8FAFC',
+                    color: activeShrinkageTooltip ? '#F8FAFC' : '#64748B',
+                    padding: '0.5rem 0.95rem',
+                    minHeight: '38px',
+                    borderRadius: THEME.radius.md,
+                    border: activeShrinkageTooltip ? '1px solid #334155' : `1px dashed ${THEME.colors.border}`,
+                    fontSize: '0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    transition: 'background-color 0.15s ease, color 0.15s ease'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Info size={15} color={activeShrinkageTooltip ? '#34D399' : '#94A3B8'} style={{ flexShrink: 0 }} />
+                        <span>
+                            {activeShrinkageTooltip || 'Pasa el cursor sobre cualquier encabezado de columna (?) para ver la definición exacta de esa métrica o periodo.'}
+                        </span>
                     </div>
-                )}
+                </div>
 
                 {/* Tabla Dinámica según la Magnitud de Tiempo Seleccionada */}
                 <div style={{ overflowX: 'auto', maxHeight: '540px', overflowY: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md }}>

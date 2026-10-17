@@ -205,6 +205,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const [sortField, setSortField] = useState<SortField>('name');
     const [sortDir, setSortDir] = useState<SortDirection>('asc');
     const [activeHeaderTooltip, setActiveHeaderTooltip] = useState<string | null>(null);
+    const [editingPriceDrafts, setEditingPriceDrafts] = useState<Record<string, string>>({});
+    const [editingMarkupDrafts, setEditingMarkupDrafts] = useState<Record<string, string>>({});
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Metadata de los 4 Modelos y Padrón de Clientes desde Supabase
@@ -745,6 +747,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
     // Aplicar precio sugerido a toda la contrapropuesta
     const handleApplyAllSuggested = () => {
+        setEditingPriceDrafts({});
+        setEditingMarkupDrafts({});
         setAgreementItems(prev => prev.map(item => ({
             ...item,
             our_counterproposal: item.suggested_price
@@ -755,6 +759,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
     // Mantener / Restaurar precios del ciclo anterior
     const handleKeepPreviousPrices = () => {
+        setEditingPriceDrafts({});
+        setEditingMarkupDrafts({});
         setAgreementItems(prev => prev.map(item => ({
             ...item,
             our_counterproposal: item.client_proposed_price
@@ -1682,45 +1688,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 </div>
             </div>
 
-            {/* BANNER FLOTANTE PEDAGÓGICO DE COLUMNA ACTIVA (TOOLTIP ENRIQUECIDO AL PASAR EL CURSOR O HACER CLIC EN ?) */}
-            {activeHeaderTooltip && (
-                <div style={{
-                    backgroundColor: '#0F172A',
-                    color: '#F8FAFC',
-                    padding: '0.65rem 1rem',
-                    borderRadius: '8px',
-                    border: '1px solid #334155',
-                    fontSize: '0.76rem',
-                    lineHeight: 1.45,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.75rem',
-                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.18)'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Info size={16} color="#34D399" style={{ flexShrink: 0 }} />
-                        <span>{activeHeaderTooltip}</span>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => setActiveHeaderTooltip(null)}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#94A3B8',
-                            cursor: 'pointer',
-                            padding: '2px',
-                            display: 'flex',
-                            alignItems: 'center'
-                        }}
-                    >
-                        <X size={14} />
-                    </button>
-                </div>
-            )}
-
-            {/* TABLA COMPARADORA MULTI-DIMENSIONAL (CON THEAD STICKY Y ANTI-SCROLL HIJACKING) */}
+            {/* TABLA COMPARADORA MULTI-DIMENSIONAL (CON THEAD STICKY Y POPOVERS FLOTANTES CERO-SALTO) */}
             <div style={{
                 backgroundColor: 'white',
                 borderRadius: '12px',
@@ -1732,9 +1700,10 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.8rem' }}>
                         <thead>
                             <tr style={{ userSelect: 'none', fontSize: '0.72rem' }}>
+                                {/* 1. CÓD */}
                                 <th 
                                     onClick={() => handleSort('code')}
-                                    onMouseEnter={() => setActiveHeaderTooltip('CÓD: Identificador contable interno (accounting_id, ej. 921, 150, 1214) o código de material del ERP del cliente para cruce directo en órdenes de compra.')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('code')}
                                     onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.5rem', 
@@ -1743,23 +1712,51 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
+                                        zIndex: activeHeaderTooltip === 'code' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'code' ? '#F1F5F9' : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="CÓD | Significado: Identificador contable interno (accounting_id, ej. 921, 150, 1214) o código de material del ERP del cliente. | Origen: Tabla products.accounting_id. | Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                         <span>CÓD</span>
-                                        <HelpCircle size={11} color="#94A3B8" />
+                                        <HelpCircle size={12} color={activeHeaderTooltip === 'code' ? THEME.colors.primary : '#94A3B8'} />
                                         {sortField === 'code' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
+                                    {activeHeaderTooltip === 'code' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            left: '4px',
+                                            width: '290px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.7rem 0.85rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                1. CÓD (Identificador Contable / ERP)
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                Código contable interno (<code style={{ color: '#93C5FD' }}>accounting_id</code>, ej. 921, 150, 1214) o código de material del cliente para cruce directo en órdenes de compra y facturación.
+                                            </div>
+                                        </div>
+                                    )}
                                 </th>
+
+                                {/* 2. PRODUCTO EN LISTA */}
                                 <th 
                                     onClick={() => handleSort('name')}
-                                    onMouseEnter={() => setActiveHeaderTooltip('PRODUCTO EN LISTA: Presentación comercial exacta pactada con el cliente (ej. Bulto sin lavar, Lavada seleccionada, Lavada tamizada x 40g) y su unidad de facturación (Kg, Unidad, Atado).')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('name')}
                                     onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
@@ -1768,24 +1765,52 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
+                                        zIndex: activeHeaderTooltip === 'name' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'name' ? '#F1F5F9' : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="PRODUCTO EN LISTA | Significado: Presentación comercial exacta pactada (ej. bulto sin lavar vs lavada vs tamizada 40g) y su unidad de cobro (Kg, Unidad, Atado). | Origen: quote_items.product_name y products.unit_of_measure. | Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                         <span>PRODUCTO EN LISTA</span>
-                                        <HelpCircle size={11} color="#94A3B8" />
+                                        <HelpCircle size={12} color={activeHeaderTooltip === 'name' ? THEME.colors.primary : '#94A3B8'} />
                                         {sortField === 'name' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
+                                    {activeHeaderTooltip === 'name' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            left: 0,
+                                            width: '320px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.7rem 0.85rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                2. PRODUCTO EN LISTA (Presentación y Unidad)
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                Nombre comercial de la presentación pactada (ej. <b>Bulto sin lavar</b>, <b>Lavada estándar</b>, <b>Lavada tamizada x 40g</b>) y su unidad oficial de entrega (Kg, Unidad, Atado).
+                                            </div>
+                                        </div>
+                                    )}
                                 </th>
+
+                                {/* 3. CADENA (SOLO NUTRESA) */}
                                 {selectedClient === 'nutresa' && (
                                     <th 
                                         onClick={() => handleSort('chain')}
-                                        onMouseEnter={() => setActiveHeaderTooltip('CADENA: Marca o formato gastronómico dentro del grupo corporativo que consume esta referencia (ej. El Corral, Leños & Carbón, Beer Station).')}
+                                        onMouseEnter={() => setActiveHeaderTooltip('chain')}
                                         onMouseLeave={() => setActiveHeaderTooltip(null)}
                                         style={{ 
                                             padding: '0.55rem 0.5rem', 
@@ -1794,24 +1819,52 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             cursor: 'pointer',
                                             position: 'sticky',
                                             top: embedded ? '190px' : '133px',
-                                            zIndex: 65,
-                                            backgroundColor: '#F8FAFC',
+                                            zIndex: activeHeaderTooltip === 'chain' ? 140 : 65,
+                                            backgroundColor: activeHeaderTooltip === 'chain' ? '#F1F5F9' : '#F8FAFC',
                                             borderBottom: `2px solid ${THEME.colors.border}`,
                                             boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                             whiteSpace: 'nowrap'
                                         }}
-                                        title="CADENA | Significado: Marca o cadena destino dentro del holding corporativo (El Corral, Leños & Carbón, Beer Station). | Origen: app_settings (nutresa_sku_chains). | Haz clic para ordenar."
                                     >
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                             <span>CADENA</span>
-                                            <HelpCircle size={11} color="#94A3B8" />
+                                            <HelpCircle size={12} color={activeHeaderTooltip === 'chain' ? THEME.colors.primary : '#94A3B8'} />
                                             {sortField === 'chain' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                         </div>
+                                        {activeHeaderTooltip === 'chain' && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: 'calc(100% + 6px)',
+                                                left: 0,
+                                                width: '290px',
+                                                backgroundColor: '#0F172A',
+                                                color: '#F8FAFC',
+                                                padding: '0.7rem 0.85rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid #334155',
+                                                boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                                whiteSpace: 'normal',
+                                                textAlign: 'left',
+                                                fontWeight: 500,
+                                                lineHeight: 1.45,
+                                                pointerEvents: 'none',
+                                                zIndex: 9999
+                                            }}>
+                                                <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                    CADENA (Marca Corporativa)
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                    Formato gastronómico o marca del grupo que solicita este ítem (El Corral, Leños & Carbón, Beer Station).
+                                                </div>
+                                            </div>
+                                        )}
                                     </th>
                                 )}
+
+                                {/* 4. COSTO / LISTA INST. */}
                                 <th 
                                     onClick={() => handleSort('cost')}
-                                    onMouseEnter={() => setActiveHeaderTooltip('COSTO / LISTA INST.: Arriba muestra el Costo Base de Matriz de Costos. Abajo (píldora verde) muestra el precio de la Lista Institucional Dinámica y su % de utilidad integral (que ya incluye Utilidad Base + Merma Real + Mano de obra de Selección/Tamizado según presentación).')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('cost')}
                                     onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
@@ -1821,23 +1874,55 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
+                                        zIndex: activeHeaderTooltip === 'cost' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'cost' ? '#F1F5F9' : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="COSTO / LISTA INST. | Arriba: Costo base estabilizado (commercial_cost_matrix). | Abajo (Píldora Verde): Precio Lista Institucional = Costo × (1 + % Regla Inst.). Ese % en pricing_rules ya incluye integralmente Utilidad Base (~20%) + Merma Real + Proceso de Selección/Tamizado por presentación (ej. +22% bulto, +60% lavada, +80% tamizada 40g)."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>COSTO / LISTA INST.</span>
-                                        <HelpCircle size={11} color="#94A3B8" />
+                                        <HelpCircle size={12} color={activeHeaderTooltip === 'cost' ? THEME.colors.primary : '#94A3B8'} />
                                         {sortField === 'cost' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
+                                    {activeHeaderTooltip === 'cost' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            right: 0,
+                                            width: '340px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.75rem 0.9rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                COSTO BASE + LISTA INSTITUCIONAL (HOY)
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#E2E8F0', marginBottom: '5px' }}>
+                                                • <b>Arriba (Costo):</b> Costo base estabilizado en Matriz de Costos.<br />
+                                                • <b>Abajo (Píldora Verde):</b> Precio en Lista Institucional y su <b>% de regla integral</b>.
+                                            </div>
+                                            <div style={{ fontSize: '0.68rem', color: '#A7F3D0', backgroundColor: 'rgba(16, 185, 129, 0.14)', padding: '5px 7px', borderRadius: '6px' }}>
+                                                Ese % ya incluye: <b>Utilidad base (~20%) + Merma real + Selección/Tamizado</b> (ej. Bulto +22%, Lavada +60%, Tamizada 40g +80%).
+                                            </div>
+                                        </div>
+                                    )}
                                 </th>
+
+                                {/* 5. PRECIO ANTERIOR / PROPUESTA CLIENTE */}
                                 <th 
                                     onClick={() => handleSort('proposed')}
-                                    onMouseEnter={() => setActiveHeaderTooltip(isGeneralList ? 'PRECIO ANTERIOR: Tarifa congelada que estuvo vigente en el ciclo anterior (quincena o mes pasado) en quote_items, junto con el % de utilidad que deja frente al costo actual.' : 'PROPUESTA CLIENTE: Tarifa objetivo vigente o solicitada por el cliente en su pliego de negociación (quote_items.unit_price), junto con el % de utilidad que representa hoy.')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('proposed')}
                                     onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
@@ -1847,23 +1932,53 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
+                                        zIndex: activeHeaderTooltip === 'proposed' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'proposed' ? '#FEF2F2' : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title={isGeneralList ? "PRECIO ANTERIOR | Significado: Precio congelado vigente en el ciclo anterior y su % de utilidad frente al costo de hoy. | Origen: quote_items.unit_price del acuerdo maestro." : "PROPUESTA CLIENTE | Significado: Tarifa unitaria vigente o solicitada por el cliente en licitación y su % de utilidad sobre el costo actual. | Origen: quote_items.unit_price."}
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>{isGeneralList ? 'PRECIO ANTERIOR' : 'PROPUESTA CLIENTE'}</span>
-                                        <HelpCircle size={11} color="#DC2626" />
+                                        <HelpCircle size={12} color="#DC2626" />
                                         {sortField === 'proposed' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
+                                    {activeHeaderTooltip === 'proposed' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            right: 0,
+                                            width: '320px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.75rem 0.9rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#F87171', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                {isGeneralList ? 'PRECIO ANTERIOR (Ciclo Previo)' : 'PROPUESTA CLIENTE (Pliego)'}
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                {isGeneralList
+                                                    ? 'Tarifa congelada que estuvo vigente en el ciclo anterior (quincena o mes pasado) y qué % de utilidad deja frente al costo actual.'
+                                                    : 'Tarifa unitaria vigente o solicitada por el cliente en su pliego de negociación y qué % de utilidad representa hoy.'}
+                                            </div>
+                                        </div>
+                                    )}
                                 </th>
+
+                                {/* 6. SUGERIDO IA */}
                                 <th 
                                     onClick={() => handleSort('suggested')}
-                                    onMouseEnter={() => setActiveHeaderTooltip('SUGERIDO IA: Fórmula simplificada = Redondear50(Costo × (1 + % Lista Inst. + % Colchón de Ciclo)). Respeta el margen integral de cada presentación (+22%, +60%, +80%) y añade solo la cobertura temporal (+2%/+3% en 15 días o +4%/+6% en 30 días), sin duplicar cobros de merma.')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('suggested')}
                                     onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
@@ -1873,24 +1988,55 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
+                                        zIndex: activeHeaderTooltip === 'suggested' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'suggested' ? '#FFFBEB' : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="SUGERIDO IA | Fórmula Simplificada: Redondear50(Costo × (1 + % Lista Inst. + % Colchón de Ciclo)). | Respeta tu % de Lista Inst. (que ya incluye utilidad base + merma + selección) y suma únicamente la protección del ciclo (+2% abarrotes / +3% fruver en 15 días; +4% / +6% en 30 días) sin doble cobro de merma."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <Zap size={12} color="#B45309" />
                                         <span>SUGERIDO IA</span>
-                                        <HelpCircle size={11} color="#B45309" />
+                                        <HelpCircle size={12} color="#B45309" />
                                         {sortField === 'suggested' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
+                                    {activeHeaderTooltip === 'suggested' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            right: 0,
+                                            width: '350px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.75rem 0.9rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#FBBF24', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                SUGERIDO IA (Fórmula Simplificada sin SIPSA)
+                                            </div>
+                                            <div style={{ fontSize: '0.71rem', color: '#FEF3C7', backgroundColor: 'rgba(245, 158, 11, 0.16)', padding: '5px 7px', borderRadius: '6px', marginBottom: '5px', fontWeight: 700 }}>
+                                                Redondear50( Costo × (1 + % Lista Inst. + % Colchón Ciclo) )
+                                            </div>
+                                            <div style={{ fontSize: '0.71rem', color: '#E2E8F0' }}>
+                                                Toma tu % de Lista Institucional (que ya incluye utilidad + merma + selección) y suma solo el colchón por congelar precios (+2%/+3% en 15 días o +4%/+6% en 30 días).
+                                            </div>
+                                        </div>
+                                    )}
                                 </th>
+
+                                {/* 7. % UTILIDAD */}
                                 <th 
                                     onClick={() => handleSort('margin')}
-                                    onMouseEnter={() => setActiveHeaderTooltip('% UTILIDAD: Columna interactiva bidireccional. Arriba (caja editable): % de Utilidad sobre el Costo ((Nuevo Precio - Costo) / Costo). Abajo: Margen Bruto sobre Venta y utilidad en $/Kg. Si escribes un %, recalcula automáticamente el Nuevo Precio.')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('margin')}
                                     onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
@@ -1900,23 +2046,53 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
+                                        zIndex: activeHeaderTooltip === 'margin' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'margin' ? '#ECFDF5' : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="% UTILIDAD | Arriba (Editable): % de Utilidad sobre Costo = (Nuevo Precio - Costo) / Costo × 100. | Abajo: Margen Bruto sobre Venta = (Nuevo Precio - Costo) / Nuevo Precio × 100 y ganancia en $/unidad. | Bidireccional: al cambiar el %, recalcula el Nuevo Precio."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>% UTILIDAD</span>
-                                        <HelpCircle size={11} color="#047857" />
+                                        <HelpCircle size={12} color="#047857" />
                                         {sortField === 'margin' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
+                                    {activeHeaderTooltip === 'margin' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            right: 0,
+                                            width: '330px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.75rem 0.9rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                % UTILIDAD (Calculadora Bidireccional)
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                • <b>Caja superior (editable):</b> % de Utilidad sobre Costo = <code style={{ color: '#93C5FD' }}>(Nuevo Precio - Costo) / Costo</code>.<br />
+                                                • <b>Texto inferior:</b> Margen Bruto sobre Venta y ganancia en $/unidad.<br />
+                                                • Al digitar un %, recalcula automáticamente el <b>Nuevo Precio</b>.
+                                            </div>
+                                        </div>
+                                    )}
                                 </th>
+
+                                {/* 8. NUEVO PRECIO / CONTRAPROPUESTA */}
                                 <th 
                                     onClick={() => handleSort('counter')}
-                                    onMouseEnter={() => setActiveHeaderTooltip(isGeneralList ? 'NUEVO PRECIO: Tarifa definitiva editable en pesos COP que quedará congelada y consagrada para todos los clientes del padrón durante la nueva vigencia.' : 'CONTRAPROPUESTA: Tarifa final en pesos COP que FruFresco ofertará y consagrará en el acuerdo corporativo del cliente.')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('counter')}
                                     onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
@@ -1926,23 +2102,51 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
+                                        zIndex: activeHeaderTooltip === 'counter' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'counter' ? '#ECFDF5' : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="NUEVO PRECIO / CONTRAPROPUESTA | Significado: Tarifa oficial editable en COP que se consagrará en quote_items para todos los clientes suscritos al acuerdo. | Bidireccional: al editar el precio en pesos, se actualiza automáticamente la columna % UTILIDAD."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>{isGeneralList ? 'NUEVO PRECIO' : 'CONTRAPROPUESTA'}</span>
-                                        <HelpCircle size={11} color={THEME.colors.primary} />
+                                        <HelpCircle size={12} color={THEME.colors.primary} />
                                         {sortField === 'counter' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
+                                    {activeHeaderTooltip === 'counter' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            right: 0,
+                                            width: '320px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.75rem 0.9rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                {isGeneralList ? 'NUEVO PRECIO A CONSAGRAR' : 'CONTRAPROPUESTA OFICIAL'}
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                Tarifa final en pesos COP que se fijará para todos los clientes suscritos a este acuerdo. Puedes borrar y escribir libremente cualquier valor y verás actualizarse el <b>% Utilidad</b> al instante.
+                                            </div>
+                                        </div>
+                                    )}
                                 </th>
+
+                                {/* 9. VARIACIÓN / GANANCIA */}
                                 <th 
                                     onClick={() => handleSort('impact')}
-                                    onMouseEnter={() => setActiveHeaderTooltip('VARIACIÓN / GANANCIA: Arriba muestra cuánto sube o baja el Nuevo Precio frente al Precio Anterior del cliente. Abajo en verde muestra la Ganancia Bruta real en pesos (Nuevo Precio - Costo) por cada Kg o Unidad vendida.')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('impact')}
                                     onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
@@ -1952,19 +2156,46 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
+                                        zIndex: activeHeaderTooltip === 'impact' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'impact' ? '#F1F5F9' : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="VARIACIÓN / GANANCIA | Arriba: Diferencia en pesos (Nuevo Precio - Precio Anterior) para explicar la variación al cliente. | Abajo: Ganancia Bruta unitaria (Nuevo Precio - Costo Base) que percibe FruFresco por cada Kg/Unidad entregada."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>VARIACIÓN / GANANCIA</span>
-                                        <HelpCircle size={11} color="#94A3B8" />
+                                        <HelpCircle size={12} color={activeHeaderTooltip === 'impact' ? THEME.colors.primary : '#94A3B8'} />
                                         {sortField === 'impact' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
+                                    {activeHeaderTooltip === 'impact' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            right: '4px',
+                                            width: '320px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.75rem 0.9rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                VARIACIÓN VS ANTERIOR Y GANANCIA UNITARIA
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                • <b>Arriba:</b> Diferencia en pesos (<code style={{ color: '#93C5FD' }}>Nuevo Precio - Precio Anterior</code>) para sustentar el ajuste ante el cliente.<br />
+                                                • <b>Abajo (Verde):</b> Ganancia bruta en pesos (<code style={{ color: '#93C5FD' }}>Nuevo Precio - Costo</code>) por cada Kg o unidad entregada.
+                                            </div>
+                                        </div>
+                                    )}
                                 </th>
                             </tr>
                         </thead>
@@ -2085,6 +2316,16 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             <button
                                                 onClick={() => {
+                                                    setEditingPriceDrafts(prev => {
+                                                        const next = { ...prev };
+                                                        delete next[item.id];
+                                                        return next;
+                                                    });
+                                                    setEditingMarkupDrafts(prev => {
+                                                        const next = { ...prev };
+                                                        delete next[item.id];
+                                                        return next;
+                                                    });
                                                     setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: item.suggested_price } : p));
                                                 }}
                                                 style={{
@@ -2113,15 +2354,47 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px' }}>
                                                 <input
-                                                    type="number"
-                                                    step="1"
-                                                    value={Number(currentMarkupPct.toFixed(1))}
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder="0"
+                                                    value={
+                                                        editingMarkupDrafts[item.id] !== undefined
+                                                            ? editingMarkupDrafts[item.id]
+                                                            : (item.our_counterproposal === 0 ? '' : String(Number(currentMarkupPct.toFixed(1))))
+                                                    }
+                                                    onFocus={(e) => {
+                                                        setEditingMarkupDrafts(prev => ({
+                                                            ...prev,
+                                                            [item.id]: item.our_counterproposal === 0 ? '' : String(Number(currentMarkupPct.toFixed(1)))
+                                                        }));
+                                                        e.currentTarget.select();
+                                                    }}
                                                     onChange={(e) => {
-                                                        const newMarkup = Number(e.target.value) || 0;
-                                                        const newPrice = cost > 0
-                                                            ? Math.ceil((cost * (1 + newMarkup / 100)) / 50) * 50
-                                                            : item.our_counterproposal;
-                                                        setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: newPrice } : p));
+                                                        const raw = e.target.value
+                                                            .replace(',', '.')
+                                                            .replace(/[^0-9.-]/g, '')
+                                                            .replace(/^0+(?=\d)/, '');
+                                                        setEditingMarkupDrafts(prev => ({ ...prev, [item.id]: raw }));
+                                                        if (raw === '' || raw === '-' || raw === '.') {
+                                                            if (raw === '') {
+                                                                setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: 0 } : p));
+                                                            }
+                                                            return;
+                                                        }
+                                                        const newMarkup = Number(raw);
+                                                        if (!Number.isNaN(newMarkup)) {
+                                                            const newPrice = cost > 0
+                                                                ? Math.ceil((cost * (1 + newMarkup / 100)) / 50) * 50
+                                                                : item.our_counterproposal;
+                                                            setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: newPrice } : p));
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        setEditingMarkupDrafts(prev => {
+                                                            const next = { ...prev };
+                                                            delete next[item.id];
+                                                            return next;
+                                                        });
                                                     }}
                                                     style={{
                                                         width: '60px',
@@ -2132,7 +2405,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                         fontSize: '0.75rem',
                                                         textAlign: 'right',
                                                         color: isHealthyMargin ? '#047857' : (isPositiveMargin ? '#B45309' : '#DC2626'),
-                                                        backgroundColor: isHealthyMargin ? '#ECFDF5' : (isPositiveMargin ? '#FFFBEB' : '#FEF2F2')
+                                                        backgroundColor: isHealthyMargin ? '#ECFDF5' : (isPositiveMargin ? '#FFFBEB' : '#FEF2F2'),
+                                                        outline: 'none'
                                                     }}
                                                     title="Edita el % de Utilidad sobre Costo para recalcular automáticamente el Nuevo Precio a Fijar"
                                                 />
@@ -2145,12 +2419,35 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         {/* NUEVO PRECIO A FIJAR */}
                                         <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             <input 
-                                                type="number"
-                                                step="50"
-                                                value={item.our_counterproposal}
+                                                type="text"
+                                                inputMode="numeric"
+                                                placeholder="0"
+                                                value={
+                                                    editingPriceDrafts[item.id] !== undefined
+                                                        ? editingPriceDrafts[item.id]
+                                                        : (item.our_counterproposal === 0 ? '' : String(item.our_counterproposal))
+                                                }
+                                                onFocus={(e) => {
+                                                    setEditingPriceDrafts(prev => ({
+                                                        ...prev,
+                                                        [item.id]: item.our_counterproposal === 0 ? '' : String(item.our_counterproposal)
+                                                    }));
+                                                    e.currentTarget.select();
+                                                }}
                                                 onChange={(e) => {
-                                                    const val = Number(e.target.value) || 0;
+                                                    const raw = e.target.value
+                                                        .replace(/[^0-9]/g, '')
+                                                        .replace(/^0+(?=\d)/, '');
+                                                    setEditingPriceDrafts(prev => ({ ...prev, [item.id]: raw }));
+                                                    const val = raw === '' ? 0 : Number(raw);
                                                     setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: val } : p));
+                                                }}
+                                                onBlur={() => {
+                                                    setEditingPriceDrafts(prev => {
+                                                        const next = { ...prev };
+                                                        delete next[item.id];
+                                                        return next;
+                                                    });
                                                 }}
                                                 style={{
                                                     width: '92px',
@@ -2161,7 +2458,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                     fontSize: '0.78rem',
                                                     textAlign: 'right',
                                                     color: isHealthyMargin ? THEME.colors.primary : (isPositiveMargin ? '#B45309' : '#DC2626'),
-                                                    backgroundColor: isHealthyMargin ? '#FFFFFF' : (isPositiveMargin ? '#FFFBEB' : '#FEF2F2')
+                                                    backgroundColor: isHealthyMargin ? '#FFFFFF' : (isPositiveMargin ? '#FFFBEB' : '#FEF2F2'),
+                                                    outline: 'none'
                                                 }}
                                             />
                                         </td>
