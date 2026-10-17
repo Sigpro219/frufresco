@@ -10726,8 +10726,9 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        $$\text{Precio Lista Inst.} = \text{Redondear}_{50}\Big(\text{Costo Matriz} \times \big(1 + \frac{\% \text{Lista Inst.}}{100}\big)\Big)$$
        $$\text{SUGERIDO IA} = \text{Redondear}_{50}\Big(\text{Costo Matriz} \times \big(1 + \frac{\% \text{Lista Inst.} + \% \text{Colchón Ciclo}}{100}\big)\Big)$$
        donde `% Colchón Ciclo` protege la estabilidad del acuerdo durante su vigencia: `+2%` (Abarrotes) / `+3%` (Perecederos) en modelos de 15 días (`general_quincenal`, `colsubsidio`) y `+4%` (Abarrotes) / `+6%` (Perecederos) en modelos de 30 días (`general_mensual`, `nutresa`).
-  3. **Enriquecimiento Pedagógico de Tooltips (`?`) en Encabezados de Galería (`SpecialAgreementsModule.tsx`):**
-     - Todos los encabezados de columna de la galería de Acuerdos Especiales cuentan con tooltips explicativos detallados (con soporte visual interactivo al pasar el cursor sobre el título o el icono `?`) que documentan el significado comercial, la tabla/origen exacto en base de datos y la fórmula matemática para facilitar la explicación ejecutiva ante el cliente.
+  3. **Popovers Flotantes Cero-Salto (`?`) en Encabezados Sticky y Edición Limpia sin Cero Bloqueado (`SpecialAgreementsModule.tsx`):**
+     - Cada encabezado `<th>` sticky de la galería despliega una tarjeta flotante (`position: absolute`, `pointer-events: none`, `z-index: 9999`) anclada directamente debajo del encabezado al hacer *hover*, garantizando cero desplazamiento vertical (*layout shift*) y visibilidad completa incluso con scroll profundo.
+     - Las celdas editables bidireccionales (`% UTILIDAD` y `NUEVO PRECIO / CONTRAPROPUESTA`) operan mediante borradores de edición (`editingPriceDrafts`, `editingMarkupDrafts`) que permiten borrar el valor por completo (`""`) con `Backspace`, autoseleccionan al enfocar y eliminan automáticamente cualquier cero a la izquierda (`.replace(/^0+(?=\d)/, '')`).
 
 ---
 
