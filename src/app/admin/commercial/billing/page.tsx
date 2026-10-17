@@ -93,7 +93,7 @@ interface BillingReturn {
     defect_category_l1?: string;
     defect_subtype_l2?: string;
     created_at?: string;
-    products?: { name: string; sku?: string };
+    products?: { name: string; sku?: string; unit_of_measure?: string };
     orders?: { sequence_id: number; created_at: string };
 }
 
@@ -1230,7 +1230,7 @@ export default function BillingDashboard() {
                 .from('billing_returns')
                 .select(`
                     *,
-                    products (name, sku),
+                    products (name, sku, unit_of_measure),
                     orders (sequence_id, created_at)
                 `)
                 .eq('status', 'pending_review');
@@ -4636,7 +4636,7 @@ export default function BillingDashboard() {
                                                     </td>
                                                     <td style={{ padding: '0.65rem 0.75rem' }}>
                                                         <span style={{ fontWeight: '800', color: '#991B1B', backgroundColor: '#FEF2F2', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #FECACA', fontSize: '0.74rem' }}>
-                                                            {ret.quantity_returned} unidades
+                                                            {ret.quantity_returned} {ret.products?.unit_of_measure || 'Kg'}
                                                         </span>
                                                     </td>
                                                     <td style={{ padding: '0.65rem 0.75rem' }}>

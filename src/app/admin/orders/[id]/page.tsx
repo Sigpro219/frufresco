@@ -711,6 +711,133 @@ export default function OrderDetailPage() {
                     </div>
                 )}
 
+                {(() => {
+                    const rawAdminNotes = order.admin_notes || '';
+                    const cnMatch = rawAdminNotes.match(/\[NOTA_CREDITO_PQR\s*#([a-zA-Z0-9-]+)\s*\|\s*NC:\s*([^\s|]+)\s*\|\s*FACTURA_REF:\s*([^\s|]+)\s*\|\s*VALOR:\s*([^\]]+)\]/i);
+                    const adjMatch = rawAdminNotes.match(/\[AJUSTE FACTURA PQR\s*#([a-zA-Z0-9-]+)\]:\s*([^\n]+)/i);
+                    if (!cnMatch && !adjMatch) return null;
+
+                    if (cnMatch) {
+                        const [, pqrShort, ncNum, fvRef, valStr] = cnMatch;
+                        return (
+                            <div style={{
+                                marginBottom: '1.5rem',
+                                padding: '1rem 1.4rem',
+                                backgroundColor: '#FAF5FF',
+                                border: '1.5px solid #C4B5FD',
+                                borderLeft: '6px solid #7C3AED',
+                                borderRadius: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '16px',
+                                flexWrap: 'wrap',
+                                boxShadow: '0 2px 8px rgba(124, 58, 237, 0.08)'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                    <div style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '10px',
+                                        backgroundColor: '#EDE9FE',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                        color: '#7C3AED'
+                                    }}>
+                                        <FileText size={18} />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.9rem', fontWeight: '900', color: '#4C1D95' }}>
+                                            TRAZABILIDAD CONTABLE SAC: Nota Crédito Emitida ({ncNum})
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: '#5B21B6', marginTop: '2px', fontWeight: '700' }}>
+                                            Factura de Referencia: {fvRef} · Saldo Acreditado a Favor del Cliente: {valStr} · Caso PQR #{pqrShort}
+                                        </div>
+                                    </div>
+                                </div>
+                                <Link
+                                    href="/admin/customer-service"
+                                    style={{
+                                        backgroundColor: '#7C3AED',
+                                        color: '#FFFFFF',
+                                        borderRadius: '8px',
+                                        padding: '8px 14px',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        textDecoration: 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <ShieldCheck size={13} />
+                                    Ver en Consola SAC
+                                </Link>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div style={{
+                            marginBottom: '1.5rem',
+                            padding: '1rem 1.4rem',
+                            backgroundColor: '#FFFBEB',
+                            border: '1.5px solid #FDE68A',
+                            borderLeft: '6px solid #D97706',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '16px',
+                            flexWrap: 'wrap'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                <div style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    backgroundColor: '#FEF3C7',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    color: '#D97706'
+                                }}>
+                                    <FileText size={18} />
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: '900', color: '#92400E' }}>
+                                        TRAZABILIDAD CONTABLE SAC: Factura Ajustada por PQR #{adjMatch?.[1]}
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: '#B45309', marginTop: '2px', fontWeight: '700' }}>
+                                        {adjMatch?.[2]}
+                                    </div>
+                                </div>
+                            </div>
+                            <Link
+                                href="/admin/customer-service"
+                                style={{
+                                    backgroundColor: '#D97706',
+                                    color: '#FFFFFF',
+                                    borderRadius: '8px',
+                                    padding: '8px 14px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '800',
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <ShieldCheck size={13} />
+                                Ver en Consola SAC
+                            </Link>
+                        </div>
+                    );
+                })()}
+
                 {duplicateSiblings.length > 0 && (
                     <div style={{
                         marginBottom: '1.5rem',

@@ -19,16 +19,16 @@
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 243 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242 (§42.1 - §42.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 243 (§39.1 - §39.6) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 243 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **242 Escenarios Canónicos (1..242)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **243 Escenarios Canónicos (1..243)** | **🟢 100%** |
 
 ---
 
@@ -10687,6 +10687,24 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   2. **Liberación Total de Scroll Vertical (Eje Y) y Despliegue Completo del Chatbot (`Navbar.tsx` y `LeadGenBot.tsx`):** `Navbar.tsx` elimina el bloqueo `document.body.style.overflow = 'hidden'` y cierra `mobileOpen` al cambiar de idioma o redimensionar sobre `768px`; `LeadGenBot.tsx` reemplaza la altura fija recortada (`660px`) por `height: 'auto'` y `minWidth: 0`, desplegando el 100% de los controles de cada paso sin trampas de scroll anidado y con `scrollWidth === innerWidth` desde `320px` hasta `1440px`.
   3. **Compactación Vertical de la Barra Sticky del Catálogo (`SearchBar.tsx` y `src/app/page.tsx`):** Se elimina el margen inferior muerto de `2.5rem` (`40px`) bajo `SearchBar` (`margin: '0 auto'`) y se estiliza el padding vertical de la barra sticky del catálogo (`0.45rem 0 0.55rem 0`), recuperando ~60px de espacio vertical útil en el eje Y sobre la grilla de productos.
   4. **Fotografía Editorial Hiperrealista 16:9 en `/b2b/register` (`public/b2b-bg.png`):** Se actualiza el fondo del hero institucional B2B con fotografía editorial 16:9 hiperrealista de cocina abierta e invernadero gastronómico HORECA con luz matutina dorada, ventanales en acero negro, olivos interiores y cosecha fresca sobre isla de roble y acero inoxidable.
+---
+
+### Escenario 243: Blindaje Integral del Liquidador de Nota Crédito y Ajuste de Factura (`Opción 3` y `Opción 4`), Preservación de Protocolo Invima, Referencia Fiscal World Office (`NC/FV`) y Trazabilidad en Pedido (SDD v1.9.212)
+- **Given** una PQR con novedades declaradas resuelta bajo la **Opción 3 (`Emitir Nota Crédito Financiera`)** o la **Opción 4 (`Ajustar Factura`)** a través de `PqrAuditModal.tsx` y `FinancialAdjustmentModal.tsx`,
+- **When** el auditor avanza del Paso 3 al liquidador financiero y confirma la emisión de la Nota Crédito o el Ajuste de Factura,
+- **Then** el sistema garantiza la integridad contable, sanitaria y de trazabilidad en todas las capas:
+  1. **Estabilidad de Efectos y Filtrado Inteligente de Productos en `FinancialAdjustmentModal.tsx`:**
+     - Las propiedades por defecto de arreglos (`orderItems`, `defaultImputedEntities`, `providersList`, `collaboratorsList`) utilizan una referencia estática constante (`EMPTY_ARRAY`) y el `useEffect` de hidratación depende únicamente de `[isOpen, pqr?.id, mode]`, eliminando bucles de re-fetching y preservando las ediciones del usuario en el modal.
+     - La tabla de desglose muestra por defecto únicamente los productos con novedad declarada (`selected || affected_quantity > 0`), ofreciendo el botón toggle `+ Ver demás productos del pedido (N)` para expandir u ocultar líneas sin novedad.
+  2. **Preservación Íntegra del Protocolo Sanitario Invima, Dictamen CAPA, Notas Técnicas de Inspección y Custodia Física:**
+     - Al hidratar `FinancialAdjustmentModal`, se extraen y resguardan tanto el dictamen sanitario/CAPA del Paso 2 (`priorCapAndSanitaryNotes`, incluyendo `[DISPOSICIÓN SANITARIA: ...]`) como la justificación técnica de inspección del Paso 3 (`technicalInspectionNotes` desde `draft.rcaEvidenceNotes` o `defaultImputedEvidenceNotes`).
+     - Al guardar `customer_service_pqrs.resolution_notes`, se concatena `priorCapAndSanitaryNotes` con `[OBSERVACIÓN CONTABLE]: ...` y se inyecta `technicalInspectionNotes` en `rca.notes` dentro de `[RCA_METADATA: ...]`, garantizando que el Acta RNC impresa conserve siempre el protocolo Invima y los hallazgos técnicos.
+     - En `upsertApprovedReturn`, se preserva el tag `[RETORNO_FISICO: SI/NO]` en `billing_returns.notes` y se actualiza `status = 'approved'`, `resolved_at`, `credit_note_number` y `reference_invoice_number` con verificación estricta de errores.
+  3. **Referencia Fiscal World Office (`NC-XXXX` / `FV-XXXX`), Resumen de Imputabilidad y Trazabilidad en `/admin/orders/[id]` y `/admin/commercial/billing`:**
+     - En modo `credit_note`, `FinancialAdjustmentModal` consulta `billing_invoices` y `orders` para pre-poblar el `Consecutivo Nota Crédito (NC-...)`, la `Factura de Referencia Asociada (FV-...)`, la `Base Contable Acreditada` y el `Régimen IVA (Exento 0% / Gravado 19%)`.
+     - Se reemplazan los selectores editables duplicados de RCA dentro de `FinancialAdjustmentModal` por la tarjeta de solo lectura `Dictamen Técnico & Imputabilidad Vinculada (Paso 3)` que muestra la Causa Raíz L1/L2, el Área Responsable y los colaboradores imputados con su cuota en COP recalculada en tiempo real.
+     - Al confirmar una Nota Crédito, se estampa en `orders.admin_notes` el sello `[NOTA_CREDITO_PQR #<shortId> | NC: <nc> | FACTURA_REF: <fv> | VALOR: -$<monto>]`, y en `src/app/admin/orders/[id]/page.tsx` se proyecta el banner `TRAZABILIDAD CONTABLE SAC: Nota Crédito Emitida / Factura Ajustada`.
+     - En `PqrAuditModal.tsx` (Paso 1), el badge de custodia física se enlaza directamente al estado reactivo `hasPhysicalReturn`, y en `src/app/admin/commercial/billing/page.tsx` (pestaña `Devoluciones`) se muestra la unidad de medida real del producto (`ret.products?.unit_of_measure || 'Kg'`).
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
