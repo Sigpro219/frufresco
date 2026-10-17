@@ -381,6 +381,16 @@ function CreateOrderContent() {
     const [b2cClients, setB2cClients] = useState<any[]>([]); // B2C Profiles
     const [products, setProducts] = useState<any[]>([]);
     const [conversions, setConversions] = useState<any[]>([]);
+    const conversionsByProductMap = useMemo(() => {
+        const map = new Map<string, any[]>();
+        for (const c of conversions) {
+            if (!c?.product_id) continue;
+            const list = map.get(c.product_id);
+            if (list) list.push(c);
+            else map.set(c.product_id, [c]);
+        }
+        return map;
+    }, [conversions]);
     const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
     const [customPriceIds, setCustomPriceIds] = useState<Set<string>>(new Set());
     const [campaignPrices, setCampaignPrices] = useState<Record<string, { value: number; type: string; name: string }>>({});
@@ -9207,8 +9217,8 @@ ${primaryAdminNotes}`.trim();
                                     </div>
 
                                     {cart.map((item, idx) => {
-                                        const hasPredefined = conversions.some(c => c.product_id === item.product.id);
-                                        const itemConversions = conversions.filter(c => c.product_id === item.product.id);
+                                        const itemConversions = conversionsByProductMap.get(item.product.id) || [];
+                                        const hasPredefined = itemConversions.length > 0;
                                         const unitPrice = item.price !== undefined && item.price !== null ? item.price : 0;
                                         const isZeroPrice = parseFloat(unitPrice.toString()) === 0;
 

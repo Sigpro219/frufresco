@@ -286,7 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 window.addEventListener('online', handleOnline);
 
-                return subscription;
+                return { subscription, handleOnline };
             } catch (err) {
                 console.error('Error crítico auth:', err);
                 setLoading(false);
@@ -297,7 +297,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return () => {
             isMounted = false;
-            authSubPromise.then(sub => sub?.unsubscribe()).catch(() => {});
+            authSubPromise.then(res => {
+                res?.subscription?.unsubscribe();
+                if (res?.handleOnline) {
+                    window.removeEventListener('online', res.handleOnline);
+                }
+            }).catch(() => {});
         };
     }, []);
 

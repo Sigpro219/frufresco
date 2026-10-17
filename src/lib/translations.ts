@@ -349,9 +349,9 @@ export const translations = {
     alreadyInCartMsg: "You already have {qty} {unit} of {name} in your order.",
     alreadyInCartBadge: "Adding {qty} {unit} will make your new total {total} {unit}",
     b2b: {
-      badge: "Exclusive HORECA Bogotá, Girardot, Melgar & Anapoima",
+      badge: "EXCLUSIVE HORECA & INSTITUTIONAL BOG",
       title: "Your Operation Deserves \n The Best from the Fields",
-      description: "Join the +500 restaurants and hotels already buying without middlemen. Standardized quality, traceability, and fixed prices.",
+      description: "Join the +500 restaurants, hotels, cafeterias, and institutional kitchens already buying without middlemen. Standardized quality, traceability, and fixed prices for your volume.",
       benefits: [
         { title: 'AM Delivery', desc: 'Everything ready before opening.' },
         { title: 'Fair Prices', desc: 'Direct savings without middlemen.' },

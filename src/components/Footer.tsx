@@ -129,12 +129,12 @@ export default function Footer() {
               textTransform: 'uppercase'
             }}>{t.quickLinks}</h4>
             <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <li><Link href="/" className="footer-link">{t.navHome}</Link></li>
-              <li><Link href={`/#catalog${locale === 'en' ? '?lang=en' : ''}`} className="footer-link">{t.navCatalog}</Link></li>
-              <li><Link href="/b2b/register" className="footer-link">{t.navInstitutional}</Link></li>
+              <li><Link href={locale === 'en' ? '/?lang=en' : '/'} className="footer-link">{t.navHome}</Link></li>
+              <li><Link href={locale === 'en' ? '/?lang=en#catalog' : '/#catalog'} className="footer-link">{t.navCatalog}</Link></li>
+              <li><Link href={locale === 'en' ? '/b2b/register?lang=en' : '/b2b/register'} className="footer-link">{t.navInstitutional}</Link></li>
               <li>
-                <Link href="/pqrs" className="footer-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#34D399', fontWeight: '700' }}>
-                  <ShieldCheck size={15} strokeWidth={2.2} /> Garantía & PQRS
+                <Link href={locale === 'en' ? '/pqrs?lang=en' : '/pqrs'} className="footer-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#34D399', fontWeight: '700' }}>
+                  <ShieldCheck size={15} strokeWidth={2.2} /> {locale === 'en' ? 'Warranty & Claims (PQRS)' : 'Garantía & PQRS'}
                 </Link>
               </li>
             </ul>
@@ -181,7 +181,7 @@ export default function Footer() {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  <MessageCircle size={16} strokeWidth={2.2} /> SAC & Calidad (WhatsApp)
+                  <MessageCircle size={16} strokeWidth={2.2} /> {locale === 'en' ? 'Customer Care & Quality (WhatsApp)' : 'SAC & Calidad (WhatsApp)'}
                 </a>
               </li>
             </ul>

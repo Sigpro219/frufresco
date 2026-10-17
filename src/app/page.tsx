@@ -147,7 +147,7 @@ async function FeaturedSection({ locale }: { locale: Locale }) {
                     </div>
                     <h2 style={{ 
                         fontFamily: 'var(--font-outfit), sans-serif', 
-                        fontSize: '2.5rem', 
+                        fontSize: 'clamp(1.85rem, 4.5vw, 2.5rem)', 
                         fontWeight: '900', 
                         color: '#081C15', 
                         margin: 0,
@@ -503,7 +503,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           </span>
           <h2 className="section-title" style={{ 
             fontFamily: 'var(--font-outfit), sans-serif', 
-            fontSize: '3rem', 
+            fontSize: 'clamp(1.95rem, 5vw, 3rem)', 
             fontWeight: '900',
             color: '#081C15',
             margin: 0,
@@ -521,11 +521,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             position: 'sticky',
             top: '85px',
             zIndex: 45,
-            backgroundColor: 'rgba(255, 255, 255, 0.88)',
+            backgroundColor: 'rgba(255, 255, 255, 0.92)',
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            padding: '0.65rem 0 0.75rem 0',
-            margin: '0 -1rem 1rem -1rem',
+            padding: '0.45rem 0 0.55rem 0',
+            margin: '0 -1rem 0.75rem -1rem',
             borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
             boxShadow: '0 10px 30px -8px rgba(8, 28, 21, 0.05)'
           }}
@@ -559,7 +559,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             <span style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--primary)', fontWeight: 700, display: 'block', marginBottom: '0.75rem' }}>
               {locale === 'en' ? 'OUR PROMISE' : 'NUESTRA PROMESA'}
             </span>
-            <h2 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.5rem', fontWeight: '900', color: 'var(--primary-dark)', margin: 0 }}>
+            <h2 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: 'clamp(1.85rem, 4.5vw, 2.5rem)', fontWeight: '900', color: 'var(--primary-dark)', margin: 0 }}>
               {locale === 'en' ? 'Why choose FruFresco?' : '¿Por qué elegir FruFresco?'}
             </h2>
           </div>

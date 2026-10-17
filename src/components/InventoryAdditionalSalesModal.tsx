@@ -12,7 +12,6 @@ import {
     AlertCircle,
     Calendar
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 interface AdditionalSaleRecord {
     id: string;
@@ -152,7 +151,8 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
     const totalKilos = filteredRows.reduce((acc, r) => acc + r.qty, 0);
     const totalAmount = filteredRows.reduce((acc, r) => acc + r.totalEstimated, 0);
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
+        const XLSX = await import('xlsx');
         try {
             const exportData = filteredRows.map(r => ({
                 'Fecha / Hora': r.date,

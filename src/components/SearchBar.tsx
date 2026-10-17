@@ -164,7 +164,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
     };
 
     return (
-        <div ref={containerRef} style={{ position: 'relative', width: '100%', maxWidth: '750px', margin: '0 auto 2.5rem' }}>
+        <div ref={containerRef} style={{ position: 'relative', width: '100%', maxWidth: '750px', margin: '0 auto' }}>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                     ref={inputRef}
@@ -175,14 +175,14 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     onChange={(e) => setQuery(e.target.value)}
                     style={{
                         width: '100%',
-                        padding: '1.2rem 4.5rem 1.2rem 3.8rem', // Reduced right padding further
+                        padding: '0.8rem 4rem 0.8rem 3.2rem',
                         borderRadius: 'var(--radius-full)',
-                        border: '1px solid rgba(0,0,0,0.06)',
+                        border: '1px solid rgba(0,0,0,0.08)',
                         background: 'white',
                         color: 'var(--text-main)',
-                        fontSize: '1.15rem',
+                        fontSize: '1rem',
                         fontWeight: '500',
-                        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.02)',
+                        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.025)',
                         outline: 'none',
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
@@ -239,7 +239,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                 
                 <div style={{
                     position: 'absolute',
-                    left: '22px',
+                    left: '18px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -247,15 +247,15 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     transition: 'color 0.3s ease',
                     pointerEvents: 'none'
                 }}>
-                    <Search size={22} strokeWidth={2.5} />
+                    <Search size={19} strokeWidth={2.5} />
                 </div>
 
                 <div style={{
                     position: 'absolute',
-                    right: '10px',
+                    right: '7px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px'
+                    gap: '6px'
                 }}>
                     {query && (
                         <button
@@ -264,8 +264,8 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                 background: '#f3f4f6',
                                 border: 'none',
                                 borderRadius: '50%',
-                                width: '32px',
-                                height: '32px',
+                                width: '28px',
+                                height: '28px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -275,7 +275,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                 padding: 0
                             }}
                         >
-                            <X size={18} strokeWidth={2.5} />
+                            <X size={16} strokeWidth={2.5} />
                         </button>
                     )}
 
@@ -285,8 +285,8 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                             background: 'var(--primary)',
                             border: 'none',
                             borderRadius: '50%',
-                            width: '45px',
-                            height: '45px',
+                            width: '38px',
+                            height: '38px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -297,7 +297,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                             flexShrink: 0
                         }}
                     >
-                        <Search size={20} strokeWidth={3} />
+                        <Search size={17} strokeWidth={3} />
                     </button>
                 </div>
 
@@ -409,7 +409,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
 export default function SearchBar({ placeholder }: { placeholder?: string }) {
     return (
         <Suspense fallback={
-            <div style={{ marginBottom: '2.5rem', height: '64px', backgroundColor: '#F3F4F6', borderRadius: 'var(--radius-full)', maxWidth: '750px', margin: '0 auto' }}></div>
+            <div style={{ height: '50px', backgroundColor: '#F3F4F6', borderRadius: 'var(--radius-full)', maxWidth: '750px', margin: '0 auto' }}></div>
         }>
             <SearchBarContent placeholder={placeholder} />
         </Suspense>

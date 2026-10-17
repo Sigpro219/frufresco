@@ -10,7 +10,6 @@ import { ShieldAlert } from 'lucide-react';
 import CreateProductModal from '@/components/CreateProductModal';
 import EditProductModal from '@/components/EditProductModal';
 import Toast from '@/components/Toast';
-import * as XLSX from 'xlsx';
 import { CATEGORY_MAP } from '@/lib/constants';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
@@ -347,10 +346,12 @@ export default function MasterProductsPage() {
         return `${nameNorm} de calidad premium, seleccionado cuidadosamente para garantizar frescura. Es ideal para ${usage}. Además, es un ${healthBenefit}.`;
     };
 
-    const downloadFullMaster = () => {
+    const downloadFullMaster = async () => {
+        const XLSX = await import('xlsx');
+        const prodMap = new Map(products.map(pr => [pr.id, pr]));
         // Tab 1: Productos Base (sin campos de precio estáticos, gestionados dinámicamente en Matriz de Costos)
         const exportData = products.map(p => {
-            const parent = products.find(pr => pr.id === p.parent_id);
+            const parent = p.parent_id ? prodMap.get(p.parent_id) : undefined;
             return {
                 ID_INTERNO: p.id,
                 SKU: p.sku || '',
@@ -485,13 +486,15 @@ export default function MasterProductsPage() {
                 return;
             }
 
+            let currentLastSku = products.filter(pr => pr.sku).sort((a,b) => a.sku.localeCompare(b.sku)).pop()?.sku || '0000';
+
             for (const p of toUpdate) {
                 const updates: Partial<Product> = {};
 
                 if (!p.sku) {
                     // Para sanetización manual de productos huérfanos
-                    const lastSku = products.filter(pr => pr.sku).sort((a,b) => a.sku.localeCompare(b.sku)).pop()?.sku || '0000';
-                    updates.sku = generateSequentialSKU(lastSku);
+                    currentLastSku = generateSequentialSKU(currentLastSku);
+                    updates.sku = currentLastSku;
                 }
                 if (!p.description) updates.description = generateDescription(p.name, p.category);
 
@@ -706,6 +709,7 @@ export default function MasterProductsPage() {
         
         const reader = new FileReader();
         reader.onload = async (readerEvent) => {
+            const XLSX = await import('xlsx');
             const data = readerEvent.target?.result;
             const workbook = XLSX.read(data, { type: 'binary' });
             
@@ -1016,7 +1020,8 @@ export default function MasterProductsPage() {
         reader.readAsBinaryString(selectedFile);
     };
 
-    const downloadTemplate = () => {
+    const downloadTemplate = async () => {
+        const XLSX = await import('xlsx');
         // Tab 1: Productos Base (sin campos de precio estáticos)
         const headers = [
             "SKU", "ID_CONTABLE", "Nombre", "Nombre_EN", "Descripcion", "Descripcion_EN", 

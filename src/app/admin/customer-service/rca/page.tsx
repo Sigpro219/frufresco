@@ -28,7 +28,7 @@ export default function RootCauseAnalysisDashboardPage() {
     const loadData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch PQRs
+            // 1. Fetch PQRs (con límite defensivo de rendimiento)
             const { data: pqrData } = await supabase
                 .from('customer_service_pqrs')
                 .select(`
@@ -36,9 +36,10 @@ export default function RootCauseAnalysisDashboardPage() {
                     orders:order_id(sequence_id, total, created_at, origin_source, admin_notes),
                     profiles:client_id(company_name, contact_name, role)
                 `)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(500);
 
-            // 2. Fetch billing returns
+            // 2. Fetch billing returns (con límite defensivo de rendimiento)
             const { data: retData } = await supabase
                 .from('billing_returns')
                 .select(`
@@ -46,7 +47,8 @@ export default function RootCauseAnalysisDashboardPage() {
                     products(name, sku, unit_of_measure),
                     orders(sequence_id, total, created_at, origin_source)
                 `)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(500);
 
             // 3. Count total orders delivered
             const { count: ordCount } = await supabase

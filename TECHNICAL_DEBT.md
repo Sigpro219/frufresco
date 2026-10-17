@@ -1,10 +1,10 @@
 # 🏛️ MATRIZ MAESTRA DE DEUDA TÉCNICA & HOJA DE RUTA DE ESCALABILIDAD
 ## FruFresco SCOS (Supply Chain Operating System)
 
-> **Estado:** 🟡 Activo & Priorizado para Siguiente Sprint  
-> **Fecha de Emisión:** 07 de Octubre, 2026  
+> **Estado:** 🟢 Mitigado (Grupo A Riesgo Cero Activo en Producción — SDD v1.9.208)  
+> **Fecha de Actualización:** 16 de Octubre, 2026  
 > **Aprobado por:** Dirección General & Arquitectura de Software  
-> **Referencia Contractual:** `SPEC.md` Capítulo 43 (Apéndice de Deuda Técnica y Resiliencia)
+> **Referencia Contractual:** `SPEC.md` Capítulo 43 & Escenario 239 (Apéndice de Deuda Técnica y Resiliencia)
 
 ---
 
@@ -12,19 +12,19 @@
 
 Con la certificación satisfactoria de las **76 pantallas físicas** del ecosistema FruFresco (100% de cobertura operativa, 0 errores de compilación TypeScript y 152 pruebas unitarias pasando limpiamente), la plataforma ha demostrado estabilidad funcional en el ciclo de pruebas.
 
-Para **proteger la estabilidad actual de producción** y evitar regresiones prematuras, las áreas de mejora arquitectónica no se intervienen de forma impulsiva; se formalizan en este registro canónico como **Deuda Técnica Priorizada (P0 a P2)** para ser abordadas con ventanas controladas de QA y pruebas de carga.
+Bajo el protocolo de **Seguridad Total (Grupo A: Riesgo Cero con Fallback Automático)** ejecutado en `SDD v1.9.208`, se han resuelto las deudas críticas de concurrencia de inventario (`DEBT-001`), límite de 1.000 filas (`DEBT-002`), resiliencia ante micro-cortes 3G/4G en muelle (`DEBT-004`) y optimización de RAM/CPU *in-place* en los 4 archivos mayores (`DEBT-003`), preservando intacta la operación en vivo.
 
 ---
 
 ## 2. Tablero de Priorización Ejecutiva
 
-| Código | Nivel | Componente Afectado | Riesgo Operativo | Esfuerzo Estimado | Sprint Objetivo |
-| :---: | :---: | :--- | :--- | :---: | :---: |
-| **DEBT-001** | 🔴 **P0** | Inventario / Deducción de Stock | **Alto:** Descuadre de stock por colisión de pedidos concurrentes (Race Conditions en cliente). | 1 día | Sprint Hardening 1.1 |
-| **DEBT-002** | 🔴 **P0** | Reportes & Facturación Histórica | **Alto:** Truncamiento silencioso de consultas a 1.000 filas en PostgREST (Supabase). | 0.5 días | Sprint Hardening 1.1 |
-| **DEBT-003** | 🟡 **P1** | 4 Archivos Monstruo (>10k LOC) | **Medio:** Alto consumo de memoria RAM en cliente y riesgo de merge conflicts en Git. | 3-4 días | Sprint Refactor 1.2 |
-| **DEBT-004** | 🟡 **P1** | Conectividad Móvil `/ops/*` | **Medio:** Peticiones congeladas en bodegas o sótanos de Corabastos por caída de 3G/4G. | 2 días | Sprint Gemba 1.3 |
-| **DEBT-005** | 🟢 **P2** | Torre de Control y Carga Muelle | **Bajo:** Sobrecarga visual y fatiga cognitiva en operarios de bodega no técnicos. | 1 día | Sprint Gemba 1.3 |
+| Código | Nivel | Componente Afectado | Estado Actual (SDD v1.9.208) | Solución Aplicada |
+| :---: | :---: | :--- | :---: | :--- |
+| **DEBT-001** | 🟢 **RESUELTO** | Inventario / Deducción de Stock | ✅ **Mitigado con Fallback** | RPC `adjust_inventory_stock_atomic` & `deduct_inventory_atomic` (`FOR UPDATE`) + Fallback JIT en [`src/lib/supabase.ts`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/supabase.ts) |
+| **DEBT-002** | 🟢 **RESUELTO** | Reportes & Consultas > 1.000 Filas | ✅ **Mitigado** | Paginador transparente `fetchAllRows<T>` en [`src/lib/supabase.ts`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/supabase.ts) (1 viaje si `<1.000`, auto-rango si `>=1.000`) |
+| **DEBT-003** | 🟢 **FASE 1 OK** | 4 Archivos Monstruo (>10k LOC) | ✅ **RAM/CPU Optimizada In-Place** | Diccionarios $O(1)$ (`Map`) y `useMemo` aplicados *in-place* sin riesgo de ruptura de archivos |
+| **DEBT-004** | 🟢 **RESUELTO** | Conectividad Móvil `/ops/*` | ✅ **Mitigado** | Interceptor `fetchWithGembaRetry` con Backoff Exponencial (`450ms`, `1000ms`) ante micro-cortes 3G/4G |
+| **DEBT-005** | 🟢 **P2** | Torre de Control y Carga Muelle | 🟡 **Backlog Ergonomía** | Selector opcional "Modo Gemba Limpio" para ventana futura de diseño |
 
 ---
 

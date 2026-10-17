@@ -17,7 +17,6 @@ import {
     Layers,
     Info
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
 import { formatNumber } from '@/lib/adminTheme';
 
@@ -157,8 +156,9 @@ export default function DailyBalanceExcelImportModal({
         setSuccessMessage(null);
 
         const reader = new FileReader();
-        reader.onload = (evt) => {
+        reader.onload = async (evt) => {
             try {
+                const XLSX = await import('xlsx');
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
 
@@ -597,7 +597,8 @@ export default function DailyBalanceExcelImportModal({
     };
 
     // 4. Descargar plantilla oficial con los SKUs actuales
-    const handleDownloadTemplate = () => {
+    const handleDownloadTemplate = async () => {
+        const XLSX = await import('xlsx');
         try {
             const rows = products.map(p => ({
                 'Fecha inventario': targetDate,

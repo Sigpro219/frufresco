@@ -585,8 +585,9 @@ export default function StrategyControlTower() {
                 const ws = XLSX.utils.json_to_sheet(salesData);
                 XLSX.utils.book_append_sheet(wb, ws, 'Ventas_Consolidadas');
             } else if (areaKey === 'inventory') {
+                const stockByProdMap = new Map(stocks.map(s => [s.product_id, s]));
                 const invData = products.map(p => {
-                    const st = stocks.find(s => s.product_id === p.id);
+                    const st = stockByProdMap.get(p.id);
                     return {
                         'ID Contable': p.accounting_id || '—',
                         'Producto': p.name,
@@ -601,8 +602,16 @@ export default function StrategyControlTower() {
                 const ws = XLSX.utils.json_to_sheet(invData);
                 XLSX.utils.book_append_sheet(wb, ws, 'Inventarios_Saldos');
             } else if (areaKey === 'crm') {
+                const ordersByProfileMap = new Map<string, any[]>();
+                for (let i = 0; i < orders.length; i++) {
+                    const o = orders[i];
+                    if (!o.profile_id) continue;
+                    const arr = ordersByProfileMap.get(o.profile_id) || [];
+                    arr.push(o);
+                    ordersByProfileMap.set(o.profile_id, arr);
+                }
                 const crmData = profiles.map(p => {
-                    const clientOrders = orders.filter(o => o.profile_id === p.id);
+                    const clientOrders = ordersByProfileMap.get(p.id) || [];
                     const totalBought = clientOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
                     return {
                         'Cliente': p.company_name || p.contact_name,

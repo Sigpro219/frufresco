@@ -20,7 +20,6 @@ import {
     Package,
     PackageOpen
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 interface MasterAttribute {
     id: string;
@@ -291,7 +290,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
         }
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         try {
             if (!localAttributes || localAttributes.length === 0) {
                 showModalToast('No hay variantes registradas para exportar', 'warning');
@@ -345,7 +344,8 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 }
             });
 
-            const workbook = XLSX.utils.book_new();
+            const XLSX = await import('xlsx');
+        const workbook = XLSX.utils.book_new();
             const wsMatrix = XLSX.utils.json_to_sheet(matrix2Cols);
             const wsDetail = XLSX.utils.json_to_sheet(detailData);
 

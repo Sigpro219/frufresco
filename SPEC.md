@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.211 (Linaje Bidireccional Padre ↔ Hijo en Pedidos de Reposición D+1, Banner de Trazabilidad en `/admin/orders/[id]`, Canal `Garantía SAC` en Tablero de Pedidos y Cintillo en Remisión Impresa — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.212 (Internacionalización Bilingüe `ES / EN` en `/b2b/register` + `LeadGenBotV2`, Liberación de Scroll Eje Y, Compactación Vertical de Barra Sticky de Catálogo y Fotografía Editorial Hiperrealista 16:9 HORECA — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 242 Escenarios BDD Ininterrumpidos (1..242)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 243 Escenarios BDD Ininterrumpidos (1..243)
 
 ---
 
@@ -17,8 +17,8 @@
 
 | Dominio | Nombre del Dominio | Pantallas | Capítulos SDD | Rango de Escenarios BDD | Cobertura |
 | :---: | :--- | :---: | :--- | :---: | :---: |
-| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240 (§40.1 - §40.8) | 🟢 100% |
-| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240 (§41.1 - §41.4) | 🟢 100% |
+| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
+| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243 (§41.1 - §41.4) | 🟢 100% |
 | **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
@@ -10576,7 +10576,7 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - **Referencia a la Lista Institucional Dinámica (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`):** El módulo consulta `pricing_rules` para el modelo base `General institucional dinámico`, obteniendo el `margin_adjustment` real de cada producto y calculando su **Precio de Lista Institucional Dinámica** mediante la fórmula canónica de `SPEC.md §7.3.A`:
        $$\text{Lista Institucional Dinámica} = \left\lceil \frac{\text{Costo Efectivo (con Merma)} \times \left(1 + \frac{\text{margin\_adjustment}}{100}\right)}{50} \right\rceil \times 50$$
   3. **Motor Real de `PRECIO SUGERIDO IA` y Columna Bidireccional de `% UTILIDAD / MARGEN`:**
-     - El `PRECIO SUGERIDO IA` se calcula directamente desde la **Lista Institucional Dinámica** más la **Prima de Estabilización por Congelamiento Temporal** (`+3%` en perecederos quincenal, `+6%` en perecederos mensual, o indexación con boletín `SIPSA DANE` en vivo de `datos.gov.co`).
+     - El `PRECIO SUGERIDO IA` se calcula adicionando al `margin_adjustment` de la **Lista Institucional Dinámica** la **Prima de Estabilización por Congelamiento Temporal** (`+2%` abarrotes / `+3%` perecederos en ciclo quincenal; `+4%` abarrotes / `+6%` perecederos en ciclo mensual, redondeado al múltiplo superior de `$50 COP`, o indexación con boletín `SIPSA DANE` en vivo de `datos.gov.co`).
      - La columna interactiva **`% UTILIDAD`** muestra y permite editar bidireccionalmente el porcentaje de utilidad sobre costo (`Markup % = ((Precio - Costo) / Costo) * 100`), recalculando al instante el `NUEVO PRECIO A FIJAR` en múltiplos de `$50 COP`.
   4. **Reconstrucción del Pipeline Unificado: `SpecialAgreementsModule` como Fuente Única de Verdad (SSOT) y `CommercialAgreementsModule` como Comodín Ad-Hoc:**
      - **Absorción de Jerarquía Corporativa Completa en Imagen 1 (`SpecialAgreementsModule.tsx`):** El Modal de Consagración y Cascada SQL carga el universo íntegro de **519 perfiles B2B (`94 Casas Matrices` + `425 Sucursales`)** sin excluir sucursales con `is_active = null`. Incorpora las 5 pestañas de filtrado (`Del Modelo`, `Marcados`, `Casas Matrices (94)`, `Sucursales (425)`, `Todos (519)`), las insignias `<Building2 /> Casa Matriz (N sucursales)` y `<MapPin /> Sucursal Específica (Sucursal de: [Matriz])`, y la cascada automática al marcar una Casa Matriz.
@@ -10677,6 +10677,16 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - En `getChannelBadge`, los canales `customer_service` y `customer_service_shortage_d1` se renderizan con la insignia **`Garantía SAC`** e icono `<RotateCcw size={10} />`.
      - En la fila del tablero y en el encabezado del modal rápido de cargue, el Pedido Hijo proyecta el badge **`PEDIDO HIJO DE #XXXX`** (`PEDIDO HIJO · REPOSICIÓN DE #XXXX`), y el Pedido Padre proyecta el badge **`TIENE HIJO #YYYY`** (`PEDIDO PADRE · TIENE HIJO #YYYY`).
      - En la remisión impresa (`/admin/orders/contingency-print`), el cintillo Poka-Yoke declara explícitamente **`REPOSICIÓN DE GARANTÍA ($0 COP — SIN COBRO AL CLIENTE)`** a la izquierda y **`PEDIDO HIJO DE #XXXX (AMPARA GARANTÍA)`** a la derecha.
+---
+
+### Escenario 243: Internacionalización Bilingüe (`ES / EN`) en Tiempo Real de `/b2b/register` y `LeadGenBotV2`, Liberación de Scroll Eje Y, Compactación Vertical de Barra Sticky del Catálogo y Fotografía Editorial Hiperrealista 16:9 HORECA (SDD v1.9.212)
+- **Given** un usuario corporativo o consumidor navegando en la Landing Page (`/`) y en el Portal de Registro y Pre-Cotización Institucional (`/b2b/register` o `/b2b/register?lang=en`) desde viewports de `320px`, `375px`, `390px`, `768px` y `1440px`,
+- **When** alterna el selector de idioma entre Español (`ES`) e Inglés (`EN`) o se desplaza verticalmente por el catálogo y el cotizador guiado de 3 pasos,
+- **Then** el sistema garantiza:
+  1. **Localización 100% Reactiva (`ES / EN`) en `/b2b/register`, `LeadGenBotV2` y `GlobalBanner`:** `src/components/LeadGenBot.tsx` traduce dinámicamente el encabezado (`HORECA Institutional Quoter` / `Guided 3-Step Pre-Quote`), las 3 píldoras de progreso (`Needs`, `Coverage`, `Quote`), las burbujas conversacionales y los 3 pasos mediante diccionarios visuales (`BUSINESS_TYPES_EN`, `CATEGORIES_EN`, `BUSINESS_SIZES_EN`), preservando internamente las llaves canónicas en español para compatibilidad estricta con `/api/b2b/quote`. `src/app/b2b/register/page.tsx`, `src/lib/translations.ts`, `GlobalBanner.tsx`, `HeroActions.tsx` y `Footer.tsx` sincronizan el hero, beneficios, cintillo rotativo y botón de WhatsApp.
+  2. **Liberación Total de Scroll Vertical (Eje Y) y Despliegue Completo del Chatbot (`Navbar.tsx` y `LeadGenBot.tsx`):** `Navbar.tsx` elimina el bloqueo `document.body.style.overflow = 'hidden'` y cierra `mobileOpen` al cambiar de idioma o redimensionar sobre `768px`; `LeadGenBot.tsx` reemplaza la altura fija recortada (`660px`) por `height: 'auto'` y `minWidth: 0`, desplegando el 100% de los controles de cada paso sin trampas de scroll anidado y con `scrollWidth === innerWidth` desde `320px` hasta `1440px`.
+  3. **Compactación Vertical de la Barra Sticky del Catálogo (`SearchBar.tsx` y `src/app/page.tsx`):** Se elimina el margen inferior muerto de `2.5rem` (`40px`) bajo `SearchBar` (`margin: '0 auto'`) y se estiliza el padding vertical de la barra sticky del catálogo (`0.45rem 0 0.55rem 0`), recuperando ~60px de espacio vertical útil en el eje Y sobre la grilla de productos.
+  4. **Fotografía Editorial Hiperrealista 16:9 en `/b2b/register` (`public/b2b-bg.png`):** Se actualiza el fondo del hero institucional B2B con fotografía editorial 16:9 hiperrealista de cocina abierta e invernadero gastronómico HORECA con luz matutina dorada, ventanales en acero negro, olivos interiores y cosecha fresca sobre isla de roble y acero inoxidable.
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad

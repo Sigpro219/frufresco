@@ -21,7 +21,6 @@ import {
     Package,
     Info
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { formatNumber } from '@/lib/adminTheme';
 
 interface EmployeeSaleRecord {
@@ -491,7 +490,8 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
     };
 
     // Exportación a Excel
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
+        const XLSX = await import('xlsx');
         try {
             const exportData = filteredRows.map(r => ({
                 'Fecha': r.datePart,

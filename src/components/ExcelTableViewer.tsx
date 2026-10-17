@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import * as XLSX from 'xlsx';
 import { 
     FileText, 
     Filter, 
@@ -45,6 +44,7 @@ export default function ExcelTableViewer({ file, fileUrl }: ExcelTableViewerProp
                     return;
                 }
 
+                const XLSX = await import('xlsx');
                 const workbook = XLSX.read(buffer, { type: 'array' });
                 const parsedSheets: any[] = [];
 

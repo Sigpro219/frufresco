@@ -48,29 +48,37 @@ interface FinancialAdjustmentModalProps {
     onSuccess: (message: string, redirectUrl?: string) => void;
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export default function FinancialAdjustmentModal({
     isOpen,
     onClose,
     mode,
     pqr,
-    orderItems = [],
+    orderItems = EMPTY_ARRAY,
     defaultRcaCategory = 'dano_mecanico',
     defaultRcaSubtype = 'aplastamiento_sobreestiba',
     defaultRcaResponsible = 'transporte',
-    defaultImputedEntities = [],
+    defaultImputedEntities = EMPTY_ARRAY,
     defaultImputedTargetType = 'none',
     defaultImputedEntityId = '',
     defaultImputedEntityName = '',
     defaultImputedEvidenceNotes = '',
-    providersList = [],
-    collaboratorsList = [],
+    providersList = EMPTY_ARRAY,
+    collaboratorsList = EMPTY_ARRAY,
     activeTaxonomy = RCA_CATEGORIES_L1,
     onSuccess
 }: FinancialAdjustmentModalProps) {
     const [items, setItems] = useState<FinancialAdjustmentItem[]>([]);
+    const [showAllOrderItems, setShowAllOrderItems] = useState(false);
     const [customGlobalAmount, setCustomGlobalAmount] = useState<number | null>(null);
     const [useManualGlobal, setUseManualGlobal] = useState(false);
     const [notes, setNotes] = useState('');
+    const [priorCapAndSanitaryNotes, setPriorCapAndSanitaryNotes] = useState('');
+    const [technicalInspectionNotes, setTechnicalInspectionNotes] = useState('');
+    const [referenceInvoiceNumber, setReferenceInvoiceNumber] = useState('');
+    const [creditNoteNumber, setCreditNoteNumber] = useState('');
+    const [isIvaResponsible, setIsIvaResponsible] = useState(false);
     const [rcaCategoryL1, setRcaCategoryL1] = useState(defaultRcaCategory);
     const [rcaSubtypeL2, setRcaSubtypeL2] = useState(defaultRcaSubtype);
     const [rcaResponsible, setRcaResponsible] = useState<string>(defaultRcaResponsible);
@@ -79,17 +87,28 @@ export default function FinancialAdjustmentModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Initialize or reset state when modal opens or pqr changes
+    // Initialize or reset state once when modal opens or pqr.id / mode changes
     useEffect(() => {
         if (!isOpen || !pqr) return;
 
         let cancelled = false;
         setErrorMsg(null);
+        setShowAllOrderItems(false);
         setRcaCategoryL1(defaultRcaCategory);
         setRcaSubtypeL2(defaultRcaSubtype);
         setRcaResponsible(defaultRcaResponsible);
-        setImputedEntities(defaultImputedEntities || []);
+        setImputedEntities(defaultImputedEntities || EMPTY_ARRAY);
         setImputedTargetType(defaultImputedTargetType || 'none');
+
+        const stripAutoTags = (raw: string) =>
+            (raw || '')
+                .replace(/\[RCA_METADATA:\s*\{[\s\S]*?\}\]/g, '')
+                .replace(/\[CONCEPTO:[\s\S]*?(?=\n\n\[|$)/g, '')
+                .replace(/\[RESPONSABLE IMPUTADO:[\s\S]*?(?=\n\n\[|$)/g, '')
+                .trim();
+
+        let preservedSanitaryAndCapa = stripAutoTags(pqr.resolution_notes || '');
+        let preservedTechNotes = defaultImputedEvidenceNotes || '';
 
         try {
             const rawDraft = localStorage.getItem(`pqr_audit_draft_${pqr.id}`);
@@ -102,15 +121,32 @@ export default function FinancialAdjustmentModal({
                 if (Array.isArray(draft.imputedEntities) && draft.imputedEntities.length > 0) {
                     setImputedEntities(draft.imputedEntities);
                 }
+                if (draft.resolutionNotes) {
+                    const cleanedDraftNotes = stripAutoTags(draft.resolutionNotes);
+                    if (cleanedDraftNotes) preservedSanitaryAndCapa = cleanedDraftNotes;
+                }
+                if (draft.rcaEvidenceNotes) {
+                    preservedTechNotes = draft.rcaEvidenceNotes;
+                }
             }
         } catch (e) {
             console.error('Error hydrating draft in FinancialAdjustmentModal:', e);
         }
 
-        // Pre-fill notes
+        setPriorCapAndSanitaryNotes(preservedSanitaryAndCapa);
+        setTechnicalInspectionNotes(preservedTechNotes);
+
+        const shortId = pqr.id.substring(0, 8);
+        const seqPart = pqr.orders?.sequence_id || shortId.toUpperCase();
+        const now = new Date();
+        const ddmm = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}`;
+        setCreditNoteNumber(`NC-${seqPart}-${ddmm}`);
+        setReferenceInvoiceNumber(pqr.orders?.sequence_id ? `FV-${pqr.orders.sequence_id}` : `FV-${shortId.toUpperCase()}`);
+
+        // Pre-fill accounting observation note
         const defaultNote = mode === 'credit_note' 
-            ? `Nota Crédito autorizada por Servicio al Cliente para PQR #${pqr.id.substring(0, 8)} (${pqr.subject}).`
-            : `Ajuste de facturación y cantidades recibidas por PQR #${pqr.id.substring(0, 8)} (${pqr.subject}).`;
+            ? `Nota Crédito autorizada por Servicio al Cliente para PQR #${shortId} (${pqr.subject}).`
+            : `Ajuste de facturación y cantidades recibidas por PQR #${shortId} (${pqr.subject}).`;
         setNotes(defaultNote);
 
         const loadItemsAndReturns = async () => {
@@ -119,19 +155,44 @@ export default function FinancialAdjustmentModal({
                 let existingReturns: any[] = [];
 
                 if (pqr.order_id) {
-                    if (effectiveOrderItems.length === 0) {
-                        const { data: fetchedItems } = await supabase
-                            .from('order_items')
-                            .select('*, products(name, sku, unit_of_measure)')
-                            .eq('order_id', pqr.order_id);
-                        effectiveOrderItems = fetchedItems || [];
-                    }
+                    const [itemsRes, returnsRes, invoiceRes, orderProfRes] = await Promise.all([
+                        effectiveOrderItems.length === 0
+                            ? supabase
+                                .from('order_items')
+                                .select('*, products(name, sku, unit_of_measure)')
+                                .eq('order_id', pqr.order_id)
+                            : Promise.resolve({ data: effectiveOrderItems }),
+                        supabase
+                            .from('billing_returns')
+                            .select('id, product_id, quantity_returned, status, reason, notes')
+                            .eq('order_id', pqr.order_id),
+                        supabase
+                            .from('billing_invoices')
+                            .select('id, invoice_number, total_base, total_tax, total_final')
+                            .eq('order_id', pqr.order_id)
+                            .maybeSingle(),
+                        supabase
+                            .from('orders')
+                            .select('sequence_id, profiles:profile_id(iva_responsible)')
+                            .eq('id', pqr.order_id)
+                            .maybeSingle()
+                    ]);
 
-                    const { data: fetchedReturns } = await supabase
-                        .from('billing_returns')
-                        .select('id, product_id, quantity_returned, status, reason, notes')
-                        .eq('order_id', pqr.order_id);
-                    existingReturns = fetchedReturns || [];
+                    effectiveOrderItems = itemsRes.data || [];
+                    existingReturns = returnsRes.data || [];
+
+                    if (!cancelled) {
+                        if (invoiceRes.data?.invoice_number) {
+                            setReferenceInvoiceNumber(invoiceRes.data.invoice_number);
+                        } else if (orderProfRes.data?.sequence_id) {
+                            setReferenceInvoiceNumber(`FV-${orderProfRes.data.sequence_id}`);
+                        }
+                        if (orderProfRes.data?.sequence_id) {
+                            setCreditNoteNumber(`NC-${orderProfRes.data.sequence_id}-${ddmm}`);
+                        }
+                        const profIva = Boolean((orderProfRes.data as any)?.profiles?.iva_responsible);
+                        setIsIvaResponsible(profIva);
+                    }
                 }
 
                 if (cancelled) return;
@@ -206,7 +267,7 @@ export default function FinancialAdjustmentModal({
         return () => {
             cancelled = true;
         };
-    }, [isOpen, pqr, orderItems, mode, defaultRcaCategory, defaultRcaSubtype, defaultRcaResponsible]);
+    }, [isOpen, pqr?.id, mode]);
 
     // Financial Calculations
     const originalOrderTotal = useMemo(() => {
@@ -308,52 +369,58 @@ export default function FinancialAdjustmentModal({
             const primaryEntity = imputedEntities && imputedEntities.length > 0 ? imputedEntities[0] : null;
             const primaryEntityId = primaryEntity?.id || defaultImputedEntityId || null;
             const primaryEntityName = primaryEntity?.name || defaultImputedEntityName || null;
-            const entitiesFormatted = imputedEntities && imputedEntities.length > 0 
-                ? imputedEntities.map(e => `${e.name} (${e.role || 'Responsable'} - ${e.sharePercent}%)`).join(', ')
-                : primaryEntityName;
 
             const finalizedEntities = (imputedEntities || []).map(e => ({
                 ...e,
                 deductionAmount: Math.round((calculatedCreditAmount * (Number(e.sharePercent) || 100)) / 100)
             }));
 
+            const entitiesFormatted = finalizedEntities.length > 0 
+                ? finalizedEntities.map(e => `${e.name} (${e.role || 'Responsable'} - ${e.sharePercent}% = ${formatMoney(e.deductionAmount || 0)})`).join(', ')
+                : primaryEntityName;
+
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
                 subtypeL2: rcaSubtypeL2,
                 responsible: rcaResponsible as any,
+                notes: technicalInspectionNotes || defaultImputedEvidenceNotes || notes,
                 imputedTargetType: imputedTargetType,
                 imputedEntities: finalizedEntities,
                 imputedEntityId: primaryEntityId || undefined,
                 imputedEntityName: primaryEntityName || undefined,
-                imputedEvidenceNotes: defaultImputedEvidenceNotes || notes,
+                imputedEvidenceNotes: technicalInspectionNotes || defaultImputedEvidenceNotes || notes,
                 deductionAmount: calculatedCreditAmount
             });
 
             const upsertApprovedReturn = async (item: FinancialAdjustmentItem, prefixTag: string) => {
-                const { data: existingPending } = await supabase
+                const { data: existingRow } = await supabase
                     .from('billing_returns')
-                    .select('id')
+                    .select('id, notes')
                     .eq('order_id', orderId)
                     .eq('product_id', item.product_id)
-                    .eq('status', 'pending_review')
                     .maybeSingle();
 
+                const custodyMatch = String(existingRow?.notes || '').match(/\[RETORNO_FISICO:\s*(SI|NO)\]/i);
+                const custodyTag = custodyMatch ? `[RETORNO_FISICO: ${custodyMatch[1].toUpperCase()}]` : '[RETORNO_FISICO: NO]';
                 const reasonText = `[${prefixTag} PQR #${shortPqrId}] ${item.novelty_type.toUpperCase()}: ${notes || pqr.subject}`;
-                const notesText = `RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}`;
+                const notesText = `${custodyTag} | RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}${mode === 'credit_note' && creditNoteNumber ? ` | NC: ${creditNoteNumber} (Ref: ${referenceInvoiceNumber})` : ''}`;
 
-                if (existingPending?.id) {
-                    await supabase
+                if (existingRow?.id) {
+                    const { error: updErr } = await supabase
                         .from('billing_returns')
                         .update({
                             quantity_returned: item.affected_quantity,
                             reason: reasonText,
                             status: 'approved',
                             notes: notesText,
-                            resolved_at: nowIso
+                            resolved_at: nowIso,
+                            credit_note_number: mode === 'credit_note' ? creditNoteNumber : null,
+                            reference_invoice_number: referenceInvoiceNumber || null
                         })
-                        .eq('id', existingPending.id);
+                        .eq('id', existingRow.id);
+                    if (updErr) throw updErr;
                 } else {
-                    await supabase
+                    const { error: insErr } = await supabase
                         .from('billing_returns')
                         .insert([{
                             order_id: orderId,
@@ -361,10 +428,19 @@ export default function FinancialAdjustmentModal({
                             quantity_returned: item.affected_quantity,
                             reason: reasonText,
                             status: 'approved',
-                            notes: notesText
+                            notes: notesText,
+                            resolved_at: nowIso,
+                            credit_note_number: mode === 'credit_note' ? creditNoteNumber : null,
+                            reference_invoice_number: referenceInvoiceNumber || null
                         }]);
+                    if (insErr) throw insErr;
                 }
             };
+
+            const combinedHeaderNotes = priorCapAndSanitaryNotes
+                ? `${priorCapAndSanitaryNotes}\n\n[OBSERVACIÓN CONTABLE]: ${notes}`
+                : notes;
+            const respLabel = RESPONSIBLE_PARTIES[rcaResponsible as keyof typeof RESPONSIBLE_PARTIES]?.label || rcaResponsible;
 
             if (mode === 'credit_note') {
                 // =========================================================
@@ -376,7 +452,29 @@ export default function FinancialAdjustmentModal({
                     }
                 }
 
-                const finalNotes = `${notes}\n\n[CONCEPTO: Opción 3 - Nota Crédito Comercial Emitida]\n-> Valor Acreditado a Favor del Cliente: ${formatMoney(calculatedCreditAmount)}\n-> Desglose de Ítems:\n${itemsSummary || `• Ajuste comercial directo por ${formatMoney(calculatedCreditAmount)}`}\n${entitiesFormatted ? `-> Responsabilidad Imputada: ${entitiesFormatted}\n` : ''}${rcaTag}`;
+                // Stamp Credit Note traceability in orders.admin_notes
+                if (orderId) {
+                    const { data: currentOrder } = await supabase
+                        .from('orders')
+                        .select('admin_notes')
+                        .eq('id', orderId)
+                        .maybeSingle();
+                    const prevAdminNotes = currentOrder?.admin_notes || '';
+                    const cnTag = `[NOTA_CREDITO_PQR #${shortPqrId} | NC: ${creditNoteNumber} | FACTURA_REF: ${referenceInvoiceNumber} | VALOR: -${formatMoney(calculatedCreditAmount)}]: Nota Crédito comercial emitida por Calidad (SAC).`;
+                    if (!prevAdminNotes.includes(`NOTA_CREDITO_PQR #${shortPqrId}`)) {
+                        await supabase
+                            .from('orders')
+                            .update({
+                                admin_notes: `${prevAdminNotes}\n${cnTag}`.trim()
+                            })
+                            .eq('id', orderId);
+                    }
+                }
+
+                const baseVal = isIvaResponsible ? Math.round(calculatedCreditAmount / 1.19) : calculatedCreditAmount;
+                const taxVal = isIvaResponsible ? calculatedCreditAmount - baseVal : 0;
+
+                const finalNotes = `${combinedHeaderNotes}\n\n[CONCEPTO: Opción 3 - Nota Crédito Comercial Emitida]\n-> Consecutivo Nota Crédito: ${creditNoteNumber} (Factura Ref: ${referenceInvoiceNumber})\n-> Valor Acreditado a Favor del Cliente: ${formatMoney(calculatedCreditAmount)} (Base: ${formatMoney(baseVal)} + IVA: ${formatMoney(taxVal)})\n-> Desglose de Ítems:\n${itemsSummary || `• Ajuste comercial directo por ${formatMoney(calculatedCreditAmount)}`}\n${entitiesFormatted ? `-> Responsabilidad Imputada: ${entitiesFormatted}\n` : ''}${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
 
                 const { error: pqrUpdateErr } = await supabase
                     .from('customer_service_pqrs')
@@ -389,7 +487,11 @@ export default function FinancialAdjustmentModal({
 
                 if (pqrUpdateErr) throw pqrUpdateErr;
 
-                onSuccess(`Nota Crédito de ${formatMoney(calculatedCreditAmount)} emitida y aprobada con éxito.`);
+                try {
+                    localStorage.removeItem(`pqr_audit_draft_${pqr.id}`);
+                } catch {}
+
+                onSuccess(`Nota Crédito ${creditNoteNumber} de ${formatMoney(calculatedCreditAmount)} emitida y aprobada con éxito.`);
                 onClose();
 
             } else {
@@ -417,7 +519,7 @@ export default function FinancialAdjustmentModal({
                 const previousTotal = Number(currentOrder?.total) || originalOrderTotal;
                 const newTotal = Math.max(0, previousTotal - calculatedCreditAmount);
 
-                const updatedAdminNotes = `${currentOrder?.admin_notes || ''}\n[AJUSTE FACTURA PQR #${shortPqrId}]: Valor ajustado de ${formatMoney(previousTotal)} a ${formatMoney(newTotal)} (-${formatMoney(calculatedCreditAmount)}).`;
+                const updatedAdminNotes = `${currentOrder?.admin_notes || ''}\n[AJUSTE FACTURA PQR #${shortPqrId}]: Valor ajustado de ${formatMoney(previousTotal)} a ${formatMoney(newTotal)} (-${formatMoney(calculatedCreditAmount)}).`.trim();
 
                 await supabase
                     .from('orders')
@@ -429,7 +531,7 @@ export default function FinancialAdjustmentModal({
                     .eq('id', orderId);
 
                 // 3. Update billing_invoices if exists
-                const { data: invoiceData } = await supabase.from('billing_invoices').select('id, order_id').eq('order_id', orderId).single();
+                const { data: invoiceData } = await supabase.from('billing_invoices').select('id, order_id').eq('order_id', orderId).maybeSingle();
                 if (invoiceData) {
                     const { data: orderProf } = await supabase
                         .from('orders')
@@ -450,8 +552,8 @@ export default function FinancialAdjustmentModal({
                         .eq('id', invoiceData.id);
                 }
 
-                // 4. Update PQR status and notes
-                const finalNotes = `${notes}\n\n[CONCEPTO: Opción 4 - Factura Ajustada con Cantidad Recibida]\n-> Total Anterior: ${formatMoney(previousTotal)} | Nuevo Total Final: ${formatMoney(newTotal)} (-${formatMoney(calculatedCreditAmount)})\n-> Ítems Ajustados en Pedido:\n${itemsSummary}\n${entitiesFormatted ? `-> Responsabilidad Imputada: ${entitiesFormatted}\n` : ''}${rcaTag}`;
+                // 4. Update PQR status and notes preserving Invima and CAPA notes
+                const finalNotes = `${combinedHeaderNotes}\n\n[CONCEPTO: Opción 4 - Factura Ajustada con Cantidad Recibida]\n-> Total Anterior: ${formatMoney(previousTotal)} | Nuevo Total Final: ${formatMoney(newTotal)} (-${formatMoney(calculatedCreditAmount)})\n-> Ítems Ajustados en Pedido:\n${itemsSummary}\n${entitiesFormatted ? `-> Responsabilidad Imputada: ${entitiesFormatted}\n` : ''}${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
 
                 const { error: pqrUpdateErr } = await supabase
                     .from('customer_service_pqrs')
@@ -463,6 +565,10 @@ export default function FinancialAdjustmentModal({
                     .eq('id', pqr.id);
 
                 if (pqrUpdateErr) throw pqrUpdateErr;
+
+                try {
+                    localStorage.removeItem(`pqr_audit_draft_${pqr.id}`);
+                } catch {}
 
                 onSuccess(`Factura y Pedido ajustados con éxito. Nuevo Total: ${formatMoney(newTotal)}.`);
                 onClose();
@@ -675,322 +781,390 @@ export default function FinancialAdjustmentModal({
                         </div>
                     </div>
 
-                    {/* Products & Items Breakdown Table */}
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <label style={{ fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <PackageCheck size={15} color="#0D7A57" />
-                                Desglose de Productos & Cantidades Afectadas ({items.length})
-                            </label>
-                            {items.length > 0 && (
-                                <button
-                                    type="button"
-                                    onClick={() => setUseManualGlobal(!useManualGlobal)}
-                                    style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#0D7A57',
-                                        fontSize: '0.72rem',
-                                        fontWeight: '700',
-                                        cursor: 'pointer',
-                                        textDecoration: 'underline'
-                                    }}
-                                >
-                                    {useManualGlobal ? 'Usar desglose por producto' : 'Ajustar valor global manual'}
-                                </button>
-                            )}
-                        </div>
-
-                        {useManualGlobal ? (
-                            <div style={{
-                                backgroundColor: '#F8FAFC',
-                                border: '1px dashed #CBD5E1',
-                                borderRadius: '12px',
-                                padding: '1rem',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '10px'
-                            }}>
-                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>
-                                    Valor Global de la Nota Crédito / Ajuste ($ COP):
+                    {/* World Office Fiscal Reference & IVA Breakdown (Credit Note Mode) */}
+                    {isCredit && (
+                        <div style={{
+                            backgroundColor: '#FAF5FF',
+                            border: '1px solid #DDD6FE',
+                            borderRadius: '12px',
+                            padding: '10px 14px',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))',
+                            gap: '10px',
+                            alignItems: 'center'
+                        }}>
+                            <div>
+                                <label style={{ fontSize: '0.64rem', fontWeight: '800', color: '#6D28D9', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
+                                    Consecutivo Nota Crédito (World Office)
                                 </label>
                                 <input
-                                    type="number"
-                                    value={customGlobalAmount ?? 0}
-                                    onChange={e => setCustomGlobalAmount(Number(e.target.value))}
-                                    min={0}
-                                    placeholder="Ingresa el valor total a descontar..."
+                                    type="text"
+                                    value={creditNoteNumber}
+                                    onChange={e => setCreditNoteNumber(e.target.value)}
                                     style={{
-                                        padding: '10px 14px',
-                                        borderRadius: '8px',
-                                        border: '1.5px solid #0D7A57',
-                                        fontSize: '1.1rem',
+                                        width: '100%',
+                                        padding: '5px 8px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #C4B5FD',
+                                        fontSize: '0.76rem',
                                         fontWeight: '900',
-                                        color: '#0D7A57',
-                                        outline: 'none'
+                                        color: '#4C1D95',
+                                        backgroundColor: '#FFFFFF',
+                                        boxSizing: 'border-box'
                                     }}
                                 />
-                                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
-                                    Aplica un ajuste contable directo sin restar existencias físicas a productos individuales.
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '0.64rem', fontWeight: '800', color: '#6D28D9', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
+                                    Factura de Referencia Asociada
+                                </label>
+                                <input
+                                    type="text"
+                                    value={referenceInvoiceNumber}
+                                    onChange={e => setReferenceInvoiceNumber(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '5px 8px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #C4B5FD',
+                                        fontSize: '0.76rem',
+                                        fontWeight: '800',
+                                        color: '#334155',
+                                        backgroundColor: '#FFFFFF',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', display: 'block' }}>
+                                    Base Contable Acreditada
+                                </span>
+                                <span style={{ fontSize: '0.84rem', fontWeight: '900', color: '#1E293B' }}>
+                                    {formatMoney(isIvaResponsible ? Math.round(calculatedCreditAmount / 1.19) : calculatedCreditAmount)}
                                 </span>
                             </div>
-                        ) : (
-                            <div style={{
-                                border: '1px solid #E2E8F0',
-                                borderRadius: '12px',
-                                overflow: 'hidden'
-                            }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
-                                    <thead>
-                                        <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left', color: '#64748B' }}>
-                                            <th style={{ padding: '8px 10px', width: '32px' }}>#</th>
-                                            <th style={{ padding: '8px 10px' }}>Producto</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center' }}>Cant. Despachada</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '180px' }}>Cant. Afectada</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Precio Unitario</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center' }}>Tipo Novedad</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Subtotal</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {items.map((item, idx) => {
-                                            const subtotal = item.affected_quantity * item.unit_price;
-                                            return (
-                                                <tr 
-                                                    key={item.id} 
-                                                    style={{ 
-                                                        borderBottom: idx < items.length - 1 ? '1px solid #F1F5F9' : 'none',
-                                                        backgroundColor: item.selected && item.affected_quantity > 0 ? '#FAFDFB' : '#FFFFFF',
-                                                        transition: 'background-color 0.12s'
+                            <div>
+                                <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', display: 'block' }}>
+                                    Régimen IVA ({isIvaResponsible ? 'Gravado 19%' : 'Exento Agro 0%'})
+                                </span>
+                                <span style={{ fontSize: '0.84rem', fontWeight: '900', color: '#0D7A57' }}>
+                                    {formatMoney(isIvaResponsible ? calculatedCreditAmount - Math.round(calculatedCreditAmount / 1.19) : 0)}
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Products & Items Breakdown Table */}
+                    <div>
+                        {(() => {
+                            const selectedCount = items.filter(i => i.selected || i.affected_quantity > 0).length;
+                            const hiddenCount = Math.max(0, items.length - selectedCount);
+                            const visibleEntries = items
+                                .map((item, idx) => ({ item, idx }))
+                                .filter(({ item }) => showAllOrderItems || selectedCount === 0 || item.selected || item.affected_quantity > 0);
+
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <PackageCheck size={15} color="#0D7A57" />
+                                            Desglose de Productos & Cantidades Afectadas ({selectedCount} de {items.length} con novedad)
+                                        </label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            {!useManualGlobal && hiddenCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowAllOrderItems(!showAllOrderItems)}
+                                                    style={{
+                                                        background: '#F1F5F9',
+                                                        border: '1px solid #CBD5E1',
+                                                        borderRadius: '6px',
+                                                        padding: '3px 9px',
+                                                        color: '#334155',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer'
                                                     }}
                                                 >
-                                                    {/* Checkbox */}
-                                                    <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                                                        <input 
-                                                            type="checkbox"
-                                                            checked={item.selected}
-                                                            onChange={() => handleItemToggle(idx)}
-                                                            style={{ cursor: 'pointer', width: '15px', height: '15px' }}
-                                                        />
-                                                    </td>
+                                                    {showAllOrderItems ? `Ocultar productos sin novedad (${hiddenCount})` : `+ Ver demás productos del pedido (${hiddenCount})`}
+                                                </button>
+                                            )}
+                                            {items.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setUseManualGlobal(!useManualGlobal)}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#0D7A57',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer',
+                                                        textDecoration: 'underline'
+                                                    }}
+                                                >
+                                                    {useManualGlobal ? 'Usar desglose por producto' : 'Ajustar valor global manual'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
 
-                                                    {/* Product Name */}
-                                                    <td style={{ padding: '8px 10px' }}>
-                                                        <div style={{ fontWeight: item.selected ? '900' : '600', color: item.selected ? '#0D7A57' : '#1E293B' }}>
-                                                            {item.product_name}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
-                                                            Presentación: {item.unit_of_measure}
-                                                        </div>
-                                                    </td>
+                                    {useManualGlobal ? (
+                                        <div style={{
+                                            backgroundColor: '#F8FAFC',
+                                            border: '1px dashed #CBD5E1',
+                                            borderRadius: '12px',
+                                            padding: '1rem',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '10px'
+                                        }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>
+                                                Valor Global de la Nota Crédito / Ajuste ($ COP):
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={customGlobalAmount ?? 0}
+                                                onChange={e => setCustomGlobalAmount(Number(e.target.value))}
+                                                min={0}
+                                                placeholder="Ingresa el valor total a descontar..."
+                                                style={{
+                                                    padding: '10px 14px',
+                                                    borderRadius: '8px',
+                                                    border: '1.5px solid #0D7A57',
+                                                    fontSize: '1.1rem',
+                                                    fontWeight: '900',
+                                                    color: '#0D7A57',
+                                                    outline: 'none'
+                                                }}
+                                            />
+                                            <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                                Aplica un ajuste contable directo sin restar existencias físicas a productos individuales.
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            border: '1px solid #E2E8F0',
+                                            borderRadius: '12px',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                                                <thead>
+                                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left', color: '#64748B' }}>
+                                                        <th style={{ padding: '8px 10px', width: '32px' }}>#</th>
+                                                        <th style={{ padding: '8px 10px' }}>Producto</th>
+                                                        <th style={{ padding: '8px 10px', textAlign: 'center' }}>Cant. Despachada</th>
+                                                        <th style={{ padding: '8px 10px', textAlign: 'center', width: '180px' }}>Cant. Afectada</th>
+                                                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Precio Unitario</th>
+                                                        <th style={{ padding: '8px 10px', textAlign: 'center' }}>Tipo Novedad</th>
+                                                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Subtotal</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {visibleEntries.map(({ item, idx }, rowPos) => {
+                                                        const subtotal = item.affected_quantity * item.unit_price;
+                                                        return (
+                                                            <tr 
+                                                                key={item.id} 
+                                                                style={{ 
+                                                                    borderBottom: rowPos < visibleEntries.length - 1 ? '1px solid #F1F5F9' : 'none',
+                                                                    backgroundColor: item.selected && item.affected_quantity > 0 ? '#FAFDFB' : '#FFFFFF',
+                                                                    transition: 'background-color 0.12s'
+                                                                }}
+                                                            >
+                                                                {/* Checkbox */}
+                                                                <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                                                    <input 
+                                                                        type="checkbox"
+                                                                        checked={item.selected}
+                                                                        onChange={() => handleItemToggle(idx)}
+                                                                        style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                                                                    />
+                                                                </td>
 
-                                                    {/* Original Quantity */}
-                                                    <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '700', color: '#475569' }}>
-                                                        {item.original_quantity} {item.unit_of_measure}
-                                                    </td>
+                                                                {/* Product Name */}
+                                                                <td style={{ padding: '8px 10px' }}>
+                                                                    <div style={{ fontWeight: item.selected ? '900' : '600', color: item.selected ? '#0D7A57' : '#1E293B' }}>
+                                                                        {item.product_name}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
+                                                                        Presentación: {item.unit_of_measure}
+                                                                    </div>
+                                                                </td>
 
-                                                    {/* Affected Quantity with Quick Steppers */}
-                                                    <td style={{ padding: '8px 10px' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <input
-                                                                    type="number"
-                                                                    value={item.affected_quantity}
-                                                                    onChange={e => handleItemQtyChange(idx, Number(e.target.value))}
-                                                                    min={0}
-                                                                    max={item.original_quantity}
-                                                                    step={0.1}
-                                                                    style={{
-                                                                        width: '70px',
-                                                                        padding: '4px 6px',
-                                                                        borderRadius: '6px',
-                                                                        border: `1.5px solid ${item.affected_quantity > 0 ? '#0D7A57' : '#CBD5E1'}`,
-                                                                        fontWeight: '800',
-                                                                        fontSize: '0.78rem',
-                                                                        textAlign: 'center',
-                                                                        outline: 'none'
-                                                                    }}
-                                                                />
-                                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>
-                                                                    {item.unit_of_measure}
-                                                                </span>
-                                                            </div>
-                                                            <div style={{ display: 'flex', gap: '4px' }}>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleQuickRatio(idx, 1)}
-                                                                    style={{ padding: '1px 5px', fontSize: '0.62rem', fontWeight: '700', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#F8FAFC', cursor: 'pointer' }}
-                                                                >
-                                                                    Todo
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleQuickRatio(idx, 0.5)}
-                                                                    style={{ padding: '1px 5px', fontSize: '0.62rem', fontWeight: '700', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#F8FAFC', cursor: 'pointer' }}
-                                                                >
-                                                                    50%
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleQuickRatio(idx, 0)}
-                                                                    style={{ padding: '1px 5px', fontSize: '0.62rem', fontWeight: '700', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#F8FAFC', cursor: 'pointer' }}
-                                                                >
-                                                                    0
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </td>
+                                                                {/* Original Quantity */}
+                                                                <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '700', color: '#475569' }}>
+                                                                    {item.original_quantity} {item.unit_of_measure}
+                                                                </td>
 
-                                                    {/* Unit Price */}
-                                                    <td style={{ padding: '8px 10px', textAlign: 'right' }}>
-                                                        <div style={{ fontWeight: '700', color: '#334155' }}>
-                                                            {formatMoney(item.unit_price)}
-                                                        </div>
-                                                    </td>
+                                                                {/* Affected Quantity with Quick Steppers */}
+                                                                <td style={{ padding: '8px 10px' }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                            <input
+                                                                                type="number"
+                                                                                value={item.affected_quantity}
+                                                                                onChange={e => handleItemQtyChange(idx, Number(e.target.value))}
+                                                                                min={0}
+                                                                                max={item.original_quantity}
+                                                                                step={0.1}
+                                                                                style={{
+                                                                                    width: '70px',
+                                                                                    padding: '4px 6px',
+                                                                                    borderRadius: '6px',
+                                                                                    border: `1.5px solid ${item.affected_quantity > 0 ? '#0D7A57' : '#CBD5E1'}`,
+                                                                                    fontWeight: '800',
+                                                                                    fontSize: '0.78rem',
+                                                                                    textAlign: 'center',
+                                                                                    outline: 'none'
+                                                                                }}
+                                                                            />
+                                                                            <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>
+                                                                                {item.unit_of_measure}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleQuickRatio(idx, 1)}
+                                                                                style={{ padding: '1px 5px', fontSize: '0.62rem', fontWeight: '700', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#F8FAFC', cursor: 'pointer' }}
+                                                                            >
+                                                                                Todo
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleQuickRatio(idx, 0.5)}
+                                                                                style={{ padding: '1px 5px', fontSize: '0.62rem', fontWeight: '700', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#F8FAFC', cursor: 'pointer' }}
+                                                                            >
+                                                                                50%
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleQuickRatio(idx, 0)}
+                                                                                style={{ padding: '1px 5px', fontSize: '0.62rem', fontWeight: '700', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#F8FAFC', cursor: 'pointer' }}
+                                                                            >
+                                                                                0
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
 
-                                                    {/* Novelty Type */}
-                                                    <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                                                        <select
-                                                            value={item.novelty_type}
-                                                            onChange={e => handleItemNoveltyTypeChange(idx, e.target.value as any)}
-                                                            style={{
-                                                                padding: '4px 6px',
-                                                                borderRadius: '6px',
-                                                                border: '1px solid #CBD5E1',
-                                                                fontSize: '0.7rem',
-                                                                fontWeight: '700',
-                                                                color: '#334155',
-                                                                backgroundColor: '#FFFFFF',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            <option value="averia">Avería / Calidad</option>
-                                                            <option value="faltante">Faltante</option>
-                                                            <option value="precio">Ajuste Precio</option>
-                                                            <option value="devolucion">Devolución</option>
-                                                        </select>
-                                                    </td>
+                                                                {/* Unit Price */}
+                                                                <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                                                                    <div style={{ fontWeight: '700', color: '#334155' }}>
+                                                                        {formatMoney(item.unit_price)}
+                                                                    </div>
+                                                                </td>
 
-                                                    {/* Subtotal */}
-                                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '900', color: subtotal > 0 ? (isCredit ? '#7C3AED' : '#D97706') : '#94A3B8' }}>
-                                                        {formatMoney(subtotal)}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                                                                {/* Novelty Type */}
+                                                                <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                                                    <select
+                                                                        value={item.novelty_type}
+                                                                        onChange={e => handleItemNoveltyTypeChange(idx, e.target.value as any)}
+                                                                        style={{
+                                                                            padding: '4px 6px',
+                                                                            borderRadius: '6px',
+                                                                            border: '1px solid #CBD5E1',
+                                                                            fontSize: '0.7rem',
+                                                                            fontWeight: '700',
+                                                                            color: '#334155',
+                                                                            backgroundColor: '#FFFFFF',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                    >
+                                                                        <option value="averia">Avería / Calidad</option>
+                                                                        <option value="faltante">Faltante</option>
+                                                                        <option value="precio">Ajuste Precio</option>
+                                                                        <option value="devolucion">Devolución</option>
+                                                                    </select>
+                                                                </td>
+
+                                                                {/* Subtotal */}
+                                                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '900', color: subtotal > 0 ? (isCredit ? '#7C3AED' : '#D97706') : '#94A3B8' }}>
+                                                                    {formatMoney(subtotal)}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </div>
 
-                    {/* RCA & Imputability Quick Pills */}
+                    {/* Read-Only Summary of Step 3 RCA & Imputed Collaborators */}
                     <div style={{
                         backgroundColor: '#F8FAFC',
                         border: '1px solid #E2E8F0',
                         borderRadius: '12px',
-                        padding: '1rem',
+                        padding: '0.9rem 1rem',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '10px'
+                        gap: '8px'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                             <span style={{ fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', color: '#0D7A57', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Sparkles size={14} color="#0D7A57" />
-                                Causa Raíz & Área Imputable de la Merma
+                                Dictamen Técnico & Imputabilidad Vinculada (Paso 3)
+                            </span>
+                            <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: '800',
+                                padding: '2px 8px',
+                                borderRadius: '999px',
+                                backgroundColor: '#DCFCE7',
+                                color: '#166534',
+                                border: '1px solid #86EFAC'
+                            }}>
+                                Sincronizado con Auditoría PQR
                             </span>
                         </div>
 
-                        {/* Category and Subtype Selectors */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            <div>
-                                <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                                    Familia de Defecto (L1)
-                                </label>
-                                <select
-                                    value={rcaCategoryL1}
-                                    onChange={e => {
-                                        setRcaCategoryL1(e.target.value);
-                                        const cat = activeTaxonomy.find(c => c.code === e.target.value);
-                                        if (cat && cat.subtypes.length > 0) {
-                                            setRcaSubtypeL2(cat.subtypes[0].code);
-                                            setRcaResponsible(cat.subtypes[0].typicalResponsible);
-                                        }
-                                    }}
-                                    style={{
-                                        width: '100%',
-                                        padding: '7px 10px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #CBD5E1',
-                                        fontSize: '0.74rem',
-                                        fontWeight: '700',
-                                        color: '#334155',
-                                        backgroundColor: '#FFFFFF'
-                                    }}
-                                >
-                                    {activeTaxonomy.map(cat => (
-                                        <option key={cat.code} value={cat.code}>{cat.label}</option>
-                                    ))}
-                                </select>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', fontSize: '0.74rem' }}>
+                            <div style={{ backgroundColor: '#FFFFFF', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', display: 'block' }}>
+                                    Causa Raíz (L1 / L2)
+                                </span>
+                                <strong style={{ color: '#1E293B', display: 'block', marginTop: '2px' }}>
+                                    {selectedCategoryL1Obj?.label || rcaCategoryL1}
+                                </strong>
+                                <span style={{ color: '#475569', fontSize: '0.7rem' }}>
+                                    {selectedCategoryL1Obj?.subtypes.find(s => s.code === rcaSubtypeL2)?.label || rcaSubtypeL2}
+                                </span>
                             </div>
 
-                            <div>
-                                <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                                    Subtipo Específico (L2)
-                                </label>
-                                <select
-                                    value={rcaSubtypeL2}
-                                    onChange={e => {
-                                        setRcaSubtypeL2(e.target.value);
-                                        const sub = selectedCategoryL1Obj?.subtypes.find(s => s.code === e.target.value);
-                                        if (sub) setRcaResponsible(sub.typicalResponsible);
-                                    }}
-                                    style={{
-                                        width: '100%',
-                                        padding: '7px 10px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #CBD5E1',
-                                        fontSize: '0.74rem',
-                                        fontWeight: '700',
-                                        color: '#334155',
-                                        backgroundColor: '#FFFFFF'
-                                    }}
-                                >
-                                    {selectedCategoryL1Obj?.subtypes.map(sub => (
-                                        <option key={sub.code} value={sub.code}>{sub.label}</option>
-                                    ))}
-                                </select>
+                            <div style={{ backgroundColor: '#FFFFFF', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', display: 'block' }}>
+                                    Área Responsable
+                                </span>
+                                <strong style={{ color: '#0D7A57', display: 'block', marginTop: '2px' }}>
+                                    {RESPONSIBLE_PARTIES[rcaResponsible as keyof typeof RESPONSIBLE_PARTIES]?.label || rcaResponsible}
+                                </strong>
                             </div>
-                        </div>
 
-                        {/* Responsible Department Pills */}
-                        <div>
-                            <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                                Área Responsable Imputable:
-                            </label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {Object.values(RESPONSIBLE_PARTIES).map(resp => {
-                                    const isSel = rcaResponsible === resp.code;
-                                    return (
-                                        <button
-                                            key={resp.code}
-                                            type="button"
-                                            onClick={() => setRcaResponsible(resp.code)}
-                                            style={{
-                                                padding: '4px 10px',
-                                                borderRadius: '6px',
-                                                fontSize: '0.7rem',
-                                                fontWeight: isSel ? '800' : '600',
-                                                border: `1.5px solid ${isSel ? resp.border : '#E2E8F0'}`,
-                                                backgroundColor: isSel ? resp.bgLight : '#FFFFFF',
-                                                color: isSel ? resp.color : '#64748B',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            {resp.label}
-                                        </button>
-                                    );
-                                })}
+                            <div style={{ backgroundColor: '#FFFFFF', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', display: 'block' }}>
+                                    Imputación Patrimonial (Columna N / Proveedor)
+                                </span>
+                                {imputedEntities && imputedEntities.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                                        {imputedEntities.map((ent, i) => {
+                                            const calcCop = Math.round((calculatedCreditAmount * (Number(ent.sharePercent) || 100)) / 100);
+                                            return (
+                                                <div key={i} style={{ fontSize: '0.72rem', fontWeight: '800', color: '#991B1B' }}>
+                                                    {ent.name} ({ent.sharePercent}% = {formatMoney(calcCop)})
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <span style={{ color: '#64748B', fontSize: '0.72rem', display: 'block', marginTop: '2px' }}>
+                                        Sin cargo individual asignado ($0)
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -998,7 +1172,7 @@ export default function FinancialAdjustmentModal({
                     {/* Accounting Notes / Justification Textarea */}
                     <div>
                         <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', display: 'block', marginBottom: '4px' }}>
-                            Concepto Contable & Observación de Resolución
+                            Concepto Contable & Observación de Liquidación
                         </label>
                         <textarea
                             value={notes}

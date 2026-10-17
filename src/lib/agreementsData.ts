@@ -2008,8 +2008,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 12578,
     "corabastos_cost": 10062,
     "client_proposed_price": 12900,
-    "suggested_price": 11550,
-    "our_counterproposal": 9500,
+    "suggested_price": 12900,
+    "our_counterproposal": 12900,
     "status_change": "SUBIÓ"
   },
   {
@@ -2023,8 +2023,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 5753,
     "corabastos_cost": 4602,
     "client_proposed_price": 5900,
-    "suggested_price": 5300,
-    "our_counterproposal": 4600,
+    "suggested_price": 5900,
+    "our_counterproposal": 5900,
     "status_change": "SUBIÓ"
   },
   {
@@ -2038,8 +2038,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 34125,
     "corabastos_cost": 27300,
     "client_proposed_price": 35000,
-    "suggested_price": 31400,
-    "our_counterproposal": 28700,
+    "suggested_price": 35000,
+    "our_counterproposal": 35000,
     "status_change": "SUBIÓ"
   },
   {
@@ -2053,8 +2053,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 12870,
     "corabastos_cost": 10296,
     "client_proposed_price": 13200,
-    "suggested_price": 11850,
-    "our_counterproposal": 10929.6,
+    "suggested_price": 13200,
+    "our_counterproposal": 13200,
     "status_change": "SUBIÓ"
   },
   {
@@ -2068,8 +2068,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 6728,
     "corabastos_cost": 5382,
     "client_proposed_price": 6900,
-    "suggested_price": 6200,
-    "our_counterproposal": 5796,
+    "suggested_price": 6900,
+    "our_counterproposal": 6900,
     "status_change": "SUBIÓ"
   },
   {
@@ -2083,8 +2083,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 8970,
     "corabastos_cost": 7176,
     "client_proposed_price": 9200,
-    "suggested_price": 8250,
-    "our_counterproposal": 8100,
+    "suggested_price": 9200,
+    "our_counterproposal": 9200,
     "status_change": "SUBIÓ"
   },
   {
@@ -2098,8 +2098,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 12870,
     "corabastos_cost": 10296,
     "client_proposed_price": 13200,
-    "suggested_price": 12300,
-    "our_counterproposal": 12300,
+    "suggested_price": 13200,
+    "our_counterproposal": 13200,
     "status_change": "SUBIÓ"
   },
   {
@@ -2113,8 +2113,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 5753,
     "corabastos_cost": 4602,
     "client_proposed_price": 5900,
-    "suggested_price": 5500,
-    "our_counterproposal": 5520,
+    "suggested_price": 5900,
+    "our_counterproposal": 5900,
     "status_change": "SUBIÓ"
   },
   {
@@ -2158,8 +2158,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 15503,
     "corabastos_cost": 12402,
     "client_proposed_price": 15900,
-    "suggested_price": 15450,
-    "our_counterproposal": 15444,
+    "suggested_price": 15900,
+    "our_counterproposal": 15900,
     "status_change": "SUBIÓ"
   },
   {
@@ -2188,8 +2188,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 3803,
     "corabastos_cost": 3042,
     "client_proposed_price": 3900,
-    "suggested_price": 3850,
-    "our_counterproposal": 3840,
+    "suggested_price": 3900,
+    "our_counterproposal": 3900,
     "status_change": "SUBIÓ"
   },
   {
@@ -2203,8 +2203,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 4631,
     "corabastos_cost": 3705,
     "client_proposed_price": 4750,
-    "suggested_price": 4700,
-    "our_counterproposal": 4680,
+    "suggested_price": 4750,
+    "our_counterproposal": 4750,
     "status_change": "SUBIÓ"
   },
   {
@@ -2219,7 +2219,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "corabastos_cost": 2262,
     "client_proposed_price": 2900,
     "suggested_price": 2900,
-    "our_counterproposal": 2880,
+    "our_counterproposal": 2900,
     "status_change": "SUBIÓ"
   },
   {
@@ -2233,8 +2233,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 34125,
     "corabastos_cost": 27300,
     "client_proposed_price": 35000,
-    "suggested_price": 34850,
-    "our_counterproposal": 34848,
+    "suggested_price": 35000,
+    "our_counterproposal": 35000,
     "status_change": "SUBIÓ"
   },
   {
@@ -2263,7 +2263,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 4778,
     "corabastos_cost": 3822,
     "client_proposed_price": 4900,
-    "suggested_price": 5000,
+    "suggested_price": 4900,
     "our_counterproposal": 5000,
     "status_change": "SUBIÓ"
   },
@@ -2278,7 +2278,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 4778,
     "corabastos_cost": 3822,
     "client_proposed_price": 4900,
-    "suggested_price": 5000,
+    "suggested_price": 4900,
     "our_counterproposal": 5000,
     "status_change": "SUBIÓ"
   },
@@ -2773,7 +2773,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 4290,
     "corabastos_cost": 3432,
     "client_proposed_price": 4400,
-    "suggested_price": 4700,
+    "suggested_price": 4400,
     "our_counterproposal": 4700,
     "status_change": "BAJÓ"
   },
@@ -2848,7 +2848,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 5753,
     "corabastos_cost": 4602,
     "client_proposed_price": 5900,
-    "suggested_price": 6400,
+    "suggested_price": 5900,
     "our_counterproposal": 6400,
     "status_change": "BAJÓ"
   },
@@ -2878,7 +2878,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 5265,
     "corabastos_cost": 4212,
     "client_proposed_price": 5400,
-    "suggested_price": 6000,
+    "suggested_price": 5400,
     "our_counterproposal": 6000,
     "status_change": "BAJÓ"
   },
@@ -2908,8 +2908,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 7703,
     "corabastos_cost": 6162,
     "client_proposed_price": 7900,
-    "suggested_price": 7100,
-    "our_counterproposal": 7120,
+    "suggested_price": 7900,
+    "our_counterproposal": 7900,
     "status_change": "BAJÓ"
   },
   {
@@ -2923,8 +2923,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 5070,
     "corabastos_cost": 4056,
     "client_proposed_price": 5200,
-    "suggested_price": 4700,
-    "our_counterproposal": 4720,
+    "suggested_price": 5200,
+    "our_counterproposal": 5200,
     "status_change": "BAJÓ"
   },
   {
@@ -2938,8 +2938,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 7703,
     "corabastos_cost": 6162,
     "client_proposed_price": 7900,
-    "suggested_price": 7200,
-    "our_counterproposal": 7200,
+    "suggested_price": 7900,
+    "our_counterproposal": 7900,
     "status_change": "BAJÓ"
   },
   {
@@ -2968,8 +2968,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 4095,
     "corabastos_cost": 3276,
     "client_proposed_price": 4200,
-    "suggested_price": 3850,
-    "our_counterproposal": 3840,
+    "suggested_price": 4200,
+    "our_counterproposal": 4200,
     "status_change": "BAJÓ"
   },
   {
@@ -2983,8 +2983,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 6728,
     "corabastos_cost": 5382,
     "client_proposed_price": 6900,
-    "suggested_price": 6300,
-    "our_counterproposal": 6320,
+    "suggested_price": 6900,
+    "our_counterproposal": 6900,
     "status_change": "BAJÓ"
   },
   {
@@ -2998,8 +2998,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 9653,
     "corabastos_cost": 7722,
     "client_proposed_price": 9900,
-    "suggested_price": 9100,
-    "our_counterproposal": 9108,
+    "suggested_price": 9900,
+    "our_counterproposal": 9900,
     "status_change": "BAJÓ"
   },
   {
@@ -3013,8 +3013,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 3803,
     "corabastos_cost": 3042,
     "client_proposed_price": 3900,
-    "suggested_price": 3600,
-    "our_counterproposal": 3600,
+    "suggested_price": 3900,
+    "our_counterproposal": 3900,
     "status_change": "BAJÓ"
   },
   {
@@ -3028,8 +3028,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 9165,
     "corabastos_cost": 7332,
     "client_proposed_price": 9400,
-    "suggested_price": 8800,
-    "our_counterproposal": 8800,
+    "suggested_price": 9400,
+    "our_counterproposal": 9400,
     "status_change": "BAJÓ"
   },
   {
@@ -3043,8 +3043,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 11603,
     "corabastos_cost": 9282,
     "client_proposed_price": 11900,
-    "suggested_price": 11350,
-    "our_counterproposal": 11334.4,
+    "suggested_price": 11900,
+    "our_counterproposal": 11900,
     "status_change": "BAJÓ"
   },
   {
@@ -3058,7 +3058,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 7020,
     "corabastos_cost": 5616,
     "client_proposed_price": 7200,
-    "suggested_price": 8750,
+    "suggested_price": 7200,
     "our_counterproposal": 8750,
     "status_change": "BAJÓ"
   },
@@ -3088,8 +3088,8 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 4778,
     "corabastos_cost": 3822,
     "client_proposed_price": 4900,
-    "suggested_price": 4800,
-    "our_counterproposal": 4804.8,
+    "suggested_price": 4900,
+    "our_counterproposal": 4900,
     "status_change": "BAJÓ"
   },
   {
@@ -3103,7 +3103,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 19013,
     "corabastos_cost": 15210,
     "client_proposed_price": 19500,
-    "suggested_price": 24000,
+    "suggested_price": 19500,
     "our_counterproposal": 24000,
     "status_change": "BAJÓ"
   },
@@ -3118,7 +3118,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 6045,
     "corabastos_cost": 4836,
     "client_proposed_price": 6200,
-    "suggested_price": 7800,
+    "suggested_price": 6200,
     "our_counterproposal": 7800,
     "status_change": "BAJÓ"
   },
@@ -3133,7 +3133,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 6728,
     "corabastos_cost": 5382,
     "client_proposed_price": 6900,
-    "suggested_price": 7500,
+    "suggested_price": 6900,
     "our_counterproposal": 7500,
     "status_change": "BAJÓ"
   },
@@ -3148,7 +3148,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 5753,
     "corabastos_cost": 4602,
     "client_proposed_price": 5900,
-    "suggested_price": 6150,
+    "suggested_price": 5900,
     "our_counterproposal": 6160,
     "status_change": "BAJÓ"
   },
@@ -3163,7 +3163,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 12675,
     "corabastos_cost": 10140,
     "client_proposed_price": 13000,
-    "suggested_price": 15000,
+    "suggested_price": 13000,
     "our_counterproposal": 15000,
     "status_change": "BAJÓ"
   },
@@ -3178,7 +3178,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 6776,
     "corabastos_cost": 5421,
     "client_proposed_price": 6950,
-    "suggested_price": 7850,
+    "suggested_price": 6950,
     "our_counterproposal": 7840,
     "status_change": "BAJÓ"
   },
@@ -3193,7 +3193,7 @@ export const INITIAL_COLSUBSIDIO_ITEMS: AgreementItem[] = [
     "baseline_price": 9165,
     "corabastos_cost": 7332,
     "client_proposed_price": 9400,
-    "suggested_price": 14000,
+    "suggested_price": 9400,
     "our_counterproposal": 14000,
     "status_change": "BAJÓ"
   }

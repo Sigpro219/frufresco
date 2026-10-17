@@ -29,7 +29,6 @@ import {
     Users,
     CheckCircle2
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month' | 'all';
 type SegmentFilter = 'all' | 'b2b' | 'b2c';
@@ -466,8 +465,9 @@ export default function CommercialReportsPage() {
     }, [compressionRows, searchTerm]);
 
     // Excel Export Handlers with Rule 32K Protection
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         try {
+            const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
 
             // Sheet 1: Clientes

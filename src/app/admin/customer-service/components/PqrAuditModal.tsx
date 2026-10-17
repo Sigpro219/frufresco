@@ -2492,7 +2492,7 @@ export default function PqrAuditModal({
                                                             const subtotal = unitPrice * (Number(ret.quantity_returned) || 0);
                                                             const pName = ret.products?.name || oi?.products?.name || 'Producto';
                                                             const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
-                                                            const isPhysical = ret.has_physical_return || (ret.notes || '').includes('RETORNO_FISICO: SI');
+                                                            const isPhysical = hasPhysicalReturn;
                                                             const isFaltante = (ret.reason || '').toLowerCase().includes('faltante');
 
                                                             return (

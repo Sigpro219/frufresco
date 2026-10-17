@@ -8,7 +8,6 @@ import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { getStructuredSpecKey } from '@/lib/orderUtils';
 import { getCanonicalProcurementSpec, normalizeDemandToKg } from '@/lib/procurement/procurementNettingEngine';
-import confetti from "canvas-confetti";
 import { 
   Calendar, 
   BookOpen, 
@@ -1278,7 +1277,8 @@ export default function ProcurementPage() {
   
   useEffect(() => {
     if (currentProgress === 100 && prevProgressRef.current < 100 && tasks.length > 0) {
-      setTimeout(() => {
+      setTimeout(async () => {
+        const { default: confetti } = await import("canvas-confetti");
         confetti({
           particleCount: 150,
           spread: 70,

@@ -73,7 +73,7 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
       </button>
 
       {/* HORECA Institutional CTA */}
-      <Link href="/b2b/register" style={{ textDecoration: 'none' }}>
+      <Link href={t.navCatalog === 'Catalog' ? '/b2b/register?lang=en' : '/b2b/register'} style={{ textDecoration: 'none' }}>
         <button className="btn-glass" style={{
           fontSize: '0.98rem',
           padding: '0.9rem 1.6rem',
@@ -91,7 +91,7 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
           boxShadow: '0 4px 15px rgba(0,0,0,0.12)'
         }}>
           <Building2 size={19} strokeWidth={2.2} />
-          <span>Cotizador Institucional HORECA</span>
+          <span>{t.navCatalog === 'Catalog' ? 'HORECA Institutional Quoter' : 'Cotizador Institucional HORECA'}</span>
           <Sparkles size={15} />
         </button>
       </Link>

@@ -255,7 +255,33 @@ export default function GlobalBanner() {
 
   // MODE B2B INSTITUCIONAL (HEADER FIJO SUPERIOR CON MARQUEE CONTINUO)
   if (isB2B) {
-    const messages = [
+    const isEn = locale === 'en';
+    const messages = isEn ? [
+      {
+        tag: 'QUALITY & CLAIMS REPORT',
+        color: '#FEF08A',
+        icon: <ClipboardList size={15} strokeWidth={2.2} style={{ color: '#FEF08A' }} />,
+        text: 'In case of any discrepancy in product quality or quantity, please record it physically on the delivery receipt and notify B2B Customer Service immediately.'
+      },
+      {
+        tag: 'CARRIER ASSISTANCE',
+        color: '#6EE7B7',
+        icon: <Truck size={15} strokeWidth={2.2} style={{ color: '#6EE7B7' }} />,
+        text: 'If you experience any issue with the driver during reception, please contact our priority support line directly.'
+      },
+      {
+        tag: 'B2B CUTOFF SCHEDULE',
+        color: '#FDE047',
+        icon: <Clock size={15} strokeWidth={2.2} style={{ color: '#FDE047' }} />,
+        text: 'Submit your orders before 5:00 p.m. to guarantee scheduling on the next day’s logistics route.'
+      },
+      {
+        tag: 'DIRECT SUPPORT CHANNEL',
+        color: '#93C5FD',
+        icon: <Headphones size={15} strokeWidth={2.2} style={{ color: '#93C5FD' }} />,
+        text: 'Preferential support line and PBX available Monday through Saturday for institutional clients.'
+      }
+    ] : [
       {
         tag: 'REPORTE DE NOVEDADES',
         color: '#FEF08A',
@@ -300,6 +326,11 @@ export default function GlobalBanner() {
           .b2b-marquee-container:hover .b2b-marquee-track {
             animation-play-state: paused;
           }
+          @media (max-width: 640px) {
+            .b2b-banner-badge-text {
+              display: none;
+            }
+          }
         `}} />
 
         <div style={{
@@ -308,7 +339,7 @@ export default function GlobalBanner() {
           zIndex: 1100,
           background: 'linear-gradient(90deg, #044E38 0%, #065F46 45%, #044E38 100%)',
           color: '#FFFFFF',
-          padding: '0.55rem 1rem',
+          padding: '0.55rem 0.75rem',
           fontSize: '0.82rem',
           fontWeight: '600',
           letterSpacing: '0.01em',
@@ -316,10 +347,11 @@ export default function GlobalBanner() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '1rem',
+          gap: '0.65rem',
           fontFamily: 'var(--font-outfit), var(--font-inter), sans-serif',
           borderBottom: '1.5px solid #10B981',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          maxWidth: '100vw'
         }}>
           {/* Left Static Badge */}
           <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, zIndex: 2 }}>
@@ -329,7 +361,7 @@ export default function GlobalBanner() {
               gap: '6px', 
               backgroundColor: 'rgba(16, 185, 129, 0.25)',
               border: '1px solid rgba(52, 211, 153, 0.45)',
-              padding: '4px 12px', 
+              padding: '4px 10px', 
               borderRadius: '20px', 
               color: '#FEF08A', 
               fontWeight: '900', 
@@ -340,12 +372,12 @@ export default function GlobalBanner() {
               backdropFilter: 'blur(4px)'
             }}>
               <Building2 size={13} strokeWidth={2.2} />
-              Portal Institucional
+              <span className="b2b-banner-badge-text">{isEn ? 'Institutional Portal' : 'Portal Institucional'}</span>
             </span>
           </div>
 
           {/* Center Continuous Infinite Marquee Track */}
-          <div className="b2b-marquee-container" style={{ flex: 1, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
+          <div className="b2b-marquee-container" style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
             <div className="b2b-marquee-track">
               {marqueeList.map((item, idx) => (
                 <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', paddingRight: '3.5rem' }}>
@@ -385,7 +417,7 @@ export default function GlobalBanner() {
                 whiteSpace: 'nowrap'
               }}
             >
-              <Headphones size={14} strokeWidth={2.2} /> Soporte B2B
+              <Headphones size={14} strokeWidth={2.2} /> {isEn ? 'B2B Support' : 'Soporte B2B'}
             </a>
           </div>
         </div>

@@ -4613,9 +4613,21 @@ export default function B2BDashboard() {
                     max-width: 1400px;
                     margin: 0 auto;
                 }
+                @media (max-width: 1023px) {
+                    .b2b-dashboard-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
                 @media (max-width: 768px) {
                     .b2b-tab-navigation {
-                        gap: 1px !important;
+                        gap: 2px !important;
+                        overflow-x: auto !important;
+                        max-width: 100% !important;
+                        -webkit-overflow-scrolling: touch;
+                        scrollbar-width: none;
+                    }
+                    .b2b-tab-navigation::-webkit-scrollbar {
+                        display: none;
                     }
                     .b2b-tab-button {
                         padding: 0.5rem 0.25rem !important;

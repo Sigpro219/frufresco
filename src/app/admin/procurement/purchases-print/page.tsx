@@ -7,7 +7,6 @@ import { Printer, ArrowLeft, Download, Filter, ShoppingBag, FileSpreadsheet } fr
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import Letterhead from '@/components/Letterhead';
 import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
-import * as XLSX from 'xlsx';
 import { formatStructuredSpecification } from '@/lib/orderUtils';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
@@ -252,7 +251,8 @@ export default function PurchasesPrintPage() {
     }, [availableSublists, selectedSublist]);
 
     // Export to Excel (10 Standard Columns - Stock and UM before Producto)
-    const exportToExcel = () => {
+    const exportToExcel = async () => {
+        const XLSX = await import('xlsx');
         const rows = items.map((it, idx) => ({
             '#': idx + 1,
             'Sublista / Pabellón': it.sublist,

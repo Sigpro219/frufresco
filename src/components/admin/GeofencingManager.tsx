@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallb
 import { Map, Marker, InfoWindow, useMapsLibrary, MapMouseEvent, useMap } from '@vis.gl/react-google-maps';
 import { Save, Trash2, Eye, EyeOff, Edit2, AlertCircle, ListFilter, Search, X, MapPin, Building2, Phone, User, Calendar, ExternalLink, Layers, ArrowUpRight, Home, Download } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
-import * as XLSX from 'xlsx';
 
 function MapController({ center, zoom }: { center: { lat: number; lng: number } | null; zoom: number }) {
     const map = useMap();
@@ -200,7 +199,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
         });
     }, [outOfBoundsPoints, b2cPoly, b2bPoly]);
 
-    const exportToExcel = () => {
+    const exportToExcel = async () => {
+        const XLSX = await import('xlsx');
         const filteredPoints = validOutOfBoundsPoints.filter(pt => {
             if (modalFilter === 'b2c' && pt.channel === 'b2b') return false;
             if (modalFilter === 'b2b' && pt.channel !== 'b2b') return false;

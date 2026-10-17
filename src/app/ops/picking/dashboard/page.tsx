@@ -581,8 +581,14 @@ export default function PickingDashboard() {
         ? sortedClients.filter(c => !isClientComplete(c.id))
         : sortedClients;
 
-    // Get all unique categories (buying_team values)
-    const allCategories = Array.from(new Set(products.map(p => p.buying_team || 'SIN ASIGNAR'))).sort();
+    // Get all unique categories (buying_team values) and O(1) category map
+    const allProductsByBuyingTeam = products.reduce((acc, p) => {
+        const team = p.buying_team || 'SIN ASIGNAR';
+        if (!acc[team]) acc[team] = [];
+        acc[team].push(p);
+        return acc;
+    }, {} as Record<string, Product[]>);
+    const allCategories = Object.keys(allProductsByBuyingTeam).sort();
 
     // Filter products based on selected categories (if any selected)
     const filteredProductsByCategories = selectedCategories.length > 0
@@ -988,7 +994,7 @@ export default function PickingDashboard() {
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                         {allCategories.map(cat => {
                                             const isChecked = selectedCategories.includes(cat);
-                                            const catProducts = products.filter(p => (p.buying_team || 'SIN ASIGNAR') === cat);
+                                            const catProducts = allProductsByBuyingTeam[cat] || [];
                                             const catPercent = getCategoryPercent(cat, catProducts);
 
                                             return (

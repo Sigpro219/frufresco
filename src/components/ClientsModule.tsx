@@ -79,7 +79,6 @@ import {
     Handshake,
     Ban
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import CommercialAgreementsModule, { extractRowsFromExcelSheet } from './CommercialAgreementsModule';
 import { normalizeCityName, CANONICAL_CITIES, normalizeSearchText, searchIncludes } from '@/lib/locationNorm';
 
@@ -790,6 +789,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                 'Precio Acordado': ''
             }));
             
+            const XLSX = await import('xlsx');
             const worksheet = XLSX.utils.json_to_sheet(rows);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla Precios B2B');
@@ -809,8 +809,9 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
         setParsingFile(true);
         
         const reader = new FileReader();
-        reader.onload = (evt) => {
+        reader.onload = async (evt) => {
             try {
+                const XLSX = await import('xlsx');
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
@@ -1063,18 +1064,27 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
         setIsFormModalOpen(true);
     };
 
-    const downloadClientsMaster = () => {
+    const downloadClientsMaster = async () => {
+        const XLSX = await import('xlsx');
         // Ordenamiento Jerárquico: Matriz primero, sucursales vinculadas inmediatamente abajo
         const sortedClients: Profile[] = [];
         const addedIds = new Set<string>();
 
-        // 1. Matrices y sus sucursales
+        // 1. Matrices y sus sucursales (DEBT-003: Indexado O(1) por parent_id)
+        const branchesByParentId = new Map<string, Profile[]>();
+        for (const c of clientsB2B) {
+            if (c.parent_id) {
+                const list = branchesByParentId.get(c.parent_id);
+                if (list) list.push(c);
+                else branchesByParentId.set(c.parent_id, [c]);
+            }
+        }
         const parents = clientsB2B.filter(c => c.is_corporate_parent);
         parents.forEach(parent => {
             sortedClients.push(parent);
             addedIds.add(parent.id);
             
-            const branches = clientsB2B.filter(c => c.parent_id === parent.id);
+            const branches = branchesByParentId.get(parent.id) || [];
             branches.forEach(b => {
                 sortedClients.push(b);
                 addedIds.add(b.id);
@@ -1260,7 +1270,8 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
         window.showToast?.('Base completa de clientes exportada con éxito', 'success');
     };
 
-    const downloadClientsTemplate = () => {
+    const downloadClientsTemplate = async () => {
+        const XLSX = await import('xlsx');
         const headers = [
             "ID_INTERNO", "Estado", "Revisado_Dev", "Tags", "Permite_Fuera_Convenio", "Override_Matriz_Convenio", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombres_Contacto", "Apellidos_Contacto", "Nombre_Contacto", "Telefono", 
             "Email", "Email_Notificacion_2", "Email_Notificacion_3", "Direccion", "Complemento_Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
@@ -1329,6 +1340,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
 
         const reader = new FileReader();
         reader.onload = async (readerEvent) => {
+            const XLSX = await import('xlsx');
             const data = readerEvent.target?.result;
             const workbook = XLSX.read(data, { type: 'binary' });
             const sheetName = workbook.SheetNames[0];
@@ -5744,7 +5756,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         }
     }, [fetchPareto, editData?.id, isLead]);
 
-    const handleDownloadParetoExcel = () => {
+    const handleDownloadParetoExcel = async () => {
+        const XLSX = await import('xlsx');
         if (!paretoData.paretoProducts || paretoData.paretoProducts.length === 0) {
             window.showToast?.('No hay productos de consumo registrados para este cliente.', 'info');
             return;
@@ -9417,7 +9430,8 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         if (!error) fetchData();
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
+        const XLSX = await import('xlsx');
         try {
             // 1. Prepare data for sheet 1: Excepciones y Notas
             const sheet1Data = products.map(p => {
@@ -9488,6 +9502,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
             const reader = new FileReader();
             reader.onload = async (evt) => {
                 try {
+                    const XLSX = await import('xlsx');
                     const bstr = evt.target?.result;
                     const wb = XLSX.read(bstr, { type: 'binary' });
                     

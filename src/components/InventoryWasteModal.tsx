@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, adjustInventoryStockAtomic } from '@/lib/supabase';
 import { 
     X, 
     Camera, 
@@ -322,27 +322,13 @@ export default function InventoryWasteModal({
 
             if (movError) throw movError;
 
-            // 4. Actualizar stock en inventory_stocks
+            // 4. Actualizar stock de forma atómica en inventory_stocks (DEBT-001: RPC FOR UPDATE + JIT Fallback)
             if (effectiveWarehouseId) {
-                const currentStock = selectedProduct.inventory_stocks?.find(s => s.warehouse_id === effectiveWarehouseId)?.quantity ?? 0;
-                const newQty = Math.max(0, currentStock + finalDelta);
-
-                const existingStockRecord = selectedProduct.inventory_stocks?.find(s => s.warehouse_id === effectiveWarehouseId);
-                if (existingStockRecord?.id) {
-                    await supabase
-                        .from('inventory_stocks')
-                        .update({ quantity: newQty, updated_at: new Date().toISOString() })
-                        .eq('id', existingStockRecord.id);
-                } else {
-                    await supabase
-                        .from('inventory_stocks')
-                        .insert([{
-                            product_id: selectedProduct.id,
-                            warehouse_id: effectiveWarehouseId,
-                            quantity: newQty,
-                            status: 'available'
-                        }]);
-                }
+                await adjustInventoryStockAtomic({
+                    productId: selectedProduct.id,
+                    warehouseId: effectiveWarehouseId,
+                    delta: finalDelta
+                });
             }
 
             if (typeof window !== 'undefined' && (window as any).showToast) {

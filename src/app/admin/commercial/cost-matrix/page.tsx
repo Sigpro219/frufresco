@@ -1012,20 +1012,23 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             }
 
             const authorizedIds: string[] = [];
-            for (let i = 0; i < toAuthorize.length; i++) {
-                const p = toAuthorize[i];
-                const smart = calculateSmartCost(p.id);
-                
-                await supabase.from('commercial_cost_matrix').upsert({
+            const nowIso = new Date().toISOString();
+            const upsertPayload = toAuthorize.map(p => {
+                authorizedIds.push(p.id);
+                return {
                     product_id: p.id,
-                    manual_cost: smart,
-                    updated_at: new Date().toISOString(),
+                    manual_cost: calculateSmartCost(p.id),
+                    updated_at: nowIso,
                     updated_by: 'AI-DELTA-AUTO',
                     is_active: true
-                });
+                };
+            });
 
-                authorizedIds.push(p.id);
-                setBatchProgress(Math.round(((i + 1) / toAuthorize.length) * 100));
+            const CHUNK_SIZE = 200;
+            for (let i = 0; i < upsertPayload.length; i += CHUNK_SIZE) {
+                const chunk = upsertPayload.slice(i, i + CHUNK_SIZE);
+                await supabase.from('commercial_cost_matrix').upsert(chunk);
+                setBatchProgress(Math.round((Math.min(i + CHUNK_SIZE, upsertPayload.length) / upsertPayload.length) * 100));
             }
 
             if (authorizedIds.length > 0) {

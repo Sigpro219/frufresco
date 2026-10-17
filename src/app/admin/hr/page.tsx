@@ -8,7 +8,6 @@ import {
     QrCode, Printer, RefreshCw, Shield, Save, Check, AlertTriangle, Sparkles,
     DollarSign, ChevronDown, ChevronUp, Edit3, ShoppingBag, ShieldAlert, CreditCard
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
@@ -487,8 +486,9 @@ export default function HRManagement() {
         }
     };
 
-    const handleExportPayrollExcel = () => {
+    const handleExportPayrollExcel = async () => {
         try {
+            const XLSX = await import('xlsx');
             const summaryData = consolidatedPayroll.map(c => {
                 const staffObj = users.find(u => normalizeSearch(u.contact_name) === normalizeSearch(c.employee));
                 return {

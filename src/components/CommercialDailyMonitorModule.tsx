@@ -27,7 +27,6 @@ import {
     Check,
     X
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 interface DateEntry {
     date: string; // YYYY-MM-DD
@@ -549,7 +548,8 @@ export default function CommercialDailyMonitorModule() {
     }, [availableDates, monthOptions, selectedMonthOffset]);
 
     // Exportar a Excel (.xlsx) Dinámico de la Vista Activa
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
+        const XLSX = await import('xlsx');
         const wb = XLSX.utils.book_new();
 
         if (activeView === 'clients') {

@@ -1319,6 +1319,13 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const { user } = useAuth();
   const [drafts, setDrafts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const productByIdMap = useMemo(() => {
+    const map = new Map<string, any>();
+    for (let i = 0; i < products.length; i++) {
+      map.set(products[i].id, products[i]);
+    }
+    return map;
+  }, [products]);
   const [conversions, setConversions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
@@ -9006,7 +9013,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                         }
                       }
 
-                      const matchedProd = products.find(p => p.id === item.matched_product_id);
+                      const matchedProd = item.matched_product_id ? productByIdMap.get(item.matched_product_id) : undefined;
                       const isConfidenceHigh = !!matchedProd && !item.isDeleted;
                       const isActiveRow = activeDropdownRowIndex === i || focusedRowIndex === i;
                       const isApprovedDraft = selectedDraft ? (selectedDraft.status === 'approved' || Boolean(getDraftMetadata(selectedDraft).orderId)) : false;
@@ -11137,7 +11144,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   <tbody>
                     {editableItems.filter(item => !item.isDeleted).map((item: any, idx: number) => {
                       if (!item.matched_product_id) return null;
-                      const prod = products.find(p => p.id === item.matched_product_id);
+                      const prod = productByIdMap.get(item.matched_product_id);
                       const qty = parseFloat(item.quantity?.toString() || '0');
                       const baseUnit = item.unit || prod?.unit_of_measure || 'Kg';
                       const unitPrice = prod ? (contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : 0) : 0;

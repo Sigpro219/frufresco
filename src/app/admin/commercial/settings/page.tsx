@@ -36,7 +36,6 @@ import {
     Crown
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
-import * as XLSX from 'xlsx';
 
 export default function PricingSettingsPage({ 
     embedded = false,
@@ -549,8 +548,9 @@ export default function PricingSettingsPage({
         }
     };
 
-    const exportTemplateExcel = () => {
+    const exportTemplateExcel = async () => {
         if (!selectedTemplate || templateItems.length === 0) return alert('No hay productos para exportar');
+        const XLSX = await import('xlsx');
         const dataToExport = templateItems.map(item => ({
             'ID ERP': item.accounting_id || '',
             'SKU': item.sku || '',
@@ -572,6 +572,7 @@ export default function PricingSettingsPage({
         const reader = new FileReader();
         reader.onload = async (evt) => {
             try {
+                const XLSX = await import('xlsx');
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
@@ -897,8 +898,9 @@ export default function PricingSettingsPage({
         }
     };
 
-    const exportToExcel = () => {
+    const exportToExcel = async () => {
         if (!selectedModel || matrixData.length === 0) return;
+        const XLSX = await import('xlsx');
         
         const data = matrixData.map(p => ({
             'ID': p.accounting_id || '',
@@ -930,6 +932,7 @@ export default function PricingSettingsPage({
         const reader = new FileReader();
         reader.onload = async (evt) => {
             try {
+                const XLSX = await import('xlsx');
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];

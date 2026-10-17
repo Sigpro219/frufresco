@@ -35,7 +35,6 @@ import {
 import { THEME } from '@/lib/adminTheme';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
-import * as XLSX from 'xlsx';
 
 const translateTableName = (table: string) => {
     if (table === 'products') return 'Productos';
@@ -764,6 +763,7 @@ export default function AuditLogPage() {
                 'Detalles JSON': sanitizeJsonForExcel(log.details)
             }));
             
+            const XLSX = await import('xlsx');
             const ws = XLSX.utils.json_to_sheet(exportData);
             
             // Configuración de anchos de columna para legibilidad óptima

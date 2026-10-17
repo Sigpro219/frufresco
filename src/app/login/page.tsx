@@ -490,14 +490,14 @@ export default function LoginPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '5rem 1rem',
+                    padding: 'clamp(2rem, 6vh, 5rem) 1rem',
                     minHeight: 'calc(100vh - 80px)'
                 }}>
                     <div style={{
                         backgroundColor: 'rgba(255, 255, 255, 0.08)',
                         backdropFilter: 'blur(16px)',
                         WebkitBackdropFilter: 'blur(16px)',
-                        padding: '2.2rem 2.5rem',
+                        padding: 'clamp(1.5rem, 5vw, 2.2rem) clamp(1.25rem, 5vw, 2.5rem)',
                         borderRadius: '32px',
                         border: '1px solid rgba(255, 255, 255, 0.15)',
                         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',

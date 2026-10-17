@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
 import { 
@@ -560,15 +560,17 @@ export default function CommercialAgreementsModule() {
                     try {
                         linksMap[quoteId] = JSON.parse(s.value || '[]');
                     } catch (e) {
+                        console.warn('Error parseando agreement_clients en fetchAgreements:', e);
                         linksMap[quoteId] = [];
                     }
                 });
             }
             setSharedLinks(linksMap);
             setAgreements(data || []);
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Error desconocido';
             console.error('Error fetching agreements:', err);
-            showToast('Error al cargar acuerdos: ' + err.message, 'error');
+            showToast('Error al cargar acuerdos: ' + message, 'error');
         } finally {
             setLoading(false);
         }
@@ -586,16 +588,69 @@ export default function CommercialAgreementsModule() {
         setSavingLinkedClients(true);
         try {
             const quoteId = managingSharedAgreement.id;
-            const newIds = editableLinkedClientIds;
-            
-            // 1. Update app_settings
-            await supabase
+            const prevIds = sharedLinks[quoteId] || [];
+
+            // Expandir automáticamente cualquier Casa Matriz marcada hacia sus sucursales hijas
+            const expandedSet = new Set<string>(editableLinkedClientIds);
+            b2bClients.forEach(c => {
+                if (c.parent_id && expandedSet.has(c.parent_id)) {
+                    expandedSet.add(c.id);
+                }
+            });
+            const newIds = Array.from(expandedSet);
+            const removedIds = prevIds.filter(cid => !expandedSet.has(cid));
+
+            // 1. Update app_settings y verificar error
+            const { error: appSetErr } = await supabase
                 .from('app_settings')
                 .upsert({
                     key: `agreement_clients:${quoteId}`,
                     value: JSON.stringify(newIds),
                     description: `Clientes vinculados a la lista maestra ${managingSharedAgreement.model_snapshot_name || managingSharedAgreement.client_name}`
                 });
+            if (appSetErr) throw appSetErr;
+
+            // 1.1 Synchronize special_agreement_model_clients using canonical columns (model_id, client_id, is_default_selected)
+            const STRUCTURAL_QUOTE_TO_MODEL: Record<string, string> = {
+                'ab9c0c14-a27e-4317-9995-dfb4ba9bcb80': 'nutresa',
+                '5afc3173-4ced-4635-a71f-56ef57e144f8': 'colsubsidio',
+                'b5a2abae-68f1-44fe-87a3-84b1817026db': 'general_quincenal',
+                '6572e7d6-4925-4576-8960-caca64a3c47f': 'general_mensual'
+            };
+            const matchedModelId = STRUCTURAL_QUOTE_TO_MODEL[quoteId];
+            if (matchedModelId) {
+                const { error: delModelErr } = await supabase
+                    .from('special_agreement_model_clients')
+                    .delete()
+                    .eq('model_id', matchedModelId);
+                if (delModelErr) throw delModelErr;
+
+                if (newIds.length > 0) {
+                    const { error: upsModelErr } = await supabase
+                        .from('special_agreement_model_clients')
+                        .upsert(
+                            newIds.map(cid => ({
+                                model_id: matchedModelId,
+                                client_id: cid,
+                                is_default_selected: true,
+                                last_applied_quote_id: quoteId,
+                                last_applied_at: new Date().toISOString()
+                            })),
+                            { onConflict: 'model_id,client_id' }
+                        );
+                    if (upsModelErr) throw upsModelErr;
+                }
+            }
+
+            // 1.2 Marcar copias individuales antiguas como superseded para preservar Single Source of Truth (SPEC.md §7.5.6 & Escenario 237.4)
+            if (newIds.length > 0) {
+                await supabase
+                    .from('quotes')
+                    .update({ status: 'superseded' })
+                    .in('client_id', newIds)
+                    .eq('status', 'agreement')
+                    .neq('id', quoteId);
+            }
 
             // 2. Update local state
             setSharedLinks(prev => ({
@@ -603,19 +658,37 @@ export default function CommercialAgreementsModule() {
                 [quoteId]: newIds
             }));
 
-            // 3. Update profiles active_master_agreement_id in background
+            // 3. Update profiles active_master_agreement_id for linked clients and clean unselected clients
             for (const cId of newIds) {
                 const client = b2bClients.find(c => c.id === cId);
-                const logData = (client as any)?.logistics_data || {};
+                const logData = client?.logistics_data || {};
                 await supabase
                     .from('profiles')
                     .update({
                         logistics_data: {
                             ...logData,
-                            active_master_agreement_id: quoteId
+                            active_master_agreement_id: quoteId,
+                            ...(matchedModelId ? { special_agreement_model_id: matchedModelId } : {})
                         }
                     })
                     .eq('id', cId);
+            }
+
+            if (removedIds.length > 0) {
+                for (const rId of removedIds) {
+                    const client = b2bClients.find(c => c.id === rId);
+                    const logData = { ...(client?.logistics_data || {}) };
+                    if (logData.active_master_agreement_id === quoteId) {
+                        delete logData.active_master_agreement_id;
+                    }
+                    if (matchedModelId && logData.special_agreement_model_id === matchedModelId) {
+                        delete logData.special_agreement_model_id;
+                    }
+                    await supabase
+                        .from('profiles')
+                        .update({ logistics_data: logData })
+                        .eq('id', rId);
+                }
             }
 
             // 4. Audit log
@@ -627,9 +700,10 @@ export default function CommercialAgreementsModule() {
 
             showToast(`Vinculaciones guardadas con éxito (${newIds.length} clientes/sucursales asociados en cascada)`, 'success');
             setIsLinkedClientsModalOpen(false);
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Error desconocido';
             console.error('Error saving linked clients:', err);
-            showToast('Error al guardar vinculaciones: ' + err.message, 'error');
+            showToast('Error al guardar vinculaciones: ' + message, 'error');
         } finally {
             setSavingLinkedClients(false);
         }
@@ -637,12 +711,15 @@ export default function CommercialAgreementsModule() {
 
     const fetchB2bClients = async () => {
         try {
-            // Fetch all b2b_client profiles to compute branch relations and support both Casas Matrices and specific Sucursales
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('id, company_name, contact_name, nit, parent_id, is_corporate_parent, address, phone')
-                .eq('role', 'b2b_client')
-                .order('company_name');
+            // Fetch all b2b_client profiles (DEBT-002: Paginated past 1,000-row PostgREST cap)
+            const { data, error } = await fetchAllRows<any>((from, to) =>
+                supabase
+                    .from('profiles')
+                    .select('id, company_name, contact_name, nit, parent_id, is_corporate_parent, address, phone')
+                    .eq('role', 'b2b_client')
+                    .order('company_name')
+                    .range(from, to)
+            );
 
             if (error) throw error;
 
@@ -940,25 +1017,8 @@ export default function CommercialAgreementsModule() {
     };
 
     const fetchMasterTemplate = async () => {
-        setLoadingMasterTemplate(true);
-        try {
-            const res = await fetch('/api/commercial/master-template');
-            if (res.ok) {
-                const json = await res.json();
-                if (json.template) {
-                    setMasterTemplate({
-                        ...json.template,
-                        items: json.items || []
-                    });
-                } else {
-                    setMasterTemplate(null);
-                }
-            }
-        } catch (err) {
-            console.warn('Error loading master template:', err);
-        } finally {
-            setLoadingMasterTemplate(false);
-        }
+        setMasterTemplate(null);
+        setLoadingMasterTemplate(false);
     };
 
     const fetchCatalogProducts = async () => {
@@ -1584,24 +1644,21 @@ export default function CommercialAgreementsModule() {
             const collaboratorName = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
             const collaboratorId = user?.id || null;
             let subtotalDelta = 0;
+            const newJustifications: Record<string, string> = {};
+            const auditPayload: any[] = [];
+            const nowIso = new Date().toISOString();
 
-            for (const mod of modified) {
+            const updateTasks = modified.map(mod => {
                 const newPriceNum = Number(mod.newPrice);
                 const costBasis = mod.costBasis;
                 const newMarginPercent = newPriceNum > 0 ? Math.round(((newPriceNum - costBasis) / newPriceNum) * 10000) / 100 : 0;
                 const diff = newPriceNum - mod.oldPrice;
                 subtotalDelta += diff;
 
-                await supabase.from('quote_items').update({
-                    unit_price: newPriceNum,
-                    margin_percent: newMarginPercent,
-                    total_price: newPriceNum
-                }).eq('id', mod.itemId);
-
                 const just = mod.justification.trim() || 'Ajuste periódico de cosecha / abastecimiento';
-                setItemJustifications(prev => ({ ...prev, [mod.itemId]: just }));
+                newJustifications[mod.itemId] = just;
 
-                await supabase.from('audit_logs').insert({
+                auditPayload.push({
                     action: 'UPDATE_quote_item_price',
                     module: 'COMMERCIAL',
                     collaborator_id: collaboratorId,
@@ -1617,9 +1674,26 @@ export default function CommercialAgreementsModule() {
                         new_margin: newMarginPercent,
                         cost_basis: costBasis,
                         justification: just,
-                        changed_at: new Date().toISOString()
+                        changed_at: nowIso
                     }
                 });
+
+                return () => supabase.from('quote_items').update({
+                    unit_price: newPriceNum,
+                    margin_percent: newMarginPercent,
+                    total_price: newPriceNum
+                }).eq('id', mod.itemId);
+            });
+
+            const BATCH_CONCURRENCY = 15;
+            for (let i = 0; i < updateTasks.length; i += BATCH_CONCURRENCY) {
+                await Promise.all(updateTasks.slice(i, i + BATCH_CONCURRENCY).map(fn => fn()));
+            }
+
+            setItemJustifications(prev => ({ ...prev, ...newJustifications }));
+
+            if (auditPayload.length > 0) {
+                await supabase.from('audit_logs').insert(auditPayload);
             }
 
             const updatedSubtotal = Math.max(0, (selectedAgreement.subtotal_amount || 0) + subtotalDelta);
@@ -3143,7 +3217,7 @@ export default function CommercialAgreementsModule() {
         return `ACI ${day}${month} ${paddedSeq}`;
     };
 
-    const filteredB2bClients = b2bClients.filter(c => {
+    const filteredB2bClients = useMemo(() => b2bClients.filter(c => {
         // Multi-client mode (General Institutional): strictly Casas Matrices / Root clients
         if (isMultiClientMode) {
             if (c.parent_id) return false;
@@ -3161,7 +3235,7 @@ export default function CommercialAgreementsModule() {
         const matchesNit = String(c.nit || '').toLowerCase().includes(query);
         const matchesParent = c.parentName?.toLowerCase().includes(query);
         return Boolean(matchesName || matchesContact || matchesNit || matchesParent);
-    });
+    }), [b2bClients, isMultiClientMode, clientTypeFilter, clientSearchQuery]);
 
     const toggleSort = (col: typeof sortColumn) => {
         if (sortColumn === col) {
@@ -3172,8 +3246,8 @@ export default function CommercialAgreementsModule() {
         }
     };
 
-    // Filter and Sort logic
-    const filteredAgreements = agreements
+    // Filter and Sort logic (DEBT-003: Memoized to avoid O(n log n) re-sorting on modal input keystrokes)
+    const filteredAgreements = useMemo(() => agreements
         .filter(agreement => {
             const matchSearch = searchIncludes(agreement.client_name, searchTerm) || 
                                 searchIncludes(agreement.profiles?.company_name, searchTerm) ||
@@ -3228,14 +3302,28 @@ export default function CommercialAgreementsModule() {
             if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
             if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
             return 0;
-        });
+        }), [agreements, searchTerm, statusFilter, modelFilter, sortColumn, sortDirection]);
 
-    const activeCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'active').length;
-    const warningCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'warning').length;
-    const expiredCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'expired').length;
+    const { activeCount, warningCount, expiredCount } = useMemo(() => {
+        let active = 0;
+        let warning = 0;
+        let expired = 0;
+        for (const a of agreements) {
+            const t = getAgreementStatus(a.valid_until).type;
+            if (t === 'active') active++;
+            else if (t === 'warning') warning++;
+            else if (t === 'expired') expired++;
+        }
+        return { activeCount: active, warningCount: warning, expiredCount: expired };
+    }, [agreements]);
 
-    const totalMargin = agreementItems.reduce((sum, item) => sum + (item.margin_percent || 0), 0);
-    const averageMargin = agreementItems.length > 0 ? totalMargin / agreementItems.length : 0;
+    const { totalMargin, averageMargin } = useMemo(() => {
+        const sum = agreementItems.reduce((acc, item) => acc + (item.margin_percent || 0), 0);
+        return {
+            totalMargin: sum,
+            averageMargin: agreementItems.length > 0 ? sum / agreementItems.length : 0
+        };
+    }, [agreementItems]);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontFamily: THEME.typography.fontFamilySecondary }}>
@@ -3721,6 +3809,12 @@ export default function CommercialAgreementsModule() {
                                             {(() => {
                                                 const isSharedMaster = !agreement.client_id || (sharedLinks[agreement.id] && sharedLinks[agreement.id].length > 0);
                                                 const linkedClientIds = sharedLinks[agreement.id] || [];
+                                                const isStructuralMaster = [
+                                                    'ab9c0c14-a27e-4317-9995-dfb4ba9bcb80',
+                                                    '5afc3173-4ced-4635-a71f-56ef57e144f8',
+                                                    'b5a2abae-68f1-44fe-87a3-84b1817026db',
+                                                    '6572e7d6-4925-4576-8960-caca64a3c47f'
+                                                ].includes(agreement.id);
                                                 
                                                 if (isSharedMaster) {
                                                     return (
@@ -3735,14 +3829,14 @@ export default function CommercialAgreementsModule() {
                                                                     </span>
                                                                     <span style={{ 
                                                                         fontSize: '0.68rem', 
-                                                                        backgroundColor: '#ECFDF5', 
-                                                                        color: '#047857', 
-                                                                        border: '1px solid #A7F3D0', 
+                                                                        backgroundColor: isStructuralMaster ? '#F5F3FF' : '#ECFDF5', 
+                                                                        color: isStructuralMaster ? '#6D28D9' : '#047857', 
+                                                                        border: isStructuralMaster ? '1px solid #DDD6FE' : '1px solid #A7F3D0', 
                                                                         padding: '1px 8px', 
                                                                         borderRadius: '4px', 
                                                                         fontWeight: '800' 
                                                                     }}>
-                                                                        Lista Maestra Compartida
+                                                                        {isStructuralMaster ? 'Fuente de Verdad: Acuerdos Especiales' : 'Lista Comodín Compartida'}
                                                                     </span>
                                                                     <button
                                                                         type="button"
@@ -3768,9 +3862,32 @@ export default function CommercialAgreementsModule() {
                                                                         <Users size={12} />
                                                                         <span>{linkedClientIds.length} {linkedClientIds.length === 1 ? 'Sede' : 'Sedes'} Vinculadas</span>
                                                                     </button>
+                                                                    {isStructuralMaster && (
+                                                                        <a
+                                                                            href="/admin/commercial?tab=operations&subtab=agreements"
+                                                                            style={{
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px',
+                                                                                padding: '2px 9px',
+                                                                                borderRadius: '12px',
+                                                                                backgroundColor: '#ECFDF5',
+                                                                                color: '#047857',
+                                                                                border: '1px solid #A7F3D0',
+                                                                                fontSize: '0.7rem',
+                                                                                fontWeight: 800,
+                                                                                textDecoration: 'none'
+                                                                            }}
+                                                                            title="Abrir Mesa de Cálculo y Consagración SQL en Acuerdos Especiales"
+                                                                        >
+                                                                            <span>Ir a Mesa de Cálculo ↗</span>
+                                                                        </a>
+                                                                    )}
                                                                 </div>
                                                                 <div style={{ fontSize: '0.7rem', color: '#0D7A57', marginTop: '2px', fontWeight: '500' }}>
-                                                                    Efecto cascada activo: cualquier cambio en esta lista impacta a los clientes vinculados en tiempo real.
+                                                                    {isStructuralMaster
+                                                                        ? 'Sincronizado en tiempo real con Operación Diaria → Acuerdos Especiales (Fuente Única de Verdad).'
+                                                                        : 'Efecto cascada activo: cualquier cambio en esta lista comodín impacta a los clientes vinculados en tiempo real.'}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -4297,31 +4414,6 @@ export default function CommercialAgreementsModule() {
 
                                 {/* Botonera de Acciones de Cabecera */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                    {masterTemplate && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setConfirmApplyMasterTarget(selectedAgreement)}
-                                            disabled={isApplyingMasterToAgreement === selectedAgreement.id}
-                                            style={{
-                                                padding: '0.4rem 0.7rem',
-                                                borderRadius: '6px',
-                                                backgroundColor: '#F0FDF4',
-                                                color: '#166534',
-                                                border: '1px solid #86EFAC',
-                                                fontSize: '0.74rem',
-                                                fontWeight: '700',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '5px',
-                                                whiteSpace: 'nowrap'
-                                            }}
-                                            title="Sincronizar y cargar los precios del Modelo Institucional General a este acuerdo"
-                                        >
-                                            <Sparkles size={13} color="#16A34A" />
-                                            {isApplyingMasterToAgreement === selectedAgreement.id ? 'Aplicando...' : 'Cargar Modelo General'}
-                                        </button>
-                                    )}
                                     <button
                                         type="button"
                                         onClick={() => setIsPrintModalOpen(true)}
@@ -6133,31 +6225,50 @@ export default function CommercialAgreementsModule() {
                                                 transition: 'all 0.15s'
                                             }}
                                         >
-                                            <Users size={16} /> Lista Maestra Compartida (Efecto Cascada)
+                                            <Users size={16} /> Acuerdo Grupal Comodín (Multi-Cliente Ad-Hoc)
                                         </button>
                                     </div>
 
-                                    {/* --- MODO MASIVO: CHECKBOXES --- */}
+                                    {/* --- MODO MASIVO COMODÍN: CHECKBOXES --- */}
                                     {isMultiClientMode ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                             <div style={{ 
-                                                backgroundColor: '#F0FDF4', 
-                                                border: '1.5px solid #86EFAC', 
+                                                backgroundColor: '#F5F3FF', 
+                                                border: '1.5px solid #DDD6FE', 
                                                 borderRadius: '10px', 
-                                                padding: '0.85rem 1rem', 
+                                                padding: '0.75rem 1rem', 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
-                                                gap: '10px' 
+                                                justifyContent: 'space-between',
+                                                gap: '12px',
+                                                flexWrap: 'wrap'
                                             }}>
-                                                <Sparkles size={20} color="#16A34A" style={{ flexShrink: 0 }} />
-                                                <div style={{ fontSize: '0.8rem', color: '#166534', lineHeight: '1.4' }}>
-                                                    <strong>Modelo de Fuente Única (Efecto Cascada):</strong> Se creará <strong>1 sola lista maestra</strong> central. Cualquier actualización posterior de precios se reflejará instantáneamente en todas las Casas Matrices y sucursales vinculadas, eliminando reprocesos e inconsistencias.
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '240px' }}>
+                                                    <Sparkles size={19} color="#7C3AED" style={{ flexShrink: 0 }} />
+                                                    <div style={{ fontSize: '0.78rem', color: '#4C1D95', lineHeight: '1.4' }}>
+                                                        <strong>¿Vas a actualizar Nutresa, Colsubsidio, Lista Quincenal o Lista Mensual?</strong> Su <strong>Fuente Única de Verdad</strong> y motor de cálculo viven en <strong>Acuerdos Especiales</strong>. Usa este modo <strong>Comodín</strong> solo cuando entre una lista extraordinaria para un grupo nuevo de clientes de manera simultánea.
+                                                    </div>
                                                 </div>
+                                                <a
+                                                    href="/admin/commercial?tab=operations&subtab=agreements"
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        borderRadius: '8px',
+                                                        backgroundColor: '#7C3AED',
+                                                        color: '#FFFFFF',
+                                                        fontSize: '0.74rem',
+                                                        fontWeight: 800,
+                                                        textDecoration: 'none',
+                                                        whiteSpace: 'nowrap'
+                                                    }}
+                                                >
+                                                    Ir a Acuerdos Especiales ↗
+                                                </a>
                                             </div>
 
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
-                                                    Casas Matrices y Clientes Vinculados a esta Lista Maestra:
+                                                    Casas Matrices y Sucursales Vinculadas a este Acuerdo Grupal Comodín:
                                                 </label>
                                                 <div style={{ display: 'flex', gap: '8px' }}>
                                                     <button
@@ -10289,9 +10400,17 @@ export default function CommercialAgreementsModule() {
                                             <div
                                                 key={c.id}
                                                 onClick={() => {
-                                                    setEditableLinkedClientIds(prev =>
-                                                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                                                    );
+                                                    const childIds = !isSucursal
+                                                        ? b2bClients.filter(b => b.parent_id === c.id).map(b => b.id)
+                                                        : [];
+                                                    const targetIds = [c.id, ...childIds];
+                                                    setEditableLinkedClientIds(prev => {
+                                                        const currentlyChecked = prev.includes(c.id);
+                                                        if (currentlyChecked) {
+                                                            return prev.filter(id => !targetIds.includes(id));
+                                                        }
+                                                        return Array.from(new Set([...prev, ...targetIds]));
+                                                    });
                                                 }}
                                                 style={{
                                                     padding: '10px 14px',

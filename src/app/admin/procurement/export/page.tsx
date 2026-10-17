@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import * as XLSX from 'xlsx';
 import { THEME } from '@/lib/adminTheme';
 
 export default function WorldOfficeExportPage() {
@@ -191,6 +190,7 @@ export default function WorldOfficeExportPage() {
             }
 
             addLog('Generando archivo Excel (.xlsx)...', 'success');
+            const XLSX = await import('xlsx');
             const ws = XLSX.utils.json_to_sheet(woData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "WorldOffice");

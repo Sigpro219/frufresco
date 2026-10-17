@@ -34,7 +34,6 @@ import {
 } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import Link from 'next/link';
-import * as XLSX from 'xlsx';
 
 interface ManualDispatchWizardModalProps {
     isOpen: boolean;
@@ -572,6 +571,7 @@ export default function ManualDispatchWizardModal({
             });
 
             // Generar libro con XLSX
+            const XLSX = await import('xlsx');
             const ws = XLSX.utils.aoa_to_sheet(rows);
 
             // Anchos de columnas calibrados para visualización industrial
