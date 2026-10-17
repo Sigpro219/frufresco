@@ -270,7 +270,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const handleSelectModel = (modelId: SpecialModelId) => {
         setSelectedClient(modelId);
         setSelectedChainFilter('all');
-        if (modelId !== 'nutresa' && sortField === 'chain') {
+        if (modelId !== 'nutresa' && (sortField === 'chain' || sortField === 'sipsa')) {
             setSortField('name');
         }
     };
@@ -1556,29 +1556,31 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
                 {/* BOTONES OPERATIVOS COMPACTOS (HABILITADOS EN LOS 4 MODELOS) */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                    {/* BOTÓN SODA SIPSA EN VIVO (DISPONIBLE EN LOS 4 MODELOS) */}
-                    <button
-                        onClick={handleSyncSipsaOnline}
-                        disabled={syncingSipsa}
-                        style={{
-                            height: '32px',
-                            padding: '0 0.65rem',
-                            borderRadius: '6px',
-                            border: '1px solid #0284C7',
-                            backgroundColor: '#E0F2FE',
-                            color: '#0369A1',
-                            fontSize: '0.76rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px'
-                        }}
-                        title="Consultar precios mayoristas oficiales SIPSA DANE (Corabastos) vía SODA API"
-                    >
-                        <RefreshCw size={13} className={syncingSipsa ? 'animate-spin' : ''} />
-                        {syncingSipsa ? 'Consultando SODA...' : 'SIPSA DANE'}
-                    </button>
+                    {/* BOTÓN SODA SIPSA EN VIVO (EXCLUSIVO MODELO NUTRESA IRCC) */}
+                    {selectedClient === 'nutresa' && (
+                        <button
+                            onClick={handleSyncSipsaOnline}
+                            disabled={syncingSipsa}
+                            style={{
+                                height: '32px',
+                                padding: '0 0.65rem',
+                                borderRadius: '6px',
+                                border: '1px solid #0284C7',
+                                backgroundColor: '#E0F2FE',
+                                color: '#0369A1',
+                                fontSize: '0.76rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px'
+                            }}
+                            title="Consultar precios mayoristas oficiales SIPSA DANE (Corabastos) vía SODA API"
+                        >
+                            <RefreshCw size={13} className={syncingSipsa ? 'animate-spin' : ''} />
+                            {syncingSipsa ? 'Consultando SODA...' : 'SIPSA DANE'}
+                        </button>
+                    )}
 
                     {/* BOTÓN APLICAR SUGERIDOS INTELIGENTES */}
                     <button
@@ -1813,30 +1815,32 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         {sortField === 'cost' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
                                 </th>
-                                <th 
-                                    onClick={() => handleSort('sipsa')}
-                                    style={{ 
-                                        padding: '0.55rem 0.5rem', 
-                                        fontWeight: 800, 
-                                        color: sortField === 'sipsa' ? '#0369A1' : '#0284C7', 
-                                        textAlign: 'right', 
-                                        cursor: 'pointer',
-                                        position: 'sticky',
-                                        top: embedded ? '190px' : '133px',
-                                        zIndex: 65,
-                                        backgroundColor: '#F8FAFC',
-                                        borderBottom: `2px solid ${THEME.colors.border}`,
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                    title="Precio oficial de referencia del boletín SIPSA DANE para el mercado mayorista de Bogotá. Haz clic para ordenar."
-                                >
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
-                                        <span>SIPSA DANE</span>
-                                        <HelpCircle size={11} color="#0284C7" />
-                                        {sortField === 'sipsa' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
-                                    </div>
-                                </th>
+                                {selectedClient === 'nutresa' && (
+                                    <th 
+                                        onClick={() => handleSort('sipsa')}
+                                        style={{ 
+                                            padding: '0.55rem 0.5rem', 
+                                            fontWeight: 800, 
+                                            color: sortField === 'sipsa' ? '#0369A1' : '#0284C7', 
+                                            textAlign: 'right', 
+                                            cursor: 'pointer',
+                                            position: 'sticky',
+                                            top: embedded ? '190px' : '133px',
+                                            zIndex: 65,
+                                            backgroundColor: '#F8FAFC',
+                                            borderBottom: `2px solid ${THEME.colors.border}`,
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                        title="Precio oficial de referencia del boletín SIPSA DANE para el mercado mayorista de Bogotá. Haz clic para ordenar."
+                                    >
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                            <span>SIPSA DANE</span>
+                                            <HelpCircle size={11} color="#0284C7" />
+                                            {sortField === 'sipsa' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
+                                        </div>
+                                    </th>
+                                )}
                                 <th 
                                     onClick={() => handleSort('proposed')}
                                     style={{ 
@@ -1963,13 +1967,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={selectedClient === 'nutresa' ? 10 : 9} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 600 }}>
+                                    <td colSpan={selectedClient === 'nutresa' ? 10 : 8} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 600 }}>
                                         Sincronizando catálogo y precios reales con Supabase...
                                     </td>
                                 </tr>
                             ) : filteredItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={selectedClient === 'nutresa' ? 10 : 9} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                    <td colSpan={selectedClient === 'nutresa' ? 10 : 8} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
                                         No se encontraron productos con el criterio de búsqueda actual.
                                     </td>
                                 </tr>
@@ -2068,20 +2072,22 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                 </div>
                                             )}
                                         </td>
-                                        <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: '#0284C7', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                            {item.sipsa_price && item.sipsa_price > 0 ? (
-                                                <div>
-                                                    <div>{formatMoney(item.sipsa_price)}</div>
-                                                    {selectedClient === 'nutresa' && item.prima_cop !== undefined && (
-                                                        <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
-                                                            +Prima {formatMoney(item.prima_cop)}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <span style={{ color: '#94A3B8', fontSize: '0.7rem' }}>No se mide</span>
-                                            )}
-                                        </td>
+                                        {selectedClient === 'nutresa' && (
+                                            <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: '#0284C7', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                                {item.sipsa_price && item.sipsa_price > 0 ? (
+                                                    <div>
+                                                        <div>{formatMoney(item.sipsa_price)}</div>
+                                                        {item.prima_cop !== undefined && (
+                                                            <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
+                                                                +Prima {formatMoney(item.prima_cop)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span style={{ color: '#94A3B8', fontSize: '0.7rem' }}>No se mide</span>
+                                                )}
+                                            </td>
+                                        )}
                                         {/* PRECIO ANTERIOR / PROPUESTA CLIENTE + % UTILIDAD ANTERIOR */}
                                         <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', fontWeight: 800, color: '#DC2626', whiteSpace: 'nowrap' }}>
                                             <div>{formatMoney(item.client_proposed_price)}</div>
