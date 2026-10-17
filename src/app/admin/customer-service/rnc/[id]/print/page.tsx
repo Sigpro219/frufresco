@@ -599,6 +599,12 @@ export default function RncPrintPage() {
                                 <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>HALLAZGO TÉCNICO / DESCRIPCIÓN: </span>
                                 {pqr.description}
                             </div>
+                            {rca.notes && rca.notes.trim() !== '' && (
+                                <div style={{ color: '#0F172A', lineHeight: '1.3', whiteSpace: 'pre-line', marginTop: '3px', paddingTop: '3px', borderTop: '1px dashed #E2E8F0' }}>
+                                    <span style={{ color: '#0D7A57', fontWeight: '800', textTransform: 'uppercase', fontSize: '5.8pt' }}>JUSTIFICACIÓN TÉCNICA DE CAUSA RAÍZ (INSPECCIÓN): </span>
+                                    {rca.notes}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

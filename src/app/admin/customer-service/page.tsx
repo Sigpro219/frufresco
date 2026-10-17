@@ -183,9 +183,9 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
             const { data: provsData } = await supabase
                 .from('providers')
-                .select('id, name, nit, phone')
+                .select('id, name, tax_id, phone')
                 .order('name');
-            setProvidersList(provsData || []);
+            setProvidersList((provsData || []).map((p: any) => ({ ...p, nit: p.tax_id || '' })));
 
             const { data: colabsData } = await supabase
                 .from('collaborators')
@@ -1097,46 +1097,81 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
                                                 {/* 6. Imputabilidad & Cobro */}
                                                 <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                        {rca.responsible && rca.responsible !== 'no_definido' ? (
-                                                            <span style={{
-                                                                fontSize: '0.68rem',
-                                                                fontWeight: '800',
-                                                                textTransform: 'uppercase',
-                                                                padding: '2px 6px',
-                                                                borderRadius: '4px',
-                                                                backgroundColor: '#EAEFEA',
-                                                                color: '#0D7A57',
-                                                                border: '1px solid #C4D7C4',
-                                                                display: 'inline-block',
-                                                                width: 'fit-content'
-                                                            }}>
-                                                                {RESPONSIBLE_PARTIES[rca.responsible as any]?.label || rca.responsible}
-                                                            </span>
-                                                        ) : (
-                                                            <span style={{
-                                                                fontSize: '0.68rem',
-                                                                fontWeight: '700',
-                                                                textTransform: 'uppercase',
-                                                                padding: '2px 6px',
-                                                                borderRadius: '4px',
-                                                                backgroundColor: '#F8FAFC',
-                                                                color: '#64748B',
-                                                                border: '1px solid #E2E8F0',
-                                                                display: 'inline-block',
-                                                                width: 'fit-content'
-                                                            }}>
-                                                                Sin Asignar
-                                                            </span>
-                                                        )}
-                                                        {rca.imputedEntities && rca.imputedEntities.length > 0 ? (
-                                                            <div style={{ fontSize: '0.68rem', color: '#475569', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.imputedEntities.map(e => `${e.name} (${e.sharePercent}%)`).join(', ')}>
-                                                                {rca.imputedEntities.map(e => e.name).join(', ')}
+                                                    {(() => {
+                                                        const totalImputedCop = (rca.imputedEntities || []).reduce((acc, e) => acc + (Number(e.deductionAmount) || 0), 0);
+                                                        const isClosedCase = pqr.status === 'resolved' || pqr.status === 'rejected';
+                                                        return (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                                    {rca.responsible && rca.responsible !== 'no_definido' ? (
+                                                                        <span style={{
+                                                                            fontSize: '0.68rem',
+                                                                            fontWeight: '800',
+                                                                            textTransform: 'uppercase',
+                                                                            padding: '2px 6px',
+                                                                            borderRadius: '4px',
+                                                                            backgroundColor: '#EAEFEA',
+                                                                            color: '#0D7A57',
+                                                                            border: '1px solid #C4D7C4',
+                                                                            display: 'inline-block',
+                                                                            width: 'fit-content'
+                                                                        }}>
+                                                                            {RESPONSIBLE_PARTIES[rca.responsible as any]?.label || rca.responsible}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span style={{
+                                                                            fontSize: '0.68rem',
+                                                                            fontWeight: '700',
+                                                                            textTransform: 'uppercase',
+                                                                            padding: '2px 6px',
+                                                                            borderRadius: '4px',
+                                                                            backgroundColor: '#F8FAFC',
+                                                                            color: '#64748B',
+                                                                            border: '1px solid #E2E8F0',
+                                                                            display: 'inline-block',
+                                                                            width: 'fit-content'
+                                                                        }}>
+                                                                            Sin Asignar
+                                                                        </span>
+                                                                    )}
+                                                                    {totalImputedCop > 0 ? (
+                                                                        <span style={{
+                                                                            fontSize: '0.65rem',
+                                                                            fontWeight: '800',
+                                                                            padding: '2px 6px',
+                                                                            borderRadius: '4px',
+                                                                            backgroundColor: '#FEF2F2',
+                                                                            color: '#DC2626',
+                                                                            border: '1px solid #FECACA',
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}>
+                                                                            Cobro: ${totalImputedCop.toLocaleString('es-CO')}
+                                                                        </span>
+                                                                    ) : (rca.imputedEntities && rca.imputedEntities.length > 0 && isClosedCase) ? (
+                                                                        <span style={{
+                                                                            fontSize: '0.65rem',
+                                                                            fontWeight: '700',
+                                                                            padding: '2px 6px',
+                                                                            borderRadius: '4px',
+                                                                            backgroundColor: '#EFF6FF',
+                                                                            color: '#1E40AF',
+                                                                            border: '1px solid #BFDBFE',
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}>
+                                                                            $0 Exonerado
+                                                                        </span>
+                                                                    ) : null}
+                                                                </div>
+                                                                {rca.imputedEntities && rca.imputedEntities.length > 0 ? (
+                                                                    <div style={{ fontSize: '0.68rem', color: '#475569', maxWidth: '190px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.imputedEntities.map(e => `${e.name} (${e.sharePercent}% — $${(Number(e.deductionAmount) || 0).toLocaleString('es-CO')})`).join(', ')}>
+                                                                        {rca.imputedEntities.map(e => e.name).join(', ')}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Sin responsable</span>
+                                                                )}
                                                             </div>
-                                                        ) : (
-                                                            <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Sin responsable</span>
-                                                        )}
-                                                    </div>
+                                                        );
+                                                    })()}
                                                 </td>
 
                                                 {/* 7. Estado & Resolución */}

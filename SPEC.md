@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.208 (Pipeline de Custodia Física del Producto en PQR: En Sede Cliente vs Retorno a Bodega, Filtrado Sanitario Invima y Cierre en Cascada — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.209 (Certificación Responsive Integral Mobile/Tablet/Desktop: Landing Page, Login y Portal Institucional B2B — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 239 Escenarios BDD Ininterrumpidos (1..239)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 240 Escenarios BDD Ininterrumpidos (1..240)
 
 ---
 
@@ -27,7 +27,7 @@
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239 (§39.1 - §39.6) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239 (§42.1 - §42.7) | 🟢 100% |
-| **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
+| **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
 | **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **239 Escenarios Canónicos (1..239)** | **🟢 100%** |
 
 ---
@@ -10561,33 +10561,28 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Queda terminantemente prohibido el uso de emojis de texto Unicode en las etiquetas, botones, insignias y tablas de `PqrAuditModal.tsx`, `FinancialAdjustmentModal.tsx`, `src/app/admin/customer-service/page.tsx` y `src/app/admin/hr/page.tsx`. Toda señalización visual utiliza exclusivamente componentes SVG de `lucide-react` (`ShoppingBag`, `ShieldAlert`, `CreditCard`, `Truck`, `DollarSign`, `Percent`, `ShieldCheck`, `AlertTriangle`, `Scale`).
 ---
 
-#### Escenario 237: Cuarteto de Modelos de Acuerdos Especiales (`Nutresa`, `Colsubsidio`, `Lista General Quincenal`, `Lista General Mensual`), Padrón Permanente de Clientes Aplicables en SQL y Modal de Consagración con Buscador Combinado Inteligente (SDD v1.9.206)
-- **Given** el módulo comercial en `/admin/commercial?tab=operations&subtab=agreements` (`SpecialAgreementsModule.tsx`) y el esquema relacional de Supabase (`special_agreement_models`, `special_agreement_model_clients`, `quotes`, `quote_items`, `profiles`).
+#### Escenario 237: Cuarteto de Modelos de Acuerdos Especiales (`Nutresa`, `Colsubsidio`, `Lista General Quincenal`, `Lista General Mensual`), Lista Institucional Dinámica, Motor de Utilidad Porcentual Bidireccional (`%`) y Padrón SQL (SDD v1.9.209)
+- **Given** el módulo comercial en `/admin/commercial?tab=operations&subtab=agreements` (`SpecialAgreementsModule.tsx`) y el esquema relacional de Supabase (`special_agreement_models`, `special_agreement_model_clients`, `pricing_rules`, `commercial_cost_matrix`, `quotes`, `quote_items`, `profiles`).
 - **When** el director comercial o analista gestiona las listas de precios congelados / indexados y ejecuta la renovación periódica (quincenal o mensual):
 - **Then**:
   1. **Cuarteto de Espacios Maestros de Negociación y Fijación de Listas (`special_agreement_models`):**
      - La barra superior de tarjetas de `SpecialAgreementsModule.tsx` despliega 4 espacios canónicos bajo el mismo motor financiero e inteligencia de mercado:
        * **`nutresa` — Grupo Nutresa (IRCC):** Corporativo dedicado indexado a `SIPSA (DANE) + Prima $ COP`, con filtro de cadenas (`El Corral`, `Beer Station`, `Leños & Carbón`) vinculado al Acuerdo Maestro `#96` y sus sucursales.
        * **`colsubsidio` — Caja de Compensación Colsubsidio:** Corporativo dedicado de variación quincenal (`1Q / 2Q`), comparando `Propuesta Cliente (NUE PRE)` vs `Anterior (ANT PRE)` con indicador visual `SUBIÓ / BAJÓ` y vinculado al Acuerdo Maestro `#86` y sus sedes operativas.
-       * **`general_quincenal` — Lista General Quincenal (15 Días):** Lista estática maestra compartida de renovación cada 15 días (388 SKUs del catálogo general), comparando `Precio Quincena Anterior` vs `Costo Corabastos Hoy`, `SIPSA DANE` y `Precio Sugerido`.
-       * **`general_mensual` — Lista General Mensual (30 Días):** Lista estática maestra compartida de renovación cada 30 días (388 SKUs del catálogo general, vinculada al Acuerdo Maestro `#165`), comparando `Precio Mes Anterior` vs `Costo Corabastos Hoy`, `SIPSA DANE` y `Precio Sugerido`.
-  2. **Arquitectura SQL de Padrón Permanente de Clientes Aplicables por Modelo (`special_agreement_model_clients`):**
-     - Cada uno de los 4 modelos posee en PostgreSQL una relación persistente de **Clientes Suscritos / Aplicables al Modelo** (`special_agreement_model_clients` con `model_id`, `client_id`, `is_default_selected`, `last_applied_at`, `last_applied_quote_id`).
-     - El sistema pre-puebla automáticamente la cohorte real de **27 clientes quincenales** en `general_quincenal`, los **8 clientes mensuales** en `general_mensual`, y las casas matrices + sucursales de `nutresa` y `colsubsidio`.
-     - De esta forma, al llegar cada corte quincenal o mensual, el analista no tiene que buscar ni reconstruir desde cero la lista de clientes: el modelo carga de inmediato su padrón habitual de clientes aplicables.
-  3. **Modal de Consagración, Vigencia y Aplicación Selectiva Periódica (`apply_special_agreement_to_clients`):**
-     - Al pulsar `[ Consagrar Acuerdo / Aplicar Lista ]`, se despliega un modal unificado que exige:
-       * **Vigencia del Ciclo:** Presets rápidos (`15 Días / Quincenal`, `30 Días / Mensual`, `Fin de Mes`) y selectores de `Fecha de Inicio` (`start_date`) y `Fecha de Fin` (`valid_until`).
-       * **En `nutresa` y `colsubsidio`:** Muestra las sedes amparadas del grupo corporativo y permite confirmar la nueva vigencia y propagar los precios consagrados en 1 clic.
-       * **En `general_quincenal` y `general_mensual` (y extensible a cualquier modelo):** Despliega el **Padrón de Clientes Aplicables al Modelo** con checkboxes individuales marcados por defecto (`☑`), permitiendo al analista decidir en cada actualización periódica a cuáles clientes del padrón sí se les aplica la nueva lista hoy y a cuáles se dejan desmarcados (`☐`) manteniendo su precio previo sin perder su membresía en el modelo para el siguiente ciclo.
-  4. **Buscador Combinado Inteligente Multi-Cliente (Omnibox + Bandeja de Chips + Cascada Casa Matriz):**
-     - Para inscribir o gestionar clientes entre cientos de registros en `profiles`, el modal incorpora:
-       * **Omnibox Multi-Token Insensible a Tildes:** Búsqueda instantánea por Razón Social, Sucursal, NIT o Casa Matriz (soportando palabras no contiguas) y botón `[ + Marcar resultados filtrados ]`.
-       * **Bandeja Superior de Chips Fijos:** Píldoras interactivas (`[ Nombre Cliente ✕ ]`) que mantienen siempre visibles a los clientes seleccionados aunque se limpie o cambie el texto de búsqueda.
-       * **Agrupación Casa Matriz -> Sucursales en 1 Clic:** Al localizar una Casa Matriz con $N$ sucursales dependientes (`parent_id`), ofrece acción directa para marcar/desmarcar todas sus sedes hijas simultáneamente.
-       * **Píldoras de Filtro Rápido y Semáforo Poka-Yoke:** Filtros `[ Del Modelo ]`, `[ Marcados (N) ]`, `[ Casas Matrices ]`, `[ Todos B2B ]` y etiquetas que alertan si un cliente pertenece a otro acuerdo o lista.
-  5. **Propagación Transaccional End-to-End en Toma de Pedidos y Borradores:**
-     - La confirmación invoca la función SQL `apply_special_agreement_to_clients`, actualizando los `quote_items` del acuerdo maestro, sincronizando los acuerdos activos de los clientes marcados (`quotes`), actualizando `app_settings` (`agreement_clients:<id>`) y fijando `profiles.logistics_data.active_master_agreement_id`, garantizando impacto inmediato en `/admin/orders/create`, `EmailDraftsModule.tsx` y `/api/orders/resolve-agreement-pricing`.
+       * **`general_quincenal` — Lista General Quincenal (15 Días):** Lista estática maestra compartida de renovación cada 15 días (388 SKUs del catálogo general), comparando `Precio Quincena Anterior` vs `Costo Matriz / Lista Institucional Dinámica`, `SIPSA DANE` y `Precio Sugerido IA`.
+       * **`general_mensual` — Lista General Mensual (30 Días):** Lista estática maestra compartida de renovación cada 30 días (388 SKUs del catálogo general, vinculada al Acuerdo Maestro `#165`), comparando `Precio Mes Anterior` vs `Costo Matriz / Lista Institucional Dinámica`, `SIPSA DANE` y `Precio Sugerido IA`.
+  2. **Limpieza Visual en Columna Producto y Referencia Dual `Costo Matriz + Lista Institucional Dinámica`:**
+     - **Prohibición de Siglas de Categoría (`DE`, `HO`):** En la columna `PRODUCTO EN LISTA`, para Colsubsidio y las Listas Generales (`general_quincenal`, `general_mensual`), queda prohibido mostrar abreviaturas o categorías de catálogo (`DE`, `HO`, `FR`). Solo se exhibe el nombre oficial del producto y su unidad de medida limpia (`Kg`, `Und`), reservando el badge de cadena exclusivamente para las marcas de restaurante de Grupo Nutresa.
+     - **Referencia a la Lista Institucional Dinámica (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`):** El módulo consulta la tabla `pricing_rules` para el modelo base `General institucional dinámico` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`), obteniendo el `margin_adjustment` específico de cada producto (ej. Acelga `+110%`, Acelgas chinas `+40%`, Achote `+10%`) y calculando su **Precio de Lista Institucional Dinámica** mediante la fórmula canónica de `SPEC.md §7.3.A`:
+       $$\text{Lista Institucional Dinámica} = \left\lceil \frac{\text{Costo Efectivo (con Merma)} \times \left(1 + \frac{\text{margin\_adjustment}}{100}\right)}{50} \right\rceil \times 50$$
+     - En la columna de costo/referencia (`COSTO / LISTA INST. DINÁMICA`), se visualiza tanto el **Costo Estabilizado Matriz (`commercial_cost_matrix.manual_cost`)** como el **Precio de Lista Institucional Dinámica** y su regla (`Regla Inst: +X%`).
+  3. **Motor Real de `PRECIO SUGERIDO IA` y Columna Bidireccional de `% UTILIDAD / MARGEN`:**
+     - **Erradicación del `Math.max(..., currentPrice)` ciego:** El `PRECIO SUGERIDO IA` se calcula directamente desde la **Lista Institucional Dinámica** del producto más la **Prima de Estabilización por Congelamiento Temporal** (`+3%` en perecederos para 15 días quincenal, `+6%` en perecederos para 30 días mensual, o indexación con boletín `SIPSA DANE`), sin arrastrar artificialmente precios antiguos sobrevalorados.
+     - **Columna Interactiva `% UTILIDAD` (Edición Bidireccional):** La tabla incorpora la columna explícita de **`% UTILIDAD`** que muestra el porcentaje de utilidad sobre costo (`Markup % = ((Precio - Costo) / Costo) * 100`, homólogo a `pricing_rules`), el margen bruto sobre venta (`((Precio - Costo) / Precio) * 100`) y la ganancia en `$/Kg` (ej. en Acelga a `$2.900` sobre costo de `$1.050` $\rightarrow$ **`+176.2%` Utilidad** / `+$1.850/Kg` vs. Regla `+110%`).
+     - El analista puede editar directamente el **`% UTILIDAD`** para que el sistema recalcule el `NUEVO PRECIO A FIJAR` (redondeado a múltiplos de `$50 COP`), o editar el `NUEVO PRECIO A FIJAR` para que se recalcule instantáneamente el `% UTILIDAD`.
+     - **Impacto Mensual (`IMPACTO MES ($)`):** Para evitar que la columna `IMPACTO MES ($)` aparezca en `$0` al iniciar la revisión, las listas generales pueden proyectar la actualización sugerida o mostrar simultáneamente el **Delta Mensual vs. Lista Anterior** (`(Nuevo Precio - Precio Anterior) × Consumo Mes`) y la **Utilidad Bruta Mensual en Pesos** (`(Nuevo Precio - Costo) × Consumo Mes`).
+  4. **Arquitectura SQL de Padrón Permanente (`special_agreement_model_clients`) y Buscador Combinado Inteligente (`apply_special_agreement_to_clients`):**
+     - Cada modelo mantiene en PostgreSQL su padrón persistente de clientes aplicables (`special_agreement_model_clients`), precargado en el Modal de Consagración con Omnibox multi-token insensible a tildes, bandeja de chips fijos, cascada Casa Matriz $\to$ Sucursales y propagación transaccional hacia `quote_items`, `quotes`, `app_settings` y `profiles.logistics_data`.
 ---
 
 
@@ -10632,10 +10627,27 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - En `src/app/admin/customer-service/page.tsx`, al completarse exitosamente (`onSuccess`) la emisión de la Nota Crédito (Opción 3) o el Ajuste Directo de Factura (Opción 4) dentro de `FinancialAdjustmentModal`, el sistema limpia automáticamente el borrador local (`localStorage.removeItem('pqr_audit_draft_' + selectedAuditPqr.id)`), cierra el modal financiero y ejecuta `setSelectedAuditPqr(null)` para cerrar en cascada el `PqrAuditModal` padre y refrescar la bandeja de PQRs.
 ---
 
+#### Escenario 240: Certificación Responsive Integral (Mobile `375px`/`390px`, Tablet `768px`, Desktop `1440px`) de Landing Page, Login y Portal Institucional B2B (SDD v1.9.209)
+- **Given** las pantallas de cara al cliente externo e institucional: Landing Page (`src/app/page.tsx`), Navbar (`src/components/Navbar.tsx`), Banner Global (`src/components/GlobalBanner.tsx`), Login (`src/app/login/page.tsx`), Registro/Cotizador B2B (`src/app/b2b/register/page.tsx` y `src/components/LeadGenBot.tsx`) y Dashboard B2B (`src/app/b2b/dashboard/page.tsx`).
+- **When** un usuario o comprador institucional accede desde dispositivos móviles compactos (`375px` - `390px`), tablets (`768px`) o monitores de escritorio (`1440px+`):
+- **Then**:
+  1. **Erradicación Total de Desbordamiento Horizontal en `/b2b/register` (`docScrollWidth === viewportWidth`):**
+     - La grilla principal `.b2b-register-grid` reemplaza el `gridTemplateColumns: '1fr 480px'` inline rígido por diseño adaptativo (`1fr 480px` en desktop `> 1024px` y colapso automático a `1fr` en tablet/móvil $\le 1024\text{px}$), reduciendo el `docScrollWidth` en móvil de `1011px` a `375px` exactos (`0px` de scroll horizontal).
+     - Las 4 tarjetas de beneficios (`.b2b-benefits-grid`) operan en `1fr 1fr` en desktop/tablet y colapsan a `1fr` en móviles $\le 640\text{px}$, mientras que la barra de progreso de 3 pasos de `LeadGenBotV2` ajusta dinámicamente su tipografía (`clamp(0.68rem, 2.2vw, 0.78rem)`) y espaciado sin desbordar.
+     - En `GlobalBanner.tsx` (modo B2B), el contenedor `.b2b-marquee-container` incorpora `minWidth: 0` y `maxWidth: '100vw'`, compactando la insignia izquierda en pantallas $\le 640\text{px}$ (`.b2b-banner-badge-text { display: none }`).
+  2. **Colapso Garantizado del Modo Enfoque y Tabs Deslizables en `/b2b/dashboard`:**
+     - En `src/app/b2b/dashboard/page.tsx`, la regla `@media (max-width: 1023px) { .b2b-dashboard-grid { grid-template-columns: 1fr !important; } }` garantiza que el catálogo y el carrito lateral se apilen verticalmente en móviles y tablets sin ser sobreescritos por el estilo inline de `focusMode`.
+     - La barra de 5 pestañas (`.b2b-tab-navigation`) habilita desplazamiento táctil horizontal suave (`overflow-x: auto`, `-webkit-overflow-scrolling: touch`, `scrollbar-width: none`) en pantallas $\le 768\text{px}$.
+  3. **Tipografía Fluida (`clamp()`) en Landing Page, Padding Adaptativo en Login y Píldora Compacta en Navbar:**
+     - En `src/app/page.tsx`, los titulares de secciones secundarias adoptan escalado fluido `clamp(1.85rem, 4.5vw, 2.5rem)` y `clamp(1.95rem, 5vw, 3rem)`.
+     - En `src/app/login/page.tsx`, la tarjeta `.login-card` y su contenedor glassmorphism aplican `padding: 'clamp(1.5rem, 5vw, 2.2rem) clamp(1.25rem, 5vw, 2.5rem)'`, permitiendo que el formulario completo encaje en `375x812` sin scroll vertical forzado.
+     - En `src/components/Navbar.tsx` y `src/app/globals.css`, la píldora `.navbar-sync-pill` oculta la marca de fecha/hora (`.navbar-sync-date`) en móviles $\le 640\text{px}$, exhibiendo únicamente `• V2.3.75` en una sola línea (`white-space: nowrap`).
+---
+
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
 
 > **Referencia:** Documento maestro [`TECHNICAL_DEBT.md`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/TECHNICAL_DEBT.md) en la raíz del repositorio.  
-> **Estado:** 🟡 Registrado & Priorizado (P0 a P2) para ventana de mantenimiento y escalabilidad.  
+> **Estado:** 🟢 Mitigado (Grupo A Riesgo Cero Activo en Producción — SDD v1.9.208).  
 > **Aprobación:** Dirección General y Arquitectura de Software.
 
 ### 43.1 Declaración Formal de Deuda Técnica y Preservación de Estabilidad

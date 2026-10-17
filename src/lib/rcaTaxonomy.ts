@@ -375,6 +375,15 @@ export function parseSanitaryAndHumanNotes(text: string, rcaNotes?: string): Par
 // Helpers to encode & decode RCA metadata from resolution notes/descriptions
 // Ensuring 100% backward compatibility even before DB migrations are run
 export function parseRcaFromRecord(record: any): ParsedRcaResult {
+    const orderNotesUpper = (record.orders?.admin_notes || '').toUpperCase();
+    const isStructuralReplacementOrder = Boolean(record.is_replacement_rejection) ||
+        orderNotesUpper.includes('[REPOSICIÓN DE GARANTÍA') ||
+        orderNotesUpper.includes('[REPOSICION DE GARANTIA') ||
+        orderNotesUpper.includes('[ANEXIÓN D+1') ||
+        (record.orders?.origin_source === 'customer_service' && Number(record.orders?.total) === 0) ||
+        (record.subject || '').toUpperCase().includes('PING-PONG') ||
+        (record.description || '').toUpperCase().includes('ALERTA CORTE DE BUCLE');
+
     // 1. Direct columns if present in DB
     if (record.defect_category_l1) {
         let parsedEntities: ImputedEntity[] = [];
@@ -403,7 +412,7 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             subtypeL2: record.defect_subtype_l2 || '',
             responsible: (record.imputed_responsible as any) || 'no_definido',
             notes: record.imputation_evidence_notes || '',
-            isReplacementRejection: Boolean(record.is_replacement_rejection),
+            isReplacementRejection: isStructuralReplacementOrder,
             isExplicitRca: true,
             imputedTargetType: record.imputed_responsible === 'proveedor' ? 'provider' : 
                                record.imputed_responsible === 'transporte' ? 'driver' : 
@@ -437,7 +446,7 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             subtypeL2: parsed.subtypeL2 || '',
             responsible: parsed.responsible || 'no_definido',
             notes: cleanNotes,
-            isReplacementRejection: Boolean(parsed.isReplacementRejection),
+            isReplacementRejection: isStructuralReplacementOrder,
             isExplicitRca: true,
             imputedTargetType: parsed.imputedTargetType,
             imputedEntities: entities,
@@ -456,18 +465,10 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
     let inferredSubtype = 'pendiente_dictamen';
     let inferredResponsible: any = 'no_definido';
 
-    if (fullText.includes('verde') || fullText.includes('madur') || fullText.includes('blando') || fullText.includes('firmeza')) {
-        inferredCatL1 = 'fisiologia_maduracion';
-        inferredSubtype = 'sobremaduro_blando';
-        inferredResponsible = 'bodega';
-    } else if (fullText.includes('magulla') || fullText.includes('golpe') || fullText.includes('aplastad') || fullText.includes('partid') || fullText.includes('volcad')) {
+    if ( fullText.includes('magulla') || fullText.includes('golpe') || fullText.includes('aplastad') || fullText.includes('partid') || fullText.includes('volcad') || fullText.includes('reventad') ) {
         inferredCatL1 = 'dano_mecanico';
         inferredSubtype = 'golpe_magulladura';
         inferredResponsible = 'transporte';
-    } else if (fullText.includes('calibre') || fullText.includes('tamaño') || fullText.includes('pequeñ') || fullText.includes('grande') || fullText.includes('cebolla') || fullText.includes('cerbolla')) {
-        inferredCatL1 = 'calibre_especificacion';
-        inferredSubtype = 'calibre_fuera_rango';
-        inferredResponsible = 'proveedor';
     } else if (fullText.includes('faltaron') || fullText.includes('faltante') || fullText.includes('incompleto') || fullText.includes('no me entregaron') || fullText.includes('no me llegó') || fullText.includes('no me llego')) {
         inferredCatL1 = 'error_montaje_pedido';
         inferredSubtype = 'pedido_incompleto_faltante';
@@ -484,6 +485,14 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
         inferredCatL1 = 'cadena_frio';
         inferredSubtype = 'dano_por_frio_ennegrecimiento';
         inferredResponsible = 'transporte';
+    } else if (fullText.includes('calibre') || fullText.includes('tamaño') || fullText.includes('pequeñ') || fullText.includes('grande')) {
+        inferredCatL1 = 'calibre_especificacion';
+        inferredSubtype = 'calibre_fuera_rango';
+        inferredResponsible = 'proveedor';
+    } else if (fullText.includes('madur') || fullText.includes('blando') || fullText.includes('firmeza') || fullText.includes('biche') || fullText.includes('inmadur') || fullText.includes('pintón') || fullText.includes('pinton')) {
+        inferredCatL1 = 'fisiologia_maduracion';
+        inferredSubtype = 'sobremaduro_blando';
+        inferredResponsible = 'bodega';
     } else if (fullText.includes('agotado') || fullText.includes('no lo hay') || fullText.includes('desabastecimiento') || fullText.includes('quiebre en plaza') || fullText.includes('escasez') || fullText.includes('quiebre de abastecimiento')) {
         inferredCatL1 = 'comercial_cliente';
         inferredSubtype = 'producto_agotado_plaza';
@@ -498,17 +507,12 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
         inferredResponsible = 'transporte';
     }
 
-    const isReplacement = (record.orders?.admin_notes || '').toLowerCase().includes('reposic') ||
-                          fullText.includes('reposic') ||
-                          fullText.includes('bucle') ||
-                          fullText.includes('ping-pong');
-
     return {
         categoryL1: inferredCatL1,
         subtypeL2: inferredSubtype,
         responsible: inferredResponsible,
         notes: '',
-        isReplacementRejection: isReplacement,
+        isReplacementRejection: isStructuralReplacementOrder,
         isExplicitRca: false,
         imputedEntities: []
     };

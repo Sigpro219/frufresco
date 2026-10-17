@@ -275,7 +275,7 @@ export default function PqrAuditModal({
             setResolutionOption('opt3');
         } else if (rawNotes.includes('Opción 4') || rawNotes.includes('Ajuste de Factura')) {
             setResolutionOption('opt4');
-        } else if (rawNotes.includes('Opción 1') || rawNotes.includes('Cerrar Conforme')) {
+        } else if (rawNotes.includes('Opción 1') || rawNotes.includes('Cerrar Conforme') || rawNotes.includes('Cerrado conforme')) {
             setResolutionOption('opt1');
         } else {
             // Sin sesgo dogmático de rechazo: los reclamos de avería/calidad inician abiertos en Reposición D+1 (opt2)
@@ -637,7 +637,9 @@ export default function PqrAuditModal({
                 ? orderItems.find(i => i.id === substituteTargetItemId)
                 : (orderItems[0] || null);
 
-            const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+            const bogotaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            const [bY, bM, bD] = bogotaToday.split('-').map(Number);
+            const tomorrow = new Date(Date.UTC(bY, bM - 1, bD + 1)).toISOString().split('T')[0];
             const { data: futureOrders } = await supabase
                 .from('orders')
                 .select('*')
@@ -659,10 +661,11 @@ export default function PqrAuditModal({
                     .insert([{
                         profile_id: pqr.client_id,
                         type: pqr.profiles?.role === 'b2c_client' ? 'B2C' : 'B2B',
-                        status: 'draft',
+                        status: 'approved',
                         delivery_date: tomorrow,
                         delivery_slot: 'AM',
                         origin_source: 'customer_service_shortage_d1',
+                        total_weight_kg: Number(targetItem?.quantity) || 0,
                         admin_notes: `[ANEXIÓN D+1 POR QUIEBRE EN PLAZA] Generado por PQR #${pqr.id.substring(0, 8)}. Consolida producto escaso sin desvío de ruta.`
                     }])
                     .select()
@@ -1215,12 +1218,13 @@ export default function PqrAuditModal({
 
         setActionLoading(true);
         try {
-            let finalNotes = resolutionNotes;
+            const baseCleanNotes = cleanHumanResolutionNotes(resolutionNotes);
+            let conceptBlock = '';
             let redirectUrl = null;
 
             if (status === 'resolved') {
                 if (resolutionOption === 'opt1') {
-                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Cerrado conforme sin impacto económico]`;
+                    conceptBlock = `[CONCEPTO: Opción 1 - Cerrado conforme sin impacto económico ($0 COP)]`;
                     if (pqr.order_id) {
                         await supabase
                             .from('billing_returns')
@@ -1299,13 +1303,19 @@ export default function PqrAuditModal({
                         }));
                     }
 
-                    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                    const bogotaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+                    const [bY, bM, bD] = bogotaToday.split('-').map(Number);
+                    const tomorrow = new Date(Date.UTC(bY, bM - 1, bD + 1)).toISOString().split('T')[0];
+                    const replacementWeightKg = Number(
+                        itemsToReprogram.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0).toFixed(2)
+                    );
+
                     const { data: newOrder, error: newOrderErr } = await supabase
                         .from('orders')
                         .insert([{
                             profile_id: originalOrder.profile_id,
                             type: originalOrder.type,
-                            status: 'draft',
+                            status: 'approved',
                             origin_source: 'customer_service',
                             delivery_date: tomorrow,
                             delivery_slot: originalOrder.delivery_slot || 'AM',
@@ -1314,8 +1324,8 @@ export default function PqrAuditModal({
                             longitude: originalOrder.longitude,
                             total: 0,
                             subtotal: 0,
-                            total_weight_kg: 0,
-                            admin_notes: `[REPOSICIÓN DE GARANTÍA $0 COP - ${isPartial ? 'RECHAZO PARCIAL' : 'RECHAZO TOTAL'}] Generado por PQR #${pqr.id.substring(0, 8)} del Pedido #${originalOrder.sequence_id}.\n\nNotas: ${resolutionNotes}`
+                            total_weight_kg: replacementWeightKg,
+                            admin_notes: `[REPOSICIÓN DE GARANTÍA $0 COP - ${isPartial ? 'RECHAZO PARCIAL' : 'RECHAZO TOTAL'}] Generado por PQR #${pqr.id.substring(0, 8)} del Pedido #${originalOrder.sequence_id}.\n\nNotas: ${baseCleanNotes}`
                         }])
                         .select()
                         .single();
@@ -1335,10 +1345,13 @@ export default function PqrAuditModal({
                         }
                     }
 
-                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Opción 2 - Reponer D+1 ($0 COP) (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Pedido de reposición generado con folio #${newOrder.sequence_id}`;
+                    conceptBlock = `[CONCEPTO: Opción 2 - Reponer D+1 ($0 COP) (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Pedido de reposición generado con folio #${newOrder.sequence_id} (Entrega D+1: ${tomorrow})`;
                     redirectUrl = `/admin/orders/${newOrder.id}`;
 
                 } else if (resolutionOption === 'opt3' || resolutionOption === 'opt4') {
+                    const prelimConcept = resolutionOption === 'opt3'
+                        ? '[CONCEPTO: Opción 3 - Emitir Nota Crédito Financiera]'
+                        : '[CONCEPTO: Opción 4 - Ajuste de Factura (Sustracción)]';
                     const prelimRcaTag = buildRcaMetadataTag({
                         categoryL1: rcaCategoryL1,
                         subtypeL2: rcaSubtypeL2,
@@ -1349,7 +1362,7 @@ export default function PqrAuditModal({
                         imputedEntities: imputedEntities
                     });
                     const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
-                    const prelimNotes = `${cleanHumanResolutionNotes(resolutionNotes)}\n\n${prelimRcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
+                    const prelimNotes = `${baseCleanNotes}\n\n${prelimConcept}\n\n${prelimRcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
                     await supabase
                         .from('customer_service_pqrs')
                         .update({ resolution_notes: prelimNotes })
@@ -1360,7 +1373,7 @@ export default function PqrAuditModal({
                     return;
                 }
             } else {
-                finalNotes = `${resolutionNotes}\n\n[CASO RECHAZADO / ARCHIVADO SIN COSTO]`;
+                conceptBlock = `[CASO RECHAZADO / ARCHIVADO SIN COSTO]`;
                 if (pqr.order_id) {
                     await supabase
                         .from('billing_returns')
@@ -1389,7 +1402,7 @@ export default function PqrAuditModal({
                 imputedEntities: finalizedImputedEntities
             });
             const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
-            finalNotes = `${cleanHumanResolutionNotes(finalNotes)}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
+            const finalNotes = `${baseCleanNotes}${conceptBlock ? `\n\n${conceptBlock}` : ''}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
 
             const { error } = await supabase
                 .from('customer_service_pqrs')
@@ -2657,40 +2670,62 @@ export default function PqrAuditModal({
                                     </button>
 
                                     {/* Opt 2: Reposición D+1 $0 COP */}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setResolutionOption('opt2');
-                                            if (sanitaryKey === 'producto_conforme_sin_baja') {
-                                                const nextKey = hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno';
-                                                setSanitaryKey(nextKey);
-                                                const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
-                                                if (tmpl) {
-                                                    setResolutionNotes(prev => {
-                                                        const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
-                                                        if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
-                                                        return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
-                                                    });
-                                                }
-                                            }
-                                        }}
-                                        style={{
-                                            padding: '12px 14px',
-                                            borderRadius: '12px',
-                                            textAlign: 'left',
-                                            backgroundColor: resolutionOption === 'opt2' ? '#EAEFEA' : 'white',
-                                            border: resolutionOption === 'opt2' ? '2px solid #0D7A57' : '1px solid #CBD5E1',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '800', color: '#1A231E', fontSize: '0.75rem', marginBottom: '4px' }}>
-                                            <Truck size={16} style={{ color: resolutionOption === 'opt2' ? '#0D7A57' : '#64748B' }} />
-                                            <span>Opción 2: Reponer Físicamente D+1 ($0 COP)</span>
-                                        </div>
-                                        <p style={{ fontSize: '0.7rem', color: '#64748B', margin: 0, lineHeight: '1.3' }}>
-                                            Genera automáticamente un pedido de reposición de garantía valorizado en <strong>$0 COP</strong>.
-                                        </p>
-                                    </button>
+                                    {(() => {
+                                        const isPingPongBlocked = parseRcaFromRecord(pqr).isReplacementRejection;
+                                        const bogotaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+                                        const [bY, bM, bD] = bogotaToday.split('-').map(Number);
+                                        const d1DateStr = new Date(Date.UTC(bY, bM - 1, bD + 1)).toISOString().split('T')[0];
+                                        return (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (isPingPongBlocked) {
+                                                        showToast('BLOQUEADO POR REGLA ANTI PING-PONG: Este pedido ya es una reposición de garantía. Usa Nota Crédito o Ajuste de Factura.', 'warning');
+                                                        return;
+                                                    }
+                                                    setResolutionOption('opt2');
+                                                    if (sanitaryKey === 'producto_conforme_sin_baja') {
+                                                        const nextKey = hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno';
+                                                        setSanitaryKey(nextKey);
+                                                        const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
+                                                        if (tmpl) {
+                                                            setResolutionNotes(prev => {
+                                                                const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
+                                                                if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
+                                                                return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
+                                                            });
+                                                        }
+                                                    }
+                                                }}
+                                                style={{
+                                                    padding: '12px 14px',
+                                                    borderRadius: '12px',
+                                                    textAlign: 'left',
+                                                    backgroundColor: isPingPongBlocked ? '#FEF2F2' : resolutionOption === 'opt2' ? '#EAEFEA' : 'white',
+                                                    border: isPingPongBlocked ? '1px dashed #FCA5A5' : resolutionOption === 'opt2' ? '2px solid #0D7A57' : '1px solid #CBD5E1',
+                                                    cursor: isPingPongBlocked ? 'not-allowed' : 'pointer',
+                                                    opacity: isPingPongBlocked ? 0.75 : 1
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', fontWeight: '800', color: isPingPongBlocked ? '#991B1B' : '#1A231E', fontSize: '0.75rem', marginBottom: '4px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <Truck size={16} style={{ color: isPingPongBlocked ? '#DC2626' : resolutionOption === 'opt2' ? '#0D7A57' : '#64748B' }} />
+                                                        <span>Opción 2: Reponer Físicamente D+1 ($0 COP)</span>
+                                                    </div>
+                                                    {isPingPongBlocked && (
+                                                        <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: '800' }}>
+                                                            Anti Ping-Pong
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p style={{ fontSize: '0.7rem', color: isPingPongBlocked ? '#991B1B' : '#64748B', margin: 0, lineHeight: '1.3' }}>
+                                                    {isPingPongBlocked
+                                                        ? 'Bloqueado: El pedido origen ya es una reposición ($0 COP). Liquida con Nota Crédito o Ajuste.'
+                                                        : <>Genera pedido de reposición valorizado en <strong>$0 COP</strong> para entrega <strong>D+1 ({d1DateStr})</strong> en estado <strong>Aprobado</strong> para Picking.</>}
+                                                </p>
+                                            </button>
+                                        );
+                                    })()}
 
                                     {/* Opt 3: Nota Crédito Financiera */}
                                     <button
