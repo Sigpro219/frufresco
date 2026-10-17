@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruction, getOrderProcurementReferences } from '@/lib/orderUtils';
 import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, Gift, CheckSquare } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
@@ -761,7 +760,8 @@ function ContingencyPrintContent() {
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount || 0);
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
+        const XLSX = await import('xlsx');
         if (!orders || orders.length === 0) return;
 
         const data = orders.map((order, idx) => {
@@ -1365,8 +1365,8 @@ function ContingencyPrintContent() {
                                     {/* Poka-Yoke Banner Reposición si aplica */}
                                     {isReposicion && (
                                         <div style={{ backgroundColor: '#FEF2F2', border: '1.2px solid #EF4444', padding: '3px 8px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.8pt', color: '#991B1B', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span>RECUERDE: Los productos en este documento NO TIENEN COBRO ($0 COP - Reposición de Calidad autorizada).</span>
-                                            {parentSeq && <span style={{ color: '#B91C1C' }}>Ampara Pedido #{parentSeq}</span>}
+                                            <span>REPOSICIÓN DE GARANTÍA ($0 COP — SIN COBRO AL CLIENTE): Los productos de este documento corresponden a garantía de calidad autorizada.</span>
+                                            {parentSeq && <span style={{ color: '#B91C1C', fontWeight: 900 }}>PEDIDO HIJO DE #{parentSeq} (AMPARA GARANTÍA)</span>}
                                         </div>
                                     )}
                                     {/* Banner Remisión Fuera de Acuerdo ($0 Pendiente de Liquidación Comercial) */}

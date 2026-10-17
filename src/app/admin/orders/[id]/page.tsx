@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUtils';
+import { getFriendlyOrderId, formatStructuredSpecification, getOrderReplacementInfo } from '@/lib/orderUtils';
 import { useParams } from 'next/navigation';
 import { ADMIN_EDIT_CUTOFF_HOUR } from '@/lib/constants';
 import Link from 'next/link';
@@ -28,7 +28,8 @@ import {
     PackageOpen,
     Printer,
     ExternalLink,
-    FileText
+    FileText,
+    RotateCcw
 } from 'lucide-react';
 import { normalizeAddress } from '@/lib/orderDuplicates';
 
@@ -40,6 +41,8 @@ export default function OrderDetailPage() {
     const [items, setItems] = useState<OrderItem[]>([]);
     const [userEmail, setUserEmail] = useState('');
     const [duplicateSiblings, setDuplicateSiblings] = useState<any[]>([]);
+    const [resolvedParentOrder, setResolvedParentOrder] = useState<{ id: string; sequence_id: number; delivery_date?: string } | null>(null);
+    const [resolvedChildOrders, setResolvedChildOrders] = useState<Array<{ id: string; sequence_id: number; delivery_date?: string }>>([]);
 
     interface Order {
         id: string;
@@ -179,6 +182,55 @@ export default function OrderDetailPage() {
                 } else {
                     setDuplicateSiblings([]);
                 }
+            }
+
+            // 5. Bidirectional Replacement Lineage (Parent <-> Child D+1)
+            if (orderData) {
+                const rep = getOrderReplacementInfo(orderData);
+                if (rep.isReplacement && rep.parentSequenceId) {
+                    if (rep.parentOrderId) {
+                        const { data: pOrd } = await supabase
+                            .from('orders')
+                            .select('id, sequence_id, delivery_date')
+                            .eq('id', rep.parentOrderId)
+                            .maybeSingle();
+                        if (pOrd) setResolvedParentOrder(pOrd);
+                    } else {
+                        const { data: pOrd } = await supabase
+                            .from('orders')
+                            .select('id, sequence_id, delivery_date')
+                            .eq('sequence_id', Number(rep.parentSequenceId))
+                            .maybeSingle();
+                        if (pOrd) setResolvedParentOrder(pOrd);
+                    }
+                } else {
+                    setResolvedParentOrder(null);
+                }
+
+                // Resolve Child Replacement Orders if this is a Parent Order
+                const childrenMap = new Map<string, { id: string; sequence_id: number; delivery_date?: string }>();
+                if (rep.childReplacementOrderId && rep.childReplacementSequenceId) {
+                    childrenMap.set(rep.childReplacementOrderId, {
+                        id: rep.childReplacementOrderId,
+                        sequence_id: Number(rep.childReplacementSequenceId),
+                        delivery_date: rep.childReplacementDeliveryDate || undefined
+                    });
+                }
+                if (orderData.sequence_id) {
+                    const { data: childMatches } = await supabase
+                        .from('orders')
+                        .select('id, sequence_id, delivery_date, admin_notes')
+                        .ilike('admin_notes', `%Pedido #${orderData.sequence_id}%`)
+                        .neq('id', orderData.id);
+                    if (childMatches) {
+                        for (const c of childMatches) {
+                            if (c.id && c.sequence_id) {
+                                childrenMap.set(c.id, { id: c.id, sequence_id: c.sequence_id, delivery_date: c.delivery_date });
+                            }
+                        }
+                    }
+                }
+                setResolvedChildOrders(Array.from(childrenMap.values()));
             }
 
         } catch (e) {
@@ -463,12 +515,201 @@ export default function OrderDetailPage() {
         ? editItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
         : order.total;
 
+    const repInfo = getOrderReplacementInfo(order);
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
-                <Link href="/admin/orders/loading" style={{ color: '#6B7280', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-                    <ArrowLeft size={16} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Volver al Listado
-                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '12px' }}>
+                    <Link href="/admin/orders/loading" style={{ color: '#6B7280', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>
+                        <ArrowLeft size={16} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Volver al Listado de Pedidos
+                    </Link>
+                    {(repInfo.isReplacement || resolvedChildOrders.length > 0) && (
+                        <Link
+                            href="/admin/customer-service"
+                            style={{
+                                color: '#4338CA',
+                                backgroundColor: '#EEF2FF',
+                                border: '1px solid #C7D2FE',
+                                borderRadius: '8px',
+                                padding: '6px 12px',
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 800
+                            }}
+                        >
+                            <ShieldCheck size={14} /> Volver a Consola de Calidad (SAC)
+                        </Link>
+                    )}
+                </div>
+
+                {repInfo.isReplacement && (
+                    <div style={{
+                        marginBottom: '1.5rem',
+                        padding: '1.1rem 1.4rem',
+                        background: 'linear-gradient(135deg, #EEF2FF 0%, #ECFDF5 100%)',
+                        border: '1.5px solid #818CF8',
+                        borderLeft: '6px solid #4F46E5',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        flexWrap: 'wrap',
+                        boxShadow: '0 4px 12px rgba(79, 70, 229, 0.08)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                            <div style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '10px',
+                                backgroundColor: '#4F46E5',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                color: '#FFFFFF'
+                            }}>
+                                <RotateCcw size={20} />
+                            </div>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.92rem', fontWeight: '900', color: '#312E81', letterSpacing: '0.01em' }}>
+                                        PEDIDO HIJO — REPOSICIÓN POR GARANTÍA DE CALIDAD ($0 COP)
+                                    </span>
+                                    <span style={{
+                                        backgroundColor: '#059669',
+                                        color: '#FFFFFF',
+                                        fontSize: '0.68rem',
+                                        fontWeight: '900',
+                                        padding: '2px 8px',
+                                        borderRadius: '999px',
+                                        textTransform: 'uppercase'
+                                    }}>
+                                        SIN COBRO AL CLIENTE
+                                    </span>
+                                </div>
+                                <div style={{ fontSize: '0.82rem', color: '#3730A3', marginTop: '4px', fontWeight: '700' }}>
+                                    Este pedido es hijo directo del Pedido Padre {repInfo.parentSequenceId ? `#${repInfo.parentSequenceId}` : 'original'} y ampara la reposición física D+1 autorizada por Calidad (SAC).
+                                </div>
+                                <div style={{ fontSize: '0.74rem', color: '#4338CA', marginTop: '3px', fontWeight: '600' }}>
+                                    Origen: Consola de Calidad & SAC {repInfo.sourcePqrId ? `· Caso PQR #${repInfo.sourcePqrId.substring(0, 8)}` : ''} · Entrega programada: {order.delivery_date}
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+                            {(resolvedParentOrder?.id || repInfo.parentOrderId) && (
+                                <Link
+                                    href={`/admin/orders/${resolvedParentOrder?.id || repInfo.parentOrderId}`}
+                                    style={{
+                                        backgroundColor: '#4F46E5',
+                                        color: '#FFFFFF',
+                                        border: '1px solid #4338CA',
+                                        borderRadius: '8px',
+                                        padding: '8px 14px',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        textDecoration: 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)'
+                                    }}
+                                >
+                                    <ExternalLink size={13} />
+                                    Ver Pedido Padre #{repInfo.parentSequenceId || resolvedParentOrder?.sequence_id}
+                                </Link>
+                            )}
+                            <Link
+                                href="/admin/customer-service"
+                                style={{
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#3730A3',
+                                    border: '1.5px solid #A5B4FC',
+                                    borderRadius: '8px',
+                                    padding: '8px 14px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '800',
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <ShieldCheck size={13} />
+                                Consola SAC
+                            </Link>
+                        </div>
+                    </div>
+                )}
+
+                {!repInfo.isReplacement && resolvedChildOrders.length > 0 && (
+                    <div style={{
+                        marginBottom: '1.5rem',
+                        padding: '1rem 1.4rem',
+                        backgroundColor: '#F0FDF4',
+                        border: '1.5px solid #6EE7B7',
+                        borderLeft: '6px solid #059669',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        flexWrap: 'wrap',
+                        boxShadow: '0 2px 8px rgba(5, 150, 105, 0.08)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                            <div style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '10px',
+                                backgroundColor: '#D1FAE5',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                color: '#059669'
+                            }}>
+                                <RotateCcw size={18} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.9rem', fontWeight: '900', color: '#065F46' }}>
+                                    TRAZABILIDAD DE GARANTÍA: Pedido Padre con Reposición Física D+1
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '2px', fontWeight: '600' }}>
+                                    Este pedido generó {resolvedChildOrders.length === 1 ? 'el Pedido Hijo de Reposición' : 'los Pedidos Hijos de Reposición'} {resolvedChildOrders.map(c => `#${c.sequence_id}`).join(', ')} a $0 COP.
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+                            {resolvedChildOrders.map(child => (
+                                <Link
+                                    key={child.id}
+                                    href={`/admin/orders/${child.id}`}
+                                    style={{
+                                        backgroundColor: '#059669',
+                                        color: '#FFFFFF',
+                                        border: '1px solid #047857',
+                                        borderRadius: '8px',
+                                        padding: '8px 14px',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        textDecoration: 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <ExternalLink size={13} />
+                                    Ver Pedido Hijo #{child.sequence_id}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {duplicateSiblings.length > 0 && (
                     <div style={{
@@ -539,9 +780,46 @@ export default function OrderDetailPage() {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: 0 }}>
-                            #{getFriendlyOrderId(order)}
-                        </h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: 0 }}>
+                                #{getFriendlyOrderId(order)}
+                            </h1>
+                            {repInfo.isReplacement && (
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    backgroundColor: '#EEF2FF',
+                                    color: '#4338CA',
+                                    border: '1.5px solid #818CF8',
+                                    borderRadius: '999px',
+                                    padding: '5px 12px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '900',
+                                    letterSpacing: '0.02em'
+                                }}>
+                                    <RotateCcw size={13} />
+                                    PEDIDO HIJO {repInfo.parentSequenceId ? `DE #${repInfo.parentSequenceId}` : ''} · GARANTÍA ($0 COP)
+                                </span>
+                            )}
+                            {!repInfo.isReplacement && resolvedChildOrders.length > 0 && (
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    backgroundColor: '#ECFDF5',
+                                    color: '#047857',
+                                    border: '1.5px solid #6EE7B7',
+                                    borderRadius: '999px',
+                                    padding: '5px 12px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '900'
+                                }}>
+                                    <RotateCcw size={13} />
+                                    PEDIDO PADRE · REPOSICIÓN #{resolvedChildOrders[0].sequence_id}
+                                </span>
+                            )}
+                        </div>
                         <p style={{ color: '#6B7280', marginTop: '0.5rem' }}>
                             Creado el {new Date(order.created_at).toLocaleString()}
                         </p>

@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.210 (Blindaje Integral del Pipeline de Reposición Física D+1 en PQR: Anti Ping-Pong Estructural, Fecha D+1 Bogotá, Peso Real en Picking y Visibilidad de Cobro — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.211 (Linaje Bidireccional Padre ↔ Hijo en Pedidos de Reposición D+1, Banner de Trazabilidad en `/admin/orders/[id]`, Canal `Garantía SAC` en Tablero de Pedidos y Cintillo en Remisión Impresa — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 241 Escenarios BDD Ininterrumpidos (1..241)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 242 Escenarios BDD Ininterrumpidos (1..242)
 
 ---
 
@@ -19,16 +19,16 @@
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241 (§42.1 - §42.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242 (§39.1 - §39.6) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **241 Escenarios Canónicos (1..241)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **242 Escenarios Canónicos (1..242)** | **🟢 100%** |
 
 ---
 
@@ -10561,28 +10561,27 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Queda terminantemente prohibido el uso de emojis de texto Unicode en las etiquetas, botones, insignias y tablas de `PqrAuditModal.tsx`, `FinancialAdjustmentModal.tsx`, `src/app/admin/customer-service/page.tsx` y `src/app/admin/hr/page.tsx`. Toda señalización visual utiliza exclusivamente componentes SVG de `lucide-react` (`ShoppingBag`, `ShieldAlert`, `CreditCard`, `Truck`, `DollarSign`, `Percent`, `ShieldCheck`, `AlertTriangle`, `Scale`).
 ---
 
-#### Escenario 237: Cuarteto de Modelos de Acuerdos Especiales (`Nutresa`, `Colsubsidio`, `Lista General Quincenal`, `Lista General Mensual`), Lista Institucional Dinámica, Motor de Utilidad Porcentual Bidireccional (`%`) y Padrón SQL (SDD v1.9.209)
-- **Given** el módulo comercial en `/admin/commercial?tab=operations&subtab=agreements` (`SpecialAgreementsModule.tsx`) y el esquema relacional de Supabase (`special_agreement_models`, `special_agreement_model_clients`, `pricing_rules`, `commercial_cost_matrix`, `quotes`, `quote_items`, `profiles`).
-- **When** el director comercial o analista gestiona las listas de precios congelados / indexados y ejecuta la renovación periódica (quincenal o mensual):
+#### Escenario 237: Cuarteto de Modelos de Acuerdos Especiales (`Nutresa`, `Colsubsidio`, `Lista General Quincenal`, `Lista General Mensual`), Lista Institucional Dinámica, Motor de Utilidad Porcentual Bidireccional (`%`), Cero-Mocks y Pipeline Unificado SSOT + Comodín (SDD v1.9.211)
+- **Given** el módulo de operación comercial en `/admin/commercial?tab=operations&subtab=agreements` (`SpecialAgreementsModule.tsx` — **Fuente Única de Verdad**), el directorio de contratos en `/admin/commercial?tab=clients&clientTab=agreements` (`CommercialAgreementsModule.tsx` — **Lector y Comodín Ad-Hoc**) y el esquema relacional de Supabase (`special_agreement_models`, `special_agreement_model_clients`, `app_settings`, `pricing_rules`, `commercial_cost_matrix`, `quotes`, `quote_items`, `profiles`).
+- **When** el director comercial o analista gestiona las listas de precios congelados / indexados y ejecuta la renovación periódica (quincenal o mensual) o vincula clientes en cascada:
 - **Then**:
-  1. **Cuarteto de Espacios Maestros de Negociación y Fijación de Listas (`special_agreement_models`):**
-     - La barra superior de tarjetas de `SpecialAgreementsModule.tsx` despliega 4 espacios canónicos bajo el mismo motor financiero e inteligencia de mercado:
-       * **`nutresa` — Grupo Nutresa (IRCC):** Corporativo dedicado indexado a `SIPSA (DANE) + Prima $ COP`, con filtro de cadenas (`El Corral`, `Beer Station`, `Leños & Carbón`) vinculado al Acuerdo Maestro `#96` y sus sucursales.
-       * **`colsubsidio` — Caja de Compensación Colsubsidio:** Corporativo dedicado de variación quincenal (`1Q / 2Q`), comparando `Propuesta Cliente (NUE PRE)` vs `Anterior (ANT PRE)` con indicador visual `SUBIÓ / BAJÓ` y vinculado al Acuerdo Maestro `#86` y sus sedes operativas.
-       * **`general_quincenal` — Lista General Quincenal (15 Días):** Lista estática maestra compartida de renovación cada 15 días (388 SKUs del catálogo general), comparando `Precio Quincena Anterior` vs `Costo Matriz / Lista Institucional Dinámica`, `SIPSA DANE` y `Precio Sugerido IA`.
-       * **`general_mensual` — Lista General Mensual (30 Días):** Lista estática maestra compartida de renovación cada 30 días (388 SKUs del catálogo general, vinculada al Acuerdo Maestro `#165`), comparando `Precio Mes Anterior` vs `Costo Matriz / Lista Institucional Dinámica`, `SIPSA DANE` y `Precio Sugerido IA`.
-  2. **Limpieza Visual en Columna Producto y Referencia Dual `Costo Matriz + Lista Institucional Dinámica`:**
-     - **Prohibición de Siglas de Categoría (`DE`, `HO`):** En la columna `PRODUCTO EN LISTA`, para Colsubsidio y las Listas Generales (`general_quincenal`, `general_mensual`), queda prohibido mostrar abreviaturas o categorías de catálogo (`DE`, `HO`, `FR`). Solo se exhibe el nombre oficial del producto y su unidad de medida limpia (`Kg`, `Und`), reservando el badge de cadena exclusivamente para las marcas de restaurante de Grupo Nutresa.
-     - **Referencia a la Lista Institucional Dinámica (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`):** El módulo consulta la tabla `pricing_rules` para el modelo base `General institucional dinámico` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`), obteniendo el `margin_adjustment` específico de cada producto (ej. Acelga `+110%`, Acelgas chinas `+40%`, Achote `+10%`) y calculando su **Precio de Lista Institucional Dinámica** mediante la fórmula canónica de `SPEC.md §7.3.A`:
+  1. **Cuarteto de Espacios Maestros de Negociación y Fijación de Listas (`special_agreement_models`) bajo Política Cero-Mocks:**
+     - La barra superior de tarjetas de `SpecialAgreementsModule.tsx` despliega 4 espacios canónicos cargados **100% en vivo desde Supabase** (quedando desconectados los arreglos estáticos `INITIAL_NUTRESA_ITEMS` / `INITIAL_COLSUBSIDIO_ITEMS`, erradicados los diccionarios estáticos de SIPSA y eliminados los fallbacks artificiales `* 1.05` o conteos quemados):
+       * **`nutresa` — Grupo Nutresa (IRCC):** Corporativo dedicado indexado a `SIPSA (DANE) + Prima $ COP` (66 SKUs reales), con filtro de cadenas (`El Corral`, `Beer Station`, `Leños & Carbón`) vinculado al Acuerdo Maestro `#96` (`ab9c0c14-a27e-4317-9995-dfb4ba9bcb80`, 44 sedes).
+       * **`colsubsidio` — Caja de Compensación Colsubsidio:** Corporativo dedicado de variación quincenal (`1Q / 2Q`, 252 SKUs reales), comparando `Propuesta Cliente (NUE PRE)` vs `Anterior (ANT PRE)` con indicador visual `SUBIÓ / BAJÓ` y vinculado al Acuerdo Maestro `#86` (`5afc3173-4ced-4635-a71f-56ef57e144f8`, 32 sedes).
+       * **`general_quincenal` — Lista General Quincenal (15 Días):** Lista estática maestra compartida de renovación cada 15 días (388 SKUs reales, Acuerdo Maestro `#166` `b5a2abae-68f1-44fe-87a3-84b1817026db`, 30 clientes/sedes), comparando `Precio Quincena Anterior` vs `Costo Matriz / Lista Institucional Dinámica`, `SIPSA DANE` y `Precio Sugerido IA`.
+       * **`general_mensual` — Lista General Mensual (30 Días):** Lista estática maestra compartida de renovación cada 30 días (388 SKUs reales, Acuerdo Maestro `#165` `6572e7d6-4925-4576-8960-caca64a3c47f`, 10 clientes/sedes), comparando `Precio Mes Anterior` vs `Costo Matriz / Lista Institucional Dinámica`, `SIPSA DANE` y `Precio Sugerido IA`.
+  2. **Limpieza Visual en Columna Producto (SKU bajo el Nombre) y Referencia Dual `Costo Matriz + Lista Institucional Dinámica`:**
+     - **Ahorro de Ancho Horizontal y Prohibición de Siglas (`DE`, `HO`):** Se elimina la columna independiente `SKU` para ubicar el código `SKU: XXX` debajo del nombre del producto junto a la unidad (`Kg`, `Und`), liberando ancho horizontal para que la galería opere con `0px` de desborde.
+     - **Referencia a la Lista Institucional Dinámica (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`):** El módulo consulta `pricing_rules` para el modelo base `General institucional dinámico`, obteniendo el `margin_adjustment` real de cada producto y calculando su **Precio de Lista Institucional Dinámica** mediante la fórmula canónica de `SPEC.md §7.3.A`:
        $$\text{Lista Institucional Dinámica} = \left\lceil \frac{\text{Costo Efectivo (con Merma)} \times \left(1 + \frac{\text{margin\_adjustment}}{100}\right)}{50} \right\rceil \times 50$$
-     - En la columna de costo/referencia (`COSTO / LISTA INST. DINÁMICA`), se visualiza tanto el **Costo Estabilizado Matriz (`commercial_cost_matrix.manual_cost`)** como el **Precio de Lista Institucional Dinámica** y su regla (`Regla Inst: +X%`).
   3. **Motor Real de `PRECIO SUGERIDO IA` y Columna Bidireccional de `% UTILIDAD / MARGEN`:**
-     - **Erradicación del `Math.max(..., currentPrice)` ciego:** El `PRECIO SUGERIDO IA` se calcula directamente desde la **Lista Institucional Dinámica** del producto más la **Prima de Estabilización por Congelamiento Temporal** (`+3%` en perecederos para 15 días quincenal, `+6%` en perecederos para 30 días mensual, o indexación con boletín `SIPSA DANE`), sin arrastrar artificialmente precios antiguos sobrevalorados.
-     - **Columna Interactiva `% UTILIDAD` (Edición Bidireccional):** La tabla incorpora la columna explícita de **`% UTILIDAD`** que muestra el porcentaje de utilidad sobre costo (`Markup % = ((Precio - Costo) / Costo) * 100`, homólogo a `pricing_rules`), el margen bruto sobre venta (`((Precio - Costo) / Precio) * 100`) y la ganancia en `$/Kg` (ej. en Acelga a `$2.900` sobre costo de `$1.050` $\rightarrow$ **`+176.2%` Utilidad** / `+$1.850/Kg` vs. Regla `+110%`).
-     - El analista puede editar directamente el **`% UTILIDAD`** para que el sistema recalcule el `NUEVO PRECIO A FIJAR` (redondeado a múltiplos de `$50 COP`), o editar el `NUEVO PRECIO A FIJAR` para que se recalcule instantáneamente el `% UTILIDAD`.
-     - **Impacto Mensual (`IMPACTO MES ($)`):** Para evitar que la columna `IMPACTO MES ($)` aparezca en `$0` al iniciar la revisión, las listas generales pueden proyectar la actualización sugerida o mostrar simultáneamente el **Delta Mensual vs. Lista Anterior** (`(Nuevo Precio - Precio Anterior) × Consumo Mes`) y la **Utilidad Bruta Mensual en Pesos** (`(Nuevo Precio - Costo) × Consumo Mes`).
-  4. **Arquitectura SQL de Padrón Permanente (`special_agreement_model_clients`) y Buscador Combinado Inteligente (`apply_special_agreement_to_clients`):**
-     - Cada modelo mantiene en PostgreSQL su padrón persistente de clientes aplicables (`special_agreement_model_clients`), precargado en el Modal de Consagración con Omnibox multi-token insensible a tildes, bandeja de chips fijos, cascada Casa Matriz $\to$ Sucursales y propagación transaccional hacia `quote_items`, `quotes`, `app_settings` y `profiles.logistics_data`.
+     - El `PRECIO SUGERIDO IA` se calcula directamente desde la **Lista Institucional Dinámica** más la **Prima de Estabilización por Congelamiento Temporal** (`+3%` en perecederos quincenal, `+6%` en perecederos mensual, o indexación con boletín `SIPSA DANE` en vivo de `datos.gov.co`).
+     - La columna interactiva **`% UTILIDAD`** muestra y permite editar bidireccionalmente el porcentaje de utilidad sobre costo (`Markup % = ((Precio - Costo) / Costo) * 100`), recalculando al instante el `NUEVO PRECIO A FIJAR` en múltiplos de `$50 COP`.
+  4. **Reconstrucción del Pipeline Unificado: `SpecialAgreementsModule` como Fuente Única de Verdad (SSOT) y `CommercialAgreementsModule` como Comodín Ad-Hoc:**
+     - **Absorción de Jerarquía Corporativa Completa en Imagen 1 (`SpecialAgreementsModule.tsx`):** El Modal de Consagración y Cascada SQL carga el universo íntegro de **519 perfiles B2B (`94 Casas Matrices` + `425 Sucursales`)** sin excluir sucursales con `is_active = null`. Incorpora las 5 pestañas de filtrado (`Del Modelo`, `Marcados`, `Casas Matrices (94)`, `Sucursales (425)`, `Todos (519)`), las insignias `<Building2 /> Casa Matriz (N sucursales)` y `<MapPin /> Sucursal Específica (Sucursal de: [Matriz])`, y la cascada automática al marcar una Casa Matriz.
+     - **Sincronización Bidireccional Cero Split-Brain:** Al consagrar un modelo en `SpecialAgreementsModule.tsx` (o al editar sedes vinculadas en `CommercialAgreementsModule.tsx`), se actualizan en una sola transacción `special_agreement_model_clients`, `app_settings` (`key = 'agreement_clients:' + master_quote_id`), `profiles.logistics_data.active_master_agreement_id` y se marcan como `status = 'superseded'` las copias individuales obsoletas en `quotes`.
+     - **Rol de `CommercialAgreementsModule.tsx` (Imagen 2 — Lector + Comodín Ad-Hoc):** En la tabla de Acuerdos Comerciales, los 4 modelos estructurales exhiben la insignia `Fuente de Verdad: Acuerdos Especiales` y el botón directo `[Ir a Mesa de Cálculo ↗]`. En el asistente `Crear Acuerdo Comercial Institucional`, la pestaña multi-cliente opera formalmente como **`Acuerdo Grupal Comodín (Multi-Cliente Ad-Hoc)`**, reservada para cuando ingrese una lista extraordinaria simultánea para un grupo nuevo de clientes fuera de los 4 modelos permanentes.
 ---
 
 
@@ -10661,6 +10660,23 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   4. **Desambiguación Heurística RCA frente a Nombres de Productos, Píldora Monetaria en Tabla SAC y Consulta de Proveedores:**
      - En `parseRcaFromRecord`, las palabras clave explícitas del defecto (`magulla`, `golpe`, `aplastad`, `partid`, `faltante`, `moho`, `frio`, `calibre`) tienen prelación sobre la inferencia de maduración, y se eliminan los falsos positivos por nombres de producto que contienen `"verde"` (`Plátano verde`, `Manzana verde`, `Limón verde`) o `"cebolla"`.
      - En `src/app/admin/customer-service/page.tsx`, la columna `IMPUTABILIDAD & COBRO` proyecta junto al área responsable la píldora monetaria del caso (`Cobro: $XX.XXX` en rojo cuando `totalImputedCop > 0` o `$0 Exonerado` en azul cuando el caso está cerrado sin cobro), y la consulta a `providers` selecciona `id, name, tax_id, phone` mapeando `nit: p.tax_id || ''` sin errores HTTP 400.
+---
+
+### Escenario 242: Linaje Bidireccional Padre ↔ Hijo en Pedidos de Reposición D+1 (`Opción 2`), Banner de Trazabilidad en `/admin/orders/[id]`, Canal `Garantía SAC` en Tablero de Pedidos y Cintillo en Remisión Impresa (SDD v1.9.211)
+- **Given** una PQR resuelta bajo la **Opción 2 (`Reponer Físicamente D+1 — $0 COP`)** en `src/app/admin/customer-service/components/PqrAuditModal.tsx`,
+- **When** el auditor confirma el dictamen y el sistema genera la orden de reposición física D+1 y redirige a `/admin/orders/[newOrder.id]`,
+- **Then** el sistema garantiza la trazabilidad bidireccional completa entre el Pedido Padre y el Pedido Hijo en todas las capas:
+  1. **Etiquetado Estructurado Padre ↔ Hijo en Base de Datos (`PqrAuditModal.tsx` y `orderUtils.ts`):**
+     - El **Pedido Hijo** se inserta con `origin_source = 'customer_service'`, `total = 0`, `shipping_cost = 0` y el bloque estructurado en `admin_notes`: `[REPOSICIÓN DE GARANTÍA - SIN COBRO AL CLIENTE] [PEDIDO HIJO DE #<parent_sequence_id> | PARENT_ORDER_ID: <parent_order_id> | PQR_ID: <pqr_id>] Reemplazo físico por PQR #<pqr_short> (Pedido #<parent_sequence_id>)`.
+     - El **Pedido Padre** recibe en su `admin_notes` el sello inverso `[HIJO_REPOSICION_D1: #<child_sequence_id> | ID: <child_order_id> | ENTREGA: <tomorrow>]`.
+     - El parser central `getOrderReplacementInfo(order)` (`src/lib/orderUtils.ts`) extrae y expone tanto la ascendencia del hijo (`isReplacement`, `parentSequenceId`, `parentOrderId`, `sourcePqrId`, `replacementType`) como la descendencia del padre (`childReplacementSequenceId`, `childReplacementOrderId`, `childReplacementDeliveryDate`).
+  2. **Banner de Linaje y Navegación Cruzada en Detalle de Pedido (`src/app/admin/orders/[id]/page.tsx`):**
+     - Cuando el usuario aterriza en el **Pedido Hijo** (`/admin/orders/[id]`), se despliega en la parte superior el banner índigo/esmeralda **`PEDIDO HIJO — REPOSICIÓN POR GARANTÍA DE CALIDAD ($0 COP)`** con distintivo **`SIN COBRO AL CLIENTE`**, indicando explícitamente que es hijo directo del Pedido Padre `#XXXX`, el caso PQR origen y la fecha de entrega D+1, acompañado de los botones de navegación en 1 clic **`[ Ver Pedido Padre #XXXX ]`** y **`[ Volver a Consola de Calidad (SAC) ]`** (`/admin/customer-service`), además de la píldora **`PEDIDO HIJO DE #XXXX · GARANTÍA ($0 COP)`** junto al folio principal.
+     - Cuando el usuario abre el **Pedido Padre**, se despliega el banner esmeralda **`TRAZABILIDAD DE GARANTÍA: Pedido Padre con Reposición Física D+1`** indicando el folio del Pedido Hijo `#YYYY` generado a `$0 COP`, con botón directo **`[ Ver Pedido Hijo #YYYY ]`**.
+  3. **Identificación en Tablero General de Pedidos (`src/app/admin/orders/loading/page.tsx`) y Remisión Impresa (`contingency-print/page.tsx`):**
+     - En `getChannelBadge`, los canales `customer_service` y `customer_service_shortage_d1` se renderizan con la insignia **`Garantía SAC`** e icono `<RotateCcw size={10} />`.
+     - En la fila del tablero y en el encabezado del modal rápido de cargue, el Pedido Hijo proyecta el badge **`PEDIDO HIJO DE #XXXX`** (`PEDIDO HIJO · REPOSICIÓN DE #XXXX`), y el Pedido Padre proyecta el badge **`TIENE HIJO #YYYY`** (`PEDIDO PADRE · TIENE HIJO #YYYY`).
+     - En la remisión impresa (`/admin/orders/contingency-print`), el cintillo Poka-Yoke declara explícitamente **`REPOSICIÓN DE GARANTÍA ($0 COP — SIN COBRO AL CLIENTE)`** a la izquierda y **`PEDIDO HIJO DE #XXXX (AMPARA GARANTÍA)`** a la derecha.
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad

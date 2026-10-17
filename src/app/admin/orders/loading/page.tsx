@@ -174,6 +174,9 @@ const getChannelBadge = (source: string, isB2B?: boolean) => {
             return <span style={{ backgroundColor: '#FCE7F3', color: '#9D174D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Home size={10} strokeWidth={1.5} /> Web Hogar</span>;
         case 'web_b2b': 
             return <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Building2 size={10} strokeWidth={1.5} /> Web Institucional</span>;
+        case 'customer_service':
+        case 'customer_service_shortage_d1':
+            return <span style={{ backgroundColor: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RotateCcw size={10} strokeWidth={2} /> Garantía SAC</span>;
         default: 
             return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={10} strokeWidth={1.5} /> {source || 'Web'}</span>;
     }
@@ -4929,22 +4932,41 @@ function OrderLoadingContent() {
 
                                         {(() => {
                                             const rep = getOrderReplacementInfo(selectedOrder);
-                                            if (!rep.isReplacement) return null;
+                                            if (!rep.isReplacement && !rep.childReplacementSequenceId) return null;
+                                            if (rep.isReplacement) {
+                                                return (
+                                                    <span style={{
+                                                        padding: '4px 12px',
+                                                        borderRadius: '20px',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: '900',
+                                                        backgroundColor: '#EEF2FF',
+                                                        color: '#4338CA',
+                                                        border: '1.5px solid #818CF8',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px'
+                                                    }}>
+                                                        <RotateCcw size={13} strokeWidth={2.8} />
+                                                        PEDIDO HIJO · REPOSICIÓN {rep.parentSequenceId ? `DE #${rep.parentSequenceId}` : '($0 COP)'}
+                                                    </span>
+                                                );
+                                            }
                                             return (
                                                 <span style={{
                                                     padding: '4px 12px',
                                                     borderRadius: '20px',
                                                     fontSize: '0.75rem',
                                                     fontWeight: '900',
-                                                    backgroundColor: '#EEF2FF',
-                                                    color: '#4338CA',
-                                                    border: '1.5px solid #818CF8',
+                                                    backgroundColor: '#ECFDF5',
+                                                    color: '#047857',
+                                                    border: '1.5px solid #6EE7B7',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
                                                     gap: '5px'
                                                 }}>
                                                     <RotateCcw size={13} strokeWidth={2.8} />
-                                                    REPOSICIÓN POR CALIDAD {rep.parentSequenceId ? `(AMPARA #${rep.parentSequenceId})` : '($0 COP)'}
+                                                    PEDIDO PADRE · TIENE HIJO #{rep.childReplacementSequenceId}
                                                 </span>
                                             );
                                         })()}
@@ -7884,14 +7906,37 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                                 {getChannelBadge(order.origin_source)}
                                 {(() => {
                                     const rep = getOrderReplacementInfo(order);
-                                    if (!rep.isReplacement) return null;
+                                    if (!rep.isReplacement && !rep.childReplacementSequenceId) return null;
+                                    if (rep.isReplacement) {
+                                        return (
+                                            <span 
+                                                title={rep.parentSequenceId ? `Pedido Hijo de Reposición vinculado al Pedido Padre #${rep.parentSequenceId}` : 'Reposición de Garantía por Calidad ($0 COP)'}
+                                                style={{
+                                                    backgroundColor: '#EEF2FF',
+                                                    color: '#4338CA',
+                                                    border: '1.2px solid #818CF8',
+                                                    borderRadius: '5px',
+                                                    padding: '1px 6px',
+                                                    fontSize: '0.66rem',
+                                                    fontWeight: '900',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '3px',
+                                                    boxShadow: '0 1px 2px rgba(67, 56, 202, 0.12)'
+                                                }}
+                                            >
+                                                <RotateCcw size={10} strokeWidth={2.8} />
+                                                <span>PEDIDO HIJO {rep.parentSequenceId ? `DE #${rep.parentSequenceId}` : '($0)'}</span>
+                                            </span>
+                                        );
+                                    }
                                     return (
                                         <span 
-                                            title={rep.parentSequenceId ? `Reposición vinculada al Pedido #${rep.parentSequenceId}` : 'Reposición de Garantía por Calidad ($0 COP)'}
+                                            title={`Pedido Padre con Reposición Física D+1 en Pedido Hijo #${rep.childReplacementSequenceId}`}
                                             style={{
-                                                backgroundColor: '#EEF2FF',
-                                                color: '#4338CA',
-                                                border: '1.2px solid #818CF8',
+                                                backgroundColor: '#ECFDF5',
+                                                color: '#047857',
+                                                border: '1.2px solid #6EE7B7',
                                                 borderRadius: '5px',
                                                 padding: '1px 6px',
                                                 fontSize: '0.66rem',
@@ -7899,11 +7944,11 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 gap: '3px',
-                                                boxShadow: '0 1px 2px rgba(67, 56, 202, 0.12)'
+                                                boxShadow: '0 1px 2px rgba(4, 120, 87, 0.12)'
                                             }}
                                         >
                                             <RotateCcw size={10} strokeWidth={2.8} />
-                                            <span>REPOSICIÓN {rep.parentSequenceId ? `DE #${rep.parentSequenceId}` : '($0)'}</span>
+                                            <span>TIENE HIJO #{rep.childReplacementSequenceId}</span>
                                         </span>
                                     );
                                 })()}

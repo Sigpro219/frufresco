@@ -1325,12 +1325,21 @@ export default function PqrAuditModal({
                             total: 0,
                             subtotal: 0,
                             total_weight_kg: replacementWeightKg,
-                            admin_notes: `[REPOSICIÓN DE GARANTÍA $0 COP - ${isPartial ? 'RECHAZO PARCIAL' : 'RECHAZO TOTAL'}] Generado por PQR #${pqr.id.substring(0, 8)} del Pedido #${originalOrder.sequence_id}.\n\nNotas: ${baseCleanNotes}`
+                            admin_notes: `[REPOSICIÓN DE GARANTÍA $0 COP - ${isPartial ? 'RECHAZO PARCIAL' : 'RECHAZO TOTAL'}] [PEDIDO HIJO DE #${originalOrder.sequence_id} | PARENT_ORDER_ID: ${originalOrder.id} | PQR_ID: ${pqr.id}] Generado por PQR #${pqr.id.substring(0, 8)} del Pedido #${originalOrder.sequence_id}.\n\nNotas: ${baseCleanNotes}`
                         }])
                         .select()
                         .single();
 
                     if (newOrderErr || !newOrder) throw new Error(`Error creando pedido de reposición: ${newOrderErr?.message}`);
+
+                    const parentChildTag = `[HIJO_REPOSICION_D1: #${newOrder.sequence_id} | ID: ${newOrder.id} | ENTREGA: ${tomorrow}]`;
+                    const updatedParentNotes = originalOrder.admin_notes
+                        ? `${originalOrder.admin_notes}\n${parentChildTag}`
+                        : parentChildTag;
+                    await supabase
+                        .from('orders')
+                        .update({ admin_notes: updatedParentNotes })
+                        .eq('id', originalOrder.id);
 
                     const itemsWithOrderId = itemsToReprogram.map(item => ({ ...item, order_id: newOrder.id }));
                     const { error: insertItemsErr } = await supabase.from('order_items').insert(itemsWithOrderId);
@@ -1345,7 +1354,7 @@ export default function PqrAuditModal({
                         }
                     }
 
-                    conceptBlock = `[CONCEPTO: Opción 2 - Reponer D+1 ($0 COP) (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Pedido de reposición generado con folio #${newOrder.sequence_id} (Entrega D+1: ${tomorrow})`;
+                    conceptBlock = `[CONCEPTO: Opción 2 - Reponer D+1 ($0 COP) (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Pedido Hijo de Reposición generado con folio #${newOrder.sequence_id} (Ampara Pedido Padre #${originalOrder.sequence_id} • Entrega D+1: ${tomorrow})`;
                     redirectUrl = `/admin/orders/${newOrder.id}`;
 
                 } else if (resolutionOption === 'opt3' || resolutionOption === 'opt4') {

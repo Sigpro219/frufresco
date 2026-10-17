@@ -685,6 +685,11 @@ export interface OrderReplacementInfo {
     isReplacement: boolean;
     parentSequenceId?: string;
     parentOrderId?: string;
+    sourcePqrId?: string;
+    replacementType?: 'partial' | 'total';
+    childReplacementSequenceId?: string;
+    childReplacementOrderId?: string;
+    childReplacementDeliveryDate?: string;
     notes?: string;
 }
 
@@ -692,24 +697,53 @@ export const getOrderReplacementInfo = (order: any): OrderReplacementInfo => {
     if (!order) return { isReplacement: false };
 
     const logistics = order.logistics_data || {};
-    const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
-    
+    const rawNotes = `${order.admin_notes || ''} ${order.special_notes || ''}`;
+    const notes = rawNotes.toLowerCase();
+
+    // Check if this order is a Parent Order that spawned a Child Replacement Order
+    const childMatch = rawNotes.match(/\[HIJO_REPOSICION_D1:\s*#?(\d+)\s*\|\s*ID:\s*([a-f0-9-]{8,36})(?:\s*\|\s*ENTREGA:\s*([0-9-]+))?/i);
+    const childReplacementSequenceId = childMatch ? childMatch[1] : undefined;
+    const childReplacementOrderId = childMatch ? childMatch[2] : undefined;
+    const childReplacementDeliveryDate = childMatch ? childMatch[3] : undefined;
+
     const isRep = Boolean(
         logistics.is_replacement ||
         logistics.parent_order_id ||
-        notes.includes('reposici') ||
+        notes.includes('[reposición de garantía') ||
+        notes.includes('[reposicion de garantia') ||
+        notes.includes('[anexión d+1') ||
         order.origin_source === 'customer_service' ||
+        order.origin_source === 'customer_service_shortage_d1' ||
         (order.total === 0 && (notes.includes('pqr') || notes.includes('garantía') || notes.includes('garantia')))
     );
 
-    if (!isRep) return { isReplacement: false };
+    if (!isRep) {
+        return {
+            isReplacement: false,
+            childReplacementSequenceId,
+            childReplacementOrderId,
+            childReplacementDeliveryDate
+        };
+    }
 
     let parentSeq = logistics.parent_order_sequence;
     let parentId = logistics.parent_order_id;
+    let sourcePqrId = logistics.source_pqr_id;
+
+    if (!parentId) {
+        const parentIdMatch = rawNotes.match(/PARENT_ORDER_ID:\s*([a-f0-9-]{8,36})/i);
+        if (parentIdMatch) parentId = parentIdMatch[1];
+    }
+
+    if (!sourcePqrId) {
+        const pqrIdMatch = rawNotes.match(/PQR_ID:\s*([a-f0-9-]{8,36})/i) || rawNotes.match(/PQR\s*#([a-f0-9-]{8,36})/i);
+        if (pqrIdMatch) sourcePqrId = pqrIdMatch[1];
+    }
 
     if (!parentSeq) {
-        // Regex to extract folio/sequence like #PED-10425 or Pedido #10425 or Pedido 10425
-        const match = notes.match(/pedido\s*(?:#|no\.?|num\.?)?\s*(\d{3,})/i) ||
+        const match = rawNotes.match(/PEDIDO\s+HIJO\s+DE\s+#(\d+)/i) ||
+                      rawNotes.match(/del\s+Pedido\s*#(\d+)/i) ||
+                      notes.match(/pedido\s*(?:#|no\.?|num\.?)?\s*(\d{3,})/i) ||
                       notes.match(/#ped-(\d{3,})/i) ||
                       notes.match(/#(\d{4,})/i);
         if (match) {
@@ -717,10 +751,17 @@ export const getOrderReplacementInfo = (order: any): OrderReplacementInfo => {
         }
     }
 
+    const replacementType: 'partial' | 'total' = notes.includes('rechazo total') ? 'total' : 'partial';
+
     return {
         isReplacement: true,
         parentSequenceId: parentSeq ? String(parentSeq) : undefined,
         parentOrderId: parentId,
+        sourcePqrId,
+        replacementType,
+        childReplacementSequenceId,
+        childReplacementOrderId,
+        childReplacementDeliveryDate,
         notes: order.admin_notes || order.special_notes
     };
 };
