@@ -43,7 +43,10 @@ import {
     Plus,
     Zap,
     Trash2,
-    ShoppingCart
+    ShoppingCart,
+    Search,
+    HelpCircle,
+    Info
 } from 'lucide-react';
 import { WorkCell, WorkCellHistoryEntry } from '@/types/workCells';
 import InventoryWasteModal from '@/components/InventoryWasteModal';
@@ -52,6 +55,7 @@ import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSales
 import FastPlazaPurchasesModal from '@/components/FastPlazaPurchasesModal';
 
 type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month';
+type ShrinkageTimeScale = 'week' | 'month' | 'quarter';
 
 // Compact money formatter for large figures ($9.87B, $35.9M, $45.000)
 const formatCompactMoney = (num: number): string => {
@@ -159,8 +163,15 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
     const [stocks, setStocks] = useState<any[]>([]);
     const [costMatrix, setCostMatrix] = useState<Record<string, number>>({});
     const [movements, setMovements] = useState<any[]>([]);
+    const [quarterlyMovements, setQuarterlyMovements] = useState<any[]>([]);
     const [tasks, setTasks] = useState<any[]>([]);
     const [closings, setClosings] = useState<any[]>([]);
+
+    // Estados de la Tabla Histórica de Mermas por Producto (3 Magnitudes de Tiempo: Semana / Mes / Trimestre — Escenario 245)
+    const [shrinkageScale, setShrinkageScale] = useState<ShrinkageTimeScale>('week');
+    const [shrinkageSearch, setShrinkageSearch] = useState<string>('');
+    const [onlyWithShrinkageOrFlow, setOnlyWithShrinkageOrFlow] = useState<boolean>(true);
+    const [activeShrinkageTooltip, setActiveShrinkageTooltip] = useState<string | null>(null);
     
     // Centro de Informes & Exportaciones
     const [isReportsMenuOpen, setIsReportsMenuOpen] = useState<boolean>(false);
@@ -213,6 +224,9 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
 
         try {
             const { startIso, endIso } = getDateRange(timeRange);
+            const now = new Date();
+            const quarterStart = new Date(now.getFullYear(), now.getMonth() - 2, 1, 0, 0, 0, 0);
+            const quarterStartIso = quarterStart.toISOString();
 
             const [
                 cellsRes,
@@ -220,18 +234,24 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 stocksRes,
                 matrixRes,
                 movementsRes,
+                quarterlyMovsRes,
                 tasksRes,
                 collabsRes,
                 closingsRes
             ] = await Promise.all([
                 supabase.from('app_settings').select('value').eq('key', 'work_cells_governance').maybeSingle(),
-                supabase.from('products').select('id, name, sku, category, inventory_group, buying_team, unit_of_measure, is_active, parent_id').eq('is_active', true),
+                supabase.from('products').select('id, name, sku, accounting_id, category, inventory_group, buying_team, unit_of_measure, is_active, parent_id, theoretical_shrinkage_pct').eq('is_active', true),
                 supabase.from('inventory_stocks').select('id, product_id, warehouse_id, quantity, status, min_stock_level, updated_at'),
                 supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true),
                 supabase.from('inventory_movements')
                     .select('id, product_id, quantity, type, notes, created_at, reference_type')
                     .gte('created_at', startIso)
                     .lte('created_at', endIso),
+                supabase.from('inventory_movements')
+                    .select('id, product_id, quantity, type, notes, created_at, reference_type')
+                    .gte('created_at', quarterStartIso)
+                    .lte('created_at', endIso)
+                    .limit(10000),
                 supabase.from('inventory_random_tasks')
                     .select('id, scheduled_date, items:inventory_task_items(product_id, expected_qty, actual_qty, difference_percent)')
                     .gte('scheduled_date', startIso.split('T')[0]),
@@ -271,6 +291,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             setProducts(productsRes.data || []);
             setStocks(stocksRes.data || []);
             setMovements(movementsRes.data || []);
+            setQuarterlyMovements(quarterlyMovsRes.data || []);
             setTasks(tasksRes.data || []);
             setCollaborators(collabsRes.data || []);
             setClosings(closingsRes.data || []);
@@ -627,6 +648,227 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             payrollCost
         };
     }, [closings, movements, costMatrix]);
+
+    // 6. Registro Histórico de Mermas por Producto en 3 Magnitudes de Tiempo (Semana por Días, Mes por Semanas, Trimestre por Meses + Comparativo — Escenario 245)
+    const historicalShrinkageData = useMemo(() => {
+        const now = new Date();
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+        // 1. Definir los 7 cubos diarios de "Esta Semana" (últimos 7 días hasta hoy)
+        const dayNamesShort = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const weekDayBuckets: { key: string; label: string; subLabel: string; startMs: number; endMs: number }[] = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 0, 0, 0, 0);
+            const dEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+            const dayName = i === 0 ? 'Hoy' : dayNamesShort[d.getDay()];
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            weekDayBuckets.push({
+                key: `${d.getFullYear()}-${mm}-${dd}`,
+                label: dayName,
+                subLabel: `${dd}/${mm}`,
+                startMs: d.getTime(),
+                endMs: dEnd.getTime()
+            });
+        }
+        const weekStartMs = weekDayBuckets[0].startMs;
+
+        // 2. Definir los 4 cubos semanales de "Este Mes" (Mes calendario actual o últimos 28 días si estamos en los primeros días del mes)
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const monthShortNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const curYear = now.getFullYear();
+        const curMonth = now.getMonth();
+        const lastDayOfCurMonth = new Date(curYear, curMonth + 1, 0).getDate();
+        const monthStartMs = new Date(curYear, curMonth, 1, 0, 0, 0, 0).getTime();
+
+        const monthWeekBuckets: { key: string; label: string; subLabel: string; startMs: number; endMs: number }[] = [
+            {
+                key: 'w1',
+                label: 'Semana 1',
+                subLabel: `01 - 07 ${monthShortNames[curMonth]}`,
+                startMs: new Date(curYear, curMonth, 1, 0, 0, 0, 0).getTime(),
+                endMs: new Date(curYear, curMonth, 7, 23, 59, 59, 999).getTime()
+            },
+            {
+                key: 'w2',
+                label: 'Semana 2',
+                subLabel: `08 - 14 ${monthShortNames[curMonth]}`,
+                startMs: new Date(curYear, curMonth, 8, 0, 0, 0, 0).getTime(),
+                endMs: new Date(curYear, curMonth, 14, 23, 59, 59, 999).getTime()
+            },
+            {
+                key: 'w3',
+                label: 'Semana 3',
+                subLabel: `15 - 21 ${monthShortNames[curMonth]}`,
+                startMs: new Date(curYear, curMonth, 15, 0, 0, 0, 0).getTime(),
+                endMs: new Date(curYear, curMonth, 21, 23, 59, 59, 999).getTime()
+            },
+            {
+                key: 'w4',
+                label: 'Semana 4+',
+                subLabel: `22 - ${lastDayOfCurMonth} ${monthShortNames[curMonth]}`,
+                startMs: new Date(curYear, curMonth, 22, 0, 0, 0, 0).getTime(),
+                endMs: new Date(curYear, curMonth, lastDayOfCurMonth, 23, 59, 59, 999).getTime()
+            }
+        ];
+
+        // 3. Definir los 3 cubos mensuales de "Este Trimestre" (Mes -2, Mes -1, Mes Actual)
+        const quarterMonthBuckets: { key: string; label: string; subLabel: string; startMs: number; endMs: number }[] = [];
+        for (let mOffset = 2; mOffset >= 0; mOffset--) {
+            const mDate = new Date(curYear, curMonth - mOffset, 1, 0, 0, 0, 0);
+            const mEnd = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 0, 23, 59, 59, 999);
+            quarterMonthBuckets.push({
+                key: `m-${mOffset}`,
+                label: monthNames[mDate.getMonth()],
+                subLabel: `${mDate.getFullYear()}`,
+                startMs: mDate.getTime(),
+                endMs: mEnd.getTime()
+            });
+        }
+        const quarterStartMs = quarterMonthBuckets[0].startMs;
+
+        // Fuente de movimientos: usar quarterlyMovements (90 días) o movements como respaldo
+        const sourceMovs = quarterlyMovements.length > 0 ? quarterlyMovements : movements;
+
+        // Agrupar movimientos por producto
+        const movsByProduct = new Map<string, any[]>();
+        sourceMovs.forEach(m => {
+            if (!m.product_id) return;
+            const list = movsByProduct.get(m.product_id) || [];
+            list.push(m);
+            movsByProduct.set(m.product_id, list);
+        });
+
+        // Helper para calcular métricas de un subconjunto de movimientos en una ventana [startMs, endMs]
+        const computeBucketMetrics = (prodMovs: any[], startMs: number, endMs: number) => {
+            let purchasedKg = 0;
+            let deliveredKg = 0;
+            let wasteWeighingKg = 0; // Col P: Pesada
+            let wasteDamageKg = 0;   // Col Q: Desperdicio
+            let wasteCleaningKg = 0; // Col R: Basura
+            let wasteAdjustKg = 0;   // Faltantes / Ajustes negativos / Donación
+
+            for (let i = 0; i < prodMovs.length; i++) {
+                const m = prodMovs[i];
+                const ts = new Date(m.created_at).getTime();
+                if (ts < startMs || ts > endMs) continue;
+
+                const q = Math.abs(Number(m.quantity || 0));
+                const signedQ = Number(m.quantity || 0);
+                const ref = String(m.reference_type || '').toLowerCase();
+
+                if (ref === 'waste_weighing') {
+                    wasteWeighingKg += q;
+                } else if (ref === 'waste_damage') {
+                    wasteDamageKg += q;
+                } else if (ref === 'waste_cleaning') {
+                    wasteCleaningKg += q;
+                } else if (ref.startsWith('waste_') || ref === 'food_bank') {
+                    wasteAdjustKg += q;
+                } else if (m.type === 'adjustment' && signedQ < 0) {
+                    wasteAdjustKg += q;
+                } else if (m.type === 'entry') {
+                    purchasedKg += q;
+                } else if (m.type === 'exit') {
+                    deliveredKg += q;
+                }
+            }
+
+            const totalWasteKg = wasteWeighingKg + wasteDamageKg + wasteCleaningKg + wasteAdjustKg;
+            const processedKg = Math.max(purchasedKg, deliveredKg + totalWasteKg);
+            const shrinkagePct = processedKg > 0 ? (totalWasteKg / processedKg) * 100 : 0;
+
+            return {
+                purchasedKg,
+                deliveredKg,
+                totalWasteKg,
+                wasteWeighingKg,
+                wasteDamageKg,
+                wasteCleaningKg,
+                wasteAdjustKg,
+                processedKg,
+                shrinkagePct
+            };
+        };
+
+        const qSearch = shrinkageSearch.trim().toLowerCase();
+
+        const rows = filteredProducts
+            .map(p => {
+                const prodMovs = movsByProduct.get(p.id) || [];
+
+                // Métricas consolidadas en las 3 magnitudes
+                const weekTotal = computeBucketMetrics(prodMovs, weekStartMs, todayEnd.getTime());
+                const monthTotal = computeBucketMetrics(prodMovs, monthStartMs, todayEnd.getTime());
+                const quarterTotal = computeBucketMetrics(prodMovs, quarterStartMs, todayEnd.getTime());
+
+                // Desglose por columnas según escala
+                const weekDays = weekDayBuckets.map(b => ({
+                    ...b,
+                    ...computeBucketMetrics(prodMovs, b.startMs, b.endMs)
+                }));
+                const monthWeeks = monthWeekBuckets.map(b => ({
+                    ...b,
+                    ...computeBucketMetrics(prodMovs, b.startMs, b.endMs)
+                }));
+                const quarterMonths = quarterMonthBuckets.map(b => ({
+                    ...b,
+                    ...computeBucketMetrics(prodMovs, b.startMs, b.endMs)
+                }));
+
+                const unitCost = costMatrix[p.id] || 0;
+                const activeTotal = shrinkageScale === 'week' ? weekTotal : (shrinkageScale === 'month' ? monthTotal : quarterTotal);
+                const wasteCostCop = activeTotal.totalWasteKg * unitCost;
+
+                return {
+                    id: p.id,
+                    code: p.accounting_id || p.sku || 'S/N',
+                    name: p.name,
+                    sku: p.sku || '',
+                    cellGroup: p.inventory_group || p.category || 'GENERAL',
+                    unit: p.unit_of_measure || 'Kg',
+                    unitCost,
+                    theoreticalPct: Number(p.theoretical_shrinkage_pct || 0),
+                    weekTotal,
+                    monthTotal,
+                    quarterTotal,
+                    activeTotal,
+                    wasteCostCop,
+                    weekDays,
+                    monthWeeks,
+                    quarterMonths,
+                    hasAnyActivity: quarterTotal.processedKg > 0 || quarterTotal.totalWasteKg > 0
+                };
+            })
+            .filter(r => {
+                if (onlyWithShrinkageOrFlow && !r.hasAnyActivity) return false;
+                if (qSearch) {
+                    const matchName = r.name.toLowerCase().includes(qSearch);
+                    const matchCode = String(r.code).toLowerCase().includes(qSearch);
+                    const matchSku = r.sku.toLowerCase().includes(qSearch);
+                    const matchCell = r.cellGroup.toLowerCase().includes(qSearch);
+                    if (!matchName && !matchCode && !matchSku && !matchCell) return false;
+                }
+                return true;
+            })
+            .sort((a, b) => {
+                // Ordenar primero por mayor % de merma en la escala activa, luego por mayor volumen de merma en Kg
+                if (Math.abs(b.activeTotal.shrinkagePct - a.activeTotal.shrinkagePct) > 0.05) {
+                    return b.activeTotal.shrinkagePct - a.activeTotal.shrinkagePct;
+                }
+                if (Math.abs(b.activeTotal.totalWasteKg - a.activeTotal.totalWasteKg) > 0.05) {
+                    return b.activeTotal.totalWasteKg - a.activeTotal.totalWasteKg;
+                }
+                return a.name.localeCompare(b.name, 'es');
+            });
+
+        return {
+            weekDayBuckets,
+            monthWeekBuckets,
+            quarterMonthBuckets,
+            rows
+        };
+    }, [filteredProducts, quarterlyMovements, movements, costMatrix, shrinkageScale, shrinkageSearch, onlyWithShrinkageOrFlow]);
 
     // Motor Exportador de Informes Ejecutivos (Centro de Descargas Centralizado)
     const handleExportExecutiveReports = useCallback(async (type: 'kardex' | 'stock' | 'payroll' | 'daily_balance') => {
@@ -1986,6 +2228,387 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                     </tr>
                                 );
                             })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* 5. REGISTRO HISTÓRICO & CURVA DE MERMAS REALES POR PRODUCTO (3 MAGNITUDES DE TIEMPO: SEMANA / MES / TRIMESTRE — ESCENARIO 245) */}
+            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <TrendingDown size={20} color="#D97706" /> Registro Histórico & Curva de Mermas Reales por Producto
+                        </h2>
+                        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                            Trazabilidad física real desde Kilos Comprados hasta su desagregación en Merma (Pesada + Desperdicio + Basura + Faltantes) vs Kilos Entregados para calibrar márgenes esperados.
+                        </p>
+                    </div>
+
+                    {/* Conmutador de las 3 Magnitudes de Tiempo + Controles */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                        {/* Buscador por Producto / Código */}
+                        <div style={{ position: 'relative', width: '230px' }}>
+                            <Search size={14} color={THEME.colors.textSecondary} style={{ position: 'absolute', left: '10px', top: '9px' }} />
+                            <input
+                                type="text"
+                                placeholder="Buscar ej. pastusa, 150, lechuga..."
+                                value={shrinkageSearch}
+                                onChange={(e) => setShrinkageSearch(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    height: '32px',
+                                    padding: '0 0.6rem 0 1.9rem',
+                                    borderRadius: THEME.radius.md,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    fontSize: '0.78rem',
+                                    fontWeight: '600',
+                                    color: THEME.colors.textMain,
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                    fontFamily: THEME.typography.fontFamilySecondary
+                                }}
+                            />
+                        </div>
+
+                        {/* Toggle: Solo con movimiento vs Todos */}
+                        <button
+                            type="button"
+                            onClick={() => setOnlyWithShrinkageOrFlow(prev => !prev)}
+                            style={{
+                                height: '32px',
+                                padding: '0 0.7rem',
+                                borderRadius: THEME.radius.md,
+                                border: `1px solid ${onlyWithShrinkageOrFlow ? '#10B981' : THEME.colors.border}`,
+                                backgroundColor: onlyWithShrinkageOrFlow ? '#ECFDF5' : '#F8FAFC',
+                                color: onlyWithShrinkageOrFlow ? '#065F46' : THEME.colors.textSecondary,
+                                fontSize: '0.74rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                fontFamily: THEME.typography.fontFamilySecondary
+                            }}
+                            title="Alternar entre ver solo los productos con compras/salidas/merma registradas en el trimestre o el catálogo completo"
+                        >
+                            {onlyWithShrinkageOrFlow ? `Con Flujo (${historicalShrinkageData.rows.length})` : `Catálogo (${historicalShrinkageData.rows.length})`}
+                        </button>
+
+                        {/* Selector de 3 Magnitudes de Tiempo */}
+                        <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                            {(
+                                [
+                                    { id: 'week', label: '1. Esta Semana (Diario)' },
+                                    { id: 'month', label: '2. Este Mes (Por Semanas)' },
+                                    { id: 'quarter', label: '3. Trimestre (Comparado)' }
+                                ] as const
+                            ).map(tab => {
+                                const isActive = shrinkageScale === tab.id;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setShrinkageScale(tab.id)}
+                                        style={{
+                                            padding: '0.35rem 0.8rem',
+                                            fontSize: '0.75rem',
+                                            fontWeight: isActive ? '800' : '600',
+                                            color: isActive ? '#FFFFFF' : THEME.colors.textSecondary,
+                                            backgroundColor: isActive ? '#0F172A' : 'transparent',
+                                            border: 'none',
+                                            borderRadius: THEME.radius.sm,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s',
+                                            fontFamily: THEME.typography.fontFamilySecondary
+                                        }}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Banner Pedagógico Interactivo de Columna (Tooltip enriquecido al pasar el cursor sobre cualquier encabezado) */}
+                {activeShrinkageTooltip && (
+                    <div style={{
+                        backgroundColor: '#0F172A',
+                        color: '#F8FAFC',
+                        padding: '0.6rem 0.95rem',
+                        borderRadius: THEME.radius.md,
+                        border: '1px solid #334155',
+                        fontSize: '0.76rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.75rem'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Info size={15} color="#34D399" style={{ flexShrink: 0 }} />
+                            <span>{activeShrinkageTooltip}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setActiveShrinkageTooltip(null)}
+                            style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '2px' }}
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                )}
+
+                {/* Tabla Dinámica según la Magnitud de Tiempo Seleccionada */}
+                <div style={{ overflowX: 'auto', maxHeight: '540px', overflowY: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.78rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}` }}>
+                            <tr>
+                                <th
+                                    onMouseEnter={() => setActiveShrinkageTooltip('CÓD / PRODUCTO: Identificador contable (accounting_id), presentación del producto y célula operativa responsable en bodega.')}
+                                    onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                    title="Código contable (accounting_id), nombre de la presentación y célula responsable en bodega."
+                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.85rem', whiteSpace: 'nowrap' }}
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <span>CÓD / PRODUCTO</span>
+                                        <HelpCircle size={11} color="#94A3B8" />
+                                    </div>
+                                </th>
+                                <th
+                                    onMouseEnter={() => setActiveShrinkageTooltip('KG COMPRADOS (ENTRADAS): Total de kilos recepcionados desde compra en Corabastos / proveedores (Col G de Sábana Oficial) durante el periodo seleccionado.')}
+                                    onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                    title="Total de kilos comprados/recepcionados (Col G) en la ventana de tiempo activa."
+                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.65rem', textAlign: 'right', whiteSpace: 'nowrap', color: '#047857' }}
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                        <span>COMPRADO ({shrinkageScale === 'week' ? '7D' : shrinkageScale === 'month' ? 'MES' : 'TRIM'})</span>
+                                        <HelpCircle size={11} color="#047857" />
+                                    </div>
+                                </th>
+
+                                {/* COLUMNAS DINÁMICAS DE LA MAGNITUD 1: ESTA SEMANA (7 DÍAS) */}
+                                {shrinkageScale === 'week' && historicalShrinkageData.weekDayBuckets.map(day => (
+                                    <th
+                                        key={day.key}
+                                        onMouseEnter={() => setActiveShrinkageTooltip(`${day.label} (${day.subLabel}): Muestra el % de merma real de ese día y debajo los kilogramos perdidos en Pesada + Desperdicio + Basura.`)}
+                                        onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                        title={`Desperdicio y merma real del día ${day.label} (${day.subLabel}): % sobre volumen procesado y Kg perdidos.`}
+                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0' }}
+                                    >
+                                        <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.72rem' }}>{day.label}</div>
+                                        <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 600 }}>{day.subLabel}</div>
+                                    </th>
+                                ))}
+
+                                {/* COLUMNAS DINÁMICAS DE LA MAGNITUD 2: ESTE MES (4 SEMANAS) */}
+                                {shrinkageScale === 'month' && historicalShrinkageData.monthWeekBuckets.map(wk => (
+                                    <th
+                                        key={wk.key}
+                                        onMouseEnter={() => setActiveShrinkageTooltip(`${wk.label} (${wk.subLabel}): Muestra el % de merma real acumulado en esa semana del mes y los Kg de merma vs Kg procesados.`)}
+                                        onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                        title={`Merma real acumulada en ${wk.label} (${wk.subLabel}): % de merma y Kg perdidos en esa semana.`}
+                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.65rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0' }}
+                                    >
+                                        <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.73rem' }}>{wk.label}</div>
+                                        <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 600 }}>{wk.subLabel}</div>
+                                    </th>
+                                ))}
+
+                                {/* COLUMNAS DINÁMICAS DE LA MAGNITUD 3: ESTE TRIMESTRE (3 MESES) */}
+                                {shrinkageScale === 'quarter' && historicalShrinkageData.quarterMonthBuckets.map(mo => (
+                                    <th
+                                        key={mo.key}
+                                        onMouseEnter={() => setActiveShrinkageTooltip(`Mes de ${mo.label} ${mo.subLabel}: Muestra el % de merma real mensual y los Kg perdidos en ese mes.`)}
+                                        onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                        title={`Merma real consolidada en ${mo.label} ${mo.subLabel}.`}
+                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.65rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0' }}
+                                    >
+                                        <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.73rem' }}>{mo.label}</div>
+                                        <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 600 }}>{mo.subLabel}</div>
+                                    </th>
+                                ))}
+
+                                <th
+                                    onMouseEnter={() => setActiveShrinkageTooltip('MERMA DESAGREGADA (P+Q+R): Suma física en Kg de Pesada (Col P) + Desperdicio (Col Q) + Basura/Descapote (Col R) + Faltantes en el periodo.')}
+                                    onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                    title="Kilos totales perdidos en Merma (Col P Pesada + Col Q Desperdicio + Col R Basura + Faltantes) y su costo en pesos."
+                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.65rem', textAlign: 'right', whiteSpace: 'nowrap', color: '#B45309', borderLeft: '1px solid #E2E8F0' }}
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                        <span>MERMA (P+Q+R)</span>
+                                        <HelpCircle size={11} color="#B45309" />
+                                    </div>
+                                </th>
+                                <th
+                                    onMouseEnter={() => setActiveShrinkageTooltip('KG ENTREGADOS / VENDIDOS: Kilos efectivos que sí salieron facturados/entregados a clientes luego de descontar la merma.')}
+                                    onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                    title="Kilos efectivos vendidos/entregados a clientes después de la merma."
+                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.65rem', textAlign: 'right', whiteSpace: 'nowrap', color: '#1E293B' }}
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                        <span>ENTREGADO</span>
+                                        <HelpCircle size={11} color="#64748B" />
+                                    </div>
+                                </th>
+
+                                {/* COMPARATIVO DE LAS 3 MAGNITUDES SIEMPRE VISIBLE AL DERECHO PARA CALIBRAR FRECUENCIA */}
+                                <th
+                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTA SEMANA: Porcentaje de merma real de los últimos 7 días = (Kg Merma 7d / Kg Procesados 7d) × 100.')}
+                                    onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                    title="% Merma Real de Esta Semana (7 días)."
+                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.6rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: shrinkageScale === 'week' ? '#ECFDF5' : '#F8FAFC', borderLeft: '2px solid #CBD5E1' }}
+                                >
+                                    % SEMANA
+                                </th>
+                                <th
+                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTE MES: Porcentaje de merma real consolidado del mes en curso = (Kg Merma Mes / Kg Procesados Mes) × 100.')}
+                                    onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                    title="% Merma Real de Este Mes."
+                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.6rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: shrinkageScale === 'month' ? '#ECFDF5' : '#F8FAFC' }}
+                                >
+                                    % MES
+                                </th>
+                                <th
+                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTE TRIMESTRE: Porcentaje estructural de merma real en los últimos 3 meses (90 días). Ideal para calibrar el % de Lista Institucional sin ruido de un día atípico.')}
+                                    onMouseLeave={() => setActiveShrinkageTooltip(null)}
+                                    title="% Merma Real Consolidada del Trimestre (3 meses)."
+                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.6rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: shrinkageScale === 'quarter' ? '#ECFDF5' : '#F8FAFC' }}
+                                >
+                                    % TRIMESTRE
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {historicalShrinkageData.rows.length === 0 ? (
+                                <tr>
+                                    <td colSpan={shrinkageScale === 'week' ? 14 : shrinkageScale === 'month' ? 11 : 10} style={{ padding: '2.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                        No se encontraron productos con movimientos para el filtro actual. Haz clic en &quot;Con Flujo&quot; arriba para ver todo el catálogo.
+                                    </td>
+                                </tr>
+                            ) : (
+                                historicalShrinkageData.rows.slice(0, 120).map((row, idx) => {
+                                    const activeBuckets = shrinkageScale === 'week'
+                                        ? row.weekDays
+                                        : (shrinkageScale === 'month' ? row.monthWeeks : row.quarterMonths);
+
+                                    const renderPctBadge = (pct: number, wasteKg: number, highlight = false) => {
+                                        if (wasteKg <= 0.001 && pct <= 0.01) {
+                                            return <span style={{ color: '#CBD5E1', fontWeight: 600 }}>0%</span>;
+                                        }
+                                        const isHigh = pct >= 15;
+                                        const isMedium = pct >= 5 && pct < 15;
+                                        const bg = isHigh ? '#FEE2E2' : (isMedium ? '#FEF3C7' : '#DCFCE7');
+                                        const fg = isHigh ? '#991B1B' : (isMedium ? '#92400E' : '#166534');
+                                        return (
+                                            <span style={{
+                                                display: 'inline-block',
+                                                padding: highlight ? '3px 7px' : '2px 5px',
+                                                borderRadius: '4px',
+                                                fontWeight: 800,
+                                                fontSize: highlight ? '0.74rem' : '0.7rem',
+                                                backgroundColor: bg,
+                                                color: fg,
+                                                border: highlight ? `1px solid ${fg}40` : 'none',
+                                                fontVariantNumeric: 'tabular-nums'
+                                            }}>
+                                                {formatNumber(pct, 1)}%
+                                            </span>
+                                        );
+                                    };
+
+                                    return (
+                                        <tr
+                                            key={row.id}
+                                            style={{
+                                                borderBottom: `1px solid ${THEME.colors.border}`,
+                                                backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA'
+                                            }}
+                                        >
+                                            {/* CÓD / PRODUCTO */}
+                                            <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span style={{ fontFamily: 'monospace', fontSize: '0.72rem', fontWeight: 800, color: '#475569', backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: '4px' }}>
+                                                        {row.code}
+                                                    </span>
+                                                    <span style={{ fontWeight: 800, color: THEME.colors.textMain, fontSize: '0.8rem' }}>
+                                                        {row.name}
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontSize: '0.66rem', color: THEME.colors.textSecondary, marginTop: '2px', fontWeight: 600 }}>
+                                                    {row.cellGroup} • {row.unit}
+                                                </div>
+                                            </td>
+
+                                            {/* COMPRADO EN ESCALA ACTIVA */}
+                                            <td style={{ padding: '0.55rem 0.65rem', textAlign: 'right', fontWeight: 800, color: '#047857', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                                {row.activeTotal.purchasedKg > 0 ? `${formatNumber(row.activeTotal.purchasedKg, 1)} kg` : <span style={{ color: '#CBD5E1' }}>—</span>}
+                                            </td>
+
+                                            {/* CELDAS DINÁMICAS (7 DÍAS / 4 SEMANAS / 3 MESES) */}
+                                            {activeBuckets.map(b => (
+                                                <td
+                                                    key={b.key}
+                                                    style={{
+                                                        padding: '0.45rem 0.45rem',
+                                                        textAlign: 'center',
+                                                        borderLeft: '1px solid #F1F5F9',
+                                                        whiteSpace: 'nowrap',
+                                                        fontVariantNumeric: 'tabular-nums'
+                                                    }}
+                                                    title={`${b.label} (${b.subLabel}) | Comprado: ${formatNumber(b.purchasedKg, 1)} kg | Entregado: ${formatNumber(b.deliveredKg, 1)} kg | Merma: ${formatNumber(b.totalWasteKg, 1)} kg (${formatNumber(b.shrinkagePct, 1)}%)`}
+                                                >
+                                                    {b.totalWasteKg > 0.01 ? (
+                                                        <div>
+                                                            {renderPctBadge(b.shrinkagePct, b.totalWasteKg)}
+                                                            <div style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 700, marginTop: '2px' }}>
+                                                                -{formatNumber(b.totalWasteKg, 1)} kg
+                                                            </div>
+                                                        </div>
+                                                    ) : b.processedKg > 0.01 ? (
+                                                        <div>
+                                                            <span style={{ fontSize: '0.68rem', color: '#10B981', fontWeight: 700 }}>0%</span>
+                                                            <div style={{ fontSize: '0.6rem', color: '#94A3B8' }}>
+                                                                {formatNumber(b.processedKg, 0)} kg ok
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ color: '#E2E8F0', fontSize: '0.7rem' }}>—</span>
+                                                    )}
+                                                </td>
+                                            ))}
+
+                                            {/* MERMA TOTAL DESAGREGADA (P+Q+R) */}
+                                            <td
+                                                style={{ padding: '0.55rem 0.65rem', textAlign: 'right', borderLeft: '1px solid #E2E8F0', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+                                                title={`Desglose Merma: Pesada (Col P): ${formatNumber(row.activeTotal.wasteWeighingKg, 1)} kg | Desperdicio (Col Q): ${formatNumber(row.activeTotal.wasteDamageKg, 1)} kg | Basura (Col R): ${formatNumber(row.activeTotal.wasteCleaningKg, 1)} kg | Ajustes/Faltantes: ${formatNumber(row.activeTotal.wasteAdjustKg, 1)} kg`}
+                                            >
+                                                <div style={{ fontWeight: 800, color: row.activeTotal.totalWasteKg > 0 ? '#B45309' : '#94A3B8' }}>
+                                                    {row.activeTotal.totalWasteKg > 0 ? `-${formatNumber(row.activeTotal.totalWasteKg, 1)} kg` : '0 kg'}
+                                                </div>
+                                                {row.wasteCostCop > 0 && (
+                                                    <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 600 }}>
+                                                        {formatMoney(row.wasteCostCop)}
+                                                    </div>
+                                                )}
+                                            </td>
+
+                                            {/* ENTREGADO / VENDIDO */}
+                                            <td style={{ padding: '0.55rem 0.65rem', textAlign: 'right', fontWeight: 800, color: THEME.colors.textMain, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                                {row.activeTotal.deliveredKg > 0 ? `${formatNumber(row.activeTotal.deliveredKg, 1)} kg` : <span style={{ color: '#CBD5E1' }}>0 kg</span>}
+                                            </td>
+
+                                            {/* COMPARATIVO DE LAS 3 MAGNITUDES LADO A LADO */}
+                                            <td style={{ padding: '0.5rem 0.55rem', textAlign: 'center', borderLeft: '2px solid #CBD5E1', backgroundColor: shrinkageScale === 'week' ? '#F0FDF4' : 'transparent' }}>
+                                                {renderPctBadge(row.weekTotal.shrinkagePct, row.weekTotal.totalWasteKg, shrinkageScale === 'week')}
+                                            </td>
+                                            <td style={{ padding: '0.5rem 0.55rem', textAlign: 'center', backgroundColor: shrinkageScale === 'month' ? '#F0FDF4' : 'transparent' }}>
+                                                {renderPctBadge(row.monthTotal.shrinkagePct, row.monthTotal.totalWasteKg, shrinkageScale === 'month')}
+                                            </td>
+                                            <td style={{ padding: '0.5rem 0.55rem', textAlign: 'center', backgroundColor: shrinkageScale === 'quarter' ? '#F0FDF4' : 'transparent' }}>
+                                                {renderPctBadge(row.quarterTotal.shrinkagePct, row.quarterTotal.totalWasteKg, shrinkageScale === 'quarter')}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
                         </tbody>
                     </table>
                 </div>

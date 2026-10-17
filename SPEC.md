@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.213 (Blindaje Integral del Liquidador de Nota Crédito y Ajuste de Factura en PQR: Sincronización en `billing_returns`, Preservación de Protocolo Invima, Referencia Fiscal World Office `NC/FV` y Trazabilidad en Pedido — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.214 (Auditoría Histórica de Mermas Multi-Escala Semana/Mes/Trimestre en Inventarios, Simplificación Radical del Motor SUGERIDO IA sin SIPSA y Tooltips Pedagógicos Enriquecidos en Acuerdos Especiales — 76/76 Pantallas Certificadas)  
 > **Fecha:** 16 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 244 Escenarios BDD Ininterrumpidos (1..244)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 245 Escenarios BDD Ininterrumpidos (1..245)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **244 Escenarios Canónicos (1..244)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **245 Escenarios Canónicos (1..245)** | **🟢 100%** |
 
 ---
 
@@ -10705,6 +10705,30 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Se reemplazan los selectores editables duplicados de RCA dentro de `FinancialAdjustmentModal` por la tarjeta de solo lectura `Dictamen Técnico & Imputabilidad Vinculada (Paso 3)` que muestra la Causa Raíz L1/L2, el Área Responsable y los colaboradores imputados con su cuota en COP recalculada en tiempo real.
      - Al confirmar una Nota Crédito, se estampa en `orders.admin_notes` el sello `[NOTA_CREDITO_PQR #<shortId> | NC: <nc> | FACTURA_REF: <fv> | VALOR: -$<monto>]`, y en `src/app/admin/orders/[id]/page.tsx` se proyecta el banner `TRAZABILIDAD CONTABLE SAC: Nota Crédito Emitida / Factura Ajustada`.
      - En `PqrAuditModal.tsx` (Paso 1), el badge de custodia física se enlaza directamente al estado reactivo `hasPhysicalReturn`, y en `src/app/admin/commercial/billing/page.tsx` (pestaña `Devoluciones`) se muestra la unidad de medida real del producto (`ret.products?.unit_of_measure || 'Kg'`).
+---
+
+### Escenario 245: Auditoría Histórica de Mermas Multi-Escala (Semana / Mes / Trimestre) en Cockpit de Inventarios, Simplificación Radical del Motor `SUGERIDO IA` sin SIPSA (Modelo de Margen Integral Padre/Hijo) y Enriquecimiento Pedagógico de Tooltips en Acuerdos Especiales (SDD v1.9.214)
+- **Given** la Dirección Comercial y de Operaciones auditando las mermas reales por producto en `/admin/commercial/inventory` (`InventoryUnifiedDashboard.tsx`) y negociando tarifas institucionales en `/admin/commercial?tab=operations&subtab=agreements` (`SpecialAgreementsModule.tsx`),
+- **When** el usuario evalúa la curva histórica de mermas en las 3 magnitudes de tiempo (`Esta Semana`, `Este Mes`, `Este Trimestre`) y calcula o aplica el `SUGERIDO IA` sobre las listas de acuerdos especiales (`Nutresa`, `Colsubsidio`, `Lista General Quincenal`, `Lista General Mensual`),
+- **Then** el sistema garantiza:
+  1. **Tabla de Registro Histórico de Mermas Reales por Producto (3 Magnitudes de Tiempo) en `InventoryUnifiedDashboard.tsx`:**
+     - En la sección inferior del Cockpit de Inventarios se despliega la matriz **"Registro Histórico & Curva de Mermas Reales por Producto"** alimentada 100% desde `inventory_movements` (ventana histórica de 90 días), `products` y `commercial_cost_matrix`.
+     - Para cada producto se consolida el flujo físico real desde los **Kilos Comprados / Entradas (`Col G`)** y **Kilos Entregados / Vendidos (`Cols H, J, M, N`)** hasta la desagregación de **Merma Real (`Col P Pesada + Col Q Desperdicio + Col R Basura + Ajustes Negativos/Faltantes`)**, calculando:
+       $$\% \text{ Merma Real} = \left( \frac{\text{Kg Merma Total}}{\text{Kg Comprados (o Kg Procesados: Entregados + Merma)}} \right) \times 100$$
+     - **Conmutador de 3 Magnitudes de Tiempo con Desglose Dinámico en Columnas:**
+       - **`Esta Semana` (Columnas Diarias `Lun` a `Dom`):** Muestra en cada columna diaria el `% de merma` y los `Kg perdidos` de ese día, junto con `Kg Comprados`, `Kg Entregados` y `% Merma Semanal`.
+       - **`Este Mes` (Columnas Semanales `Sem 1` a `Sem 4+`):** Muestra en cada columna semanal el `% de merma` y los `Kg perdidos` de esa semana del mes, junto con el consolidado mensual.
+       - **`Este Trimestre` (Columnas Mensuales + Comparativo de las 3 Magnitudes):** Muestra los 3 meses del trimestre (`Mes -2`, `Mes -1`, `Mes Actual`) y las **3 Magnitudes Comparadas lado a lado (`% Esta Semana` vs `% Este Mes` vs `% Este Trimestre`)** para que Dirección determine la frecuencia óptima de evaluación y calibre los márgenes esperados por presentación.
+  2. **Simplificación Radical del Algoritmo `SUGERIDO IA` y Erradicación de SIPSA DANE en `SpecialAgreementsModule.tsx`:**
+     - Se elimina por completo la columna `SIPSA DANE`, el botón de sincronización `SIPSA DANE` y toda intervención del boletín mayorista en la fórmula de precios sugeridos, así como la píldora de código SKU en la columna `PRODUCTO EN LISTA`.
+     - **Principio de Margen Integral en Lista Institucional (`pricing_rules.margin_adjustment`):** El porcentaje de utilidad esperada configurado por presentación en la **Lista Institucional Dinámica (`% Lista Inst.`)** ya incluye de forma integral la utilidad base (ej. `+20%` en bulto sin lavar), la merma física real del producto (ej. `+20%` en papa lavada) y el proceso operativo de selección o tamizado (ej. `+20%` adicional en selección estándar para un total de `+60%`, o `+40%` en tamizado calibre 40g para un total de `+80%`).
+     - Se elimina el divisor hiperbólico adicional `1 / (1 - theoretical_shrinkage_pct)` sobre el costo para impedir el doble cobro de merma. La fórmula canónica simplificada opera directamente sobre el `Costo Matriz` (`commercial_cost_matrix.manual_cost`):
+       $$\text{Precio Lista Inst.} = \text{Redondear}_{50}\Big(\text{Costo Matriz} \times \big(1 + \frac{\% \text{Lista Inst.}}{100}\big)\Big)$$
+       $$\text{SUGERIDO IA} = \text{Redondear}_{50}\Big(\text{Costo Matriz} \times \big(1 + \frac{\% \text{Lista Inst.} + \% \text{Colchón Ciclo}}{100}\big)\Big)$$
+       donde `% Colchón Ciclo` protege la estabilidad del acuerdo durante su vigencia: `+2%` (Abarrotes) / `+3%` (Perecederos) en modelos de 15 días (`general_quincenal`, `colsubsidio`) y `+4%` (Abarrotes) / `+6%` (Perecederos) en modelos de 30 días (`general_mensual`, `nutresa`).
+  3. **Enriquecimiento Pedagógico de Tooltips (`?`) en Encabezados de Galería (`SpecialAgreementsModule.tsx`):**
+     - Todos los encabezados de columna de la galería de Acuerdos Especiales cuentan con tooltips explicativos detallados (con soporte visual interactivo al pasar el cursor sobre el título o el icono `?`) que documentan el significado comercial, la tabla/origen exacto en base de datos y la fórmula matemática para facilitar la explicación ejecutiva ante el cliente.
+
 ---
 
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad

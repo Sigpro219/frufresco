@@ -204,6 +204,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [sortField, setSortField] = useState<SortField>('name');
     const [sortDir, setSortDir] = useState<SortDirection>('asc');
+    const [activeHeaderTooltip, setActiveHeaderTooltip] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Metadata de los 4 Modelos y Padrón de Clientes desde Supabase
@@ -212,7 +213,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
             id: 'nutresa',
             name: 'Grupo Nutresa (IRCC)',
             subtitle: 'El Corral • Beer Station • Leños & Carbón',
-            cycle_type: 'sipsa_prima',
+            cycle_type: 'corporativo_multimarca',
             default_duration_days: 30,
             master_quote_id: 'ab9c0c14-a27e-4317-9995-dfb4ba9bcb80',
             start_date: '2026-10-05',
@@ -292,7 +293,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     // Cargar ítems reales de Supabase al cambiar de modelo activo (deps[0] versionado para forzar HMR en React 19)
     useEffect(() => {
         loadDataForModel(selectedClient);
-    }, [`${selectedClient}::v9_zero_trust_tirano`, 'v9_zero_trust_tirano']);
+    }, [`${selectedClient}::v10_escenario_245_no_sipsa`, 'v10_escenario_245_no_sipsa']);
 
     const fetchModelsAndRoster = async () => {
         try {
@@ -481,31 +482,30 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 const prod = prodById.get(qi.product_id) || prodByNormName.get(normalizeSearchStr(qi.product_name));
                 const currentPrice = Number(qi.unit_price) || 0;
                 const realCost = (prod && costMap.get(prod.id)) || (Number(qi.cost_basis) > 0 ? Number(qi.cost_basis) : 0);
-                const shrinkagePct = Math.min(Math.max(Number(prod?.theoretical_shrinkage_pct) || 0, 0), 90);
-                const effectiveCost = shrinkagePct > 0 ? realCost / (1 - shrinkagePct / 100) : realCost;
 
-                // Regla de Utilidad Institucional específica del SKU desde pricing_rules en Supabase
+                // Regla de Utilidad Institucional específica del SKU desde pricing_rules en Supabase.
+                // Por diseño (Escenario 245), este % ya incorpora integralmente: Utilidad Base + Merma Real + Selección/Tamizado por presentación.
                 const explicitRule = prod ? instRuleMap.get(prod.id) : undefined;
                 const instRuleMargin = explicitRule !== undefined
                     ? Number(explicitRule)
-                    : (effectiveCost > 0 && currentPrice > effectiveCost
-                        ? Math.round(((currentPrice - effectiveCost) / effectiveCost) * 100)
+                    : (realCost > 0 && currentPrice > realCost
+                        ? Math.round(((currentPrice - realCost) / realCost) * 100)
                         : 0);
 
-                // Precio vivo de Lista Institucional Dinámica (SPEC.md §7.3.A: Costo Efectivo * (1 + Regla%) redondeado a $50 COP)
-                const instDynamicPrice = effectiveCost > 0
-                    ? Math.ceil((effectiveCost * (1 + instRuleMargin / 100)) / 50) * 50
+                // Precio vivo de Lista Institucional Dinámica (Costo Matriz * (1 + % Regla Inst.) redondeado a $50 COP, sin doble recargo de merma)
+                const instDynamicPrice = realCost > 0
+                    ? Math.ceil((realCost * (1 + instRuleMargin / 100)) / 50) * 50
                     : ((prod && generalPriceMap.get(prod.id)) || currentPrice);
 
                 const catCode = String(prod?.category || '').toUpperCase();
                 const isStablePantry = catCode === 'DE' || catCode === 'AB';
-                // Prima de estabilización temporal según SPEC.md Escenario 237.3 (+2% abarrotes / +3% perecederos en 15d; +4% abarrotes / +6% perecederos en 30d)
+                // Colchón de estabilización temporal de ciclo (+2% abarrotes / +3% perecederos en 15d; +4% abarrotes / +6% perecederos en 30d)
                 const freezeBufferPct = (modelId === 'general_quincenal' || modelId === 'colsubsidio')
                     ? (isStablePantry ? 2 : 3)
                     : (isStablePantry ? 4 : 6);
 
-                const rawTechnicalSuggested = effectiveCost > 0
-                    ? effectiveCost * (1 + (instRuleMargin + freezeBufferPct) / 100)
+                const rawTechnicalSuggested = realCost > 0
+                    ? realCost * (1 + (instRuleMargin + freezeBufferPct) / 100)
                     : currentPrice;
                 const suggested = Math.ceil(rawTechnicalSuggested / 50) * 50;
 
@@ -528,8 +528,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     baseline_price: instDynamicPrice,
                     corabastos_cost: realCost,
                     inst_rule_margin_pct: instRuleMargin,
-                    sipsa_price: 0, // Solo se pobla desde API SODA DANE en vivo al sincronizar
-                    client_proposed_price: currentPrice, // Precio vigente en quote_items
+                    sipsa_price: 0,
+                    client_proposed_price: currentPrice,
                     previous_price: currentPrice,
                     suggested_price: suggested,
                     our_counterproposal: currentPrice > 0 ? currentPrice : suggested,
@@ -1156,7 +1156,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                             </p>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: '0.66rem', backgroundColor: '#FEE2E2', color: '#991B1B', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                                    SIPSA + Prima
+                                    Acuerdo Multimarca
                                 </span>
                                 <span style={{ fontSize: '0.66rem', backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
                                     {modelClientsMap.nutresa?.length ?? 0} sedes
@@ -1556,32 +1556,6 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
                 {/* BOTONES OPERATIVOS COMPACTOS (HABILITADOS EN LOS 4 MODELOS) */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                    {/* BOTÓN SODA SIPSA EN VIVO (EXCLUSIVO MODELO NUTRESA IRCC) */}
-                    {selectedClient === 'nutresa' && (
-                        <button
-                            onClick={handleSyncSipsaOnline}
-                            disabled={syncingSipsa}
-                            style={{
-                                height: '32px',
-                                padding: '0 0.65rem',
-                                borderRadius: '6px',
-                                border: '1px solid #0284C7',
-                                backgroundColor: '#E0F2FE',
-                                color: '#0369A1',
-                                fontSize: '0.76rem',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                            }}
-                            title="Consultar precios mayoristas oficiales SIPSA DANE (Corabastos) vía SODA API"
-                        >
-                            <RefreshCw size={13} className={syncingSipsa ? 'animate-spin' : ''} />
-                            {syncingSipsa ? 'Consultando SODA...' : 'SIPSA DANE'}
-                        </button>
-                    )}
-
                     {/* BOTÓN APLICAR SUGERIDOS INTELIGENTES */}
                     <button
                         onClick={handleApplyAllSuggested}
@@ -1599,7 +1573,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                             alignItems: 'center',
                             gap: '5px'
                         }}
-                        title="Transferir todos los precios sugeridos por margen/SIPSA a la columna de fijación"
+                        title="Transferir todos los precios sugeridos por Lista Institucional + Colchón de Ciclo a la columna de fijación"
                     >
                         <Zap size={13} />
                         Aplicar Sugeridos
@@ -1708,6 +1682,44 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 </div>
             </div>
 
+            {/* BANNER FLOTANTE PEDAGÓGICO DE COLUMNA ACTIVA (TOOLTIP ENRIQUECIDO AL PASAR EL CURSOR O HACER CLIC EN ?) */}
+            {activeHeaderTooltip && (
+                <div style={{
+                    backgroundColor: '#0F172A',
+                    color: '#F8FAFC',
+                    padding: '0.65rem 1rem',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    fontSize: '0.76rem',
+                    lineHeight: 1.45,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.18)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Info size={16} color="#34D399" style={{ flexShrink: 0 }} />
+                        <span>{activeHeaderTooltip}</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setActiveHeaderTooltip(null)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94A3B8',
+                            cursor: 'pointer',
+                            padding: '2px',
+                            display: 'flex',
+                            alignItems: 'center'
+                        }}
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+            )}
+
             {/* TABLA COMPARADORA MULTI-DIMENSIONAL (CON THEAD STICKY Y ANTI-SCROLL HIJACKING) */}
             <div style={{
                 backgroundColor: 'white',
@@ -1722,6 +1734,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                             <tr style={{ userSelect: 'none', fontSize: '0.72rem' }}>
                                 <th 
                                     onClick={() => handleSort('code')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('CÓD: Identificador contable interno (accounting_id, ej. 921, 150, 1214) o código de material del ERP del cliente para cruce directo en órdenes de compra.')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.5rem', 
                                         fontWeight: 800, 
@@ -1735,7 +1749,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="Código interno o número de material con el que el cliente o el ERP identifica este producto. Haz clic para ordenar."
+                                    title="CÓD | Significado: Identificador contable interno (accounting_id, ej. 921, 150, 1214) o código de material del ERP del cliente. | Origen: Tabla products.accounting_id. | Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                         <span>CÓD</span>
@@ -1745,6 +1759,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('name')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('PRODUCTO EN LISTA: Presentación comercial exacta pactada con el cliente (ej. Bulto sin lavar, Lavada seleccionada, Lavada tamizada x 40g) y su unidad de facturación (Kg, Unidad, Atado).')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
                                         fontWeight: 800, 
@@ -1758,7 +1774,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="Nombre del producto en la lista junto con su SKU homologado de FruFresco y unidad de medida. Haz clic para ordenar."
+                                    title="PRODUCTO EN LISTA | Significado: Presentación comercial exacta pactada (ej. bulto sin lavar vs lavada vs tamizada 40g) y su unidad de cobro (Kg, Unidad, Atado). | Origen: quote_items.product_name y products.unit_of_measure. | Haz clic para ordenar."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                         <span>PRODUCTO EN LISTA</span>
@@ -1769,6 +1785,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 {selectedClient === 'nutresa' && (
                                     <th 
                                         onClick={() => handleSort('chain')}
+                                        onMouseEnter={() => setActiveHeaderTooltip('CADENA: Marca o formato gastronómico dentro del grupo corporativo que consume esta referencia (ej. El Corral, Leños & Carbón, Beer Station).')}
+                                        onMouseLeave={() => setActiveHeaderTooltip(null)}
                                         style={{ 
                                             padding: '0.55rem 0.5rem', 
                                             fontWeight: 800, 
@@ -1782,7 +1800,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                             whiteSpace: 'nowrap'
                                         }}
-                                        title="Marca o cadena comercial destino dentro del grupo corporativo (ej: El Corral, Leños & Carbón, Beer Station). Haz clic para ordenar."
+                                        title="CADENA | Significado: Marca o cadena destino dentro del holding corporativo (El Corral, Leños & Carbón, Beer Station). | Origen: app_settings (nutresa_sku_chains). | Haz clic para ordenar."
                                     >
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                             <span>CADENA</span>
@@ -1793,6 +1811,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 )}
                                 <th 
                                     onClick={() => handleSort('cost')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('COSTO / LISTA INST.: Arriba muestra el Costo Base de Matriz de Costos. Abajo (píldora verde) muestra el precio de la Lista Institucional Dinámica y su % de utilidad integral (que ya incluye Utilidad Base + Merma Real + Mano de obra de Selección/Tamizado según presentación).')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
                                         fontWeight: 800, 
@@ -1807,7 +1827,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="Costo estabilizado en Matriz de Costos junto con el precio de la Lista Institucional Dinámica y su regla porcentual real en pricing_rules. Haz clic para ordenar."
+                                    title="COSTO / LISTA INST. | Arriba: Costo base estabilizado (commercial_cost_matrix). | Abajo (Píldora Verde): Precio Lista Institucional = Costo × (1 + % Regla Inst.). Ese % en pricing_rules ya incluye integralmente Utilidad Base (~20%) + Merma Real + Proceso de Selección/Tamizado por presentación (ej. +22% bulto, +60% lavada, +80% tamizada 40g)."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>COSTO / LISTA INST.</span>
@@ -1815,34 +1835,10 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         {sortField === 'cost' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
                                 </th>
-                                {selectedClient === 'nutresa' && (
-                                    <th 
-                                        onClick={() => handleSort('sipsa')}
-                                        style={{ 
-                                            padding: '0.55rem 0.5rem', 
-                                            fontWeight: 800, 
-                                            color: sortField === 'sipsa' ? '#0369A1' : '#0284C7', 
-                                            textAlign: 'right', 
-                                            cursor: 'pointer',
-                                            position: 'sticky',
-                                            top: embedded ? '190px' : '133px',
-                                            zIndex: 65,
-                                            backgroundColor: '#F8FAFC',
-                                            borderBottom: `2px solid ${THEME.colors.border}`,
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
-                                            whiteSpace: 'nowrap'
-                                        }}
-                                        title="Precio oficial de referencia del boletín SIPSA DANE para el mercado mayorista de Bogotá. Haz clic para ordenar."
-                                    >
-                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
-                                            <span>SIPSA DANE</span>
-                                            <HelpCircle size={11} color="#0284C7" />
-                                            {sortField === 'sipsa' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
-                                        </div>
-                                    </th>
-                                )}
                                 <th 
                                     onClick={() => handleSort('proposed')}
+                                    onMouseEnter={() => setActiveHeaderTooltip(isGeneralList ? 'PRECIO ANTERIOR: Tarifa congelada que estuvo vigente en el ciclo anterior (quincena o mes pasado) en quote_items, junto con el % de utilidad que deja frente al costo actual.' : 'PROPUESTA CLIENTE: Tarifa objetivo vigente o solicitada por el cliente en su pliego de negociación (quote_items.unit_price), junto con el % de utilidad que representa hoy.')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
                                         fontWeight: 800, 
@@ -1857,7 +1853,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title={isGeneralList ? "Precio congelado que estuvo vigente en la quincena o mes anterior para esta lista y su % de utilidad. Haz clic para ordenar." : "Tarifa unitaria que el cliente solicita pagar según su planilla de licitación. Haz clic para ordenar."}
+                                    title={isGeneralList ? "PRECIO ANTERIOR | Significado: Precio congelado vigente en el ciclo anterior y su % de utilidad frente al costo de hoy. | Origen: quote_items.unit_price del acuerdo maestro." : "PROPUESTA CLIENTE | Significado: Tarifa unitaria vigente o solicitada por el cliente en licitación y su % de utilidad sobre el costo actual. | Origen: quote_items.unit_price."}
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>{isGeneralList ? 'PRECIO ANTERIOR' : 'PROPUESTA CLIENTE'}</span>
@@ -1867,6 +1863,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('suggested')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('SUGERIDO IA: Fórmula simplificada = Redondear50(Costo × (1 + % Lista Inst. + % Colchón de Ciclo)). Respeta el margen integral de cada presentación (+22%, +60%, +80%) y añade solo la cobertura temporal (+2%/+3% en 15 días o +4%/+6% en 30 días), sin duplicar cobros de merma.')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
                                         fontWeight: 800, 
@@ -1881,7 +1879,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="Tarifa calculada por el motor técnico desde la Lista Institucional Dinámica + Prima de Estabilización (15d / 30d) o SIPSA. Haz clic para ordenar."
+                                    title="SUGERIDO IA | Fórmula Simplificada: Redondear50(Costo × (1 + % Lista Inst. + % Colchón de Ciclo)). | Respeta tu % de Lista Inst. (que ya incluye utilidad base + merma + selección) y suma únicamente la protección del ciclo (+2% abarrotes / +3% fruver en 15 días; +4% / +6% en 30 días) sin doble cobro de merma."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <Zap size={12} color="#B45309" />
@@ -1892,6 +1890,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('margin')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('% UTILIDAD: Columna interactiva bidireccional. Arriba (caja editable): % de Utilidad sobre el Costo ((Nuevo Precio - Costo) / Costo). Abajo: Margen Bruto sobre Venta y utilidad en $/Kg. Si escribes un %, recalcula automáticamente el Nuevo Precio.')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
                                         fontWeight: 800, 
@@ -1906,7 +1906,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="Porcentaje de Utilidad sobre Costo (Markup %) y Margen Bruto (%). Editable: si cambias el %, recalcula automáticamente el Nuevo Precio a Fijar."
+                                    title="% UTILIDAD | Arriba (Editable): % de Utilidad sobre Costo = (Nuevo Precio - Costo) / Costo × 100. | Abajo: Margen Bruto sobre Venta = (Nuevo Precio - Costo) / Nuevo Precio × 100 y ganancia en $/unidad. | Bidireccional: al cambiar el %, recalcula el Nuevo Precio."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>% UTILIDAD</span>
@@ -1916,6 +1916,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('counter')}
+                                    onMouseEnter={() => setActiveHeaderTooltip(isGeneralList ? 'NUEVO PRECIO: Tarifa definitiva editable en pesos COP que quedará congelada y consagrada para todos los clientes del padrón durante la nueva vigencia.' : 'CONTRAPROPUESTA: Tarifa final en pesos COP que FruFresco ofertará y consagrará en el acuerdo corporativo del cliente.')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
                                         fontWeight: 800, 
@@ -1930,7 +1932,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="Tarifa oficial editable que FruFresco fijará y consagrará en este acuerdo para los clientes seleccionados. Haz clic para ordenar."
+                                    title="NUEVO PRECIO / CONTRAPROPUESTA | Significado: Tarifa oficial editable en COP que se consagrará en quote_items para todos los clientes suscritos al acuerdo. | Bidireccional: al editar el precio en pesos, se actualiza automáticamente la columna % UTILIDAD."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>{isGeneralList ? 'NUEVO PRECIO' : 'CONTRAPROPUESTA'}</span>
@@ -1940,6 +1942,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 </th>
                                 <th 
                                     onClick={() => handleSort('impact')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('VARIACIÓN / GANANCIA: Arriba muestra cuánto sube o baja el Nuevo Precio frente al Precio Anterior del cliente. Abajo en verde muestra la Ganancia Bruta real en pesos (Nuevo Precio - Costo) por cada Kg o Unidad vendida.')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
                                         fontWeight: 800, 
@@ -1954,7 +1958,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
-                                    title="Variación unitaria en pesos frente al Precio Anterior y Ganancia Bruta real por Kg/Unidad sobre el costo. Haz clic para ordenar."
+                                    title="VARIACIÓN / GANANCIA | Arriba: Diferencia en pesos (Nuevo Precio - Precio Anterior) para explicar la variación al cliente. | Abajo: Ganancia Bruta unitaria (Nuevo Precio - Costo Base) que percibe FruFresco por cada Kg/Unidad entregada."
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>VARIACIÓN / GANANCIA</span>
@@ -1967,13 +1971,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={selectedClient === 'nutresa' ? 10 : 8} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 600 }}>
+                                    <td colSpan={selectedClient === 'nutresa' ? 8 : 7} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 600 }}>
                                         Sincronizando catálogo y precios reales con Supabase...
                                     </td>
                                 </tr>
                             ) : filteredItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={selectedClient === 'nutresa' ? 10 : 8} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                    <td colSpan={selectedClient === 'nutresa' ? 8 : 7} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
                                         No se encontraron productos con el criterio de búsqueda actual.
                                     </td>
                                 </tr>
@@ -2011,25 +2015,9 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             <div style={{ fontWeight: 800, color: THEME.colors.textMain, fontSize: '0.82rem', lineHeight: 1.25 }}>
                                                 {item.raw_name}
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px', flexWrap: 'wrap' }}>
-                                                <span style={{
-                                                    fontSize: '0.66rem',
-                                                    fontFamily: 'monospace',
-                                                    fontWeight: 800,
-                                                    backgroundColor: '#ECFDF5',
-                                                    color: '#065F46',
-                                                    border: '1px solid #A7F3D0',
-                                                    padding: '1px 5px',
-                                                    borderRadius: '4px',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '3px'
-                                                }}>
-                                                    <Bot size={10} color="#059669" />
-                                                    {item.mapped_sku || 'HOMOLOGADO'}
-                                                </span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', flexWrap: 'wrap' }}>
                                                 <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>
-                                                    • {item.unit}
+                                                    {item.unit}
                                                     {selectedClient === 'nutresa' && item.unified_name && item.unified_name !== item.raw_name
                                                         ? ` • ${item.unified_name}`
                                                         : ''}
@@ -2072,22 +2060,6 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                 </div>
                                             )}
                                         </td>
-                                        {selectedClient === 'nutresa' && (
-                                            <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: '#0284C7', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                                {item.sipsa_price && item.sipsa_price > 0 ? (
-                                                    <div>
-                                                        <div>{formatMoney(item.sipsa_price)}</div>
-                                                        {item.prima_cop !== undefined && (
-                                                            <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
-                                                                +Prima {formatMoney(item.prima_cop)}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span style={{ color: '#94A3B8', fontSize: '0.7rem' }}>No se mide</span>
-                                                )}
-                                            </td>
-                                        )}
                                         {/* PRECIO ANTERIOR / PROPUESTA CLIENTE + % UTILIDAD ANTERIOR */}
                                         <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', fontWeight: 800, color: '#DC2626', whiteSpace: 'nowrap' }}>
                                             <div>{formatMoney(item.client_proposed_price)}</div>
