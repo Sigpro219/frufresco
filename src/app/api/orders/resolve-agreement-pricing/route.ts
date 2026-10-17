@@ -22,15 +22,44 @@ async function getGeneralInstitutionalPrices(supabase: any): Promise<Record<stri
         return cachedGeneralPrices.map;
     }
 
-    const { data: genPrices } = await supabase
-        .from('pricing_model_prices')
-        .select('product_id, price')
-        .eq('model_id', GENERAL_INSTITUCIONAL_ID);
+    const [genPricesRes, prodsRes, costRes, rulesRes] = await Promise.all([
+        supabase.from('pricing_model_prices').select('product_id, price').eq('model_id', GENERAL_INSTITUCIONAL_ID),
+        supabase.from('products').select('id, base_price, theoretical_shrinkage_pct').eq('is_active', true),
+        supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true),
+        supabase.from('pricing_rules').select('product_id, margin_adjustment').eq('model_id', GENERAL_INSTITUCIONAL_ID)
+    ]);
 
     const map: Record<string, number> = {};
-    (genPrices || []).forEach((p: any) => {
+    (genPricesRes.data || []).forEach((p: any) => {
         if (p.product_id && p.price !== null && Number(p.price) > 0) {
             map[p.product_id] = Number(p.price);
+        }
+    });
+
+    const costMap = new Map<string, number>();
+    (costRes.data || []).forEach((c: any) => {
+        if (Number(c.manual_cost) > 0) costMap.set(c.product_id, Number(c.manual_cost));
+    });
+
+    const ruleMap = new Map<string, number>();
+    (rulesRes.data || []).forEach((r: any) => {
+        if (r.margin_adjustment !== null && r.margin_adjustment !== undefined) {
+            ruleMap.set(r.product_id, Number(r.margin_adjustment));
+        }
+    });
+
+    (prodsRes.data || []).forEach((prod: any) => {
+        if (!map[prod.id] || map[prod.id] <= 0) {
+            const realCost = costMap.get(prod.id) || 0;
+            const ruleMargin = ruleMap.has(prod.id) ? (ruleMap.get(prod.id) as number) : 35;
+            const shrinkagePct = Math.min(Math.max(Number(prod.theoretical_shrinkage_pct) || 0, 0), 90);
+            const effectiveCost = shrinkagePct > 0 ? realCost / (1 - shrinkagePct / 100) : realCost;
+            const computed = effectiveCost > 0
+                ? Math.ceil((effectiveCost * (1 + ruleMargin / 100)) / 50) * 50
+                : (Number(prod.base_price) > 0 ? Number(prod.base_price) : 0);
+            if (computed > 0) {
+                map[prod.id] = computed;
+            }
         }
     });
 
@@ -115,7 +144,53 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         }
 
         // 3. Agreement Resolution (Canonical Hierarchy: Branch > Matrix > Master Shared)
+        const { data: specialModels } = await supabase
+            .from('special_agreement_models')
+            .select('id, name, master_quote_id, start_date, valid_until');
+
+        const masterModelByQuoteId = new Map<string, any>();
+        (specialModels || []).forEach((sm: any) => {
+            if (sm.master_quote_id) masterModelByQuoteId.set(sm.master_quote_id, sm);
+        });
+
+        const enrichAgreementDates = (ag: any) => {
+            if (!ag) return null;
+            const mm = masterModelByQuoteId.get(ag.id);
+            if (mm) {
+                return {
+                    ...ag,
+                    start_date: mm.start_date || ag.start_date,
+                    valid_until: mm.valid_until || ag.valid_until,
+                    model_snapshot_name: ag.model_snapshot_name || mm.name
+                };
+            }
+            return ag;
+        };
+
+        const isAgreementExpired = (ag: any) => {
+            if (!ag) return true;
+            const start = ag.start_date?.split('T')[0];
+            const end = ag.valid_until?.split('T')[0];
+            if (start && start > checkDate) return true;
+            if (end && end < checkDate) return true;
+            return false;
+        };
+
         let candidateAgreement: any = null;
+        let firstExpiredCandidate: any = null;
+
+        const considerCandidate = (rawAg: any) => {
+            const ag = enrichAgreementDates(rawAg);
+            if (!ag) return false;
+            if (!isAgreementExpired(ag)) {
+                candidateAgreement = ag;
+                return true;
+            }
+            if (!firstExpiredCandidate) {
+                firstExpiredCandidate = ag;
+            }
+            return false;
+        };
 
         // Level 1: Branch assigned agreement
         if (branchId) {
@@ -127,7 +202,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
-            if (bAg) candidateAgreement = bAg;
+            if (bAg) considerCandidate(bAg);
         }
 
         // Level 2: Matrix parent assigned agreement
@@ -140,7 +215,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
-            if (mAg) candidateAgreement = mAg;
+            if (mAg) considerCandidate(mAg);
         }
 
         // Level 3: Master shared agreement
@@ -154,7 +229,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                     .eq('id', masterId)
                     .eq('status', 'agreement')
                     .maybeSingle();
-                if (sm) candidateAgreement = sm;
+                if (sm) considerCandidate(sm);
             }
 
             if (!candidateAgreement && (branchId || parentId)) {
@@ -175,8 +250,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                                     .eq('id', quoteId)
                                     .eq('status', 'agreement')
                                     .maybeSingle();
-                                if (sm) {
-                                    candidateAgreement = sm;
+                                if (sm && considerCandidate(sm)) {
                                     break;
                                 }
                             }
@@ -188,15 +262,12 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             }
         }
 
-        // 4. Validity check against delivery date
-        let expired = false;
-        if (candidateAgreement) {
-            const start = candidateAgreement.start_date?.split('T')[0];
-            const end = candidateAgreement.valid_until?.split('T')[0];
-            if (start && start > checkDate) expired = true;
-            if (end && end < checkDate) expired = true;
+        if (!candidateAgreement && firstExpiredCandidate) {
+            candidateAgreement = firstExpiredCandidate;
         }
 
+        // 4. Validity check against delivery date
+        let expired = candidateAgreement ? isAgreementExpired(candidateAgreement) : false;
         const activeAgreement = (candidateAgreement && !expired) ? candidateAgreement : null;
 
         // 5. Model Resolution

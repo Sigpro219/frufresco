@@ -892,8 +892,17 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
             if (rpcErr) throw rpcErr;
 
-            // 4. Sincronizar explícitamente app_settings, depurar fotocopias individuales antiguas en todos los modelos y limpiar desvinculados (SPEC.md §7.5.6 & Escenario 237.4)
+            // 4. Sincronizar explícitamente quotes, app_settings, depurar fotocopias individuales antiguas en todos los modelos y limpiar desvinculados (SPEC.md §7.5.6 & Escenario 237.4)
             if (masterQuoteId) {
+                await supabase
+                    .from('quotes')
+                    .update({
+                        start_date: modalStartDate,
+                        valid_until: modalEndDate,
+                        status: 'agreement'
+                    })
+                    .eq('id', masterQuoteId);
+
                 const { error: appSetErr } = await supabase
                     .from('app_settings')
                     .upsert({
@@ -904,10 +913,15 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 if (appSetErr) throw appSetErr;
 
                 if (finalClientIds.length > 0) {
+                    const parentIdsToClean = allB2BClients
+                        .filter(c => finalClientIds.includes(c.id) && c.parent_id)
+                        .map(c => c.parent_id as string);
+                    const allIdsToSupersede = Array.from(new Set([...finalClientIds, ...parentIdsToClean]));
+
                     await supabase
                         .from('quotes')
                         .update({ status: 'superseded' })
-                        .in('client_id', finalClientIds)
+                        .in('client_id', allIdsToSupersede)
                         .eq('status', 'agreement')
                         .neq('id', masterQuoteId);
                 }

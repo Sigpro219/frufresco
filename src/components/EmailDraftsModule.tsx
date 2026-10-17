@@ -3339,27 +3339,38 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     parentId: string | null | undefined,
     profileObj?: any
   ) => {
+    const checkDate = (deliveryDate || new Date().toISOString()).split('T')[0];
+    const isNotExpired = (ag: any) => {
+      if (!ag) return false;
+      const start = ag.start_date?.split('T')[0];
+      const end = ag.valid_until?.split('T')[0];
+      if (start && start > checkDate) return false;
+      if (end && end < checkDate) return false;
+      return true;
+    };
+
+    const candidates: any[] = [];
     if (branchId) {
       const bAgr = agreements.find(q => q.client_id === branchId);
-      if (bAgr) return bAgr;
+      if (bAgr) candidates.push(bAgr);
     }
     if (parentId) {
       const mAgr = agreements.find(q => q.client_id === parentId);
-      if (mAgr) return mAgr;
+      if (mAgr) candidates.push(mAgr);
     }
     const masterId = profileObj?.logistics_data?.active_master_agreement_id;
     if (masterId) {
       const sAgr = agreements.find(q => q.id === masterId);
-      if (sAgr) return sAgr;
+      if (sAgr) candidates.push(sAgr);
     }
     const targetIds = [branchId, parentId].filter(Boolean) as string[];
     for (const [quoteId, clientIds] of Object.entries(sharedAgreementLinks)) {
       if (targetIds.some(id => clientIds.includes(id))) {
         const sAgr = agreements.find(q => q.id === quoteId);
-        if (sAgr) return sAgr;
+        if (sAgr) candidates.push(sAgr);
       }
     }
-    return null;
+    return candidates.find(isNotExpired) || candidates[0] || null;
   };
 
   const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
