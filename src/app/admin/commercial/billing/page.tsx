@@ -482,11 +482,16 @@ export function getOrderGraceInfo(order: any, graceMinutes: number = 120, cutClo
         };
     }
     
-    if (hasReturn) {
+    const pendingReturns = activeReturns.filter((r: any) => r.status === 'pending_review');
+    const approvedReturns = activeReturns.filter((r: any) => r.status === 'approved');
+    const hasOpenInvestigation = activePqrs.length > 0 || pendingReturns.length > 0;
+    const isQualityResolvedWithReturns = !hasOpenInvestigation && approvedReturns.length > 0;
+
+    if (hasOpenInvestigation) {
         return {
             statusType: 'novelty',
             isUnpricedNovelty: false,
-            badgeText: activePqrs.length > 0 ? 'PQRS Abierta' : 'Novedad',
+            badgeText: activePqrs.length > 0 ? 'PQRS Abierta' : 'En Auditoría',
             badgeBg: '#FEF2F2',
             badgeColor: '#991B1B',
             badgeBorder: '#FECACA',
@@ -497,6 +502,24 @@ export function getOrderGraceInfo(order: any, graceMinutes: number = 120, cutClo
             cutCountdownLabel: '',
             isCutExpired: false,
             label: 'Retenido por Calidad'
+        };
+    }
+
+    if (isQualityResolvedWithReturns) {
+        return {
+            statusType: 'resolved_novelty',
+            isUnpricedNovelty: false,
+            badgeText: 'Resuelto SAC',
+            badgeBg: '#EFF6FF',
+            badgeColor: '#1D4ED8',
+            badgeBorder: '#BFDBFE',
+            progressBarBg: '#3B82F6',
+            progressPct: 100,
+            isReadyForCut: true,
+            remainingMin: 0,
+            cutCountdownLabel: '',
+            isCutExpired: false,
+            label: 'Resuelto por Calidad'
         };
     }
 
@@ -646,7 +669,10 @@ export default function BillingDashboard() {
 
     const selectReadyOrders = () => {
         const readyIds = pendingOrders
-            .filter(o => getOrderGraceInfo(o, graceMinutes, cutCloseTime).statusType === 'ready')
+            .filter(o => {
+                const st = getOrderGraceInfo(o, graceMinutes, cutCloseTime).statusType;
+                return st === 'ready' || st === 'resolved_novelty';
+            })
             .map(o => o.id);
         setSelectedOrderIds(readyIds);
     };
@@ -1620,7 +1646,7 @@ export default function BillingDashboard() {
 
         pendingOrders.forEach(o => {
             const statusType = getOrderGraceInfo(o, graceMinutes, cutCloseTime).statusType;
-            if (statusType === 'ready') ready++;
+            if (statusType === 'ready' || statusType === 'resolved_novelty') ready++;
             else if (statusType === 'grace') grace++;
             else if (statusType === 'in_route') inRoute++;
             else if (statusType === 'novelty') novelties++;
@@ -4246,19 +4272,39 @@ export default function BillingDashboard() {
                                                             {(() => {
                                                                 const activeReturns = (order.billing_returns || []).filter((r: any) => r.status !== 'rejected');
                                                                 const activePqrs = (order.customer_service_pqrs || []).filter((p: any) => p.status === 'pending' || p.status === 'in_progress');
-                                                                const totalIncidents = activeReturns.length + activePqrs.length;
+                                                                const pendingReturns = activeReturns.filter((r: any) => r.status === 'pending_review');
+                                                                const approvedReturns = activeReturns.filter((r: any) => r.status === 'approved');
+                                                                const hasOpenInvestigation = activePqrs.length > 0 || pendingReturns.length > 0;
+                                                                const isResolvedWithReturns = !hasOpenInvestigation && approvedReturns.length > 0;
 
-                                                                if (totalIncidents > 0) {
+                                                                if (hasOpenInvestigation) {
+                                                                    const totalOpen = activePqrs.length + pendingReturns.length;
                                                                     const firstPqr = activePqrs[0];
-                                                                    const firstReturn = activeReturns[0];
+                                                                    const firstReturn = pendingReturns[0] || activeReturns[0];
                                                                     const issueLabel = firstPqr?.subject || firstReturn?.reason || 'Incidencia de calidad en revisión';
 
                                                                     return (
                                                                         <div>
                                                                             <span style={{ backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', padding: '0.15rem 0.4rem', borderRadius: '5px', fontSize: '0.66rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                                <AlertTriangle size={10} /> {totalIncidents} {totalIncidents === 1 ? (activePqrs.length > 0 ? 'PQRS Abierta' : 'Novedad') : 'Incidencias'}
+                                                                                <AlertTriangle size={10} /> {totalOpen} {totalOpen === 1 ? (activePqrs.length > 0 ? 'PQRS Abierta' : 'En Auditoría') : 'Incidencias Abiertas'}
                                                                             </span>
                                                                             <div style={{ fontSize: '0.64rem', color: '#DC2626', fontWeight: '600', marginTop: '1px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={issueLabel}>
+                                                                                {issueLabel}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+
+                                                                if (isResolvedWithReturns) {
+                                                                    const firstReturn = approvedReturns[0];
+                                                                    const issueLabel = firstReturn?.reason || 'Novedad dictaminada por Calidad';
+
+                                                                    return (
+                                                                        <div>
+                                                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '0.15rem 0.4rem', borderRadius: '5px', fontSize: '0.66rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                <CheckCircle2 size={10} color="#2563EB" /> {approvedReturns.length} {approvedReturns.length === 1 ? 'Novedad Resuelta' : 'Novedades Resueltas'}
+                                                                            </span>
+                                                                            <div style={{ fontSize: '0.64rem', color: '#2563EB', fontWeight: '600', marginTop: '1px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={issueLabel}>
                                                                                 {issueLabel}
                                                                             </div>
                                                                         </div>
@@ -4373,8 +4419,10 @@ export default function BillingDashboard() {
                                                                                     ? `Cuenta regresiva activa: ${grace.remainingMin}m restantes de la ventana de ${graceMinutes}m post-entrega.`
                                                                                     : grace.statusType === 'ready'
                                                                                     ? `Tiempo de gracia de ${graceMinutes}m cumplido sin reclamaciones. Apto para corte contable.`
+                                                                                    : grace.statusType === 'resolved_novelty'
+                                                                                    ? `Novedad auditada y resuelta en SAC. Dictamen aplicado y apto para corte contable.`
                                                                                     : grace.statusType === 'novelty'
-                                                                                    ? `Pedido con novedades o devoluciones reportadas. Requiere auditoría antes de facturar.`
+                                                                                    ? `Pedido con novedades o reclamaciones abiertas. Requiere auditoría antes de facturar.`
                                                                                     : `Barra de Gracia: Se activará la cuenta regresiva de ${graceMinutes >= 60 ? `${Math.round(graceMinutes/60)}h` : `${graceMinutes}m`} automáticamente una vez se entregue el pedido.`
                                                                             }
                                                                             style={{
@@ -4411,7 +4459,7 @@ export default function BillingDashboard() {
                                                                         </div>
 
                                                                         {/* Micro-telemetría explicativa */}
-                                                                        <div style={{ fontSize: '0.58rem', color: grace.isUnpricedNovelty ? (grace.isCutExpired ? '#DC2626' : '#C2410C') : grace.statusType === 'grace' ? '#B45309' : grace.statusType === 'ready' ? '#065F46' : '#94A3B8', fontWeight: '700', lineHeight: '1', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                        <div style={{ fontSize: '0.58rem', color: grace.isUnpricedNovelty ? (grace.isCutExpired ? '#DC2626' : '#C2410C') : grace.statusType === 'grace' ? '#B45309' : grace.statusType === 'ready' ? '#065F46' : grace.statusType === 'resolved_novelty' ? '#1D4ED8' : '#94A3B8', fontWeight: '700', lineHeight: '1', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '3px' }}>
                                                                             {grace.isUnpricedNovelty ? (
                                                                                 <>
                                                                                     <Timer size={9} style={{ color: grace.isCutExpired ? '#DC2626' : '#EA580C', flexShrink: 0 }} />
@@ -4427,10 +4475,15 @@ export default function BillingDashboard() {
                                                                                     <CheckCircle2 size={9} style={{ color: '#059669', flexShrink: 0 }} />
                                                                                     <span>{graceMinutes >= 60 ? `${Math.round(graceMinutes/60)}h` : `${graceMinutes}m`} cumplidas</span>
                                                                                 </>
+                                                                            ) : grace.statusType === 'resolved_novelty' ? (
+                                                                                <>
+                                                                                    <CheckCircle2 size={9} style={{ color: '#2563EB', flexShrink: 0 }} />
+                                                                                    <span>Dictamen aplicado</span>
+                                                                                </>
                                                                             ) : grace.statusType === 'novelty' ? (
                                                                                 <>
                                                                                     <AlertTriangle size={9} style={{ color: '#DC2626', flexShrink: 0 }} />
-                                                                                    <span>Con novedad</span>
+                                                                                    <span>Pendiente Calidad</span>
                                                                                 </>
                                                                             ) : (
                                                                                 <>
