@@ -396,11 +396,11 @@ export default function Navbar() {
                             }} />
                         </div>
                         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.05, gap: '1px' }}>
-                            <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
-                                V{process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ? process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.substring(0, 6).toUpperCase() : SYNC_METADATA.version}
+                            <span className="navbar-sync-date" style={{ fontSize: '0.65rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+                                {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}).replace(',', ' ·') : '...'}
                             </span>
-                            <span className="navbar-sync-date" style={{ fontSize: '0.52rem', fontWeight: 600, opacity: 0.85, letterSpacing: '-0.02em' }}>
-                                {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}).replace(',', '') : '...'}
+                            <span style={{ fontSize: '0.50rem', fontWeight: 600, opacity: 0.72, letterSpacing: '0.01em' }}>
+                                V{process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ? process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.substring(0, 6).toUpperCase() : SYNC_METADATA.version}
                             </span>
                         </span>
                     </div>
