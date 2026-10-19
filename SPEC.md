@@ -10804,6 +10804,12 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
       - En caso de múltiples conceptos para un mismo trabajador, se disponen lado a lado sobre la misma línea base visual sin desbordamiento ni saltos de línea.
       - La columna de volumen físico (`VOLUMEN (KG/UN)`) reserva cifras con sufijo `kg` para despachos de bodega reales y presenta un guion semántico sobrio (`—`) ante deducciones puramente financieras o administrativas de calidad (RNC), erradicando el ruido de ceros absolutos (`0.00`).
 
+   6. **Buscador Universal de Asignación con Navegación por Teclado (`SearchableSelect`):**
+      - En la Bandeja de Conciliación Superior (`Asignar a Colaborador`) y en las subtablas desplegables, la asignación de compras huérfanas se opera mediante el combobox reactivo canónico de la aplicación (`SearchableSelect`).
+      - Admite búsqueda en vivo por nombre, cédula (CC) o cargo con normalización de tildes.
+      - Navegación táctica 100% por teclado: flechas `ArrowDown` / `ArrowUp` para alternar la selección destacada, `Enter` para vincular de inmediato con persistencia en `inventory_movements`, `Escape` para cancelar y reubicación inteligente hacia arriba (`autoFlip`) ante proximidad al borde inferior de pantalla.
+      - Admite ingreso de texto libre (`allowCustomValue`) con `Enter` para colaboradores eventuales no registrados previamente en la plantilla.
+
 
 ---
 

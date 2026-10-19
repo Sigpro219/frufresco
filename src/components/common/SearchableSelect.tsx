@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, ChevronDown, Check, X } from 'lucide-react';
+import { Search, ChevronDown, Check, X, Plus } from 'lucide-react';
 
 export interface SearchableSelectOption {
     value: string;
@@ -26,6 +26,8 @@ export interface SearchableSelectProps {
     dropdownStyle?: React.CSSProperties;
     size?: 'sm' | 'md';
     wrapOptions?: boolean;
+    allowCustomValue?: boolean;
+    autoFlip?: boolean;
 }
 
 function normalizeStr(text: string): string {
@@ -50,11 +52,14 @@ export default function SearchableSelect({
     buttonStyle,
     dropdownStyle,
     size = 'sm',
-    wrapOptions = false
+    wrapOptions = false,
+    allowCustomValue = false,
+    autoFlip = true
 }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [highlightedIndex, setHighlightedIndex] = useState(0);
+    const [openUpwards, setOpenUpwards] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const triggerButtonRef = useRef<HTMLButtonElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -138,6 +143,19 @@ export default function SearchableSelect({
             searchInputRef.current.focus();
         }
     }, [isOpen]);
+
+    // Auto-flip upwards if not enough space below
+    useEffect(() => {
+        if (isOpen && autoFlip && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            if (spaceBelow < 250 && rect.top > 250) {
+                setOpenUpwards(true);
+            } else {
+                setOpenUpwards(false);
+            }
+        }
+    }, [isOpen, autoFlip]);
 
     const isSmall = size === 'sm';
 
@@ -259,7 +277,8 @@ export default function SearchableSelect({
                 <div
                     style={{
                         position: 'absolute',
-                        top: 'calc(100% + 4px)',
+                        top: openUpwards ? 'auto' : 'calc(100% + 4px)',
+                        bottom: openUpwards ? 'calc(100% + 4px)' : 'auto',
                         left: 0,
                         right: 0,
                         zIndex: 9999,
@@ -290,22 +309,27 @@ export default function SearchableSelect({
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             onKeyDown={e => {
+                                const totalOptionsCount = filteredOptions.length + (allowCustomValue && searchQuery.trim() ? 1 : 0);
                                 if (e.key === 'ArrowDown') {
                                     e.preventDefault();
-                                    if (filteredOptions.length > 0) {
-                                        setHighlightedIndex(prev => (prev + 1) % filteredOptions.length);
+                                    if (totalOptionsCount > 0) {
+                                        setHighlightedIndex(prev => (prev + 1) % totalOptionsCount);
                                     }
                                 } else if (e.key === 'ArrowUp') {
                                     e.preventDefault();
-                                    if (filteredOptions.length > 0) {
-                                        setHighlightedIndex(prev => (prev - 1 + filteredOptions.length) % filteredOptions.length);
+                                    if (totalOptionsCount > 0) {
+                                        setHighlightedIndex(prev => (prev - 1 + totalOptionsCount) % totalOptionsCount);
                                     }
                                 } else if (e.key === 'Enter' || e.key === 'Tab') {
-                                    if (filteredOptions.length > 0) {
+                                    if (filteredOptions.length > 0 && highlightedIndex < filteredOptions.length) {
                                         e.preventDefault();
                                         e.stopPropagation();
                                         const targetOpt = filteredOptions[highlightedIndex] || filteredOptions[0];
                                         selectOption(targetOpt.value);
+                                    } else if (allowCustomValue && searchQuery.trim()) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        selectOption(searchQuery.trim());
                                     } else if (e.key === 'Tab') {
                                         setIsOpen(false);
                                         setSearchQuery('');
@@ -450,6 +474,31 @@ export default function SearchableSelect({
                                     </div>
                                 );
                             })
+                        )}
+
+                        {allowCustomValue && searchQuery.trim() && (
+                            <div
+                                data-option-index={filteredOptions.length}
+                                onClick={() => selectOption(searchQuery.trim())}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '7px 9px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.73rem',
+                                    cursor: 'pointer',
+                                    backgroundColor: highlightedIndex === filteredOptions.length ? '#F0FDF4' : '#F8FAFC',
+                                    border: highlightedIndex === filteredOptions.length ? '1px solid #A7F3D0' : '1px dashed #CBD5E1',
+                                    color: '#065F46',
+                                    fontWeight: '700',
+                                    marginTop: '4px'
+                                }}
+                                onMouseEnter={() => setHighlightedIndex(filteredOptions.length)}
+                            >
+                                <Plus size={13} style={{ color: '#0D7A57' }} />
+                                <span>Asignar "{searchQuery.trim()}" (texto libre)</span>
+                            </div>
                         )}
                     </div>
                 </div>

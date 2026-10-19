@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
 import { parseRcaFromRecord } from '@/lib/rcaTaxonomy';
+import SearchableSelect from '@/components/common/SearchableSelect';
 
 const styles = {
     th: {
@@ -444,6 +445,26 @@ export default function HRManagement() {
         };
     }, [users]);
 
+    // Opciones estandarizadas para el buscador SearchableSelect de nómina
+    const collaboratorOptions = useMemo(() => {
+        return users
+            .filter(u => u.contact_name)
+            .sort((a, b) => (a.contact_name || '').localeCompare(b.contact_name || '', 'es'))
+            .map(u => {
+                const canonicalValue = u.document_id 
+                    ? `${u.contact_name} (Doc: ${u.document_id})` 
+                    : u.contact_name;
+                return {
+                    value: canonicalValue,
+                    label: u.contact_name,
+                    sublabel: u.document_id 
+                        ? `CC: ${u.document_id}${u.role ? ` • ${u.role}` : ''}` 
+                        : (u.role || 'Colaborador'),
+                    badge: u.role || undefined
+                };
+            });
+    }, [users]);
+
     // Compras huérfanas sin asignar (Anomalía operativa separada)
     const unassignedPayrollRows = useMemo(() => {
         return filteredPayrollRows.filter(r => r.isUnassigned);
@@ -570,6 +591,7 @@ export default function HRManagement() {
 
     const handleAssignPayrollInHR = async (rowId: string, collaboratorName: string, currentTotal: number) => {
         if (!collaboratorName.trim()) return;
+        setPayrollAssigningRowId(rowId);
         setIsSavingPayrollAssign(true);
         try {
             const targetRow = payrollSales.find(s => s.id === rowId);
@@ -604,6 +626,7 @@ export default function HRManagement() {
             showToast('Error al asignar colaborador: ' + (err.message || 'Error en BD'), 'error');
         } finally {
             setIsSavingPayrollAssign(false);
+            setPayrollAssigningRowId(null);
         }
     };
 
@@ -2431,62 +2454,29 @@ export default function HRManagement() {
                                                             <td style={{ padding: '0.5rem 0.85rem', fontWeight: '700', color: '#1E293B' }}>{item.productName}</td>
                                                             <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700' }}>{item.qty.toFixed(2)} {item.uom}</td>
                                                             <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '800', color: '#0D7A57' }}>${item.totalVal.toLocaleString('es-CO')}</td>
-                                                            <td style={{ padding: '0.5rem 0.85rem' }}>
-                                                                {isAssigningThis ? (
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <input
-                                                                            type="text"
-                                                                            autoFocus
-                                                                            placeholder="Nombre colaborador..."
-                                                                            value={payrollAssignQuery}
-                                                                            onChange={e => setPayrollAssignQuery(e.target.value)}
-                                                                            onKeyDown={e => {
-                                                                                if (e.key === 'Enter') handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal);
-                                                                                if (e.key === 'Escape') setPayrollAssigningRowId(null);
-                                                                            }}
-                                                                            style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', border: '1.5px solid #0D7A57', fontSize: '0.75rem', outline: 'none' }}
-                                                                        />
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={isSavingPayrollAssign}
-                                                                            onClick={() => handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal)}
-                                                                            style={{ padding: '4px 10px', borderRadius: '6px', border: 'none', backgroundColor: '#0D7A57', color: '#FFFFFF', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}
-                                                                        >
-                                                                            {isSavingPayrollAssign ? '...' : 'OK'}
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setPayrollAssigningRowId(null)}
-                                                                            style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.72rem', cursor: 'pointer' }}
-                                                                        >
-                                                                            X
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setPayrollAssigningRowId(item.raw.id);
-                                                                            setPayrollAssignQuery('');
+                                                            <td style={{ padding: '0.45rem 0.85rem' }}>
+                                                                <div style={{ width: '100%', maxWidth: '320px' }}>
+                                                                    <SearchableSelect
+                                                                        value=""
+                                                                        onChange={() => {}}
+                                                                        onSelectComplete={(collaboratorName) => {
+                                                                            handleAssignPayrollInHR(item.raw.id, collaboratorName, item.totalVal);
                                                                         }}
-                                                                        style={{
-                                                                            padding: '3px 9px',
-                                                                            borderRadius: '6px',
-                                                                            border: '1px solid #CBD5E1',
-                                                                            backgroundColor: '#FFFFFF',
-                                                                            color: '#0D7A57',
-                                                                            fontWeight: '700',
-                                                                            fontSize: '0.72rem',
-                                                                            cursor: 'pointer',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '4px'
-                                                                        }}
-                                                                    >
-                                                                        <Edit3 size={11} />
-                                                                        <span>Asignar Colaborador</span>
-                                                                    </button>
-                                                                )}
+                                                                        disabled={isSavingPayrollAssign && payrollAssigningRowId === item.raw.id}
+                                                                        placeholder={
+                                                                            isSavingPayrollAssign && payrollAssigningRowId === item.raw.id
+                                                                                ? 'Asignando en nómina...'
+                                                                                : 'Buscar o asignar colaborador...'
+                                                                        }
+                                                                        searchPlaceholder="Nombre, cédula o cargo (↑↓ Enter)..."
+                                                                        size="sm"
+                                                                        options={collaboratorOptions}
+                                                                        allowCustomValue={true}
+                                                                        autoFlip={true}
+                                                                        wrapOptions={false}
+                                                                        dropdownStyle={{ minWidth: '300px' }}
+                                                                    />
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     );
@@ -2895,34 +2885,22 @@ export default function HRManagement() {
                                                                                                     </span>
                                                                                                 </div>
                                                                                             ) : isAssigningThis ? (
-                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                                                    <input
-                                                                                                        type="text"
-                                                                                                        autoFocus
-                                                                                                        placeholder="Nombre colaborador..."
-                                                                                                        value={payrollAssignQuery}
-                                                                                                        onChange={e => setPayrollAssignQuery(e.target.value)}
-                                                                                                        onKeyDown={e => {
-                                                                                                            if (e.key === 'Enter') handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal);
-                                                                                                            if (e.key === 'Escape') setPayrollAssigningRowId(null);
+                                                                                                <div style={{ width: '100%', maxWidth: '300px' }}>
+                                                                                                    <SearchableSelect
+                                                                                                        value=""
+                                                                                                        onChange={() => {}}
+                                                                                                        onSelectComplete={(collaboratorName) => {
+                                                                                                            handleAssignPayrollInHR(item.raw.id, collaboratorName, item.totalVal);
                                                                                                         }}
-                                                                                                        style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1.5px solid #0D7A57', fontSize: '0.75rem', outline: 'none' }}
-                                                                                                    />
-                                                                                                    <button
-                                                                                                        type="button"
                                                                                                         disabled={isSavingPayrollAssign}
-                                                                                                        onClick={() => handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal)}
-                                                                                                        style={{ padding: '3px 8px', borderRadius: '6px', border: 'none', backgroundColor: '#0D7A57', color: '#FFFFFF', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}
-                                                                                                    >
-                                                                                                        {isSavingPayrollAssign ? '...' : 'OK'}
-                                                                                                    </button>
-                                                                                                    <button
-                                                                                                        type="button"
-                                                                                                        onClick={() => setPayrollAssigningRowId(null)}
-                                                                                                        style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.72rem', cursor: 'pointer' }}
-                                                                                                    >
-                                                                                                        X
-                                                                                                    </button>
+                                                                                                        placeholder="Buscar o asignar colaborador..."
+                                                                                                        searchPlaceholder="Nombre, cédula o cargo (↑↓ Enter)..."
+                                                                                                        size="sm"
+                                                                                                        options={collaboratorOptions}
+                                                                                                        allowCustomValue={true}
+                                                                                                        autoFlip={true}
+                                                                                                        wrapOptions={false}
+                                                                                                    />
                                                                                                 </div>
                                                                                             ) : (
                                                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
