@@ -854,8 +854,8 @@ export default function HRManagement() {
     };
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAF9', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-            <div style={{ maxWidth: '100%', padding: '0.85rem 1.75rem', margin: '0 auto' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif', paddingBottom: '3.5rem' }}>
+            <div style={{ maxWidth: '1240px', padding: '1.25rem 1.75rem', margin: '0 auto' }}>
                 
                 {/* Banner de Notificación Toast In-UI */}
                 {toast && (
@@ -964,29 +964,37 @@ export default function HRManagement() {
                 </div>
 
                 {/* ========================================================
-                    SUBPESTAÑAS DE NAVEGACIÓN TALENTO HUMANO
+                    SUBPESTAÑAS DE NAVEGACIÓN TALENTO HUMANO (SKIN 1 PRECISION)
                 ======================================================== */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.15rem', borderBottom: '1.5px solid #E2E8F0', paddingBottom: '2px', flexWrap: 'wrap' }}>
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px', 
+                    marginBottom: '1.25rem', 
+                    borderBottom: '1px solid #E2E8F0', 
+                    paddingBottom: '6px', 
+                    flexWrap: 'wrap' 
+                }}>
                     <button
                         type="button"
                         onClick={() => setMainTab('staff')}
                         style={{
                             padding: '0.55rem 1.15rem',
-                            borderRadius: '8px 8px 0 0',
-                            border: 'none',
-                            borderBottom: mainTab === 'staff' ? '3px solid #0D7A57' : '3px solid transparent',
-                            backgroundColor: mainTab === 'staff' ? '#EDF5F1' : 'transparent',
-                            color: mainTab === 'staff' ? '#0D7A57' : '#64748B',
-                            fontWeight: '800',
-                            fontSize: '0.84rem',
+                            borderRadius: '10px',
+                            border: mainTab === 'staff' ? '1px solid #A7F3D0' : '1px solid transparent',
+                            backgroundColor: mainTab === 'staff' ? '#ECFDF5' : 'transparent',
+                            color: mainTab === 'staff' ? '#065F46' : '#64748B',
+                            fontWeight: mainTab === 'staff' ? '800' : '600',
+                            fontSize: '0.82rem',
                             cursor: 'pointer',
-                            display: 'flex',
+                            display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
+                            gap: '7px',
+                            boxShadow: mainTab === 'staff' ? '0 1px 3px rgba(13, 122, 87, 0.08)' : 'none',
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        <Users size={16} />
+                        <Users size={16} style={{ color: mainTab === 'staff' ? '#0D7A57' : '#94A3B8' }} />
                         <span>Directorio de Personal ({users.length})</span>
                     </button>
 
@@ -995,32 +1003,33 @@ export default function HRManagement() {
                         onClick={() => setMainTab('payroll_deductions')}
                         style={{
                             padding: '0.55rem 1.15rem',
-                            borderRadius: '8px 8px 0 0',
-                            border: 'none',
-                            borderBottom: mainTab === 'payroll_deductions' ? '3px solid #2563EB' : '3px solid transparent',
-                            backgroundColor: mainTab === 'payroll_deductions' ? '#EFF6FF' : 'transparent',
-                            color: mainTab === 'payroll_deductions' ? '#1D4ED8' : '#64748B',
-                            fontWeight: '800',
-                            fontSize: '0.84rem',
+                            borderRadius: '10px',
+                            border: mainTab === 'payroll_deductions' ? '1px solid #A7F3D0' : '1px solid transparent',
+                            backgroundColor: mainTab === 'payroll_deductions' ? '#ECFDF5' : 'transparent',
+                            color: mainTab === 'payroll_deductions' ? '#065F46' : '#64748B',
+                            fontWeight: mainTab === 'payroll_deductions' ? '800' : '600',
+                            fontSize: '0.82rem',
                             cursor: 'pointer',
-                            display: 'flex',
+                            display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
+                            gap: '7px',
+                            boxShadow: mainTab === 'payroll_deductions' ? '0 1px 3px rgba(13, 122, 87, 0.08)' : 'none',
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        <DollarSign size={16} />
+                        <DollarSign size={16} style={{ color: mainTab === 'payroll_deductions' ? '#0D7A57' : '#94A3B8' }} />
                         <span>Deducciones de Nómina • Ventas Bodega (Col N)</span>
                         {payrollUnassignedCount > 0 && (
                             <span style={{
-                                backgroundColor: '#F59E0B',
-                                color: '#FFFFFF',
-                                fontSize: '0.65rem',
-                                fontWeight: '900',
-                                padding: '1px 6px',
-                                borderRadius: '10px'
+                                backgroundColor: '#FEF3C7',
+                                color: '#92400E',
+                                border: '1px solid #FCD34D',
+                                fontSize: '0.66rem',
+                                fontWeight: '800',
+                                padding: '1px 7px',
+                                borderRadius: '8px'
                             }}>
-                                {payrollUnassignedCount} pend.
+                                {payrollUnassignedCount} pendientes
                             </span>
                         )}
                     </button>
@@ -1848,120 +1857,207 @@ export default function HRManagement() {
             ======================================================== */}
             {mainTab === 'payroll_deductions' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                    {/* KPI CARDS (4 Tarjetas de Nómina) */}
+                    {/* KPI CARDS (4 Tarjetas Ejecutivas Skin 1 Precision) */}
                     <div style={{ 
                         display: 'grid', 
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                        gap: '0.75rem' 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+                        gap: '0.85rem' 
                     }}>
-                        <div style={{ backgroundColor: '#FFFFFF', padding: '0.85rem 1.1rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
-                            <div style={{ backgroundColor: '#EDF5F1', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57' }}>
-                                <DollarSign size={20} strokeWidth={2.4} />
+                        <div style={{ 
+                            backgroundColor: '#FFFFFF', 
+                            padding: '1.1rem 1.25rem', 
+                            borderRadius: '14px', 
+                            border: '1px solid #E2E8F0', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '1rem', 
+                            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)' 
+                        }}>
+                            <div style={{ 
+                                backgroundColor: '#ECFDF5', 
+                                width: '46px', 
+                                height: '46px', 
+                                borderRadius: '12px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                color: '#0D7A57',
+                                flexShrink: 0
+                            }}>
+                                <DollarSign size={22} strokeWidth={2.4} />
                             </div>
-                            <div>
-                                <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Total a Descontar Nómina</div>
-                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Total a Descontar Nómina
+                                </div>
+                                <div style={{ fontSize: '1.45rem', fontWeight: '900', color: '#0D7A57', fontVariantNumeric: 'tabular-nums', lineHeight: '1.2' }}>
                                     ${payrollTotalCOP.toLocaleString('es-CO')}
                                 </div>
-                                <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>{filteredPayrollRows.length} compras auditadas</div>
+                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '2px' }}>
+                                    {filteredPayrollRows.length} compras auditadas
+                                </div>
                             </div>
                         </div>
 
-                        <div style={{ backgroundColor: '#FFFFFF', padding: '0.85rem 1.1rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
-                            <div style={{ backgroundColor: '#F1F5F9', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1E293B' }}>
-                                <Briefcase size={20} strokeWidth={2.2} />
+                        <div style={{ 
+                            backgroundColor: '#FFFFFF', 
+                            padding: '1.1rem 1.25rem', 
+                            borderRadius: '14px', 
+                            border: '1px solid #E2E8F0', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '1rem', 
+                            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)' 
+                        }}>
+                            <div style={{ 
+                                backgroundColor: '#F1F5F9', 
+                                width: '46px', 
+                                height: '46px', 
+                                borderRadius: '12px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                color: '#1E293B',
+                                flexShrink: 0
+                            }}>
+                                <Briefcase size={22} strokeWidth={2.2} />
                             </div>
-                            <div>
-                                <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Volumen Despachado</div>
-                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#1E293B', fontVariantNumeric: 'tabular-nums' }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Volumen Despachado
+                                </div>
+                                <div style={{ fontSize: '1.45rem', fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums', lineHeight: '1.2' }}>
                                     {payrollTotalQty.toFixed(2)}
                                 </div>
-                                <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Kilos / Unidades de bodega</div>
+                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '2px' }}>
+                                    Kilos / Unidades de bodega
+                                </div>
                             </div>
                         </div>
 
-                        <div style={{ backgroundColor: '#FFFFFF', padding: '0.85rem 1.1rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
-                            <div style={{ backgroundColor: '#EFF6FF', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
-                                <Users size={20} strokeWidth={2.2} />
+                        <div style={{ 
+                            backgroundColor: '#FFFFFF', 
+                            padding: '1.1rem 1.25rem', 
+                            borderRadius: '14px', 
+                            border: '1px solid #E2E8F0', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '1rem', 
+                            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)' 
+                        }}>
+                            <div style={{ 
+                                backgroundColor: '#EFF6FF', 
+                                width: '46px', 
+                                height: '46px', 
+                                borderRadius: '12px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                color: '#2563EB',
+                                flexShrink: 0
+                            }}>
+                                <Users size={22} strokeWidth={2.2} />
                             </div>
-                            <div>
-                                <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Colaboradores</div>
-                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#2563EB', fontVariantNumeric: 'tabular-nums' }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Colaboradores
+                                </div>
+                                <div style={{ fontSize: '1.45rem', fontWeight: '900', color: '#2563EB', fontVariantNumeric: 'tabular-nums', lineHeight: '1.2' }}>
                                     {payrollUniqueCollabs}
                                 </div>
-                                <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Con compras registradas</div>
+                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '2px' }}>
+                                    Con compras registradas
+                                </div>
                             </div>
                         </div>
 
                         <div style={{ 
                             backgroundColor: payrollUnassignedCount > 0 ? '#FFFBEB' : '#FFFFFF', 
-                            padding: '0.85rem 1.1rem', 
-                            borderRadius: '12px', 
-                            border: payrollUnassignedCount > 0 ? '1.5px solid #FCD34D' : '1px solid #E2E8F0', 
+                            padding: '1.1rem 1.25rem', 
+                            borderRadius: '14px', 
+                            border: payrollUnassignedCount > 0 ? '1px solid #FCD34D' : '1px solid #E2E8F0', 
                             display: 'flex', 
                             alignItems: 'center', 
-                            gap: '0.85rem',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                            gap: '1rem',
+                            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
                         }}>
-                            <div style={{ backgroundColor: payrollUnassignedCount > 0 ? '#FEF3C7' : '#F1F5F9', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: payrollUnassignedCount > 0 ? '#B45309' : '#64748B' }}>
-                                <AlertCircle size={20} strokeWidth={2.2} />
+                            <div style={{ 
+                                backgroundColor: payrollUnassignedCount > 0 ? '#FEF3C7' : '#F1F5F9', 
+                                width: '46px', 
+                                height: '46px', 
+                                borderRadius: '12px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                color: payrollUnassignedCount > 0 ? '#B45309' : '#64748B',
+                                flexShrink: 0
+                            }}>
+                                <AlertCircle size={22} strokeWidth={2.2} />
                             </div>
-                            <div>
-                                <div style={{ fontSize: '0.66rem', fontWeight: '800', color: payrollUnassignedCount > 0 ? '#B45309' : '#64748B', textTransform: 'uppercase' }}>Por Asignar</div>
-                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: payrollUnassignedCount > 0 ? '#D97706' : '#10B981', fontVariantNumeric: 'tabular-nums' }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: payrollUnassignedCount > 0 ? '#B45309' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Por Asignar
+                                </div>
+                                <div style={{ fontSize: '1.45rem', fontWeight: '900', color: payrollUnassignedCount > 0 ? '#D97706' : '#10B981', fontVariantNumeric: 'tabular-nums', lineHeight: '1.2' }}>
                                     {payrollUnassignedCount} pendientes
                                 </div>
-                                <div style={{ fontSize: '0.68rem', color: payrollUnassignedCount > 0 ? '#B45309' : '#94A3B8' }}>
+                                <div style={{ fontSize: '0.7rem', color: payrollUnassignedCount > 0 ? '#B45309' : '#94A3B8', marginTop: '2px' }}>
                                     {payrollUnassignedCount > 0 ? 'Requieren vincular colaborador' : '100% conciliado'}
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* TOOLBAR FLOTANTE DE NÓMINA (Filtros de Fecha + Superbuscador + Exportación) */}
+                    {/* BARRA FLOTANTE STICKY DE NÓMINA (Filtros de Fecha + Superbuscador + Exportación) */}
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        backgroundColor: '#FFFFFF',
-                        padding: '0.75rem 1.1rem',
-                        borderRadius: '14px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        padding: '0.75rem 1.25rem',
+                        borderRadius: '16px',
                         border: '1px solid #E2E8F0',
                         gap: '0.85rem',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
-                        flexWrap: 'wrap'
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03)',
+                        flexWrap: 'wrap',
+                        position: 'sticky',
+                        top: '75px',
+                        zIndex: 40
                     }}>
                         {/* Filtros de Fecha con Presets */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#475569' }}>Corte Nómina:</span>
+                            <span style={{ fontSize: '0.76rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Corte Nómina:</span>
                             <input
                                 type="date"
                                 value={payrollStartDate}
                                 onChange={e => setPayrollStartDate(e.target.value)}
-                                style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.8rem', color: '#1E293B', outline: 'none' }}
+                                style={{ padding: '0.45rem 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.8rem', color: '#1E293B', outline: 'none', backgroundColor: '#FFFFFF' }}
                             />
-                            <span style={{ fontSize: '0.78rem', color: '#94A3B8' }}>al</span>
+                            <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: '600' }}>al</span>
                             <input
                                 type="date"
                                 value={payrollEndDate}
                                 onChange={e => setPayrollEndDate(e.target.value)}
-                                style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.8rem', color: '#1E293B', outline: 'none' }}
+                                style={{ padding: '0.45rem 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.8rem', color: '#1E293B', outline: 'none', backgroundColor: '#FFFFFF' }}
                             />
                             <button
                                 type="button"
                                 onClick={fetchPayrollSales}
                                 style={{
-                                    padding: '0.4rem 0.75rem',
-                                    borderRadius: '6px',
+                                    padding: '0.45rem 0.85rem',
+                                    borderRadius: '8px',
                                     border: '1px solid #CBD5E1',
-                                    backgroundColor: '#F8FAFC',
+                                    backgroundColor: '#FFFFFF',
                                     cursor: 'pointer',
-                                    display: 'flex',
+                                    display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '4px',
+                                    gap: '5px',
                                     fontSize: '0.78rem',
                                     fontWeight: '700',
-                                    color: '#475569'
+                                    color: '#334155',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
                                 }}
                             >
                                 <RefreshCw size={13} className={loadingPayroll ? 'animate-spin' : ''} />
@@ -1970,8 +2066,8 @@ export default function HRManagement() {
                         </div>
 
                         {/* Superbuscador Omnibox Universal */}
-                        <div style={{ position: 'relative', flex: 1, minWidth: '240px', maxWidth: '420px' }}>
-                            <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                        <div style={{ position: 'relative', flex: 1, minWidth: '260px', maxWidth: '440px' }}>
+                            <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                             <input
                                 ref={payrollSearchRef}
                                 type="text"
@@ -1980,12 +2076,13 @@ export default function HRManagement() {
                                 onChange={e => setPayrollSearch(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '0.45rem 4rem 0.45rem 2.2rem',
-                                    borderRadius: '8px',
+                                    padding: '0.5rem 4rem 0.5rem 2.4rem',
+                                    borderRadius: '10px',
                                     border: '1px solid #CBD5E1',
                                     fontSize: '0.8rem',
                                     outline: 'none',
-                                    boxSizing: 'border-box'
+                                    boxSizing: 'border-box',
+                                    backgroundColor: '#F8FAFC'
                                 }}
                             />
                             {payrollSearch && (
@@ -1994,7 +2091,7 @@ export default function HRManagement() {
                                     onClick={() => setPayrollSearch('')}
                                     style={{
                                         position: 'absolute',
-                                        right: '8px',
+                                        right: '10px',
                                         top: '50%',
                                         transform: 'translateY(-50%)',
                                         border: 'none',
@@ -2020,18 +2117,18 @@ export default function HRManagement() {
                             onClick={handleExportPayrollExcel}
                             disabled={filteredPayrollRows.length === 0}
                             style={{
-                                padding: '0.5rem 1rem',
-                                borderRadius: '8px',
+                                padding: '0.55rem 1.15rem',
+                                borderRadius: '10px',
                                 border: 'none',
                                 backgroundColor: '#0D7A57',
                                 color: '#FFFFFF',
                                 fontSize: '0.8rem',
-                                fontWeight: '700',
-                                display: 'flex',
+                                fontWeight: '800',
+                                display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '0.45rem',
+                                gap: '6px',
                                 cursor: filteredPayrollRows.length === 0 ? 'not-allowed' : 'pointer',
-                                boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)',
+                                boxShadow: '0 2px 5px rgba(13, 122, 87, 0.25)',
                                 opacity: filteredPayrollRows.length === 0 ? 0.6 : 1
                             }}
                         >
@@ -2041,26 +2138,26 @@ export default function HRManagement() {
                     </div>
 
                     {/* TABLA CONSOLIDADA POR COLABORADOR */}
-                    <div style={{ backgroundColor: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-                        <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Users size={16} color="#0D7A57" />
+                    <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                        <div style={{ padding: '0.95rem 1.35rem', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                            <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Users size={16} style={{ color: '#0D7A57' }} />
                                 <span>Consolidado de Descuentos por Colaborador ({consolidatedPayroll.length})</span>
                             </div>
                             <div style={{ fontSize: '0.74rem', color: '#64748B' }}>
-                                Haz clic en <span style={{ fontWeight: '700' }}>"Ver Detalle"</span> para inspeccionar cada artículo adquirido
+                                Haz clic en <span style={{ fontWeight: '700', color: '#0F172A' }}>"Ver Detalle"</span> para inspeccionar cada artículo adquirido o reclamación imputada
                             </div>
                         </div>
 
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.82rem' }}>
-                                <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #CBD5E1' }}>
+                                <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
                                     <tr>
-                                        <th style={{ padding: '0.7rem 1.25rem', textAlign: 'left', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Colaborador (Nómina)</th>
-                                        <th style={{ padding: '0.7rem 1rem', textAlign: 'center', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Transacciones</th>
-                                        <th style={{ padding: '0.7rem 1rem', textAlign: 'right', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Volumen (Kg/Un)</th>
-                                        <th style={{ padding: '0.7rem 1.25rem', textAlign: 'right', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Total a Deducir</th>
-                                        <th style={{ padding: '0.7rem 1.25rem', textAlign: 'center', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Acciones</th>
+                                        <th style={{ padding: '0.75rem 1.25rem', textAlign: 'left', fontWeight: '800', color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colaborador (Nómina)</th>
+                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: '800', color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Transacciones</th>
+                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Volumen (Kg/Un)</th>
+                                        <th style={{ padding: '0.75rem 1.25rem', textAlign: 'right', fontWeight: '800', color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total a Deducir</th>
+                                        <th style={{ padding: '0.75rem 1.25rem', textAlign: 'center', fontWeight: '800', color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2088,37 +2185,39 @@ export default function HRManagement() {
                                                 <React.Fragment key={collab.employee}>
                                                     <tr style={{
                                                         borderBottom: '1px solid #F1F5F9',
-                                                        backgroundColor: collab.isUnassigned ? '#FFFBEB' : (isExpanded ? '#F8FAFC' : '#FFFFFF'),
+                                                        backgroundColor: collab.isUnassigned ? '#FFFDF5' : (isExpanded ? '#F8FAFC' : '#FFFFFF'),
                                                         transition: 'background 0.15s ease'
                                                     }}>
-                                                        <td style={{ padding: '0.85rem 1.25rem' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <td style={{ padding: '0.9rem 1.25rem' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                                 <div style={{
-                                                                    width: '32px',
-                                                                    height: '32px',
-                                                                    borderRadius: '8px',
+                                                                    width: '36px',
+                                                                    height: '36px',
+                                                                    borderRadius: '10px',
                                                                     backgroundColor: collab.isUnassigned ? '#FEF3C7' : '#EFF6FF',
-                                                                    color: collab.isUnassigned ? '#D97706' : '#2563EB',
+                                                                    color: collab.isUnassigned ? '#B45309' : '#1D4ED8',
+                                                                    border: collab.isUnassigned ? '1px solid #FDE68A' : '1px solid #DBEAFE',
                                                                     display: 'flex',
                                                                     alignItems: 'center',
-                                                                    justifyContent: 'center'
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0
                                                                 }}>
-                                                                    {collab.isUnassigned ? <AlertCircle size={16} /> : <User size={16} />}
+                                                                    {collab.isUnassigned ? <AlertCircle size={18} strokeWidth={2.2} /> : <User size={18} strokeWidth={2.2} />}
                                                                 </div>
                                                                 <div>
-                                                                    <div style={{ fontWeight: '800', color: collab.isUnassigned ? '#B45309' : '#0F172A', fontSize: '0.86rem' }}>
-                                                                        {collab.employee}
-                                                                    </div>
-                                                                    <div style={{ fontSize: '0.72rem', color: '#64748B', display: 'flex', gap: '6px', alignItems: 'center', marginTop: '1px' }}>
-                                                                        {staffObj?.document_id && <span>CC: {staffObj.document_id}</span>}
-                                                                        {staffObj?.role && (
-                                                                            <span style={{ backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: '4px', fontWeight: '600' }}>
-                                                                                {staffObj.role}
+                                                                    <div style={{ fontWeight: '800', color: collab.isUnassigned ? '#92400E' : '#0F172A', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                        <span>{collab.employee}</span>
+                                                                        {collab.isUnassigned && (
+                                                                            <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', fontSize: '0.62rem', letterSpacing: '0.02em' }}>
+                                                                                REQUIERE ASIGNAR
                                                                             </span>
                                                                         )}
-                                                                        {collab.isUnassigned && (
-                                                                            <span style={{ backgroundColor: '#F59E0B', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', fontSize: '0.65rem' }}>
-                                                                                REQUIERE ASIGNAR
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.72rem', color: '#64748B', display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                                                                        {staffObj?.document_id && <span>CC: {staffObj.document_id}</span>}
+                                                                        {staffObj?.role && (
+                                                                            <span style={{ backgroundColor: '#F1F5F9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '700', fontSize: '0.68rem' }}>
+                                                                                {staffObj.role}
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -2126,27 +2225,27 @@ export default function HRManagement() {
                                                             </div>
                                                         </td>
 
-                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: '700', color: '#475569' }}>
-                                                            <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
-                                                                <span style={{ backgroundColor: '#F1F5F9', padding: '3px 9px', borderRadius: '8px', fontSize: '0.76rem' }}>
+                                                        <td style={{ padding: '0.9rem 1rem', textAlign: 'center', fontWeight: '700', color: '#475569' }}>
+                                                            <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                                                                <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '3px 10px', borderRadius: '8px', fontSize: '0.74rem', fontWeight: '700' }}>
                                                                     {collab.txCount} {collab.txCount === 1 ? 'registro' : 'registros'}
                                                                 </span>
                                                                 {(collab.wompiCount > 0 || collab.creditCount > 0 || collab.pqrCount > 0) && (
-                                                                    <div style={{ display: 'flex', gap: '4px', fontSize: '0.64rem', fontWeight: '800', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                                    <div style={{ display: 'flex', gap: '4px', fontSize: '0.65rem', fontWeight: '800', flexWrap: 'wrap', justifyContent: 'center' }}>
                                                                         {collab.creditCount > 0 && (
-                                                                            <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #A7F3D0' }}>
+                                                                            <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '2px 7px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #A7F3D0' }}>
                                                                                 <ShoppingBag size={10} />
                                                                                 <span>{collab.creditCount} Compra Prod.</span>
                                                                             </span>
                                                                         )}
                                                                         {collab.pqrCount > 0 && (
-                                                                            <span style={{ backgroundColor: '#FFF1F2', color: '#BE123C', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FECDD3' }}>
+                                                                            <span style={{ backgroundColor: '#FFF1F2', color: '#BE123C', padding: '2px 7px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #FECDD3' }}>
                                                                                 <ShieldAlert size={10} />
                                                                                 <span>{collab.pqrCount} Reclamación RNC</span>
                                                                             </span>
                                                                         )}
                                                                         {collab.wompiCount > 0 && (
-                                                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #BFDBFE' }}>
+                                                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '2px 7px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #BFDBFE' }}>
                                                                                 <CreditCard size={10} />
                                                                                 <span>{collab.wompiCount} Wompi</span>
                                                                             </span>
@@ -2278,20 +2377,20 @@ export default function HRManagement() {
                                                                                                             if (e.key === 'Enter') handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal);
                                                                                                             if (e.key === 'Escape') setPayrollAssigningRowId(null);
                                                                                                         }}
-                                                                                                        style={{ padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1.5px solid #2563EB', fontSize: '0.75rem', outline: 'none' }}
+                                                                                                        style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1.5px solid #0D7A57', fontSize: '0.75rem', outline: 'none' }}
                                                                                                     />
                                                                                                     <button
                                                                                                         type="button"
                                                                                                         disabled={isSavingPayrollAssign}
                                                                                                         onClick={() => handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal)}
-                                                                                                        style={{ padding: '3px 8px', borderRadius: '4px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}
+                                                                                                        style={{ padding: '3px 8px', borderRadius: '6px', border: 'none', backgroundColor: '#0D7A57', color: '#FFFFFF', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}
                                                                                                     >
                                                                                                         {isSavingPayrollAssign ? '...' : 'OK'}
                                                                                                     </button>
                                                                                                     <button
                                                                                                         type="button"
                                                                                                         onClick={() => setPayrollAssigningRowId(null)}
-                                                                                                        style={{ padding: '3px 6px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.72rem', cursor: 'pointer' }}
+                                                                                                        style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.72rem', cursor: 'pointer' }}
                                                                                                     >
                                                                                                         X
                                                                                                     </button>
@@ -2325,7 +2424,7 @@ export default function HRManagement() {
                                                                                                         style={{
                                                                                                             background: 'none',
                                                                                                             border: 'none',
-                                                                                                            color: '#2563EB',
+                                                                                                            color: '#0D7A57',
                                                                                                             cursor: 'pointer',
                                                                                                             fontSize: '0.7rem',
                                                                                                             fontWeight: '700',
