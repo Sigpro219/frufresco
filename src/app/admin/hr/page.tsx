@@ -244,7 +244,10 @@ export default function HRManagement() {
                 if (!rca.imputedEntities || rca.imputedEntities.length === 0) return;
 
                 // Excluir casos cerrados conforme sin impacto económico (Opción 1)
-                if ((pqr.resolution_notes || '').includes('Cerrado conforme sin impacto económico')) return;
+                if (
+                    (pqr.resolution_notes || '').includes('Cerrado conforme sin impacto económico') ||
+                    (pqr.resolution_notes || '').includes('Opción 1')
+                ) return;
 
                 rca.imputedEntities.forEach((entity: any, idx: number) => {
                     const isCollaborator = !entity.entityType || ['employee', 'driver', 'sales_rep'].includes(entity.entityType);
@@ -260,12 +263,12 @@ export default function HRManagement() {
                             order_sequence: ordSeq,
                             deduction_amount: amount,
                             share_percent: Number(entity.sharePercent) || 100,
-                            notes: `[COBRO POR RECLAMACIÓN PQR #${pqr.id.substring(0, 8)}] ${ordSeq ? `Pedido #${ordSeq} | ` : ''}Empleado: ${entity.name} | Cuota Imputada (${entity.sharePercent || 100}%): $${amount.toLocaleString('es-CO')} | Valor Nómina: $${amount.toLocaleString('es-CO')} | Motivo: ${pqr.subject || 'Novedad de Calidad'}`,
+                            notes: `[COBRO POR RECLAMACIÓN RNC #${ordSeq || pqr.id.substring(0, 8)}] ${ordSeq ? `Pedido #${ordSeq} | ` : ''}Empleado: ${entity.name} | Cuota Imputada (${entity.sharePercent || 100}%): $${amount.toLocaleString('es-CO')} | Valor Nómina: $${amount.toLocaleString('es-CO')} | Motivo: ${pqr.subject || 'Novedad de Calidad'}`,
                             created_at: effDate,
                             products: {
-                                name: `Reclamación PQR #${pqr.id.substring(0, 8)} — ${pqr.subject || 'Novedad Calidad'}`,
-                                sku: `PQR-${pqr.id.substring(0, 6).toUpperCase()}`,
-                                accounting_id: ordSeq ? `PED-${ordSeq}` : `PQR-${pqr.id.substring(0, 4).toUpperCase()}`,
+                                name: `Reclamación RNC #${ordSeq || pqr.id.substring(0, 8)} — ${pqr.subject || 'Novedad Calidad'}`,
+                                sku: `RNC-${pqr.id.substring(0, 6).toUpperCase()}`,
+                                accounting_id: ordSeq ? `PED-${ordSeq}` : `RNC-${pqr.id.substring(0, 4).toUpperCase()}`,
                                 unit_of_measure: 'CASO'
                             }
                         });
@@ -2139,7 +2142,7 @@ export default function HRManagement() {
                                                                         {collab.pqrCount > 0 && (
                                                                             <span style={{ backgroundColor: '#FFF1F2', color: '#BE123C', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FECDD3' }}>
                                                                                 <ShieldAlert size={10} />
-                                                                                <span>{collab.pqrCount} Reclamación PQR</span>
+                                                                                <span>{collab.pqrCount} Reclamación RNC</span>
                                                                             </span>
                                                                         )}
                                                                         {collab.wompiCount > 0 && (
@@ -2257,7 +2260,7 @@ export default function HRManagement() {
                                                                                                         gap: '4px'
                                                                                                     }}>
                                                                                                         <ShieldAlert size={11} />
-                                                                                                        <span>COBRO POR RECLAMACIÓN PQR</span>
+                                                                                                        <span>COBRO POR RECLAMACIÓN RNC</span>
                                                                                                     </span>
                                                                                                     <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
                                                                                                         {item.raw.notes}
