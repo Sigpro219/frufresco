@@ -361,24 +361,22 @@ export default function Navbar() {
                     </div>
                     {/* Sync Indicator */}
                     <div className="navbar-sync-pill" style={{ 
-                        marginLeft: '0.65rem', 
+                        marginLeft: '0.45rem', 
                         display: 'flex', 
                         alignItems: 'center', 
-                        gap: '6px',
-                        padding: '5px 10px',
-                        borderRadius: 'var(--radius-full)',
+                        gap: '5px',
+                        padding: '3px 7px',
+                        borderRadius: '8px',
                         backgroundColor: 'rgba(5, 150, 105, 0.08)',
-                        fontSize: '0.7rem',
                         color: '#065f46',
-                        fontWeight: '800',
                         border: '1px solid rgba(5, 150, 105, 0.2)',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
                         whiteSpace: 'nowrap',
                         flexShrink: 0
                     }} title={mounted ? `Última sincronización: ${new Date(lastSyncDate).toLocaleString()}` : 'Cargando...'}>
                         <div style={{ 
-                            width: '8px', 
-                            height: '8px', 
+                            width: '6px', 
+                            height: '6px', 
                             borderRadius: '50%', 
                             backgroundColor: '#10B981',
                             position: 'relative',
@@ -397,9 +395,13 @@ export default function Navbar() {
                                 animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite'
                             }} />
                         </div>
-                        <span>
-                            V{process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ? process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.substring(0, 6).toUpperCase() : SYNC_METADATA.version}
-                            <span className="navbar-sync-date"> | {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
+                        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.05, gap: '1px' }}>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
+                                V{process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ? process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.substring(0, 6).toUpperCase() : SYNC_METADATA.version}
+                            </span>
+                            <span className="navbar-sync-date" style={{ fontSize: '0.52rem', fontWeight: 600, opacity: 0.85, letterSpacing: '-0.02em' }}>
+                                {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}).replace(',', '') : '...'}
+                            </span>
                         </span>
                     </div>
                 </Link>
