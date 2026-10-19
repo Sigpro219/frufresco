@@ -4468,7 +4468,15 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     <InfoRow 
                         icon="" 
                         label="Ubicación" 
-                        value={`${profileData.address || ''}${profileData.municipality || profileData.city ? `, ${profileData.municipality || profileData.city}` : ''}${profileData.department ? `, ${profileData.department}` : ''}`} 
+                        value={(() => {
+                            const addr = (profileData.address || '').trim();
+                            const city = (profileData.municipality || profileData.city || '').trim();
+                            const dept = (profileData.department || '').trim();
+                            let out = addr;
+                            if (city && !out.toLowerCase().includes(city.toLowerCase())) out += (out ? `, ${city}` : city);
+                            if (dept && !out.toLowerCase().includes(dept.toLowerCase())) out += (out ? `, ${dept}` : dept);
+                            return out;
+                        })()} 
                     />
                 )}
                 {isLead && leadData && (

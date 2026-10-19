@@ -28,6 +28,7 @@ const EVIDENCE_PHOTOS = {
   yuca: 'https://images.unsplash.com/photo-1590165482129-1b8b27698780?auto=format&fit=crop&w=800&q=80',
   platano: 'https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=800&q=80',
   uchuva: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=800&q=80',
+  melon: 'https://images.unsplash.com/photo-1571575173700-afb9492e6a50?auto=format&fit=crop&w=800&q=80',
   general: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80'
 };
 
@@ -69,12 +70,12 @@ const SCENARIOS_BY_SEQ = {
   1082: {
     persona: 'Claudia Patricia Rincón (Supervisora Eventos Colsubsidio Catering)',
     phone: '3144083862',
-    keyword: 'fresa',
-    fallbackKeyword: 'melon',
+    keyword: 'melon',
+    fallbackKeyword: 'fresa',
     reason: 'Calibre o especificación incorrecta',
     priority: 'high',
     fixedQty: 4,
-    photo: EVIDENCE_PHOTOS.fresa,
+    photo: EVIDENCE_PHOTOS.melon,
     narrative: 'Buenos días. Para el servicio de catering corporativo de hoy solicitamos fruta extra seleccionada de calibre uniforme para decoración de postres, pero nos llegaron 4 kg de calibre muy pequeño y desparejo que no podemos montar en mesa.'
   },
   1083: {

@@ -4356,16 +4356,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const matchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
       
       if (matchedProfile && matchedProfile.address) {
-        const city = matchedProfile.municipality || matchedProfile.city || '';
-        const dept = matchedProfile.department || '';
-        let fullAddress = matchedProfile.address;
-        if (city && !fullAddress.toLowerCase().includes(city.toLowerCase())) {
-          fullAddress += `, ${city}`;
-        }
-        if (dept && !fullAddress.toLowerCase().includes(dept.toLowerCase())) {
-          fullAddress += `, ${dept}`;
-        }
-        setEditableAddress(fullAddress);
+        const cleanBaseAddress = matchedProfile.address
+          .replace(/(?:,\s*Bogot[aá](?:\s*D\.?C\.?)?\s*,\s*Cundinamarca)+/gi, '')
+          .replace(/(?:,\s*Bogot[aá](?:\s*D\.?C\.?)?)+$/gi, '')
+          .replace(/(?:,\s*Cundinamarca)+$/gi, '')
+          .trim();
+        setEditableAddress(cleanBaseAddress);
       } else {
         setEditableAddress(meta.address || '');
       }
@@ -5414,10 +5410,15 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             }
           } else {
             // Actualizar dirección y coordenadas en perfil existente
+            const rawAddrToSave = (editableAddress || metadataForValidations?.address || '')
+              .replace(/(?:,\s*Bogot[aá](?:\s*D\.?C\.?)?\s*,\s*Cundinamarca)+/gi, '')
+              .replace(/(?:,\s*Bogot[aá](?:\s*D\.?C\.?)?)+$/gi, '')
+              .replace(/(?:,\s*Cundinamarca)+$/gi, '')
+              .trim();
             const { error: profileUpdateError } = await supabase
               .from('profiles')
               .update({
-                address: editableAddress || metadataForValidations?.address || '',
+                address: rawAddrToSave,
                 latitude: draftCoordinates?.lat || metadataForValidations?.latitude || null,
                 longitude: draftCoordinates?.lng || metadataForValidations?.longitude || null
               })
@@ -5887,10 +5888,15 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         }
       } else {
         // Update existing profile's address and coordinates
+        const rawAddrToSave = (editableAddress || metadata?.address || '')
+          .replace(/(?:,\s*Bogot[aá](?:\s*D\.?C\.?)?\s*,\s*Cundinamarca)+/gi, '')
+          .replace(/(?:,\s*Bogot[aá](?:\s*D\.?C\.?)?)+$/gi, '')
+          .replace(/(?:,\s*Cundinamarca)+$/gi, '')
+          .trim();
         const { error: profileUpdateError } = await supabase
           .from('profiles')
           .update({
-            address: editableAddress || metadata?.address || '',
+            address: rawAddrToSave,
             latitude: draftCoordinates?.lat || metadata?.latitude || null,
             longitude: draftCoordinates?.lng || metadata?.longitude || null
           })

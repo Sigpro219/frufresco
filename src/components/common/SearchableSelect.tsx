@@ -14,6 +14,7 @@ export interface SearchableSelectOption {
 export interface SearchableSelectProps {
     value: string;
     onChange: (value: string) => void;
+    onSelectComplete?: (value: string) => void;
     options: SearchableSelectOption[];
     placeholder?: string;
     searchPlaceholder?: string;
@@ -38,6 +39,7 @@ function normalizeStr(text: string): string {
 export default function SearchableSelect({
     value,
     onChange,
+    onSelectComplete,
     options,
     placeholder = '-- Seleccionar opción --',
     searchPlaceholder = 'Buscar...',
@@ -52,8 +54,11 @@ export default function SearchableSelect({
 }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
+    const triggerButtonRef = useRef<HTMLButtonElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const optionsListRef = useRef<HTMLDivElement>(null);
 
     const selectedOption = useMemo(() => {
         return options.find(opt => opt.value === value);
@@ -68,6 +73,38 @@ export default function SearchableSelect({
             (opt.badge && normalizeStr(opt.badge).includes(query))
         );
     }, [options, searchQuery]);
+
+    // Keep highlightedIndex in bounds and reset to 0 when filtering
+    useEffect(() => {
+        setHighlightedIndex(0);
+    }, [searchQuery]);
+
+    useEffect(() => {
+        if (isOpen) {
+            const currentIdx = options.findIndex(opt => opt.value === value);
+            setHighlightedIndex(currentIdx >= 0 ? currentIdx : 0);
+        }
+    }, [isOpen, options, value]);
+
+    // Scroll highlighted option into view when navigating with arrows
+    useEffect(() => {
+        if (!isOpen || !optionsListRef.current) return;
+        const optionEl = optionsListRef.current.querySelector(`[data-option-index="${highlightedIndex}"]`) as HTMLElement | null;
+        if (optionEl) {
+            optionEl.scrollIntoView({ block: 'nearest' });
+        }
+    }, [highlightedIndex, isOpen]);
+
+    const selectOption = (optValue: string) => {
+        onChange(optValue);
+        setIsOpen(false);
+        setSearchQuery('');
+        if (onSelectComplete) {
+            setTimeout(() => onSelectComplete(optValue), 0);
+        } else {
+            setTimeout(() => triggerButtonRef.current?.focus(), 0);
+        }
+    };
 
     // Handle outside clicks
     useEffect(() => {
@@ -116,12 +153,21 @@ export default function SearchableSelect({
         >
             {/* Trigger Button */}
             <button
+                ref={triggerButtonRef}
                 type="button"
                 disabled={disabled}
                 onClick={() => {
                     if (disabled) return;
                     setIsOpen(prev => !prev);
                     if (!isOpen) setSearchQuery('');
+                }}
+                onKeyDown={(e) => {
+                    if (disabled) return;
+                    if (!isOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        setIsOpen(true);
+                        setSearchQuery('');
+                    }
                 }}
                 style={{
                     width: '100%',
@@ -243,6 +289,33 @@ export default function SearchableSelect({
                             type="text"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    if (filteredOptions.length > 0) {
+                                        setHighlightedIndex(prev => (prev + 1) % filteredOptions.length);
+                                    }
+                                } else if (e.key === 'ArrowUp') {
+                                    e.preventDefault();
+                                    if (filteredOptions.length > 0) {
+                                        setHighlightedIndex(prev => (prev - 1 + filteredOptions.length) % filteredOptions.length);
+                                    }
+                                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                    if (filteredOptions.length > 0) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const targetOpt = filteredOptions[highlightedIndex] || filteredOptions[0];
+                                        selectOption(targetOpt.value);
+                                    } else if (e.key === 'Tab') {
+                                        setIsOpen(false);
+                                        setSearchQuery('');
+                                    }
+                                } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    setIsOpen(false);
+                                    setSearchQuery('');
+                                }
+                            }}
                             placeholder={searchPlaceholder}
                             style={{
                                 width: '100%',
@@ -274,11 +347,14 @@ export default function SearchableSelect({
                     </div>
 
                     {/* Options List */}
-                    <div style={{
-                        maxHeight: wrapOptions ? '280px' : '200px',
-                        overflowY: 'auto',
-                        padding: '4px'
-                    }}>
+                    <div
+                        ref={optionsListRef}
+                        style={{
+                            maxHeight: wrapOptions ? '280px' : '200px',
+                            overflowY: 'auto',
+                            padding: '4px'
+                        }}
+                    >
                         {filteredOptions.length === 0 ? (
                             <div style={{
                                 padding: '12px 10px',
@@ -289,16 +365,14 @@ export default function SearchableSelect({
                                 No se encontraron resultados {searchQuery ? `para "${searchQuery}"` : ''}
                             </div>
                         ) : (
-                            filteredOptions.map(opt => {
+                            filteredOptions.map((opt, idx) => {
                                 const isSelected = opt.value === value;
+                                const isHighlighted = idx === highlightedIndex;
                                 return (
                                     <div
                                         key={opt.value}
-                                        onClick={() => {
-                                            onChange(opt.value);
-                                            setIsOpen(false);
-                                            setSearchQuery('');
-                                        }}
+                                        data-option-index={idx}
+                                        onClick={() => selectOption(opt.value)}
                                         style={{
                                             display: 'flex',
                                             alignItems: wrapOptions ? 'flex-start' : 'center',
@@ -308,16 +382,20 @@ export default function SearchableSelect({
                                             borderRadius: '6px',
                                             fontSize: '0.73rem',
                                             cursor: 'pointer',
-                                            backgroundColor: isSelected ? '#ECFDF5' : 'transparent',
-                                            color: isSelected ? '#065F46' : '#334155',
-                                            fontWeight: isSelected ? '700' : '500',
+                                            backgroundColor: isSelected
+                                                ? '#ECFDF5'
+                                                : isHighlighted
+                                                    ? '#F0FDF4'
+                                                    : 'transparent',
+                                            border: isHighlighted && !isSelected
+                                                ? '1px solid #A7F3D0'
+                                                : '1px solid transparent',
+                                            color: isSelected || isHighlighted ? '#065F46' : '#334155',
+                                            fontWeight: isSelected || isHighlighted ? '700' : '500',
                                             transition: 'background-color 0.1s'
                                         }}
-                                        onMouseEnter={(e) => {
-                                            if (!isSelected) e.currentTarget.style.backgroundColor = '#F1F5F9';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                                        onMouseEnter={() => {
+                                            setHighlightedIndex(idx);
                                         }}
                                     >
                                         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
@@ -339,7 +417,7 @@ export default function SearchableSelect({
                                             {opt.sublabel && (
                                                 <span style={{
                                                     fontSize: '0.66rem',
-                                                    color: isSelected ? '#047857' : '#64748B',
+                                                    color: isSelected || isHighlighted ? '#047857' : '#64748B',
                                                     overflow: wrapOptions ? 'visible' : 'hidden',
                                                     textOverflow: wrapOptions ? 'clip' : 'ellipsis',
                                                     whiteSpace: wrapOptions ? 'normal' : 'nowrap',

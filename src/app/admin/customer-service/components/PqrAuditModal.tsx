@@ -98,6 +98,7 @@ export default function PqrAuditModal({
     const [activePhotoIdx, setActivePhotoIdx] = useState(0);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const noveltyQtyInputRef = useRef<HTMLInputElement>(null);
 
     // Order Items & Novelties State
     const [orderItems, setOrderItems] = useState<any[]>([]);
@@ -188,7 +189,7 @@ export default function PqrAuditModal({
         clearCaseDraft(pqr.id);
 
         setCurrentStep(1);
-        setResolutionNotes(pqr.resolution_notes || '');
+        setResolutionNotes(cleanHumanResolutionNotes(pqr.resolution_notes || ''));
         setSelectedItemId('');
         setNoveltyQty(0);
         setNoveltyReason('');
@@ -292,7 +293,7 @@ export default function PqrAuditModal({
                 if (draft && typeof draft === 'object') {
                     isRestoringDraftRef.current = true;
                     if (draft.currentStep) setCurrentStep(draft.currentStep);
-                    if (draft.resolutionNotes !== undefined) setResolutionNotes(draft.resolutionNotes);
+                    if (draft.resolutionNotes !== undefined) setResolutionNotes(cleanHumanResolutionNotes(draft.resolutionNotes));
                     if (draft.resolutionOption) setResolutionOption(draft.resolutionOption);
                     if (draft.rcaCategoryL1) setRcaCategoryL1(draft.rcaCategoryL1);
                     if (draft.rcaSubtypeL2 !== undefined) setRcaSubtypeL2(draft.rcaSubtypeL2);
@@ -354,17 +355,6 @@ export default function PqrAuditModal({
                             plate: r.vehicle_plate
                         };
                         setAssignedRouteDriver(foundDriver);
-
-                        if (!restoredFromDraft && (!rca.imputedEntities || rca.imputedEntities.length === 0) && currentResp === 'transporte') {
-                            setImputedEntities([{
-                                id: foundDriver.id || 'driver-route',
-                                name: `${foundDriver.name} (${foundDriver.plate || 'Furgón'})`,
-                                role: 'transporte',
-                                entityType: 'driver',
-                                sharePercent: 100,
-                                deductionAmount: caseCoQ
-                            }]);
-                        }
                     }
                 } catch (e) {
                     console.error('Error fetching order items or driver:', e);
@@ -761,58 +751,8 @@ export default function PqrAuditModal({
         else if (newResp === 'cliente') newTargetType = 'client';
 
         setImputedTargetType(newTargetType);
-
-        if (newResp === 'transporte' && assignedRouteDriver) {
-            setImputedEntities([{
-                id: assignedRouteDriver.id || 'driver-1',
-                name: `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`,
-                role: 'transporte',
-                entityType: 'driver',
-                sharePercent: 100,
-                deductionAmount: caseCoQ
-            }]);
-        } else if (newResp === 'cliente' && pqr?.profiles) {
-            setImputedEntities([{
-                id: pqr.client_id,
-                name: pqr.profiles.company_name || pqr.profiles.contact_name,
-                documentId: pqr.profiles.nit,
-                role: 'cliente',
-                entityType: 'client',
-                sharePercent: 100,
-                deductionAmount: 0
-            }]);
-        } else if (newResp === 'proveedor' && providersList.length > 0) {
-            const firstProv = providersList[0];
-            setImputedEntities([{
-                id: firstProv.id,
-                name: firstProv.name,
-                documentId: firstProv.nit,
-                role: 'proveedor',
-                entityType: 'provider',
-                sharePercent: 100,
-                deductionAmount: caseCoQ
-            }]);
-        } else {
-            const matchingStaff = collaboratorsList.filter(c => {
-                if (newResp === 'picking') return (c.role || '').toLowerCase().includes('pick') || (c.role || '').toLowerCase().includes('bodega');
-                if (newResp === 'bodega') return (c.role || '').toLowerCase().includes('bodega') || (c.role || '').toLowerCase().includes('operac');
-                if (newResp === 'comercial') return (c.role || '').toLowerCase().includes('comer') || (c.role || '').toLowerCase().includes('ventas');
-                return true;
-            });
-
-            if (matchingStaff.length > 0) {
-                setImputedEntities([{
-                    id: matchingStaff[0].id,
-                    name: matchingStaff[0].contact_name,
-                    role: matchingStaff[0].role || newResp,
-                    entityType: newResp === 'comercial' ? 'sales_rep' : 'employee',
-                    sharePercent: 100,
-                    deductionAmount: caseCoQ
-                }]);
-            } else {
-                setImputedEntities([]);
-            }
-        }
+        setSelectedImputedToAdd('');
+        setImputedEntities([]);
     };
 
 
@@ -872,6 +812,15 @@ export default function PqrAuditModal({
                     deductionAmount: 0
                 };
             }
+        } else if (rcaResponsible === 'transporte' && assignedRouteDriver && entityId === (assignedRouteDriver.id || 'driver-route')) {
+            newEntity = {
+                id: assignedRouteDriver.id || 'driver-route',
+                name: `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`,
+                role: 'transporte',
+                entityType: 'driver',
+                sharePercent: 100,
+                deductionAmount: 0
+            };
         } else {
             const colab = collaboratorsList.find(c => c.id === entityId);
             if (colab) {
@@ -1163,14 +1112,6 @@ export default function PqrAuditModal({
 
         if (nextKey !== sanitaryKey) {
             setSanitaryKey(nextKey);
-            const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
-            if (tmpl) {
-                setResolutionNotes(prev => {
-                    const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
-                    if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
-                    return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
-                });
-            }
         }
 
         const targets = specificReturnId
@@ -1195,8 +1136,14 @@ export default function PqrAuditModal({
     };
 
     const handleResolvePqr = async (status: 'resolved' | 'rejected') => {
-        if (!resolutionNotes.trim()) {
-            showToast('Ingresa una nota de resolución antes de continuar.', 'warning');
+        const effectiveHumanNotes = cleanHumanResolutionNotes(resolutionNotes) || (
+            resolutionOption === 'opt1'
+                ? 'Novedad aclarada y aceptada conforme por el cliente sin impacto económico ($0 COP).'
+                : ''
+        );
+
+        if (!effectiveHumanNotes.trim()) {
+            showToast('Selecciona un motivo rápido o ingresa el dictamen de auditoría antes de continuar.', 'warning');
             return;
         }
 
@@ -1218,7 +1165,13 @@ export default function PqrAuditModal({
 
         setActionLoading(true);
         try {
-            const baseCleanNotes = cleanHumanResolutionNotes(resolutionNotes);
+            const hasAveriaItems = caseReturns.some((r: any) => !(r.reason || '').toLowerCase().includes('faltante'));
+            const activeSanitaryTmpl = (resolutionOption !== 'opt1' && hasAveriaItems)
+                ? DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === (hasPhysicalReturn ? sanitaryKey : 'disposicion_cliente_sin_retorno'))
+                : null;
+            const baseCleanNotes = activeSanitaryTmpl
+                ? `${effectiveHumanNotes}\n\n${activeSanitaryTmpl.textTemplate}`.trim()
+                : effectiveHumanNotes;
             let conceptBlock = '';
             let redirectUrl = null;
 
@@ -1511,13 +1464,13 @@ export default function PqrAuditModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '1rem'
+            padding: '0.5rem 1rem'
         }}>
             <div style={{
                 position: 'relative',
                 width: '100%',
-                maxWidth: '1080px',
-                maxHeight: '94vh',
+                maxWidth: '1240px',
+                maxHeight: '96vh',
                 display: 'flex',
                 flexDirection: 'column',
                 backgroundColor: 'white',
@@ -1944,8 +1897,8 @@ export default function PqrAuditModal({
                                         </span>
                                     </div>
                                     <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0F172A' }}>{pqr.subject || 'Sin asunto'}</div>
-                                    <div style={{ fontSize: '0.74rem', color: '#334155', lineHeight: '1.4', backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                        {pqr.description || 'Sin descripción ingresada.'}
+                                    <div style={{ fontSize: '0.74rem', color: '#334155', lineHeight: '1.5', whiteSpace: 'pre-line', backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                        {(pqr.description || 'Sin descripción ingresada.').replace(/\s*\[Radicado por[^\]]+\]/gi, '').trim()}
                                     </div>
                                     {authorInfo.isColleagueLogged && (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: '#0D7A57', backgroundColor: '#EAEFEA', padding: '4px 8px', borderRadius: '6px', border: '1px solid #C4D7C4' }}>
@@ -1989,11 +1942,18 @@ export default function PqrAuditModal({
                                             </div>
                                             <div>
                                                 <span style={{ color: '#94A3B8', fontSize: '0.66rem', display: 'block' }}>Dirección / Sede</span>
-                                                <span style={{ color: '#334155', fontWeight: '600' }}>{pqr.orders?.shipping_address || 'Sede Principal'}</span>
+                                                <span style={{ color: '#0F172A', fontWeight: '700', display: 'block', fontSize: '0.72rem' }}>
+                                                    {authorInfo.companyName && authorInfo.companyName !== 'Empresa No Especificada' ? authorInfo.companyName : 'Sede Principal'}
+                                                </span>
+                                                <span style={{ color: '#475569', fontWeight: '600', fontSize: '0.7rem' }}>
+                                                    {(pqr.orders?.shipping_address || '').replace(/(,\s*Bogot[aá],\s*Cundinamarca)+/gi, ', Bogotá, Cundinamarca')}
+                                                </span>
                                             </div>
                                             <div>
                                                 <span style={{ color: '#94A3B8', fontSize: '0.66rem', display: 'block' }}>Conductor Ruta</span>
-                                                <span style={{ color: '#334155', fontWeight: '700' }}>{assignedRouteDriver ? assignedRouteDriver.name : 'No asignado'}</span>
+                                                <span style={{ color: '#334155', fontWeight: '700' }}>
+                                                    {assignedRouteDriver ? `${assignedRouteDriver.name}${assignedRouteDriver.plate ? ` (${assignedRouteDriver.plate})` : ''}` : 'No asignado'}
+                                                </span>
                                             </div>
                                         </div>
                                     ) : (
@@ -2154,7 +2114,7 @@ export default function PqrAuditModal({
                                     </div>
 
                                     {/* Contacto Comercial & WhatsApp SAC */}
-                                    <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
                                             <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                 <MessageCircle size={13} style={{ color: '#059669' }} />
@@ -2174,10 +2134,20 @@ export default function PqrAuditModal({
                                             </button>
                                         </div>
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0F172A' }}>{authorInfo.clientDisplayName}</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0F172A' }}>
+                                                {authorInfo.clientContact && authorInfo.clientContact !== 'Ecónomo / Contacto en Sitio'
+                                                    ? authorInfo.clientContact
+                                                    : authorInfo.clientDisplayName}
+                                            </div>
+                                            {authorInfo.companyName && authorInfo.companyName !== 'Empresa No Especificada' && authorInfo.companyName !== authorInfo.clientContact && (
+                                                <div style={{ fontSize: '0.73rem', fontWeight: '700', color: '#334155' }}>
+                                                    {authorInfo.companyName}
+                                                </div>
+                                            )}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', color: '#64748B', flexWrap: 'wrap' }}>
-                                                {authorInfo.nit && <span>NIT: {authorInfo.nit}</span>}
+                                                {authorInfo.phone && <span style={{ fontWeight: '700', color: '#0D7A57' }}>Tel: {authorInfo.phone}</span>}
+                                                {authorInfo.nit && <span>• NIT: {authorInfo.nit}</span>}
                                                 {authorInfo.email && <span>• {authorInfo.email}</span>}
                                             </div>
                                         </div>
@@ -2202,13 +2172,12 @@ export default function PqrAuditModal({
                                             </div>
                                         )}
 
-                                        {/* Template Selector Pills */}
+                                        {/* Template Selector Pills (Wrapped cleanly without horizontal scrollbar) */}
                                         <div style={{
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '4px',
-                                            overflowX: 'auto',
-                                            paddingBottom: '2px'
+                                            gap: '6px',
+                                            flexWrap: 'wrap'
                                         }}>
                                             {WHATSAPP_PQR_TEMPLATES.map(t => (
                                                 <button
@@ -2216,15 +2185,14 @@ export default function PqrAuditModal({
                                                     type="button"
                                                     onClick={() => setSelectedWaTemplate(t.id)}
                                                     style={{
-                                                        padding: '3px 7px',
-                                                        fontSize: '0.66rem',
+                                                        padding: '4px 9px',
+                                                        fontSize: '0.68rem',
                                                         fontWeight: selectedWaTemplate === t.id ? '800' : '600',
                                                         borderRadius: '6px',
                                                         border: selectedWaTemplate === t.id ? '1px solid #0D7A57' : '1px solid #CBD5E1',
                                                         backgroundColor: selectedWaTemplate === t.id ? '#EAEFEA' : 'white',
                                                         color: selectedWaTemplate === t.id ? '#0D7A57' : '#475569',
                                                         cursor: 'pointer',
-                                                        whiteSpace: 'nowrap',
                                                         transition: 'all 0.15s ease'
                                                     }}
                                                     title={t.description}
@@ -2234,17 +2202,18 @@ export default function PqrAuditModal({
                                             ))}
                                         </div>
 
-                                        {/* Message Preview Box */}
+                                        {/* Message Preview Box (Expanded height & legible typography) */}
                                         <div style={{
                                             backgroundColor: '#F0FDF4',
                                             border: '1px solid #BBF7D0',
-                                            borderRadius: '8px',
-                                            padding: '7px 9px',
-                                            fontSize: '0.7rem',
+                                            borderRadius: '10px',
+                                            padding: '12px 14px',
+                                            fontSize: '0.78rem',
                                             color: '#166534',
-                                            lineHeight: '1.35',
+                                            lineHeight: '1.5',
                                             whiteSpace: 'pre-wrap',
-                                            maxHeight: '85px',
+                                            minHeight: '195px',
+                                            maxHeight: '340px',
                                             overflowY: 'auto'
                                         }}>
                                             {buildPqrWhatsAppMessage(pqr, selectedWaTemplate)}
@@ -2331,14 +2300,14 @@ export default function PqrAuditModal({
                                                     <SearchableSelect
                                                         value={selectedItemId}
                                                         onChange={setSelectedItemId}
+                                                        onSelectComplete={() => noveltyQtyInputRef.current?.focus()}
                                                         placeholder="-- Seleccionar Producto del Pedido --"
-                                                        searchPlaceholder="Buscar producto por nombre o SKU..."
+                                                        searchPlaceholder="Buscar producto por nombre..."
                                                         clearable
                                                         options={orderItems.map(item => ({
                                                             value: item.id,
                                                             label: item.products?.name || item.nickname || 'Ítem sin nombre',
-                                                            sublabel: `Pedido: ${item.quantity} ${item.products?.unit_of_measure || 'ud'} • Precio: ${formatMoney(item.unit_price)}`,
-                                                            badge: item.products?.sku || `${item.quantity} ${item.products?.unit_of_measure || 'ud'}`
+                                                            sublabel: `Pedido: ${item.quantity} ${item.products?.unit_of_measure || 'ud'} • Precio: ${formatMoney(item.unit_price)}`
                                                         }))}
                                                     />
                                                 </div>
@@ -2394,12 +2363,19 @@ export default function PqrAuditModal({
                                                         <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Cantidad Afectada</label>
                                                         <div style={{ display: 'flex', gap: '6px' }}>
                                                             <input
+                                                                ref={noveltyQtyInputRef}
                                                                 type="number"
                                                                 min="0.1"
                                                                 step="0.1"
                                                                 placeholder="Cant."
                                                                 value={noveltyQty || ''}
                                                                 onChange={e => setNoveltyQty(parseFloat(e.target.value) || 0)}
+                                                                onKeyDown={e => {
+                                                                    if (e.key === 'Enter' && selectedItemId && noveltyQty > 0 && !actionLoading) {
+                                                                        e.preventDefault();
+                                                                        handleCreateNovelty();
+                                                                    }
+                                                                }}
                                                                 style={{ width: '100%', padding: '6px 8px', fontSize: '0.72rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px' }}
                                                             />
                                                             <button
@@ -2650,14 +2626,6 @@ export default function PqrAuditModal({
                                             setResolutionOption('opt1');
                                             if (!hasPhysicalReturn) {
                                                 setSanitaryKey('producto_conforme_sin_baja');
-                                                const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === 'producto_conforme_sin_baja');
-                                                if (tmpl) {
-                                                    setResolutionNotes(prev => {
-                                                        const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
-                                                        if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
-                                                        return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
-                                                    });
-                                                }
                                             }
                                         }}
                                         style={{
@@ -2694,16 +2662,7 @@ export default function PqrAuditModal({
                                                     }
                                                     setResolutionOption('opt2');
                                                     if (sanitaryKey === 'producto_conforme_sin_baja') {
-                                                        const nextKey = hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno';
-                                                        setSanitaryKey(nextKey);
-                                                        const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
-                                                        if (tmpl) {
-                                                            setResolutionNotes(prev => {
-                                                                const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
-                                                                if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
-                                                                return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
-                                                            });
-                                                        }
+                                                        setSanitaryKey(hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno');
                                                     }
                                                 }}
                                                 style={{
@@ -2742,16 +2701,7 @@ export default function PqrAuditModal({
                                         onClick={() => {
                                             setResolutionOption('opt3');
                                             if (sanitaryKey === 'producto_conforme_sin_baja') {
-                                                const nextKey = hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno';
-                                                setSanitaryKey(nextKey);
-                                                const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
-                                                if (tmpl) {
-                                                    setResolutionNotes(prev => {
-                                                        const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
-                                                        if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
-                                                        return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
-                                                    });
-                                                }
+                                                setSanitaryKey(hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno');
                                             }
                                         }}
                                         style={{
@@ -2778,16 +2728,7 @@ export default function PqrAuditModal({
                                         onClick={() => {
                                             setResolutionOption('opt4');
                                             if (sanitaryKey === 'producto_conforme_sin_baja') {
-                                                const nextKey = hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno';
-                                                setSanitaryKey(nextKey);
-                                                const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === nextKey);
-                                                if (tmpl) {
-                                                    setResolutionNotes(prev => {
-                                                        const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
-                                                        if (regex.test(prev)) return prev.replace(regex, tmpl.textTemplate).trim();
-                                                        return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
-                                                    });
-                                                }
+                                                setSanitaryKey(hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno');
                                             }
                                         }}
                                         style={{
@@ -2810,173 +2751,145 @@ export default function PqrAuditModal({
                                 </div>
                             </div>
 
-                            {/* Sanitary Disposal Template Filtered by Physical Custody */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                                    <div>
-                                        <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
-                                            2. Custodia Física del Producto & Protocolo Invima (Res. 2674/2013)
-                                        </label>
-                                        <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
-                                            El protocolo sanitario depende de si el producto se quedó donde el cliente o regresó en el furgón a FruFresco.
-                                        </span>
-                                    </div>
-                                    <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', padding: '3px', borderRadius: '8px', gap: '4px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleTogglePhysicalReturnCustody(false)}
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '5px',
-                                                padding: '5px 10px',
-                                                borderRadius: '6px',
-                                                fontSize: '0.68rem',
-                                                fontWeight: '800',
-                                                border: 'none',
-                                                cursor: 'pointer',
-                                                backgroundColor: !hasPhysicalReturn ? '#FFFFFF' : 'transparent',
-                                                color: !hasPhysicalReturn ? '#0D7A57' : '#475569',
-                                                boxShadow: !hasPhysicalReturn ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
-                                            }}
-                                        >
-                                            <Store size={12} />
-                                            <span>Se queda en Cliente (Sin Retorno)</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleTogglePhysicalReturnCustody(true)}
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '5px',
-                                                padding: '5px 10px',
-                                                borderRadius: '6px',
-                                                fontSize: '0.68rem',
-                                                fontWeight: '800',
-                                                border: 'none',
-                                                cursor: 'pointer',
-                                                backgroundColor: hasPhysicalReturn ? '#FFFFFF' : 'transparent',
-                                                color: hasPhysicalReturn ? '#3730A3' : '#475569',
-                                                boxShadow: hasPhysicalReturn ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
-                                            }}
-                                        >
-                                            <Truck size={12} />
-                                            <span>Devuelto en Camión (En Bodega FruFresco)</span>
-                                        </button>
-                                    </div>
-                                </div>
+                            {/* Sanitary Warehouse Destination ONLY when product returned in truck and case is not Opt 1 */}
+                            {(() => {
+                                const hasAveriaItems = caseReturns.some((r: any) => !(r.reason || '').toLowerCase().includes('faltante'));
+                                const showWarehouseSanitarySelector = resolutionOption !== 'opt1' && hasPhysicalReturn && (hasAveriaItems || caseReturns.length === 0);
+                                if (!showWarehouseSanitarySelector) return null;
 
-                                <SearchableSelect
-                                    value={sanitaryKey}
-                                    onChange={k => {
-                                        setSanitaryKey(k);
-                                        const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === k);
-                                        if (tmpl) {
-                                            setResolutionNotes(prev => {
-                                                const regex = /\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\n\[|$)/;
-                                                if (regex.test(prev)) {
-                                                    return prev.replace(regex, tmpl.textTemplate).trim();
-                                                }
-                                                return prev ? `${prev}\n\n${tmpl.textTemplate}`.trim() : tmpl.textTemplate;
-                                            });
+                                return (
+                                    <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
+                                                2. Destino en Bodega del Producto Devuelto (Protocolo Invima Res. 2674/2013)
+                                            </label>
+                                            <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
+                                                Como en el Paso 1 marcaste que el producto regresó en camión a FruFresco, selecciona qué hará Calidad con esta mercancía en muelle:
+                                            </span>
+                                        </div>
+
+                                        <SearchableSelect
+                                            value={sanitaryKey}
+                                            onChange={k => setSanitaryKey(k)}
+                                            wrapOptions={true}
+                                            placeholder="Seleccionar destino en bodega..."
+                                            searchPlaceholder="Buscar destino en bodega..."
+                                            options={DISPOSICION_SANITARIA_TEMPLATES
+                                                .filter(tmpl => tmpl.id !== 'producto_conforme_sin_baja' && tmpl.id !== 'disposicion_cliente_sin_retorno')
+                                                .map(tmpl => {
+                                                    const IconComp = tmpl.id === 'destruccion_biologica' ? Trash2 :
+                                                                     tmpl.id === 'transformacion_industrial' ? Layers :
+                                                                     tmpl.id === 'donacion_banco_alimentos' ? HeartHandshake : Sparkles;
+                                                    return {
+                                                        value: tmpl.id,
+                                                        label: tmpl.title,
+                                                        sublabel: tmpl.summary || tmpl.textTemplate,
+                                                        badge: 'En Bodega FruFresco',
+                                                        icon: <IconComp size={15} style={{ color: '#3730A3' }} />
+                                                    };
+                                                })}
+                                        />
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Final Resolution Notes Textarea with 1-Click Quick Dictamen Pills */}
+                            {(() => {
+                                const hasAveriaItems = caseReturns.some((r: any) => !(r.reason || '').toLowerCase().includes('faltante'));
+                                const showWarehouseSanitarySelector = resolutionOption !== 'opt1' && hasPhysicalReturn && (hasAveriaItems || caseReturns.length === 0);
+                                const sectionNumber = showWarehouseSanitarySelector ? '3' : '2';
+
+                                const quickDictamenPills = resolutionOption === 'opt1'
+                                    ? [
+                                        {
+                                            label: 'Calidad conforme validada con cliente',
+                                            text: 'Tras validar fotografías y parámetros de maduración/calibre con el cliente, el producto es aceptado conforme en cocina sin requerir descuento ni reposición ($0 COP).'
+                                        },
+                                        {
+                                            label: 'Conteo / báscula aclarado en recepción',
+                                            text: 'Se verificó el peso y conteo en recepción junto con el cliente, confirmando la entrega completa conforme a la remisión original ($0 COP).'
+                                        },
+                                        {
+                                            label: 'Novedad subsanada en ruta sin cobro',
+                                            text: 'La novedad reportada fue aclarada y subsanada directamente en ruta a satisfacción del cliente, manteniendo el 100% de la factura original ($0 COP).'
                                         }
-                                    }}
-                                    wrapOptions={true}
-                                    placeholder="Seleccionar Protocolo Invima..."
-                                    searchPlaceholder="Buscar protocolo sanitario..."
-                                    options={DISPOSICION_SANITARIA_TEMPLATES
-                                        .filter(tmpl => {
-                                            const isClientSiteOption = tmpl.id === 'producto_conforme_sin_baja' || tmpl.id === 'disposicion_cliente_sin_retorno';
-                                            return hasPhysicalReturn ? !isClientSiteOption : isClientSiteOption;
-                                        })
-                                        .map(tmpl => {
-                                            const IconComp = tmpl.id === 'producto_conforme_sin_baja' ? ShieldCheck :
-                                                             tmpl.id === 'disposicion_cliente_sin_retorno' ? Store :
-                                                             tmpl.id === 'destruccion_biologica' ? Trash2 :
-                                                             tmpl.id === 'transformacion_industrial' ? Layers :
-                                                             tmpl.id === 'donacion_banco_alimentos' ? HeartHandshake : Sparkles;
-                                            return {
-                                                value: tmpl.id,
-                                                label: tmpl.title,
-                                                sublabel: tmpl.summary || tmpl.textTemplate,
-                                                badge: tmpl.id === 'producto_conforme_sin_baja' ? 'Cliente se queda con él (Sin Baja)' : tmpl.id === 'disposicion_cliente_sin_retorno' ? 'Cliente descarta en sitio' : 'En Bodega FruFresco',
-                                                icon: <IconComp size={15} style={{ color: tmpl.id === 'producto_conforme_sin_baja' ? '#1D4ED8' : tmpl.id === 'disposicion_cliente_sin_retorno' ? '#0D7A57' : '#3730A3' }} />
-                                            };
-                                        })}
-                                />
+                                    ]
+                                    : resolutionOption === 'opt2'
+                                    ? [
+                                        {
+                                            label: 'Reposición física autorizada D+1 ($0 COP)',
+                                            text: 'Se autoriza reposición física de garantía ($0 COP) en la siguiente ventana de entrega (D+1) para cubrir la novedad validada con el cliente.'
+                                        },
+                                        {
+                                            label: 'Faltante de ruta reprogramado D+1',
+                                            text: 'Se confirma faltante físico en la entrega y se programa envío prioritario de reposición sin costo ($0 COP) para primera hora D+1.'
+                                        }
+                                    ]
+                                    : resolutionOption === 'opt3'
+                                    ? [
+                                        {
+                                            label: 'Nota Crédito aprobada por novedad de calidad',
+                                            text: 'Se aprueba emisión de Nota Crédito financiera a favor del cliente por el valor exacto del producto afectado reportado en recepción.'
+                                        },
+                                        {
+                                            label: 'Nota Crédito aprobada por faltante en entrega',
+                                            text: 'Se autoriza Nota Crédito financiera para descontar el saldo correspondiente a la cantidad faltante verificada en entrega.'
+                                        }
+                                    ]
+                                    : [
+                                        {
+                                            label: 'Ajuste de factura pre-emisión autorizado',
+                                            text: 'Se aplica sustracción directa de las unidades afectadas antes del cierre de facturación para que la factura refleje el neto real recibido.'
+                                        }
+                                    ];
 
-                                {!hasPhysicalReturn && sanitaryKey === 'producto_conforme_sin_baja' && (
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        padding: '8px 12px',
-                                        backgroundColor: '#EFF6FF',
-                                        border: '1px solid #BFDBFE',
-                                        borderRadius: '8px',
-                                        fontSize: '0.72rem',
-                                        color: '#1E40AF'
-                                    }}>
-                                        <ShieldCheck size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
-                                        <span>
-                                            <strong>Sin Retorno — Cliente Aprovecha el Producto:</strong> El producto permanece en las instalaciones del cliente y es aprovechado normalmente sin requerir destrucción ni retorno a FruFresco.
-                                        </span>
+                                return (
+                                    <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                                {sectionNumber}. Dictamen Final de Auditoría & Plan de Acción (CAPA)
+                                            </label>
+                                            <span style={{ fontSize: '0.66rem', color: '#64748B' }}>
+                                                Haz clic en una plantilla rápida o redacta el acuerdo final:
+                                            </span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                            {quickDictamenPills.map((pill, idx) => {
+                                                const isSelected = resolutionNotes.trim() === pill.text;
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => setResolutionNotes(pill.text)}
+                                                        style={{
+                                                            padding: '4px 10px',
+                                                            borderRadius: '999px',
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: '700',
+                                                            cursor: 'pointer',
+                                                            backgroundColor: isSelected ? '#0D7A57' : '#FFFFFF',
+                                                            color: isSelected ? '#FFFFFF' : '#0F172A',
+                                                            border: isSelected ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        + {pill.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <textarea
+                                            rows={7}
+                                            value={resolutionNotes}
+                                            onChange={e => setResolutionNotes(e.target.value)}
+                                            placeholder="Conclusiones finales de cierre, acuerdos con el cliente o transportador..."
+                                            style={{ width: '100%', minHeight: '145px', padding: '10px 12px', fontSize: '0.78rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', lineHeight: '1.5', resize: 'vertical' }}
+                                        />
                                     </div>
-                                )}
-
-                                {!hasPhysicalReturn && sanitaryKey === 'disposicion_cliente_sin_retorno' && (
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        padding: '8px 12px',
-                                        backgroundColor: '#ECFDF5',
-                                        border: '1px solid #A7F3D0',
-                                        borderRadius: '8px',
-                                        fontSize: '0.72rem',
-                                        color: '#065F46'
-                                    }}>
-                                        <Check size={14} style={{ color: '#059669', flexShrink: 0 }} />
-                                        <span>
-                                            <strong>Sin Retorno — Baja en Sitio por el Cliente:</strong> El producto averiado nunca regresa a FruFresco. El cliente asume el descarte físico en su cocina para proteger la ruta contra contaminación cruzada.
-                                        </span>
-                                    </div>
-                                )}
-
-                                {hasPhysicalReturn && (
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        padding: '8px 12px',
-                                        backgroundColor: '#EEF2FF',
-                                        border: '1px solid #C7D2FE',
-                                        borderRadius: '8px',
-                                        fontSize: '0.72rem',
-                                        color: '#3730A3'
-                                    }}>
-                                        <Truck size={14} style={{ color: '#4338CA', flexShrink: 0 }} />
-                                        <span>
-                                            <strong>Con Retorno Físico a Bodega FruFresco:</strong> El cliente devolvió físicamente el producto con el conductor. La mercancía ingresa a cuarentena en muelle para ejecutar la disposición seleccionada arriba.
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Final Resolution Notes Textarea */}
-                            <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                    3. Dictamen Final de Auditoría & Plan de Acción (CAPA)
-                                </label>
-                                <textarea
-                                    rows={4}
-                                    value={resolutionNotes}
-                                    onChange={e => setResolutionNotes(e.target.value)}
-                                    placeholder="Conclusiones finales de cierre, acuerdos con el cliente o transportador..."
-                                    style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', lineHeight: '1.4' }}
-                                />
-                            </div>
+                                );
+                            })()}
                         </div>
                     )}
 
@@ -3179,7 +3092,13 @@ export default function PqrAuditModal({
                                     <div style={{ flex: '1', minWidth: 0 }}>
                                         <SearchableSelect
                                             value={selectedImputedToAdd}
-                                            onChange={setSelectedImputedToAdd}
+                                            onChange={val => {
+                                                if (val) {
+                                                    handleAddImputedEntity(val);
+                                                } else {
+                                                    setSelectedImputedToAdd('');
+                                                }
+                                            }}
                                             placeholder={`-- Seleccionar ${rcaResponsible === 'proveedor' ? 'Proveedor' : rcaResponsible === 'cliente' ? 'Cliente' : 'Funcionario'} para Imputar --`}
                                             searchPlaceholder={rcaResponsible === 'proveedor' ? "Buscar proveedor por nombre o NIT..." : rcaResponsible === 'cliente' ? "Buscar cliente..." : "Buscar funcionario por nombre o cargo..."}
                                             clearable
@@ -3198,12 +3117,21 @@ export default function PqrAuditModal({
                                                     badge: 'Cliente'
                                                 }] : []
                                             ) : (
-                                                collaboratorsList.map(colab => ({
-                                                    value: colab.id,
-                                                    label: colab.contact_name,
-                                                    sublabel: colab.phone || undefined,
-                                                    badge: colab.role || 'Operativo'
-                                                }))
+                                                [
+                                                    ...(rcaResponsible === 'transporte' && assignedRouteDriver && !collaboratorsList.some(c => c.id === assignedRouteDriver.id)
+                                                        ? [{
+                                                            value: assignedRouteDriver.id || 'driver-route',
+                                                            label: `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`,
+                                                            badge: 'Conductor de Ruta'
+                                                        }]
+                                                        : []),
+                                                    ...collaboratorsList.map(colab => ({
+                                                        value: colab.id,
+                                                        label: colab.contact_name,
+                                                        sublabel: colab.phone || undefined,
+                                                        badge: colab.role || 'Operativo'
+                                                    }))
+                                                ]
                                             )}
                                         />
                                     </div>
@@ -3384,26 +3312,75 @@ export default function PqrAuditModal({
                         )}
 
                         {currentStep < 3 ? (
-                            <button
-                                type="button"
-                                onClick={() => setCurrentStep((currentStep + 1) as any)}
-                                style={{
-                                    padding: '8px 18px',
-                                    backgroundColor: '#0F172A',
-                                    color: 'white',
-                                    borderRadius: '10px',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '700',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                }}
-                            >
-                                <span>Siguiente</span>
-                                <ChevronRight size={14} />
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {currentStep === 2 && resolutionOption === 'opt1' && pqr.status !== 'resolved' ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurrentStep(3)}
+                                            style={{
+                                                padding: '8px 14px',
+                                                backgroundColor: 'white',
+                                                color: '#334155',
+                                                borderRadius: '10px',
+                                                fontSize: '0.74rem',
+                                                fontWeight: '700',
+                                                border: '1px solid #CBD5E1',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px'
+                                            }}
+                                        >
+                                            <span>Ir a Causa Raíz (Opcional)</span>
+                                            <ChevronRight size={14} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleResolvePqr('resolved')}
+                                            disabled={actionLoading}
+                                            style={{
+                                                padding: '8px 18px',
+                                                backgroundColor: '#0D7A57',
+                                                color: 'white',
+                                                borderRadius: '10px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.3)'
+                                            }}
+                                        >
+                                            {actionLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
+                                            <span>Confirmar Cierre Conforme ($0 COP)</span>
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentStep((currentStep + 1) as any)}
+                                        style={{
+                                            padding: '8px 18px',
+                                            backgroundColor: '#0F172A',
+                                            color: 'white',
+                                            borderRadius: '10px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '700',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <span>Siguiente</span>
+                                        <ChevronRight size={14} />
+                                    </button>
+                                )}
+                            </div>
                         ) : pqr.status === 'resolved' ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <button
@@ -3538,18 +3515,17 @@ export default function PqrAuditModal({
 
                             <div>
                                 <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>
-                                    SKU Sustituto Disponible en Catálogo
+                                    Producto Sustituto Disponible en Catálogo
                                 </label>
                                 <SearchableSelect
                                     value={selectedSubstituteProductId}
                                     onChange={setSelectedSubstituteProductId}
                                     placeholder="-- Selecciona el producto equivalente disponible --"
-                                    searchPlaceholder="Buscar SKU o nombre en catálogo..."
+                                    searchPlaceholder="Buscar producto en catálogo..."
                                     clearable
                                     options={availableCatalogProducts.map(prod => ({
                                         value: prod.id,
                                         label: prod.name,
-                                        sublabel: prod.sku ? `SKU: ${prod.sku}` : undefined,
                                         badge: prod.unit_of_measure || 'kg'
                                     }))}
                                 />

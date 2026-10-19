@@ -307,18 +307,11 @@ export function cleanHumanResolutionNotes(text: string): string {
     let cleaned = stripRcaMetadataTags(text);
     cleaned = cleaned.replace(/\[RESPONSABLE IMPUTADO:[^\n]+\]/gi, '');
     cleaned = cleaned.replace(/\[CONCEPTO:[^\n]+\]/gi, '');
+    cleaned = cleaned.replace(/\[DISPOSICIÓN SANITARIA:[\s\S]*?(?=\n\s*\[|\n\n|$)/gi, '');
     cleaned = cleaned.replace(/\{"categoryL1"[\s\S]*?\}/gi, '');
     cleaned = cleaned.replace(/,?\\?"?imputedEntityId[\s\S]*?(?:\n|$)/gi, '');
     cleaned = cleaned.replace(/\\n/g, '\n');
     cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
-
-    // Deduplicate identical sanitary disposal blocks if repeated
-    const dispRegex = /(\[DISPOSICIÓN SANITARIA:[\s\S]*?)(?=\n\s*\[DISPOSICIÓN SANITARIA:|$)/gi;
-    const blocks = cleaned.match(dispRegex);
-    if (blocks && blocks.length > 1) {
-        const unique = blocks[0];
-        cleaned = cleaned.replace(/\[DISPOSICIÓN SANITARIA:[\s\S]*$/gi, unique.trim());
-    }
 
     return cleaned.trim();
 }
