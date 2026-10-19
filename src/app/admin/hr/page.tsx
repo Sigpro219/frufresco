@@ -2713,38 +2713,79 @@ export default function HRManagement() {
                                                             </div>
                                                         </td>
 
-                                                        <td style={{ padding: '0.9rem 1rem', textAlign: 'center', fontWeight: '700', color: '#475569' }}>
-                                                            <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                                                                <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '3px 10px', borderRadius: '8px', fontSize: '0.74rem', fontWeight: '700' }}>
-                                                                    {collab.txCount} {collab.txCount === 1 ? 'registro' : 'registros'}
-                                                                </span>
-                                                                {(collab.wompiCount > 0 || collab.creditCount > 0 || collab.pqrCount > 0) && (
-                                                                    <div style={{ display: 'flex', gap: '4px', fontSize: '0.65rem', fontWeight: '800', flexWrap: 'wrap', justifyContent: 'center' }}>
-                                                                        {collab.creditCount > 0 && (
-                                                                            <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '2px 7px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #A7F3D0' }}>
-                                                                                <ShoppingBag size={10} />
-                                                                                <span>{collab.creditCount} Compra Prod.</span>
-                                                                            </span>
-                                                                        )}
-                                                                        {collab.pqrCount > 0 && (
-                                                                            <span style={{ backgroundColor: '#FFF1F2', color: '#BE123C', padding: '2px 7px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #FECDD3' }}>
-                                                                                <ShieldAlert size={10} />
-                                                                                <span>{collab.pqrCount} Reclamación RNC</span>
-                                                                            </span>
-                                                                        )}
-                                                                        {collab.wompiCount > 0 && (
-                                                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '2px 7px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #BFDBFE' }}>
-                                                                                <CreditCard size={10} />
-                                                                                <span>{collab.wompiCount} Wompi</span>
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
+                                                        <td style={{ padding: '0.9rem 1rem', textAlign: 'center' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'nowrap' }}>
+                                                                {collab.creditCount > 0 && (
+                                                                    <span style={{
+                                                                        backgroundColor: '#ECFDF5',
+                                                                        color: '#065F46',
+                                                                        padding: '4px 10px',
+                                                                        borderRadius: '9999px',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '5px',
+                                                                        border: '1px solid #A7F3D0',
+                                                                        fontSize: '0.72rem',
+                                                                        fontWeight: '700',
+                                                                        boxShadow: '0 1px 2px rgba(16, 185, 129, 0.06)',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        <ShoppingBag size={12} strokeWidth={2.2} style={{ color: '#059669' }} />
+                                                                        <span>{collab.creditCount} {collab.creditCount === 1 ? 'Compra Bodega' : 'Compras Bodega'}</span>
+                                                                    </span>
+                                                                )}
+                                                                {collab.pqrCount > 0 && (
+                                                                    <span style={{
+                                                                        backgroundColor: '#FFF1F2',
+                                                                        color: '#9F1239',
+                                                                        padding: '4px 10px',
+                                                                        borderRadius: '9999px',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '5px',
+                                                                        border: '1px solid #FECDD3',
+                                                                        fontSize: '0.72rem',
+                                                                        fontWeight: '700',
+                                                                        boxShadow: '0 1px 2px rgba(225, 29, 72, 0.06)',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        <ShieldAlert size={12} strokeWidth={2.2} style={{ color: '#E11D48' }} />
+                                                                        <span>{collab.pqrCount} {collab.pqrCount === 1 ? 'Cobro RNC' : 'Cobros RNC'}</span>
+                                                                    </span>
+                                                                )}
+                                                                {collab.wompiCount > 0 && (
+                                                                    <span style={{
+                                                                        backgroundColor: '#EFF6FF',
+                                                                        color: '#1E40AF',
+                                                                        padding: '4px 10px',
+                                                                        borderRadius: '9999px',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '5px',
+                                                                        border: '1px solid #BFDBFE',
+                                                                        fontSize: '0.72rem',
+                                                                        fontWeight: '700',
+                                                                        boxShadow: '0 1px 2px rgba(29, 78, 216, 0.06)',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        <CreditCard size={12} strokeWidth={2.2} style={{ color: '#2563EB' }} />
+                                                                        <span>{collab.wompiCount} {collab.wompiCount === 1 ? 'Pago Wompi ($0)' : 'Pagos Wompi ($0)'}</span>
+                                                                    </span>
+                                                                )}
+                                                                {collab.creditCount === 0 && collab.pqrCount === 0 && collab.wompiCount === 0 && (
+                                                                    <span style={{ color: '#94A3B8', fontSize: '0.75rem' }}>—</span>
                                                                 )}
                                                             </div>
                                                         </td>
 
-                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: '800', color: '#1E293B', fontVariantNumeric: 'tabular-nums' }}>
-                                                            {collab.totalQty.toFixed(2)}
+                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                                            {collab.totalQty > 0 ? (
+                                                                <span style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.84rem' }}>
+                                                                    {collab.totalQty.toFixed(2)} <span style={{ fontSize: '0.70rem', color: '#64748B', fontWeight: '600' }}>kg</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ color: '#94A3B8', fontSize: '0.85rem', fontWeight: '500' }}>—</span>
+                                                            )}
                                                         </td>
 
                                                         <td style={{ padding: '0.85rem 1.25rem', textAlign: 'right', fontWeight: '900', color: '#0D7A57', fontSize: '0.95rem', fontVariantNumeric: 'tabular-nums' }}>

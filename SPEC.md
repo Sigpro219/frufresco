@@ -10798,6 +10798,12 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        * *Total a Deducir:* Saldo en COP de mayor a menor / menor a mayor.
   4. **Píldoras de Segmentación Rápida (Quick Segment Pills):**
      - Encima de la tabla se provee un conmutador rápido para aislar universos operativos en un clic: `Todos`, `🟢 Con Deducción (> $0)`, `🔴 Con Cobro RNC` y `🔵 Solo Wompi ($0)`.
+   5. **Diseño de Badges Horizontales Limpios (Swiss Micro-Pill) & Formateo Semántico de Volumen:**
+      - Se prohíbe el apilamiento vertical multinivel de insignias redundantes en una misma celda (`1 registro` apilado sobre `1 Reclamación RNC`).
+      - Cada naturaleza de registro (`Compra Bodega`, `Cobro RNC`, `Pago Wompi ($0)`) se proyecta como una micro-píldora horizontal en línea (`rounded-full`, sombra ultra-sutil, borde armonizado, ícono representativo de 12px y etiqueta semántica en español de negocios).
+      - En caso de múltiples conceptos para un mismo trabajador, se disponen lado a lado sobre la misma línea base visual sin desbordamiento ni saltos de línea.
+      - La columna de volumen físico (`VOLUMEN (KG/UN)`) reserva cifras con sufijo `kg` para despachos de bodega reales y presenta un guion semántico sobrio (`—`) ante deducciones puramente financieras o administrativas de calidad (RNC), erradicando el ruido de ceros absolutos (`0.00`).
+
 
 ---
 
