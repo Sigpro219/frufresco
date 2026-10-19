@@ -156,6 +156,10 @@ export default function HRManagement() {
     const [payrollAssigningRowId, setPayrollAssigningRowId] = useState<string | null>(null);
     const [payrollAssignQuery, setPayrollAssignQuery] = useState('');
     const [isSavingPayrollAssign, setIsSavingPayrollAssign] = useState(false);
+    const [payrollSortField, setPayrollSortField] = useState<'deduction' | 'employee' | 'volume' | 'txCount'>('deduction');
+    const [payrollSortOrder, setPayrollSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [payrollFilterStatus, setPayrollFilterStatus] = useState<'all' | 'with_deduction' | 'rnc' | 'wompi'>('all');
+    const [isUnassignedOpen, setIsUnassignedOpen] = useState(false);
     const payrollSearchRef = useRef<HTMLInputElement>(null);
 
     const normalizeSearch = (val: any): string => {
@@ -411,15 +415,100 @@ export default function HRManagement() {
         });
     }, [parsedPayrollRows, payrollSearch]);
 
+    // Helper para resolución canónica de identidad y anti-duplicidad por Cédula / Nombre
+    const resolveStaffProfile = useCallback((rawName: string) => {
+        const docMatch = rawName.match(/(?:\(?Doc:?|\(?CC:?)\s*([0-9]+)\)?/i);
+        const extractedDoc = docMatch ? docMatch[1].trim() : null;
+
+        const cleanName = rawName
+            .replace(/\(?Doc:?\s*[0-9]+\)?/gi, '')
+            .replace(/\(?CC:?\s*[0-9]+\)?/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const matched = users.find(u => {
+            if (extractedDoc && u.document_id && u.document_id.trim() === extractedDoc) return true;
+            if (cleanName && u.contact_name && normalizeSearch(u.contact_name) === normalizeSearch(cleanName)) return true;
+            return false;
+        });
+
+        const canonicalName = matched?.contact_name || cleanName;
+        const documentId = matched?.document_id || extractedDoc || '';
+        const canonicalKey = matched?.id || (documentId ? `doc_${documentId}` : normalizeSearch(canonicalName));
+
+        return {
+            matchedUser: matched || null,
+            canonicalKey,
+            displayName: canonicalName,
+            documentId
+        };
+    }, [users]);
+
+    // Compras huérfanas sin asignar (Anomalía operativa separada)
+    const unassignedPayrollRows = useMemo(() => {
+        return filteredPayrollRows.filter(r => r.isUnassigned);
+    }, [filteredPayrollRows]);
+
+    // Resumen de conteos para las píldoras de filtrado rápido
+    const rawCollabGroups = useMemo(() => {
+        const groups: { [key: string]: { totalDeduction: number; pqrCount: number; wompiCount: number } } = {};
+        filteredPayrollRows.forEach(row => {
+            if (row.isUnassigned) return;
+            const profile = resolveStaffProfile(row.employee);
+            const key = profile.canonicalKey;
+            if (!groups[key]) {
+                groups[key] = { totalDeduction: 0, pqrCount: 0, wompiCount: 0 };
+            }
+            groups[key].totalDeduction += row.totalVal;
+            if (row.isWompiPaid) groups[key].wompiCount = (groups[key].wompiCount || 0) + 1;
+            if (row.isPqrDeduction) groups[key].pqrCount = (groups[key].pqrCount || 0) + 1;
+        });
+        return groups;
+    }, [filteredPayrollRows, resolveStaffProfile]);
+
+    const payrollFilterCounts = useMemo(() => {
+        const list = Object.values(rawCollabGroups);
+        return {
+            total: list.length,
+            withDeduction: list.filter(c => c.totalDeduction > 0).length,
+            rnc: list.filter(c => c.pqrCount > 0).length,
+            wompi: list.filter(c => c.wompiCount > 0 && c.totalDeduction === 0).length,
+            unassigned: unassignedPayrollRows.length
+        };
+    }, [rawCollabGroups, unassignedPayrollRows]);
+
+    // Tabla de colaboradores unificados e identificados
     const consolidatedPayroll = useMemo(() => {
-        const groups: { [key: string]: { employee: string; isUnassigned: boolean; totalDeduction: number; totalQty: number; txCount: number; creditCount: number; pqrCount: number; wompiCount: number; items: typeof parsedPayrollRows } } = {};
+        const groups: {
+            [key: string]: {
+                canonicalKey: string;
+                employee: string;
+                documentId: string;
+                staffProfile: Profile | null;
+                isUnassigned: boolean;
+                totalDeduction: number;
+                totalQty: number;
+                txCount: number;
+                creditCount: number;
+                pqrCount: number;
+                wompiCount: number;
+                items: typeof parsedPayrollRows;
+            }
+        } = {};
 
         filteredPayrollRows.forEach(row => {
-            const key = row.employee.trim();
+            if (row.isUnassigned) return; // Se gestionan en la Bandeja de Conciliación Superior
+
+            const profile = resolveStaffProfile(row.employee);
+            const key = profile.canonicalKey;
+
             if (!groups[key]) {
                 groups[key] = {
-                    employee: row.employee,
-                    isUnassigned: row.isUnassigned,
+                    canonicalKey: key,
+                    employee: profile.displayName,
+                    documentId: profile.documentId,
+                    staffProfile: profile.matchedUser,
+                    isUnassigned: false,
                     totalDeduction: 0,
                     totalQty: 0,
                     txCount: 0,
@@ -429,6 +518,7 @@ export default function HRManagement() {
                     items: []
                 };
             }
+
             groups[key].totalDeduction += row.totalVal;
             groups[key].totalQty += row.isPqrDeduction ? 0 : row.qty;
             groups[key].txCount += 1;
@@ -442,13 +532,41 @@ export default function HRManagement() {
             groups[key].items.push(row);
         });
 
-        return Object.values(groups).sort((a, b) => b.totalDeduction - a.totalDeduction);
-    }, [filteredPayrollRows]);
+        let list = Object.values(groups);
+
+        // Aplicar píldora de filtro rápido
+        if (payrollFilterStatus === 'with_deduction') {
+            list = list.filter(c => c.totalDeduction > 0);
+        } else if (payrollFilterStatus === 'rnc') {
+            list = list.filter(c => c.pqrCount > 0);
+        } else if (payrollFilterStatus === 'wompi') {
+            list = list.filter(c => c.wompiCount > 0 && c.totalDeduction === 0);
+        }
+
+        // Ordenamiento multicriterio interactivo
+        return list.sort((a, b) => {
+            let comp = 0;
+            if (payrollSortField === 'employee') {
+                comp = a.employee.localeCompare(b.employee, 'es', { sensitivity: 'base' });
+            } else if (payrollSortField === 'volume') {
+                comp = a.totalQty - b.totalQty;
+            } else if (payrollSortField === 'txCount') {
+                comp = a.txCount - b.txCount;
+            } else {
+                // 'deduction' por defecto
+                comp = a.totalDeduction - b.totalDeduction;
+                if (comp === 0) {
+                    comp = (a.pqrCount || 0) - (b.pqrCount || 0);
+                }
+            }
+            return payrollSortOrder === 'asc' ? comp : -comp;
+        });
+    }, [filteredPayrollRows, resolveStaffProfile, payrollFilterStatus, payrollSortField, payrollSortOrder]);
 
     const payrollTotalCOP = useMemo(() => filteredPayrollRows.reduce((acc, r) => acc + r.totalVal, 0), [filteredPayrollRows]);
     const payrollTotalQty = useMemo(() => filteredPayrollRows.reduce((acc, r) => acc + r.qty, 0), [filteredPayrollRows]);
     const payrollUnassignedCount = useMemo(() => filteredPayrollRows.filter(r => r.isUnassigned).length, [filteredPayrollRows]);
-    const payrollUniqueCollabs = useMemo(() => new Set(filteredPayrollRows.filter(r => !r.isUnassigned).map(r => r.employee.toLowerCase())).size, [filteredPayrollRows]);
+    const payrollUniqueCollabs = useMemo(() => Object.keys(rawCollabGroups).length, [rawCollabGroups]);
 
     const handleAssignPayrollInHR = async (rowId: string, collaboratorName: string, currentTotal: number) => {
         if (!collaboratorName.trim()) return;
@@ -2217,17 +2335,225 @@ export default function HRManagement() {
                         </button>
                     </div>
 
+                    {/* BANDEJA DE CONCILIACIÓN SUPERIOR: COMPRAS HUÉRFANAS */}
+                    {unassignedPayrollRows.length > 0 && (
+                        <div style={{
+                            backgroundColor: '#FFFDF5',
+                            border: '1px solid #FCD34D',
+                            borderRadius: '16px',
+                            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)',
+                            overflow: 'hidden',
+                            marginBottom: '0.5rem'
+                        }}>
+                            <div style={{
+                                padding: '1rem 1.4rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: '12px',
+                                backgroundColor: '#FFFBEB'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div style={{
+                                        width: '42px',
+                                        height: '42px',
+                                        borderRadius: '10px',
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #FDE68A',
+                                        color: '#B45309',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0
+                                    }}>
+                                        <AlertTriangle size={22} strokeWidth={2.4} />
+                                    </div>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                            <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: '800', color: '#92400E' }}>
+                                                Bandeja de Conciliación: Compras de Bodega por Asignar
+                                            </h3>
+                                            <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', padding: '1px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: '800' }}>
+                                                {unassignedPayrollRows.length} {unassignedPayrollRows.length === 1 ? 'pendiente' : 'pendientes'}
+                                            </span>
+                                        </div>
+                                        <p style={{ margin: '3px 0 0 0', fontSize: '0.75rem', color: '#B45309' }}>
+                                            Total a Vincular: <strong style={{ color: '#78350F' }}>${unassignedPayrollRows.reduce((a, b) => a + b.totalVal, 0).toLocaleString('es-CO')} COP</strong> • Volumen: <strong>{unassignedPayrollRows.reduce((a, b) => a + b.qty, 0).toFixed(2)} Kg</strong> sin trabajador asignado en remisión.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setIsUnassignedOpen(prev => !prev)}
+                                    style={{
+                                        padding: '0.55rem 1.15rem',
+                                        borderRadius: '10px',
+                                        border: '1px solid #FCD34D',
+                                        backgroundColor: isUnassignedOpen ? '#B45309' : '#FFFFFF',
+                                        color: isUnassignedOpen ? '#FFFFFF' : '#92400E',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <span>{isUnassignedOpen ? 'Ocultar Bandeja' : `Auditar y Asignar (${unassignedPayrollRows.length})`}</span>
+                                    {isUnassignedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                </button>
+                            </div>
+
+                            {/* Desplegable de items por asignar */}
+                            {isUnassignedOpen && (
+                                <div style={{ borderTop: '1px solid #FDE68A', padding: '1rem 1.4rem', backgroundColor: '#FFFFFF' }}>
+                                    <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #CBD5E1' }}>
+                                                    <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Fecha</th>
+                                                    <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Producto</th>
+                                                    <th style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>Cantidad</th>
+                                                    <th style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>Valor COP</th>
+                                                    <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Asignar a Colaborador</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {unassignedPayrollRows.map(item => {
+                                                    const isAssigningThis = payrollAssigningRowId === item.raw.id;
+                                                    return (
+                                                        <tr key={item.raw.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                            <td style={{ padding: '0.5rem 0.85rem', color: '#64748B' }}>{item.date}</td>
+                                                            <td style={{ padding: '0.5rem 0.85rem', fontWeight: '700', color: '#1E293B' }}>{item.productName}</td>
+                                                            <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700' }}>{item.qty.toFixed(2)} {item.uom}</td>
+                                                            <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '800', color: '#0D7A57' }}>${item.totalVal.toLocaleString('es-CO')}</td>
+                                                            <td style={{ padding: '0.5rem 0.85rem' }}>
+                                                                {isAssigningThis ? (
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <input
+                                                                            type="text"
+                                                                            autoFocus
+                                                                            placeholder="Nombre colaborador..."
+                                                                            value={payrollAssignQuery}
+                                                                            onChange={e => setPayrollAssignQuery(e.target.value)}
+                                                                            onKeyDown={e => {
+                                                                                if (e.key === 'Enter') handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal);
+                                                                                if (e.key === 'Escape') setPayrollAssigningRowId(null);
+                                                                            }}
+                                                                            style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', border: '1.5px solid #0D7A57', fontSize: '0.75rem', outline: 'none' }}
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isSavingPayrollAssign}
+                                                                            onClick={() => handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal)}
+                                                                            style={{ padding: '4px 10px', borderRadius: '6px', border: 'none', backgroundColor: '#0D7A57', color: '#FFFFFF', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}
+                                                                        >
+                                                                            {isSavingPayrollAssign ? '...' : 'OK'}
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setPayrollAssigningRowId(null)}
+                                                                            style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.72rem', cursor: 'pointer' }}
+                                                                        >
+                                                                            X
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setPayrollAssigningRowId(item.raw.id);
+                                                                            setPayrollAssignQuery('');
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '3px 9px',
+                                                                            borderRadius: '6px',
+                                                                            border: '1px solid #CBD5E1',
+                                                                            backgroundColor: '#FFFFFF',
+                                                                            color: '#0D7A57',
+                                                                            fontWeight: '700',
+                                                                            fontSize: '0.72rem',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
+                                                                        }}
+                                                                    >
+                                                                        <Edit3 size={11} />
+                                                                        <span>Asignar Colaborador</span>
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* TABLA CONSOLIDADA POR COLABORADOR */}
                     <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', overflow: 'visible', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                        <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', flexWrap: 'wrap', gap: '10px', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
-                            <div style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Users size={17} style={{ color: '#0D7A57' }} />
-                                <span>Consolidado de Descuentos por Colaborador ({consolidatedPayroll.length})</span>
+                        <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', flexWrap: 'wrap', gap: '12px', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Users size={17} style={{ color: '#0D7A57' }} />
+                                    <span>Consolidado de Descuentos por Colaborador ({consolidatedPayroll.length})</span>
+                                </div>
+
+                                {/* Píldoras de Filtro Rápido */}
+                                <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    backgroundColor: '#FFFFFF',
+                                    border: '1px solid #CBD5E1',
+                                    borderRadius: '10px',
+                                    padding: '2px',
+                                    gap: '3px'
+                                }}>
+                                    {[
+                                        { id: 'all', label: `Todos (${payrollFilterCounts.total})` },
+                                        { id: 'with_deduction', label: `Con Deducción (${payrollFilterCounts.withDeduction})` },
+                                        { id: 'rnc', label: `Cobro RNC (${payrollFilterCounts.rnc})` },
+                                        { id: 'wompi', label: `Solo Wompi (${payrollFilterCounts.wompi})` }
+                                    ].map(pill => {
+                                        const isActive = payrollFilterStatus === pill.id;
+                                        return (
+                                            <button
+                                                key={pill.id}
+                                                type="button"
+                                                onClick={() => setPayrollFilterStatus(pill.id as any)}
+                                                style={{
+                                                    padding: '4px 10px',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: isActive ? '800' : '600',
+                                                    border: 'none',
+                                                    backgroundColor: isActive ? '#0D7A57' : 'transparent',
+                                                    color: isActive ? '#FFFFFF' : '#475569',
+                                                    cursor: 'pointer',
+                                                    boxShadow: isActive ? '0 1px 3px rgba(13, 122, 87, 0.25)' : 'none',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                {pill.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
+
                             <div style={{ fontSize: '0.74rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span>Haz clic en</span>
                                 <span style={{ fontWeight: '800', color: '#0F172A', backgroundColor: '#FFFFFF', padding: '2px 8px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>"Ver Detalle"</span>
-                                <span>para inspeccionar cada artículo adquirido o reclamación imputada</span>
+                                <span>para inspeccionar transacciones</span>
                             </div>
                         </div>
 
@@ -2235,11 +2561,97 @@ export default function HRManagement() {
                             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.82rem' }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1.25rem' }}>Colaborador (Nómina)</th>
-                                        <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1rem', textAlign: 'center' }}>Transacciones</th>
-                                        <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1rem', textAlign: 'right' }}>Volumen (Kg/Un)</th>
-                                        <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1.25rem', textAlign: 'right' }}>Total a Deducir</th>
-                                        <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1.25rem', textAlign: 'center' }}>Acciones</th>
+                                        <th
+                                            onClick={() => {
+                                                if (payrollSortField === 'employee') {
+                                                    setPayrollSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                                                } else {
+                                                    setPayrollSortField('employee');
+                                                    setPayrollSortOrder('asc');
+                                                }
+                                            }}
+                                            style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1.25rem', cursor: 'pointer', userSelect: 'none' }}
+                                            title="Ordenar por nombre de colaborador"
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <span>Colaborador (Nómina)</span>
+                                                {payrollSortField === 'employee' ? (
+                                                    <span style={{ color: '#0D7A57', fontWeight: '900' }}>{payrollSortOrder === 'asc' ? '▲' : '▼'}</span>
+                                                ) : (
+                                                    <span style={{ opacity: 0.25 }}>⇅</span>
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => {
+                                                if (payrollSortField === 'txCount') {
+                                                    setPayrollSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                                                } else {
+                                                    setPayrollSortField('txCount');
+                                                    setPayrollSortOrder('desc');
+                                                }
+                                            }}
+                                            style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}
+                                            title="Ordenar por cantidad de registros"
+                                        >
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                                <span>Transacciones</span>
+                                                {payrollSortField === 'txCount' ? (
+                                                    <span style={{ color: '#0D7A57', fontWeight: '900' }}>{payrollSortOrder === 'asc' ? '▲' : '▼'}</span>
+                                                ) : (
+                                                    <span style={{ opacity: 0.25 }}>⇅</span>
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => {
+                                                if (payrollSortField === 'volume') {
+                                                    setPayrollSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                                                } else {
+                                                    setPayrollSortField('volume');
+                                                    setPayrollSortOrder('desc');
+                                                }
+                                            }}
+                                            style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1rem', textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                                            title="Ordenar por volumen en kilos/unidades"
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px' }}>
+                                                <span>Volumen (Kg/Un)</span>
+                                                {payrollSortField === 'volume' ? (
+                                                    <span style={{ color: '#0D7A57', fontWeight: '900' }}>{payrollSortOrder === 'asc' ? '▲' : '▼'}</span>
+                                                ) : (
+                                                    <span style={{ opacity: 0.25 }}>⇅</span>
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => {
+                                                if (payrollSortField === 'deduction') {
+                                                    setPayrollSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                                                } else {
+                                                    setPayrollSortField('deduction');
+                                                    setPayrollSortOrder('desc');
+                                                }
+                                            }}
+                                            style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1.25rem', textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                                            title="Ordenar por saldo a deducir en nómina"
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px' }}>
+                                                <span>Total a Deducir</span>
+                                                {payrollSortField === 'deduction' ? (
+                                                    <span style={{ color: '#0D7A57', fontWeight: '900' }}>{payrollSortOrder === 'asc' ? '▲' : '▼'}</span>
+                                                ) : (
+                                                    <span style={{ opacity: 0.25 }}>⇅</span>
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '0.85rem 1.25rem', textAlign: 'center' }}>
+                                            Acciones
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2255,19 +2667,18 @@ export default function HRManagement() {
                                     ) : consolidatedPayroll.length === 0 ? (
                                         <tr>
                                             <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#94A3B8' }}>
-                                                No se registran deducciones de nómina en este período.
+                                                No se registran colaboradores en esta categoría de deducción.
                                             </td>
                                         </tr>
                                     ) : (
                                         consolidatedPayroll.map(collab => {
-                                            const isExpanded = expandedCollab === collab.employee;
-                                            const staffObj = users.find(u => normalizeSearch(u.contact_name) === normalizeSearch(collab.employee));
+                                            const isExpanded = expandedCollab === collab.canonicalKey;
 
                                             return (
-                                                <React.Fragment key={collab.employee}>
+                                                <React.Fragment key={collab.canonicalKey}>
                                                     <tr style={{
                                                         borderBottom: '1px solid #F1F5F9',
-                                                        backgroundColor: collab.isUnassigned ? '#FFFDF5' : (isExpanded ? '#F8FAFC' : '#FFFFFF'),
+                                                        backgroundColor: isExpanded ? '#F8FAFC' : '#FFFFFF',
                                                         transition: 'background 0.15s ease'
                                                     }}>
                                                         <td style={{ padding: '0.9rem 1.25rem' }}>
@@ -2276,30 +2687,25 @@ export default function HRManagement() {
                                                                     width: '36px',
                                                                     height: '36px',
                                                                     borderRadius: '10px',
-                                                                    backgroundColor: collab.isUnassigned ? '#FEF3C7' : '#EFF6FF',
-                                                                    color: collab.isUnassigned ? '#B45309' : '#1D4ED8',
-                                                                    border: collab.isUnassigned ? '1px solid #FDE68A' : '1px solid #DBEAFE',
+                                                                    backgroundColor: '#EFF6FF',
+                                                                    color: '#1D4ED8',
+                                                                    border: '1px solid #DBEAFE',
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
                                                                     flexShrink: 0
                                                                 }}>
-                                                                    {collab.isUnassigned ? <AlertCircle size={18} strokeWidth={2.2} /> : <User size={18} strokeWidth={2.2} />}
+                                                                    <User size={18} strokeWidth={2.2} />
                                                                 </div>
                                                                 <div>
-                                                                    <div style={{ fontWeight: '800', color: collab.isUnassigned ? '#92400E' : '#0F172A', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                         <span>{collab.employee}</span>
-                                                                        {collab.isUnassigned && (
-                                                                            <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', fontSize: '0.62rem', letterSpacing: '0.02em' }}>
-                                                                                REQUIERE ASIGNAR
-                                                                            </span>
-                                                                        )}
                                                                     </div>
                                                                     <div style={{ fontSize: '0.72rem', color: '#64748B', display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-                                                                        {staffObj?.document_id && <span>CC: {staffObj.document_id}</span>}
-                                                                        {staffObj?.role && (
+                                                                        {collab.documentId && <span>CC: {collab.documentId}</span>}
+                                                                        {collab.staffProfile?.role && (
                                                                             <span style={{ backgroundColor: '#F1F5F9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '700', fontSize: '0.68rem' }}>
-                                                                                {staffObj.role}
+                                                                                {collab.staffProfile.role}
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -2348,7 +2754,7 @@ export default function HRManagement() {
                                                         <td style={{ padding: '0.85rem 1.25rem', textAlign: 'center' }}>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => setExpandedCollab(isExpanded ? null : collab.employee)}
+                                                                onClick={() => setExpandedCollab(isExpanded ? null : collab.canonicalKey)}
                                                                 style={{
                                                                     padding: '0.35rem 0.75rem',
                                                                     borderRadius: '6px',

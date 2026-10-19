@@ -10779,6 +10779,28 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
 
 ---
 
+### Escenario 249: Arquitectura de Información Lean y Estandarización de Consola de Talento Humano y Nómina (`/admin/hr`): Separación de la Anomalía Operativa (Bandeja de Compras Huérfanas), Unificación Canónica de Identidad Anti-Duplicados por Cédula, Ordenamiento Multicriterio en Cabeceras y Píldoras de Segmentación Rápida (SDD v1.9.218)
+- **Given** la consola de Talento Humano y Deducciones de Nómina en `src/app/admin/hr/page.tsx` (pestaña *Deducciones de Nómina • Ventas Bodega Col N*),
+- **When** el liquidador de nómina, pagador o director operativo consulta las compras de tienda y cobros por calidad (RNC) de los colaboradores dentro de un rango de fechas,
+- **Then** el sistema garantiza una jerarquía de información orientada a la toma de decisiones y conciliación sin fricción:
+  1. **Separación de la Anomalía Operativa (Bandeja de Conciliación Superior de Compras Huérfanas):**
+     - Las compras de bodega registradas sin colaborador vinculado (`Empleado no especificado` / `isUnassigned = true`) se extraen de la tabla principal de nómina para evitar contaminar la lista de trabajadores reales.
+     - Se proyectan en una **Bandeja de Conciliación Superior** destacada con borde ámbar (`#FCD34D`), fondo `#FFFDF5`, resumen de impacto (total compras pendientes, volumen en Kg y monto a asignar en COP) y acordeón interactivo que permite auditar y asignar individualmente cada registro huérfano con persistencia en tiempo real en `inventory_movements`.
+  2. **Unificación Canónica de Identidad de Colaborador (Anti-Duplicidad por Cédula):**
+     - El motor de consolidación normaliza la identidad del colaborador extrayendo números de documento incrustados (`(Doc: ...)`, `CC: ...`) y cotejando contra la plantilla oficial de colaboradores (`users` / `profiles`).
+     - Cada persona física cuenta con una **única fila canónica consolidada** en la nómina, sumando tanto sus compras de bodega a crédito de nómina, sus cobros por reclamaciones RNC imputadas y sus pagos en línea vía Wompi ($0 a descontar), eliminando registros dispersos de un mismo trabajador.
+  3. **Ordenamiento Multicriterio Interactivo en Cabeceras (`<th>` Clickables con Indicador `▲`/`▼`):**
+     - **Orden Predeterminado:** De mayor a menor impacto patrimonial (`totalDeduction` descendente), ubicando en primer plano a quienes tienen mayores retenciones de nómina, seguidos de quienes tienen cobros RNC, y al final quienes están en saldo $0 (Wompi).
+     - **Interactividad en Encabezados:** Cada celda `<th>` de la tabla permite alternar el criterio de ordenamiento con un clic:
+       * *Colaborador:* Orden alfabético ascendente (A-Z) y descendente (Z-A).
+       * *Transacciones:* Conteo de compras y notas de mayor a menor / menor a mayor.
+       * *Volumen:* Kilos despachados de mayor a menor / menor a mayor.
+       * *Total a Deducir:* Saldo en COP de mayor a menor / menor a mayor.
+  4. **Píldoras de Segmentación Rápida (Quick Segment Pills):**
+     - Encima de la tabla se provee un conmutador rápido para aislar universos operativos en un clic: `Todos`, `🟢 Con Deducción (> $0)`, `🔴 Con Cobro RNC` y `🔵 Solo Wompi ($0)`.
+
+---
+
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
 
 > **Referencia:** Documento maestro [`TECHNICAL_DEBT.md`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/TECHNICAL_DEBT.md) en la raíz del repositorio.  
