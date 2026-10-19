@@ -24,6 +24,8 @@ import {
 } from '@/lib/rcaTaxonomy';
 import {
     PQR,
+    formatPqrFolio,
+    formatCleanPqrSubject,
     getClientInitials,
     getTypeBadgeStyle,
     formatDateFriendly,
@@ -142,13 +144,24 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                 .from('customer_service_pqrs')
                 .select(`
                     *,
-                    profiles:client_id(id, company_name, contact_name, role, nit, email, phone, contact_phone, corporate_role),
-                    orders:order_id(id, sequence_id, total, created_at, origin_source, admin_notes, shipping_address)
+                    profiles:client_id(id, company_name, contact_name, role, nit, email, phone, contact_phone, corporate_role, delivery_restrictions, logistics_data),
+                    orders:order_id(id, sequence_id, total, created_at, origin_source, admin_notes, shipping_address, delivery_date, delivery_slot, is_manual_delivery, logistics_data)
                 `)
                 .order('created_at', { ascending: false });
 
             if (pqrsError) throw pqrsError;
-            setPqrs(pqrsData || []);
+            const rawList = pqrsData || [];
+            const chronologicalIds = [...rawList]
+                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                .map(p => p.id);
+            const seqMap = new Map<string, number>();
+            chronologicalIds.forEach((id, index) => seqMap.set(id, index + 1));
+
+            const enrichedPqrs = rawList.map(p => ({
+                ...p,
+                sequence_number: seqMap.get(p.id) || 1
+            }));
+            setPqrs(enrichedPqrs);
 
             const { data: returnsData, error: returnsError } = await supabase
                 .from('billing_returns')
@@ -315,14 +328,20 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
         }
 
         const rcaCounts: Record<string, number> = {};
-        pqrs.forEach(p => {
+        const auditedPqrs = pqrs.filter(p => {
+            const rca = parseRcaFromRecord(p);
+            return rca.isExplicitRca || p.status === 'resolved' || p.status === 'rejected';
+        });
+        auditedPqrs.forEach(p => {
             const rca = parseRcaFromRecord(p);
             const cat = rca.categoryL1 || 'dano_mecanico';
             rcaCounts[cat] = (rcaCounts[cat] || 0) + 1;
         });
         const topRcaEntry = Object.entries(rcaCounts).sort((a, b) => b[1] - a[1])[0];
-        const topRcaLabel = customTaxonomy.find(c => c.code === topRcaEntry?.[0])?.label || 'Daño Mecánico';
-        const topRcaPct = totalPqrs > 0 && topRcaEntry ? Math.round((topRcaEntry[1] / totalPqrs) * 100) : 0;
+        const topRcaLabel = topRcaEntry
+            ? (customTaxonomy.find(c => c.code === topRcaEntry[0])?.label || 'Daño Mecánico')
+            : 'Sin casos auditados';
+        const topRcaPct = auditedPqrs.length > 0 && topRcaEntry ? Math.round((topRcaEntry[1] / auditedPqrs.length) * 100) : 0;
 
         return {
             totalPqrs,
@@ -359,6 +378,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                 const author = getPqrAuthorInfo(p);
                 const rca = parseRcaFromRecord(p);
                 const orderSeq = p.orders?.sequence_id ? `#${p.orders.sequence_id}` : '';
+                const pqrFolio = formatPqrFolio(p);
                 const pqrShortId = `#${p.id.substring(0, 8)}`;
 
                 return (
@@ -367,10 +387,11 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                     author.clientDisplayName.toLowerCase().includes(term) ||
                     author.nit?.toLowerCase().includes(term) ||
                     orderSeq.toLowerCase().includes(term) ||
+                    pqrFolio.toLowerCase().includes(term) ||
                     pqrShortId.toLowerCase().includes(term) ||
-                    rca.categoryL1?.toLowerCase().includes(term) ||
-                    rca.subtypeL2?.toLowerCase().includes(term) ||
-                    rca.responsible?.toLowerCase().includes(term) ||
+                    (rca.isExplicitRca && rca.categoryL1?.toLowerCase().includes(term)) ||
+                    (rca.isExplicitRca && rca.subtypeL2?.toLowerCase().includes(term)) ||
+                    (rca.isExplicitRca && rca.responsible?.toLowerCase().includes(term)) ||
                     rca.imputedEntities?.some(e => e.name.toLowerCase().includes(term))
                 );
             });
@@ -881,28 +902,28 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                             <thead style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
+                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
                                         Folio & Fecha
                                     </th>
-                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '18%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Cliente & Canal
                                     </th>
-                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '20%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Asunto & Pedido
                                     </th>
-                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'center' }}>
+                                    <th style={{ width: '6%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'center' }}>
                                         Evidencia
                                     </th>
-                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Diagnóstico RCA
                                     </th>
-                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Imputabilidad & Cobro
                                     </th>
-                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '9%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Estado
                                     </th>
-                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
+                                    <th style={{ width: '5%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
                                         Acciones
                                     </th>
                                 </tr>
@@ -945,7 +966,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 {typeStyle.label}
                                                             </span>
                                                             <span style={{ fontFamily: 'monospace', fontWeight: '800', color: '#1A231E', fontSize: '0.78rem' }}>
-                                                                #{pqr.id.substring(0, 8)}
+                                                                {formatPqrFolio(pqr)}
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
@@ -970,7 +991,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             justifyContent: 'center',
                                                             flexShrink: 0
                                                         }}>
-                                                            {author.authorInitials}
+                                                            {getClientInitials(author.clientDisplayName)}
                                                         </div>
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '210px' }}>
                                                             <div style={{ fontWeight: '800', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -998,8 +1019,8 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 {/* 3. Asunto & Pedido */}
                                                 <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', maxWidth: '280px' }}>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                        <div style={{ fontWeight: '600', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pqr.subject}>
-                                                            {pqr.subject || 'Sin asunto'}
+                                                        <div style={{ fontWeight: '600', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatCleanPqrSubject(pqr.subject)}>
+                                                            {formatCleanPqrSubject(pqr.subject)}
                                                         </div>
                                                         {pqr.order_id ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1073,36 +1094,83 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
                                                 {/* 5. Diagnóstico RCA */}
                                                 <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                        <span style={{
-                                                            fontSize: '0.72rem',
-                                                            fontWeight: '700',
-                                                            padding: '2px 8px',
-                                                            borderRadius: '6px',
-                                                            backgroundColor: '#F8FAFC',
-                                                            color: '#1A231E',
-                                                            border: '1px solid #E2E8F0',
-                                                            display: 'inline-block',
-                                                            width: 'fit-content'
-                                                        }}>
-                                                            {catObj?.label.split('.')[1]?.trim() || catObj?.label || 'Daño Mecánico'}
-                                                        </span>
-                                                        {rca.subtypeL2 && (
-                                                            <div style={{ fontSize: '0.68rem', color: '#64748B', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {rca.subtypeL2.replace(/_/g, ' ')}
+                                                    {(!rca.isExplicitRca && pqr.status === 'pending') ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                            <span style={{
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: '600',
+                                                                padding: '2px 8px',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: '#F8FAFC',
+                                                                color: '#64748B',
+                                                                border: '1px dashed #CBD5E1',
+                                                                display: 'inline-block',
+                                                                width: 'fit-content'
+                                                            }}>
+                                                                Pendiente de auditoría
+                                                            </span>
+                                                            <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
+                                                                Sin clasificar
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                            <span style={{
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '700',
+                                                                padding: '2px 8px',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: '#F8FAFC',
+                                                                color: '#1A231E',
+                                                                border: '1px solid #E2E8F0',
+                                                                display: 'inline-block',
+                                                                width: 'fit-content',
+                                                                maxWidth: '180px',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap'
+                                                            }} title={catObj?.label || 'Sin clasificar'}>
+                                                                {catObj?.label.split('.')[1]?.trim() || catObj?.label || 'Sin clasificar'}
+                                                            </span>
+                                                            <div style={{ fontSize: '0.68rem', color: '#64748B', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.subtypeL2?.replace(/_/g, ' ') || 'Sin subtipo L2'}>
+                                                                {rca.subtypeL2 ? rca.subtypeL2.replace(/_/g, ' ') : 'Clasificación general'}
                                                             </div>
-                                                        )}
-                                                    </div>
+                                                        </div>
+                                                    )}
                                                 </td>
 
                                                 {/* 6. Imputabilidad & Cobro */}
                                                 <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
                                                     {(() => {
+                                                        const isUnauditedPending = !rca.isExplicitRca && pqr.status === 'pending' && (!rca.imputedEntities || rca.imputedEntities.length === 0);
+                                                        if (isUnauditedPending) {
+                                                            return (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                    <span style={{
+                                                                        fontSize: '0.68rem',
+                                                                        fontWeight: '600',
+                                                                        padding: '2px 8px',
+                                                                        borderRadius: '6px',
+                                                                        backgroundColor: '#F8FAFC',
+                                                                        color: '#64748B',
+                                                                        border: '1px dashed #CBD5E1',
+                                                                        display: 'inline-block',
+                                                                        width: 'fit-content'
+                                                                    }}>
+                                                                        Sin imputar
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
+                                                                        Pendiente de dictamen
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        }
+
                                                         const totalImputedCop = (rca.imputedEntities || []).reduce((acc, e) => acc + (Number(e.deductionAmount) || 0), 0);
                                                         const isClosedCase = pqr.status === 'resolved' || pqr.status === 'rejected';
                                                         return (
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'nowrap' }}>
                                                                     {rca.responsible && rca.responsible !== 'no_definido' ? (
                                                                         <span style={{
                                                                             fontSize: '0.68rem',
@@ -1114,7 +1182,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                             color: '#0D7A57',
                                                                             border: '1px solid #C4D7C4',
                                                                             display: 'inline-block',
-                                                                            width: 'fit-content'
+                                                                            whiteSpace: 'nowrap'
                                                                         }}>
                                                                             {RESPONSIBLE_PARTIES[rca.responsible as any]?.label || rca.responsible}
                                                                         </span>
@@ -1129,7 +1197,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                             color: '#64748B',
                                                                             border: '1px solid #E2E8F0',
                                                                             display: 'inline-block',
-                                                                            width: 'fit-content'
+                                                                            whiteSpace: 'nowrap'
                                                                         }}>
                                                                             Sin Asignar
                                                                         </span>
@@ -1163,11 +1231,11 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                     ) : null}
                                                                 </div>
                                                                 {rca.imputedEntities && rca.imputedEntities.length > 0 ? (
-                                                                    <div style={{ fontSize: '0.68rem', color: '#475569', maxWidth: '190px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.imputedEntities.map(e => `${e.name} (${e.sharePercent}% — $${(Number(e.deductionAmount) || 0).toLocaleString('es-CO')})`).join(', ')}>
+                                                                    <div style={{ fontSize: '0.68rem', color: '#475569', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.imputedEntities.map(e => `${e.name} (${e.sharePercent}% — $${(Number(e.deductionAmount) || 0).toLocaleString('es-CO')})`).join(', ')}>
                                                                         {rca.imputedEntities.map(e => e.name).join(', ')}
                                                                     </div>
                                                                 ) : (
-                                                                    <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Sin responsable</span>
+                                                                    <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>Sin personas imputadas</span>
                                                                 )}
                                                             </div>
                                                         );
@@ -1176,27 +1244,51 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
                                                 {/* 7. Estado & Resolución */}
                                                 <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                                                    {pqr.status === 'resolved' ? (
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#EAEFEA', color: '#0D7A57', border: '1px solid #C4D7C4' }}>
-                                                            <CheckCircle2 size={12} />
-                                                            <span>Resuelto</span>
-                                                        </span>
-                                                    ) : pqr.status === 'rejected' ? (
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FECDD3' }}>
-                                                            <AlertCircle size={12} />
-                                                            <span>Rechazado</span>
-                                                        </span>
-                                                    ) : pqr.status === 'in_progress' ? (
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#F1F5F9', color: '#334155', border: '1px solid #CBD5E1' }}>
-                                                            <Clock size={12} />
-                                                            <span>En Auditoría</span>
-                                                        </span>
-                                                    ) : (
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
-                                                            <AlertTriangle size={12} />
-                                                            <span>Pendiente</span>
-                                                        </span>
-                                                    )}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                                                        {pqr.status === 'resolved' ? (
+                                                            <>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#EAEFEA', color: '#0D7A57', border: '1px solid #C4D7C4' }}>
+                                                                    <CheckCircle2 size={12} />
+                                                                    <span>Resuelto</span>
+                                                                </span>
+                                                                <span style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px', paddingLeft: '2px' }} title={`Auditado por: ${rca.auditedBy || 'FruFresco Admin'}`}>
+                                                                    <User size={10} color="#64748B" />
+                                                                    <span>Por: {(rca.auditedBy || 'FruFresco Admin').split(' ')[0]}</span>
+                                                                </span>
+                                                            </>
+                                                        ) : pqr.status === 'rejected' ? (
+                                                            <>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FECDD3' }}>
+                                                                    <AlertCircle size={12} />
+                                                                    <span>Rechazado</span>
+                                                                </span>
+                                                                <span style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px', paddingLeft: '2px' }} title={`Auditado por: ${rca.auditedBy || 'FruFresco Admin'}`}>
+                                                                    <User size={10} color="#64748B" />
+                                                                    <span>Por: {(rca.auditedBy || 'FruFresco Admin').split(' ')[0]}</span>
+                                                                </span>
+                                                            </>
+                                                        ) : pqr.status === 'in_progress' ? (
+                                                            <>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#F1F5F9', color: '#334155', border: '1px solid #CBD5E1' }}>
+                                                                    <Clock size={12} />
+                                                                    <span>En Auditoría</span>
+                                                                </span>
+                                                                <span style={{ fontSize: '0.64rem', color: '#64748B', paddingLeft: '2px' }}>
+                                                                    Revisión en curso
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
+                                                                    <AlertTriangle size={12} />
+                                                                    <span>Pendiente</span>
+                                                                </span>
+                                                                <span style={{ fontSize: '0.64rem', color: '#94A3B8', paddingLeft: '2px' }}>
+                                                                    Esperando dictamen
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </td>
 
                                                 {/* 8. Acciones */}

@@ -194,6 +194,7 @@ export interface ParsedRcaResult {
     imputedEntityId?: string;
     imputedEntityName?: string;
     imputedEvidenceNotes?: string;
+    auditedBy?: string;
 }
 
 // Helpers to encode & decode RCA metadata from resolution notes/descriptions
@@ -377,7 +378,48 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
         (record.subject || '').toUpperCase().includes('PING-PONG') ||
         (record.description || '').toUpperCase().includes('ALERTA CORTE DE BUCLE');
 
-    // 1. Direct columns if present in DB
+    // 1. Prioritize embedded [RCA_METADATA: ...] tag in resolution_notes or description (most recent audit state)
+    const textToSearch = `${record.resolution_notes || ''} \n ${record.description || ''}`;
+    const parsed = extractRcaJsonFromText(textToSearch);
+    if (parsed && (parsed.categoryL1 || parsed.subtypeL2 || parsed.responsible)) {
+        const effectiveResp = parsed.responsible || record.imputed_responsible || 'no_definido';
+        const entities: ImputedEntity[] = Array.isArray(parsed.imputedEntities) && parsed.imputedEntities.length > 0
+            ? parsed.imputedEntities
+            : (parsed.imputedEntityName || record.imputed_entity_name) ? [{
+                id: parsed.imputedEntityId || record.imputed_entity_id || 'entity-1',
+                name: parsed.imputedEntityName || record.imputed_entity_name,
+                role: effectiveResp,
+                entityType: parsed.imputedTargetType || (
+                    effectiveResp === 'proveedor' ? 'provider' :
+                    effectiveResp === 'transporte' ? 'driver' :
+                    effectiveResp === 'comercial' ? 'sales_rep' :
+                    effectiveResp === 'cliente' ? 'client' : 'employee'
+                ),
+                sharePercent: 100
+            }] : [];
+
+        return {
+            categoryL1: parsed.categoryL1 || record.defect_category_l1 || 'no_clasificado',
+            subtypeL2: parsed.subtypeL2 || record.defect_subtype_l2 || '',
+            responsible: effectiveResp,
+            notes: parsed.notes !== undefined ? parsed.notes : (record.imputation_evidence_notes || ''),
+            isReplacementRejection: Boolean(parsed.isReplacementRejection) || isStructuralReplacementOrder,
+            isExplicitRca: true,
+            imputedTargetType: parsed.imputedTargetType || (
+                effectiveResp === 'proveedor' ? 'provider' :
+                effectiveResp === 'transporte' ? 'driver' :
+                effectiveResp === 'comercial' ? 'sales_rep' :
+                effectiveResp === 'cliente' ? 'client' : 'employee'
+            ),
+            imputedEntities: entities,
+            imputedEntityId: entities[0]?.id || parsed.imputedEntityId || record.imputed_entity_id,
+            imputedEntityName: entities.map(e => e.name).join(', ') || parsed.imputedEntityName || record.imputed_entity_name,
+            imputedEvidenceNotes: parsed.imputedEvidenceNotes || parsed.notes || record.imputation_evidence_notes || '',
+            auditedBy: parsed.auditedBy || undefined
+        };
+    }
+
+    // 2. Direct columns if present in DB (and no [RCA_METADATA] override exists)
     if (record.defect_category_l1) {
         let parsedEntities: ImputedEntity[] = [];
         if (record.imputed_entity_name) {
@@ -391,13 +433,6 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
                             record.imputed_responsible === 'cliente' ? 'client' : 'employee',
                 sharePercent: 100
             }];
-        }
-
-        // Try extracting richer metadata from tag if available using balanced brace parser
-        const textToSearch = `${record.resolution_notes || ''} \n ${record.description || ''}`;
-        const parsed = extractRcaJsonFromText(textToSearch);
-        if (parsed && Array.isArray(parsed.imputedEntities) && parsed.imputedEntities.length > 0) {
-            parsedEntities = parsed.imputedEntities;
         }
 
         return {
@@ -414,13 +449,12 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             imputedEntities: parsedEntities,
             imputedEntityId: record.imputed_entity_id,
             imputedEntityName: record.imputed_entity_name,
-            imputedEvidenceNotes: record.imputation_evidence_notes
+            imputedEvidenceNotes: record.imputation_evidence_notes,
+            auditedBy: parsed?.auditedBy || undefined
         };
     }
 
-    // 2. Fallback to parsing embedded tags in resolution_notes or description
-    const textToSearch = `${record.resolution_notes || ''} \n ${record.description || ''}`;
-    const parsed = extractRcaJsonFromText(textToSearch);
+    // 3. Fallback to parsing embedded tags in resolution_notes or description
     if (parsed) {
         const entities: ImputedEntity[] = Array.isArray(parsed.imputedEntities) ? parsed.imputedEntities : 
             (parsed.imputedEntityName ? [{
@@ -445,7 +479,8 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             imputedEntities: entities,
             imputedEntityId: parsed.imputedEntityId,
             imputedEntityName: parsed.imputedEntityName,
-            imputedEvidenceNotes: parsed.imputedEvidenceNotes ? cleanHumanResolutionNotes(parsed.imputedEvidenceNotes) : cleanNotes
+            imputedEvidenceNotes: parsed.imputedEvidenceNotes ? cleanHumanResolutionNotes(parsed.imputedEvidenceNotes) : cleanNotes,
+            auditedBy: parsed.auditedBy || undefined
         };
     }
 
@@ -523,6 +558,7 @@ export function buildRcaMetadataTag(data: {
     imputedEntityName?: string;
     imputedEvidenceNotes?: string;
     deductionAmount?: number;
+    auditedBy?: string;
 }): string {
     const cleanNotes = (data.notes || '')
         .replace(/\[RCA_METADATA:[\s\S]*$/gi, '')
@@ -542,7 +578,8 @@ export function buildRcaMetadataTag(data: {
         imputedEntityId: data.imputedEntityId || '',
         imputedEntityName: data.imputedEntityName || '',
         imputedEvidenceNotes: data.imputedEvidenceNotes || '',
-        deductionAmount: data.deductionAmount || 0
+        deductionAmount: data.deductionAmount || 0,
+        auditedBy: data.auditedBy || undefined
     });
     return `[RCA_METADATA: ${json}]`;
 }

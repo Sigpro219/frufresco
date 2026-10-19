@@ -23,6 +23,7 @@ export interface FinancialAdjustmentItem {
     original_quantity: number;
     unit_price: number;
     affected_quantity: number;
+    affected_quantity_input?: string;
     novelty_type: 'averia' | 'faltante' | 'precio' | 'devolucion';
     selected: boolean;
     notes?: string;
@@ -305,11 +306,14 @@ export default function FinancialAdjustmentModal({
         });
     };
 
-    const handleItemQtyChange = (index: number, val: number) => {
+    const handleItemQtyChange = (index: number, val: number, rawInput?: string) => {
         setItems(prev => {
             const next = [...prev];
             const clamped = Math.max(0, Math.min(next[index].original_quantity, val));
             next[index].affected_quantity = clamped;
+            if (rawInput !== undefined) {
+                next[index].affected_quantity_input = rawInput;
+            }
             if (clamped > 0) next[index].selected = true;
             return next;
         });
@@ -336,6 +340,7 @@ export default function FinancialAdjustmentModal({
             const next = [...prev];
             const targetQty = Number((next[index].original_quantity * ratio).toFixed(2));
             next[index].affected_quantity = targetQty;
+            next[index].affected_quantity_input = targetQty === 0 ? '' : String(targetQty).replace('.', ',');
             next[index].selected = targetQty > 0;
             return next;
         });
@@ -924,10 +929,15 @@ export default function FinancialAdjustmentModal({
                                             </label>
                                             <input
                                                 type="number"
-                                                value={customGlobalAmount ?? 0}
-                                                onChange={e => setCustomGlobalAmount(Number(e.target.value))}
+                                                value={!customGlobalAmount ? '' : customGlobalAmount}
+                                                onFocus={e => e.currentTarget.select()}
+                                                onChange={e => {
+                                                    const raw = e.target.value.replace(/^0+(?=\d)/, '');
+                                                    if (raw !== e.target.value) e.target.value = raw;
+                                                    setCustomGlobalAmount(raw === '' ? 0 : Number(raw));
+                                                }}
                                                 min={0}
-                                                placeholder="Ingresa el valor total a descontar..."
+                                                placeholder="0"
                                                 style={{
                                                     padding: '10px 14px',
                                                     borderRadius: '8px',
@@ -1002,12 +1012,33 @@ export default function FinancialAdjustmentModal({
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                             <input
-                                                                                type="number"
-                                                                                value={item.affected_quantity}
-                                                                                onChange={e => handleItemQtyChange(idx, Number(e.target.value))}
-                                                                                min={0}
-                                                                                max={item.original_quantity}
-                                                                                step={0.1}
+                                                                                type="text"
+                                                                                inputMode="decimal"
+                                                                                placeholder="0"
+                                                                                value={item.affected_quantity_input !== undefined
+                                                                                    ? item.affected_quantity_input
+                                                                                    : (item.affected_quantity === 0 ? '' : String(item.affected_quantity).replace('.', ','))}
+                                                                                onFocus={e => e.currentTarget.select()}
+                                                                                onChange={e => {
+                                                                                    let raw = e.target.value.replace(/[^0-9.,]/g, '');
+                                                                                    const parts = raw.split(/[.,]/);
+                                                                                    if (parts.length > 2) {
+                                                                                        const sepMatch = raw.match(/[.,]/);
+                                                                                        const sep = sepMatch ? sepMatch[0] : ',';
+                                                                                        raw = parts[0] + sep + parts.slice(1).join('');
+                                                                                    }
+                                                                                    raw = raw.replace(/^0+(?=\d)/, '');
+                                                                                    const normalized = raw.replace(',', '.');
+                                                                                    const parsed = normalized === '' || normalized === '.' ? 0 : parseFloat(normalized);
+                                                                                    handleItemQtyChange(idx, isNaN(parsed) ? 0 : parsed, raw);
+                                                                                }}
+                                                                                onBlur={() => {
+                                                                                    setItems(prev => prev.map((r, rIdx) => (
+                                                                                        rIdx === idx
+                                                                                            ? { ...r, affected_quantity_input: r.affected_quantity === 0 ? '' : String(r.affected_quantity).replace('.', ',') }
+                                                                                            : r
+                                                                                    )));
+                                                                                }}
                                                                                 style={{
                                                                                     width: '70px',
                                                                                     padding: '4px 6px',

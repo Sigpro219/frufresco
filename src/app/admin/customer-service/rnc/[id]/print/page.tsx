@@ -11,6 +11,7 @@ import {
     cleanHumanResolutionNotes,
     parseSanitaryAndHumanNotes
 } from '@/lib/rcaTaxonomy';
+import { getPqrAuthorInfo } from '@/app/admin/customer-service/utils';
 import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
 import { 
     Printer, ArrowLeft, ShieldAlert, CheckCircle2, FileText, 
@@ -131,13 +132,16 @@ export default function RncPrintPage() {
         });
     }
 
+    const authorInfo = getPqrAuthorInfo(pqr);
     const consecutive = pqr.id.substring(0, 8).toUpperCase();
     const orderSequence = pqr.orders?.sequence_id ? `#${pqr.orders.sequence_id}` : 'Sin Pedido';
-    const clientName = pqr.profiles?.company_name || pqr.profiles?.contact_name || 'Cliente Institucional B2B';
-    const clientNit = pqr.profiles?.nit || 'No Registrado';
-    const clientContact = pqr.profiles?.contact_name || pqr.profiles?.company_name || 'No especificado';
-    const clientPhone = pqr.profiles?.contact_phone || pqr.profiles?.phone || 'No Registrado';
-    const address = pqr.orders?.shipping_address || 'Entrega en Sede Principal';
+    const clientName = authorInfo.clientDisplayName || pqr.profiles?.company_name || 'Cliente Institucional B2B';
+    const clientNit = authorInfo.nit || pqr.profiles?.nit || 'No Registrado';
+    const clientContact = authorInfo.clientContact || pqr.profiles?.contact_name || 'No especificado';
+    const clientPhone = authorInfo.phone || pqr.profiles?.contact_phone || pqr.profiles?.phone || 'No Registrado';
+    const address = (pqr.orders?.shipping_address || 'Entrega en Sede Principal')
+        .replace(/(?:,\s*Bogot[aá](?:\s*D\.?C\.?)?\s*,\s*Cundinamarca)+/gi, ', Bogotá, Cundinamarca')
+        .trim();
     
     const creationDateFull = new Date(pqr.created_at).toLocaleString('es-CO', {
         day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -149,8 +153,14 @@ export default function RncPrintPage() {
         ? new Date(pqr.resolved_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : 'En investigación técnica';
 
-    // Total economic impact (Cost of Quality)
-    const totalImpactCoQ = novelties.reduce((sum, item) => {
+    const resNotesRaw = pqr.resolution_notes || '';
+    const isClosedConformeZeroCost = resNotesRaw.includes('Cerrado conforme sin impacto económico') ||
+        resNotesRaw.includes('Opción 1') ||
+        pqr.status === 'rejected';
+
+    // Total economic impact (Cost of Quality) — exclude rejected items and zero-cost conforme closures
+    const totalImpactCoQ = isClosedConformeZeroCost ? 0 : novelties.reduce((sum, item) => {
+        if (item.status === 'rejected') return sum;
         const oi = item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
         const price = Number(oi?.unit_price || item.unit_price || 0);
         return sum + (price * (Number(item.quantity_returned) || 0));
@@ -597,7 +607,7 @@ export default function RncPrintPage() {
                             </div>
                             <div style={{ color: '#334155', lineHeight: '1.3', whiteSpace: 'pre-line' }}>
                                 <span style={{ color: '#64748B', fontWeight: '700', textTransform: 'uppercase', fontSize: '5.8pt' }}>HALLAZGO TÉCNICO / DESCRIPCIÓN: </span>
-                                {pqr.description}
+                                {(pqr.description || '').replace(/\s*\[Radicado por[^\]]+\]/gi, '').trim()}
                             </div>
                             {rca.notes && rca.notes.trim() !== '' && (
                                 <div style={{ color: '#0F172A', lineHeight: '1.3', whiteSpace: 'pre-line', marginTop: '3px', paddingTop: '3px', borderTop: '1px dashed #E2E8F0' }}>
@@ -630,9 +640,13 @@ export default function RncPrintPage() {
                                 <FileText size={11} color="#0D7A57" />
                                 <span>3. Relación de Ítems No Conformes y Costo de Calidad (CoQ)</span>
                             </div>
-                            {totalImpactCoQ > 0 && (
+                            {totalImpactCoQ > 0 ? (
                                 <span style={{ fontSize: '6.4pt', fontWeight: '800', color: '#DC2626' }}>
                                     Impacto Total CoQ: ${totalImpactCoQ.toLocaleString('es-CO')} COP
+                                </span>
+                            ) : (
+                                <span style={{ fontSize: '6.4pt', fontWeight: '800', color: '#0D7A57' }}>
+                                    Impacto Total CoQ: $0 COP (Cerrado Conforme — Sin Costo)
                                 </span>
                             )}
                         </div>
@@ -668,21 +682,21 @@ export default function RncPrintPage() {
                                     </tr>
                                 ))}
                             </tbody>
-                            {totalImpactCoQ > 0 && (
-                                <tfoot>
-                                    <tr style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #CBD5E1' }}>
-                                        <td colSpan={2} style={{ padding: '2.5px 5px', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', fontSize: '6pt' }}>
-                                            Total Impacto Contable
-                                        </td>
-                                        <td style={{ padding: '2.5px 5px', textAlign: 'center', fontWeight: '900', color: '#0F172A' }}>
-                                            {novelties.reduce((acc, it) => acc + (Number(it.quantity_returned) || 0), 0)} Unidades
-                                        </td>
-                                        <td colSpan={2} style={{ padding: '2.5px 5px', textAlign: 'right', fontWeight: '900', color: '#DC2626', fontSize: '6.8pt' }}>
-                                            Total CoQ: ${totalImpactCoQ.toLocaleString('es-CO')} COP
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            )}
+                            <tfoot>
+                                <tr style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #CBD5E1' }}>
+                                    <td colSpan={2} style={{ padding: '2.5px 5px', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', fontSize: '6pt' }}>
+                                        Total Impacto Contable
+                                    </td>
+                                    <td style={{ padding: '2.5px 5px', textAlign: 'center', fontWeight: '900', color: '#0F172A' }}>
+                                        {novelties.reduce((acc, it) => acc + (Number(it.quantity_returned) || 0), 0)} Unidades
+                                    </td>
+                                    <td colSpan={2} style={{ padding: '2.5px 5px', textAlign: 'right', fontWeight: '900', color: totalImpactCoQ > 0 ? '#DC2626' : '#0D7A57', fontSize: '6.8pt' }}>
+                                        {totalImpactCoQ > 0
+                                            ? `Total CoQ: $${totalImpactCoQ.toLocaleString('es-CO')} COP`
+                                            : 'Total CoQ: $0 COP (Cerrado Conforme — Sin Costo)'}
+                                    </td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 )}

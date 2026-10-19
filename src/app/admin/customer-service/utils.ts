@@ -40,14 +40,40 @@ export interface PQR {
         admin_notes?: string;
         shipping_address?: string;
     } | null;
+    sequence_number?: number;
 }
+
+export const formatPqrFolio = (pqr?: PQR | null): string => {
+    if (!pqr) return 'SAC-0000';
+    if (pqr.sequence_number && pqr.sequence_number > 0) {
+        return `SAC-${String(pqr.sequence_number).padStart(4, '0')}`;
+    }
+    if (pqr.orders?.sequence_id) {
+        return `SAC-${String(pqr.orders.sequence_id).padStart(4, '0')}`;
+    }
+    const numericHash = parseInt((pqr.id || '').replace(/[^0-9]/g, '').substring(0, 4) || '1', 10);
+    return `SAC-${String(numericHash).padStart(4, '0')}`;
+};
 
 export const getClientInitials = (name?: string): string => {
     if (!name) return 'CL';
-    const clean = name.trim();
-    const parts = clean.split(' ').filter(Boolean);
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[1][0]).toUpperCase();
+    const stopWords = new Set(['DE', 'DEL', 'LA', 'LAS', 'LOS', 'EL', 'Y', 'E', 'SAS', 'S.A.S.', 'S.A.', 'SA', 'LTDA', 'CIA']);
+    const clean = name.trim().replace(/[^a-zA-ZÁÉÍÓÚÑáéíóúñ0-9\s]/g, ' ');
+    const parts = clean.split(/\s+/).filter(Boolean);
+    const meaningful = parts.filter(w => !stopWords.has(w.toUpperCase()));
+    const target = meaningful.length >= 2 ? meaningful : parts;
+    if (target.length === 0) return 'CL';
+    if (target.length === 1) return target[0].substring(0, 2).toUpperCase();
+    return (target[0][0] + target[1][0]).toUpperCase();
+};
+
+export const formatCleanPqrSubject = (subject?: string | null): string => {
+    if (!subject) return 'Sin asunto';
+    const cleaned = subject
+        .replace(/^(\[(?:Garant[ií]a Cliente|Portal B2B|Portal B2C|Tienda B2C|Conductor|Mesa SAC)\]\s*)+/gi, '')
+        .replace(/\s*[-–•]\s*Pedido\s*#[A-Za-z0-9-]+.*$/i, '')
+        .trim();
+    return cleaned || subject;
 };
 
 export const getTypeBadgeStyle = (type: string) => {
@@ -376,8 +402,8 @@ export const WHATSAPP_PQR_TEMPLATES: WhatsAppTemplateOption[] = [
     },
     {
         id: 'replacement',
-        label: 'Reposición D+1 ($0 COP)',
-        description: 'Confirmación directa de la reposición física en la próxima ruta.'
+        label: 'Reposición Física ($0 COP)',
+        description: 'Confirmación directa de la fecha y productos de reposición sin costo.'
     },
     {
         id: 'credit_note',
@@ -514,7 +540,8 @@ export const buildShortageWhatsAppMessage = (
 
 export const buildPqrWhatsAppMessage = (
     pqr: PQR, 
-    templateType: WhatsAppPqrTemplateType = 'initial'
+    templateType: WhatsAppPqrTemplateType = 'initial',
+    replacementConfig?: { deliveryDate?: string; deliverySlot?: string; itemsSummary?: string }
 ): string => {
     const ctx = extractPqrNarrativeContext(pqr);
 
@@ -525,8 +552,18 @@ export const buildPqrWhatsAppMessage = (
         case 'shortage_autorelease':
             return `Hola ${ctx.cleanPersonName}${ctx.company}, te saludamos del equipo de Calidad de FruFresco.\n\nPara garantizar que tu ${ctx.orderSeq} llegue puntualmente dentro de la franja horaria de tu cocina, despachamos tu ruta a tiempo retirando ${ctx.productName} de la remisión de hoy por no contar con calidad óptima en plaza.\n\nTu factura reflejará únicamente los productos efectivamente entregados, sin cobros por este ítem.\n\n¡Gracias por tu comprensión y que tengas un excelente servicio!`;
 
-        case 'replacement':
-            return `Hola ${ctx.cleanPersonName}${ctx.company}, te saludamos del equipo de Calidad de FruFresco.\n\nTe confirmamos que ya dejamos programada sin costo ($0 COP) la reposición de ${ctx.productWithQty} correspondiente al ${ctx.orderSeq}, la cual será entregada en tu próxima ruta de despacho.\n\n¡Seguimos atentos para apoyarte en lo que necesites!`;
+        case 'replacement': {
+            const repItemsLabel = replacementConfig?.itemsSummary || ctx.productWithQty;
+            const slotSuffix = replacementConfig?.deliverySlot
+                ? (replacementConfig.deliverySlot === 'AM' || replacementConfig.deliverySlot === 'PM'
+                    ? ` (Franja ${replacementConfig.deliverySlot})`
+                    : ` (${replacementConfig.deliverySlot})`)
+                : '';
+            const repDateLabel = replacementConfig?.deliveryDate
+                ? `para entrega el ${replacementConfig.deliveryDate}${slotSuffix}`
+                : 'la cual será entregada en tu próxima ruta de despacho';
+            return `Hola ${ctx.cleanPersonName}${ctx.company}, te saludamos del equipo de Calidad de FruFresco.\n\nTe confirmamos que ya dejamos programada sin costo ($0 COP) la reposición de ${repItemsLabel} correspondiente al ${ctx.orderSeq}, ${repDateLabel}.\n\n¡Seguimos atentos para apoyarte en lo que necesites!`;
+        }
 
         case 'credit_note':
             return `Hola ${ctx.cleanPersonName}${ctx.company}, te saludamos del equipo de Calidad de FruFresco.\n\nTe confirmamos que ya aplicamos la Nota Crédito (saldo a favor) en tu estado de cuenta por la novedad reportada en ${ctx.productWithQty} del ${ctx.orderSeq}.\n\n¡Cualquier duda adicional, con gusto te atendemos por este medio!`;

@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.214 (Auditoría Histórica de Mermas Multi-Escala Semana/Mes/Trimestre en Inventarios, Simplificación Radical del Motor SUGERIDO IA sin SIPSA y Tooltips Pedagógicos Enriquecidos en Acuerdos Especiales — 76/76 Pantallas Certificadas)  
-> **Fecha:** 16 de Octubre, 2026  
+> **Versión:** 1.9.215 (Configurador Interactivo de Orden de Reposición en Opción 2 SAC con Fecha Flexible D+N, Trueque Controlado de SKU/Cantidad y Termómetro de Equivalencia Financiera — 76/76 Pantallas Certificadas)  
+> **Fecha:** 19 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 245 Escenarios BDD Ininterrumpidos (1..245)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 246 Escenarios BDD Ininterrumpidos (1..246)
 
 ---
 
@@ -19,16 +19,16 @@
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244 (§42.1 - §42.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246 (§39.1 - §39.6) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **245 Escenarios Canónicos (1..245)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **247 Escenarios Canónicos (1..247)** | **🟢 100%** |
 
 ---
 
@@ -10729,6 +10729,38 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   3. **Popovers Flotantes Cero-Salto (`?`) en Encabezados Sticky y Edición Limpia sin Cero Bloqueado (`SpecialAgreementsModule.tsx`):**
      - Cada encabezado `<th>` sticky de la galería despliega una tarjeta flotante (`position: absolute`, `pointer-events: none`, `z-index: 9999`) anclada directamente debajo del encabezado al hacer *hover*, garantizando cero desplazamiento vertical (*layout shift*) y visibilidad completa incluso con scroll profundo.
      - Las celdas editables bidireccionales (`% UTILIDAD` y `NUEVO PRECIO / CONTRAPROPUESTA`) operan mediante borradores de edición (`editingPriceDrafts`, `editingMarkupDrafts`) que permiten borrar el valor por completo (`""`) con `Backspace`, autoseleccionan al enfocar y eliminan automáticamente cualquier cero a la izquierda (`.replace(/^0+(?=\d)/, '')`).
+
+---
+
+### Escenario 247: Invarianza de Ancho de Columnas y Homologacion de Altura de Fila en Consola SAC (/admin/customer-service — SDD v1.9.216)
+- **Given** la tabla maestra de casos y PQRs en /admin/customer-service,
+- **When** el usuario conmuta entre los badges de filtro Pendientes, Resueltos y Todos,
+- **Then** el sistema garantiza estabilidad visual e invarianza de layout:
+  1. **Anchos Proporcionales Fijos en <thead>:** Folio & Fecha (14%), Cliente & Canal (18%), Asunto & Pedido (20%), Evidencia (6%), Diagnostico RCA (14%), Imputabilidad & Cobro (14%), Estado (9%) y Acciones (5%), eliminando saltos dinamicos de 	able-layout: auto.
+  2. **Estructura Canónica a Doble Renglon:** Diagnostico RCA, Imputabilidad & Cobro y Estado & Resolucion homologados a dos lineas simetricas en todos los estados.
+  3. **Invarianza de Altura Vertical de Fila:** Altura uniforme (48-52px) sin desbordamientos por lexWrap al mostrar cobros o imputaciones.
+
+---
+
+### Escenario 246: Configurador Interactivo de Orden de Reposición Física en `Opción 2` SAC (Fecha Flexible `D+N`, Franja `AM/PM`, Trueque Controlado de Producto/Cantidad y Termómetro de Equivalencia Financiera — SDD v1.9.215)
+- **Given** una PQR con novedades declaradas abierta en el **Paso 2 (`2 — Decisión Comercial`)** de `src/app/admin/customer-service/components/PqrAuditModal.tsx`,
+- **When** el analista de Calidad y SAC selecciona la **Opción 2 (`Reponer Físicamente — Garantía $0 COP`)**,
+- **Then** el sistema despliega en línea dentro del Paso 2 el **Configurador de la Orden de Reposición a Programar** con las siguientes reglas de negocio y controles Poka-Yoke:
+  1. **Neutralidad de Inicio en Casos Pendientes (Cero Preselección Ciega):**
+     - Al abrir un caso pendiente en el Paso 1, la plantilla de WhatsApp inicia en **`Caso Recibido & En Proceso`** (`'initial'`) y ninguna de las 4 opciones comerciales del Paso 2 viene preseleccionada (`resolutionOption = ''`), exigiendo selección consciente del analista antes de avanzar al Paso 3.
+  2. **Programación Flexible de Fecha de Entrega (`Mañana`, `Pasado mañana`, `En 3 días` o Calendario Libre) y Restricciones Horarias Reales de Sucursal:**
+     - Por defecto se sugiere el **próximo día hábil de recepción autorizado para la sucursal** (`nextValidBranchDate` en zona horaria `America/Bogota`) calculado a partir de `profiles.logistics_data.allowed_days` (o `days`), y se proyecta la ventana horaria y restricciones específicas de recepción de la sucursal (`profiles.delivery_restrictions` y `logistics_data.windows`, ej. `08:00 - 11:00 • MARTES Y JUEVES de 8 am a 11 am` o `07:00 - 10:00 • Lunes a sábado 7 AM a 10 AM`) en lugar de botones genéricos `Franja AM / PM`.
+     - El analista dispone de píldoras en español natural (`Mañana`, `Pasado mañana`, `En 3 días` con el día de la semana) y un selector de fecha (`input type="date"` con mínimo en `hoy`). Si la fecha seleccionada cae en un día fuera de los días habituales de recepción de esa sucursal, se proyecta una alerta Poka-Yoke ámbar con botón de ajuste en 1 clic al próximo día habilitado de la sucursal.
+  3. **Canasta Editable de Productos a Reponer (Soporte de Trueque / Cambio de SKU y Ajuste de Cantidad):**
+     - La tabla de reposición se hidrata automáticamente con los ítems reclamados en `billing_returns` (o los ítems del pedido origen), mostrando para cada línea:
+       - **Producto Original Reclamado:** Nombre, cantidad reclamada y precio unitario facturado en el pedido padre.
+       - **Producto a Despachar en Reposición (`SearchableSelect` del catálogo activo):** Permite mantener el mismo SKU o cambiarlo por otro producto acordado con el cliente (ej. cambiar *3 Kg de Mora* por *2 Kg de Fresa*).
+       - **Cantidad a Reponer (`Kg / Und` editable):** Permite ajustar la cantidad física a despachar, además de permitir **`[+ Agregar línea de reposición]`** o eliminar líneas.
+  4. **Termómetro Poka-Yoke de Equivalencia Financiera en Trueques:**
+     - Calcula y proyecta en tiempo real la comparación entre:
+       - **`Valor Reclamado Original (COP):`** Suma de $\text{Cantidad Reclamada} \times \text{Precio Unitario en Pedido Padre}$.
+       - **`Valor Comercial Estimado a Reponer (COP):`** Suma de $\text{Cantidad a Reponer} \times \text{Precio Unitario de Referencia del SKU a Enviar}$ (tomado del pedido padre si existe, o de `base_price` del catálogo).
+       - **`Diferencia / Equivalencia:`** Semáforo verde si el valor a reponer es menor o hasta un $+10\%$ del valor reclamado, y alerta ámbar/roja si el trueque supera el valor original reclamado, registrando en `orders.admin_notes` del Pedido Hijo y en `customer_service_pqrs.resolution_notes` el detalle exacto de la fecha programada y de cualquier trueque/cambio de producto autorizado.
 
 ---
 

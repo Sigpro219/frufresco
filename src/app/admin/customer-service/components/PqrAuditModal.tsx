@@ -10,7 +10,7 @@ import {
     Unlink, Plus, Trash2, Loader2, Maximize2, DollarSign, Percent,
     PackageMinus, AlertCircle, Edit2, RotateCcw, ExternalLink, Copy,
     Clock, ArrowRight, PackageX, ShoppingBag, Package, Save, HeartHandshake,
-    Info
+    Info, Lock, Unlock, Printer, Eye
 } from 'lucide-react';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import {
@@ -23,8 +23,11 @@ import {
     ImputedEntity,
     cleanHumanResolutionNotes
 } from '@/lib/rcaTaxonomy';
+import { useAuth } from '@/lib/authContext';
 import { 
     cleanColombianPhone, 
+    formatPqrFolio,
+    formatCleanPqrSubject,
     PqrAuthorInfo, 
     getPqrAuthorInfo,
     buildPqrWhatsAppMessage,
@@ -64,10 +67,16 @@ export default function PqrAuditModal({
     showToast,
     onZoomPhoto
 }: PqrAuditModalProps) {
+    const { user, profile } = useAuth();
+    const auditorDisplayName = profile?.contact_name || profile?.company_name || user?.email?.split('@')[0] || 'FruFresco Admin';
     const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
     const [actionLoading, setActionLoading] = useState(false);
     const [resolutionNotes, setResolutionNotes] = useState('');
-    const [resolutionOption, setResolutionOption] = useState<'opt1' | 'opt2' | 'opt3' | 'opt4'>('opt1');
+    const [resolutionOption, setResolutionOption] = useState<'' | 'opt1' | 'opt2' | 'opt3' | 'opt4'>('');
+    const [isRectifyingClosedCase, setIsRectifyingClosedCase] = useState(false);
+
+    const isClosedCase = pqr?.status === 'resolved' || pqr?.status === 'rejected';
+    const isReadOnlyClosed = isClosedCase && !isRectifyingClosedCase;
 
     // Shortage Proactive Timer & State
     const [shortageCountdown, setShortageCountdown] = useState<ShortageTimeoutInfo>({
@@ -77,10 +86,99 @@ export default function PqrAuditModal({
         formattedCountdown: '--:--',
         deadlineText: ''
     });
-    const [availableCatalogProducts, setAvailableCatalogProducts] = useState<{ id: string; name: string; sku?: string; unit_of_measure?: string }[]>([]);
+    const [availableCatalogProducts, setAvailableCatalogProducts] = useState<{ id: string; name: string; sku?: string; unit_of_measure?: string; base_price?: number }[]>([]);
     const [substituteModalOpen, setSubstituteModalOpen] = useState(false);
     const [selectedSubstituteProductId, setSelectedSubstituteProductId] = useState('');
     const [substituteTargetItemId, setSubstituteTargetItemId] = useState('');
+
+    // Replacement Order Configurator State (Escenario 246)
+    const getBogotaFutureDate = (daysAhead: number): string => {
+        const bogotaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const [bY, bM, bD] = bogotaToday.split('-').map(Number);
+        return new Date(Date.UTC(bY, bM - 1, bD + daysAhead)).toISOString().split('T')[0];
+    };
+
+    const branchScheduleInfo = useMemo(() => {
+        const prof = pqr?.profiles || {};
+        const logData = prof?.logistics_data || pqr?.orders?.logistics_data || {};
+        const win0 = Array.isArray(logData?.windows) && logData.windows.length > 0 ? logData.windows[0] : null;
+        const startTime = win0?.startTime || logData?.start_time || '06:30';
+        const endTime = win0?.endTime || logData?.end_time || '11:00';
+        const windowLabel = `${startTime} - ${endTime}`;
+
+        const rawRestr = typeof prof?.delivery_restrictions === 'string' && prof.delivery_restrictions.trim() !== ''
+            ? prof.delivery_restrictions.trim()
+            : (typeof logData?.special_notes === 'string' && logData.special_notes.trim() !== ''
+                ? logData.special_notes.trim()
+                : '');
+
+        const rawDays: number[] = Array.isArray(logData?.allowed_days) && logData.allowed_days.length > 0
+            ? logData.allowed_days
+            : (Array.isArray(logData?.days) && logData.days.length > 0 ? logData.days : [1, 2, 3, 4, 5, 6]);
+        const normalizedDays = Array.from(new Set(rawDays.map((d: number) => (Number(d) === 7 ? 0 : Number(d)))));
+
+        const dayNamesShort = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const dayNamesFull = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const allowedDaysLabel = normalizedDays.length >= 7
+            ? 'Todos los días (Lun a Dom)'
+            : (normalizedDays.length === 6 && !normalizedDays.includes(0))
+                ? 'Lunes a Sábado'
+                : (normalizedDays.length === 5 && !normalizedDays.includes(0) && !normalizedDays.includes(6))
+                    ? 'Lunes a Viernes'
+                    : normalizedDays.map(d => dayNamesShort[d] || '').filter(Boolean).join(', ');
+
+        const findNextValidBranchDate = (): string => {
+            for (let i = 1; i <= 14; i++) {
+                const candidate = getBogotaFutureDate(i);
+                const [y, m, d] = candidate.split('-').map(Number);
+                const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+                if (normalizedDays.includes(dow)) {
+                    return candidate;
+                }
+            }
+            return getBogotaFutureDate(1);
+        };
+
+        const checkDateForBranch = (dateStr: string): { allowed: boolean; dayName: string; shortDayName: string } => {
+            if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { allowed: true, dayName: '', shortDayName: '' };
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+            return {
+                allowed: normalizedDays.includes(dow),
+                dayName: dayNamesFull[dow] || '',
+                shortDayName: dayNamesShort[dow] || ''
+            };
+        };
+
+        return {
+            startTime,
+            endTime,
+            windowLabel,
+            restrictionsText: rawRestr || `Horario Estándar: ${allowedDaysLabel} (${windowLabel})`,
+            allowedDays: normalizedDays,
+            allowedDaysLabel,
+            nextValidBranchDate: findNextValidBranchDate(),
+            checkDateForBranch
+        };
+    }, [pqr]);
+
+    const [replacementDeliveryDate, setReplacementDeliveryDate] = useState<string>(() => getBogotaFutureDate(1));
+    const [replacementDeliverySlot, setReplacementDeliverySlot] = useState<'AM' | 'PM'>('AM');
+    const [replacementPlanItems, setReplacementPlanItems] = useState<{
+        id: string;
+        originalProductId: string;
+        originalProductName: string;
+        originalUnit: string;
+        originalQty: number;
+        originalUnitPrice: number;
+        targetProductId: string;
+        targetProductName: string;
+        targetUnit: string;
+        targetQty: number;
+        targetQtyInput?: string;
+        referenceUnitPrice: number;
+    }[]>([]);
+    const [isReplacementPlanCustomized, setIsReplacementPlanCustomized] = useState<boolean>(false);
 
     // RCA Form State
     const [rcaCategoryL1, setRcaCategoryL1] = useState('dano_mecanico');
@@ -105,6 +203,7 @@ export default function PqrAuditModal({
     const [loadingItems, setLoadingItems] = useState(false);
     const [selectedItemId, setSelectedItemId] = useState('');
     const [noveltyQty, setNoveltyQty] = useState(0);
+    const [noveltyQtyInput, setNoveltyQtyInput] = useState('');
     const [noveltyType, setNoveltyType] = useState<'faltante' | 'averia'>('faltante');
     const [noveltyReason, setNoveltyReason] = useState('');
     const [hasPhysicalReturn, setHasPhysicalReturn] = useState<boolean>(false);
@@ -183,6 +282,55 @@ export default function PqrAuditModal({
         setLastSavedDraftTime(null);
     };
 
+    // Helper to build default replacement basket from declared novelties or order items
+    const buildDefaultReplacementPlanItems = (returnsList: any[], itemsList: any[]) => {
+        if (returnsList && returnsList.length > 0) {
+            return returnsList.map((ret: any, idx: number) => {
+                const oi = itemsList.find(o => o.product_id === ret.product_id) ||
+                           ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                const prodName = ret.products?.name || oi?.products?.name || oi?.nickname || 'Producto reclamado';
+                const prodUnit = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+                const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                const qty = Number(ret.quantity_returned || 1);
+                return {
+                    id: `rep-${ret.id || idx}`,
+                    originalProductId: ret.product_id || '',
+                    originalProductName: prodName,
+                    originalUnit: prodUnit,
+                    originalQty: qty,
+                    originalUnitPrice: unitPrice,
+                    targetProductId: ret.product_id || '',
+                    targetProductName: prodName,
+                    targetUnit: prodUnit,
+                    targetQty: qty,
+                    referenceUnitPrice: unitPrice
+                };
+            });
+        }
+        if (itemsList && itemsList.length > 0) {
+            return itemsList.map((oi: any, idx: number) => {
+                const prodName = oi.products?.name || oi.nickname || 'Producto del pedido';
+                const prodUnit = oi.products?.unit_of_measure || 'Kg';
+                const unitPrice = Number(oi.unit_price || 0);
+                const qty = Number(oi.quantity || 1);
+                return {
+                    id: `rep-oi-${oi.id || idx}`,
+                    originalProductId: oi.product_id || '',
+                    originalProductName: prodName,
+                    originalUnit: prodUnit,
+                    originalQty: qty,
+                    originalUnitPrice: unitPrice,
+                    targetProductId: oi.product_id || '',
+                    targetProductName: prodName,
+                    targetUnit: prodUnit,
+                    targetQty: qty,
+                    referenceUnitPrice: unitPrice
+                };
+            });
+        }
+        return [];
+    };
+
     // Discard draft and revert to DB values
     const handleDiscardDraft = () => {
         if (!pqr?.id) return;
@@ -190,11 +338,17 @@ export default function PqrAuditModal({
 
         setCurrentStep(1);
         setResolutionNotes(cleanHumanResolutionNotes(pqr.resolution_notes || ''));
+        setResolutionOption('');
+        setSelectedWaTemplate('initial');
         setSelectedItemId('');
         setNoveltyQty(0);
         setNoveltyReason('');
         setHasPhysicalReturn(false);
         setLinkingOrderId('');
+        setReplacementDeliveryDate(branchScheduleInfo.nextValidBranchDate);
+        setReplacementDeliverySlot(pqr?.orders?.delivery_slot === 'PM' ? 'PM' : 'AM');
+        setIsReplacementPlanCustomized(false);
+        setReplacementPlanItems(buildDefaultReplacementPlanItems(caseReturns, orderItems));
 
         const rca = parseRcaFromRecord(pqr);
         setRcaCategoryL1(rca.categoryL1 || 'dano_mecanico');
@@ -216,6 +370,7 @@ export default function PqrAuditModal({
         if (!pqr) return;
 
         setCurrentStep(1);
+        setIsRectifyingClosedCase(false);
         setResolutionNotes(cleanHumanResolutionNotes(pqr.resolution_notes || ''));
         setActivePhotoIdx(0);
         setSelectedItemId('');
@@ -224,6 +379,9 @@ export default function PqrAuditModal({
         setAssignedRouteDriver(null);
         setEditingPhone(false);
         setNewPhoneInput('');
+        setReplacementDeliveryDate(branchScheduleInfo.nextValidBranchDate);
+        setReplacementDeliverySlot(pqr?.orders?.delivery_slot === 'PM' ? 'PM' : 'AM');
+        setIsReplacementPlanCustomized(false);
 
         const rca = parseRcaFromRecord(pqr);
         setRcaCategoryL1(rca.categoryL1 || 'dano_mecanico');
@@ -266,35 +424,45 @@ export default function PqrAuditModal({
             setSanitaryKey(anyPhysicalReturnInNovelties ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno');
         }
 
-        const isReplacement = rca.isReplacementRejection || 
-            (pqr.subject || '').includes('[ALERTA PING-PONG]') || 
-            (pqr.description || '').includes('ALERTA CORTE DE BUCLE');
-
-        if (rawNotes.includes('Opción 2') || rawNotes.includes('Reponer D+1')) {
+        if (rawNotes.includes('Opción 2') || rawNotes.includes('Reponer D+1') || rawNotes.includes('Reponer Físicamente')) {
             setResolutionOption('opt2');
+            setSelectedWaTemplate('replacement');
         } else if (rawNotes.includes('Opción 3') || rawNotes.includes('Nota Crédito')) {
             setResolutionOption('opt3');
+            setSelectedWaTemplate('credit_note');
         } else if (rawNotes.includes('Opción 4') || rawNotes.includes('Ajuste de Factura')) {
             setResolutionOption('opt4');
+            setSelectedWaTemplate('credit_note');
         } else if (rawNotes.includes('Opción 1') || rawNotes.includes('Cerrar Conforme') || rawNotes.includes('Cerrado conforme')) {
             setResolutionOption('opt1');
+            setSelectedWaTemplate('closing');
         } else {
-            // Sin sesgo dogmático de rechazo: los reclamos de avería/calidad inician abiertos en Reposición D+1 (opt2)
-            setResolutionOption(isReplacement ? 'opt3' : 'opt2');
+            // Casos pendientes inician sin ninguna decisión comercial ni plantilla de resolución preseleccionada
+            setResolutionOption('');
+            setSelectedWaTemplate('initial');
         }
 
-        // Check for progressive draft saved in localStorage
+        // Check for progressive draft saved in localStorage (only for active pending/in_progress cases)
         const draftKey = `pqr_audit_draft_${pqr.id}`;
         let restoredFromDraft = false;
+        const isCaseAlreadyClosed = pqr.status === 'resolved' || pqr.status === 'rejected';
         try {
-            const rawDraft = localStorage.getItem(draftKey);
+            const rawDraft = !isCaseAlreadyClosed ? localStorage.getItem(draftKey) : null;
             if (rawDraft) {
                 const draft = JSON.parse(rawDraft);
                 if (draft && typeof draft === 'object') {
                     isRestoringDraftRef.current = true;
                     if (draft.currentStep) setCurrentStep(draft.currentStep);
                     if (draft.resolutionNotes !== undefined) setResolutionNotes(cleanHumanResolutionNotes(draft.resolutionNotes));
-                    if (draft.resolutionOption) setResolutionOption(draft.resolutionOption);
+                    if (draft.resolutionOption && (draft.currentStep > 1 || (draft.resolutionNotes && draft.resolutionNotes.trim() !== '') || pqr.status === 'resolved')) {
+                        setResolutionOption(draft.resolutionOption);
+                        if (draft.resolutionOption === 'opt2') setSelectedWaTemplate('replacement');
+                        else if (draft.resolutionOption === 'opt3' || draft.resolutionOption === 'opt4') setSelectedWaTemplate('credit_note');
+                        else if (draft.resolutionOption === 'opt1') setSelectedWaTemplate('closing');
+                    } else if (pqr.status !== 'resolved') {
+                        setResolutionOption('');
+                        setSelectedWaTemplate('initial');
+                    }
                     if (draft.rcaCategoryL1) setRcaCategoryL1(draft.rcaCategoryL1);
                     if (draft.rcaSubtypeL2 !== undefined) setRcaSubtypeL2(draft.rcaSubtypeL2);
                     if (draft.rcaResponsible) setRcaResponsible(draft.rcaResponsible);
@@ -310,6 +478,12 @@ export default function PqrAuditModal({
                     if (draft.linkingOrderId) setLinkingOrderId(draft.linkingOrderId);
                     if (draft.selectedSubstituteProductId) setSelectedSubstituteProductId(draft.selectedSubstituteProductId);
                     if (draft.substituteTargetItemId) setSubstituteTargetItemId(draft.substituteTargetItemId);
+                    if (draft.replacementDeliveryDate) setReplacementDeliveryDate(draft.replacementDeliveryDate);
+                    if (draft.replacementDeliverySlot === 'AM' || draft.replacementDeliverySlot === 'PM') setReplacementDeliverySlot(draft.replacementDeliverySlot);
+                    if (Array.isArray(draft.replacementPlanItems) && draft.replacementPlanItems.length > 0 && draft.isReplacementPlanCustomized) {
+                        setReplacementPlanItems(draft.replacementPlanItems);
+                        setIsReplacementPlanCustomized(true);
+                    }
 
                     restoredFromDraft = true;
                     setIsDraftRestored(true);
@@ -389,9 +563,16 @@ export default function PqrAuditModal({
         }
     }, [pqr]);
 
+    // Auto-hydrate replacementPlanItems when caseReturns or orderItems load (if not customized by analyst)
+    useEffect(() => {
+        if (!pqr || isReplacementPlanCustomized) return;
+        const defaults = buildDefaultReplacementPlanItems(caseReturns, orderItems);
+        setReplacementPlanItems(defaults);
+    }, [pqr?.id, caseReturns, orderItems, isReplacementPlanCustomized]);
+
     // Progressive Auto-Save Draft to LocalStorage (Debounced 400ms)
     useEffect(() => {
-        if (!pqr?.id || !isOpen || isRestoringDraftRef.current) return;
+        if (!pqr?.id || !isOpen || isRestoringDraftRef.current || isReadOnlyClosed) return;
 
         const timer = setTimeout(() => {
             try {
@@ -414,6 +595,10 @@ export default function PqrAuditModal({
                     linkingOrderId,
                     selectedSubstituteProductId,
                     substituteTargetItemId,
+                    replacementDeliveryDate,
+                    replacementDeliverySlot,
+                    replacementPlanItems,
+                    isReplacementPlanCustomized,
                     updatedAt: new Date().toISOString()
                 };
                 localStorage.setItem(`pqr_audit_draft_${pqr.id}`, JSON.stringify(draftData));
@@ -444,7 +629,11 @@ export default function PqrAuditModal({
         hasPhysicalReturn,
         linkingOrderId,
         selectedSubstituteProductId,
-        substituteTargetItemId
+        substituteTargetItemId,
+        replacementDeliveryDate,
+        replacementDeliverySlot,
+        replacementPlanItems,
+        isReplacementPlanCustomized
     ]);
 
     // Shortage live countdown timer and template auto-selection
@@ -462,14 +651,14 @@ export default function PqrAuditModal({
         return () => clearInterval(timer);
     }, [pqr, selectedWaTemplate]);
 
-    // Load available catalog products for quick substitution
+    // Load available catalog products for quick substitution & replacement barter
     useEffect(() => {
         if (!isOpen) return;
         (async () => {
             try {
                 const { data } = await supabase
                     .from('products')
-                    .select('id, name, sku, unit_of_measure')
+                    .select('id, name, sku, unit_of_measure, base_price')
                     .eq('is_active', true)
                     .order('name');
                 setAvailableCatalogProducts(data || []);
@@ -661,9 +850,9 @@ export default function PqrAuditModal({
                     .select()
                     .single();
 
-                if (createErr || !newOrder) throw new Error('Error al crear orden para D+1: ' + createErr?.message);
+                if (createErr || !newOrder) throw new Error('Error al crear orden para el próximo despacho: ' + createErr?.message);
                 destOrderId = newOrder.id;
-                destOrderSeq = `#${newOrder.sequence_id} (D+1 ${tomorrow})`;
+                destOrderSeq = `#${newOrder.sequence_id} (Entrega ${tomorrow})`;
             }
 
             if (targetItem) {
@@ -673,7 +862,7 @@ export default function PqrAuditModal({
                     quantity: targetItem.quantity,
                     unit_price: targetItem.unit_price || 0,
                     nickname: targetItem.nickname || targetItem.products?.name,
-                    variant_label: `Anexado desde PQR #${pqr.id.substring(0, 8)} (D+1)`
+                    variant_label: `Anexado desde PQR #${pqr.id.substring(0, 8)} (Próximo Pedido)`
                 }]);
 
                 await supabase.from('order_items').delete().eq('id', targetItem.id);
@@ -685,7 +874,7 @@ export default function PqrAuditModal({
                     quantity: Number(targetItem.quantity) || 1,
                     type: 'exit',
                     reference_type: 'order_shortage',
-                    notes: `[COLUMNA K - REPROGRAMADO D+1]: Anexado al siguiente pedido programado ${destOrderSeq} | PQR #${pqr.id.substring(0, 8)}`
+                    notes: `[COLUMNA K - REPROGRAMADO EN PRÓXIMO PEDIDO]: Anexado al siguiente pedido programado ${destOrderSeq} | PQR #${pqr.id.substring(0, 8)}`
                 }]);
             }
 
@@ -706,7 +895,7 @@ export default function PqrAuditModal({
                 imputedTargetType: 'provider'
             });
 
-            const finalNotes = `[ANEXADO AL SIGUIENTE PEDIDO HABITUAL D+1]\n- Destino: Pedido ${destOrderSeq}\n- Regla: CERO desvíos vehiculares ni fletes aislados de micro-cantidades.\n- Remisión de Hoy: Depurada sin cobro.\n\n${rcaTag}`;
+            const finalNotes = `[ANEXADO AL SIGUIENTE PEDIDO HABITUAL]\n- Destino: Pedido ${destOrderSeq}\n- Regla: CERO desvíos vehiculares ni fletes aislados de micro-cantidades.\n- Remisión de Hoy: Depurada sin cobro.\n\n${rcaTag}`;
 
             await supabase
                 .from('customer_service_pqrs')
@@ -1136,6 +1325,11 @@ export default function PqrAuditModal({
     };
 
     const handleResolvePqr = async (status: 'resolved' | 'rejected') => {
+        if (status === 'resolved' && !resolutionOption) {
+            showToast('Selecciona primero una de las 4 opciones de resolución comercial en el Paso 2.', 'warning');
+            setCurrentStep(2);
+            return;
+        }
         const effectiveHumanNotes = cleanHumanResolutionNotes(resolutionNotes) || (
             resolutionOption === 'opt1'
                 ? 'Novedad aclarada y aceptada conforme por el cliente sin impacto económico ($0 COP).'
@@ -1166,10 +1360,12 @@ export default function PqrAuditModal({
         setActionLoading(true);
         try {
             const hasAveriaItems = caseReturns.some((r: any) => !(r.reason || '').toLowerCase().includes('faltante'));
-            const activeSanitaryTmpl = (resolutionOption !== 'opt1' && hasAveriaItems)
-                ? DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === (hasPhysicalReturn ? sanitaryKey : 'disposicion_cliente_sin_retorno'))
-                : null;
-            const baseCleanNotes = activeSanitaryTmpl
+            const activeSanitaryTmpl = resolutionOption === 'opt1'
+                ? DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === 'producto_conforme_sin_baja')
+                : hasAveriaItems
+                    ? DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === (hasPhysicalReturn ? sanitaryKey : 'disposicion_cliente_sin_retorno'))
+                    : null;
+            const baseCleanNotes = (activeSanitaryTmpl && !effectiveHumanNotes.includes('[DISPOSICIÓN SANITARIA:'))
                 ? `${effectiveHumanNotes}\n\n${activeSanitaryTmpl.textTemplate}`.trim()
                 : effectiveHumanNotes;
             let conceptBlock = '';
@@ -1219,8 +1415,51 @@ export default function PqrAuditModal({
 
                     let itemsToReprogram: any[] = [];
                     let isPartial = false;
+                    let swapDescriptions: string[] = [];
 
-                    if (pendingReturns && pendingReturns.length > 0) {
+                    const validPlanItems = replacementPlanItems.filter(
+                        it => it.targetProductId && Number(it.targetQty) > 0
+                    );
+
+                    if (validPlanItems.length > 0) {
+                        isPartial = Boolean(
+                            (pendingReturns && pendingReturns.length > 0) ||
+                            isReplacementPlanCustomized ||
+                            validPlanItems.length < (originalItems?.length || 1)
+                        );
+                        validPlanItems.forEach(planItem => {
+                            const matchedItem = originalItems?.find(item => item.product_id === planItem.targetProductId);
+                            const isSwapped = Boolean(
+                                planItem.originalProductId &&
+                                planItem.originalProductId !== planItem.targetProductId
+                            );
+                            const isQtyChanged = Boolean(
+                                planItem.originalProductId &&
+                                Math.abs(Number(planItem.targetQty) - Number(planItem.originalQty)) > 0.001
+                            );
+
+                            if (isSwapped) {
+                                swapDescriptions.push(
+                                    `Trueque autorizado: ${planItem.originalQty} ${planItem.originalUnit} de ${planItem.originalProductName} -> ${planItem.targetQty} ${planItem.targetUnit} de ${planItem.targetProductName}`
+                                );
+                            } else if (isQtyChanged) {
+                                swapDescriptions.push(
+                                    `Ajuste cantidad: ${planItem.originalProductName} (${planItem.originalQty} ${planItem.originalUnit} -> ${planItem.targetQty} ${planItem.targetUnit})`
+                                );
+                            }
+
+                            itemsToReprogram.push({
+                                product_id: planItem.targetProductId,
+                                quantity: Number(planItem.targetQty),
+                                unit_price: 0,
+                                nickname: isSwapped
+                                    ? `${planItem.targetProductName} [Trueque por ${planItem.originalQty} ${planItem.originalUnit} de ${planItem.originalProductName}]`
+                                    : (matchedItem?.nickname || planItem.targetProductName),
+                                selected_options: matchedItem?.selected_options || null,
+                                variant_label: matchedItem?.variant_label || null
+                            });
+                        });
+                    } else if (pendingReturns && pendingReturns.length > 0) {
                         isPartial = true;
                         pendingReturns.forEach(ret => {
                             const matchedItem = originalItems?.find(item => item.product_id === ret.product_id);
@@ -1239,7 +1478,7 @@ export default function PqrAuditModal({
 
                     if (itemsToReprogram.length === 0) {
                         const confirmTotal = window.confirm(
-                            'ATENCIÓN: No hay productos específicos devueltos.\n\n¿Deseas reprogramar el 100% de TODOS los productos del pedido original como reposición de garantía ($0 COP)?'
+                            'ATENCIÓN: No hay productos específicos configurados en la canasta de reposición.\n\n¿Deseas reprogramar el 100% de TODOS los productos del pedido original como reposición de garantía ($0 COP)?'
                         );
                         if (!confirmTotal) {
                             setActionLoading(false);
@@ -1256,12 +1495,21 @@ export default function PqrAuditModal({
                         }));
                     }
 
-                    const bogotaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-                    const [bY, bM, bD] = bogotaToday.split('-').map(Number);
-                    const tomorrow = new Date(Date.UTC(bY, bM - 1, bD + 1)).toISOString().split('T')[0];
+                    const scheduledDate = replacementDeliveryDate || branchScheduleInfo.nextValidBranchDate;
+                    const scheduledSlot = originalOrder.delivery_slot || 'AM';
+                    const branchWindowLabel = branchScheduleInfo.windowLabel;
+                    const branchRestrNote = branchScheduleInfo.restrictionsText
+                        ? ` • Restricción Sucursal: ${branchScheduleInfo.restrictionsText}`
+                        : '';
                     const replacementWeightKg = Number(
                         itemsToReprogram.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0).toFixed(2)
                     );
+                    const swapAuditLine = swapDescriptions.length > 0
+                        ? `\n[TRUEQUE / AJUSTE DE CANASTA: ${swapDescriptions.join(' | ')}]`
+                        : '';
+                    const itemsSummaryText = validPlanItems.length > 0
+                        ? validPlanItems.map(it => `${it.targetQty} ${it.targetUnit} de ${it.targetProductName}`).join(', ')
+                        : `${itemsToReprogram.length} ítem(s)`;
 
                     const { data: newOrder, error: newOrderErr } = await supabase
                         .from('orders')
@@ -1270,22 +1518,23 @@ export default function PqrAuditModal({
                             type: originalOrder.type,
                             status: 'approved',
                             origin_source: 'customer_service',
-                            delivery_date: tomorrow,
-                            delivery_slot: originalOrder.delivery_slot || 'AM',
+                            delivery_date: scheduledDate,
+                            delivery_slot: scheduledSlot,
+                            logistics_data: originalOrder.logistics_data || pqr?.profiles?.logistics_data || null,
                             shipping_address: originalOrder.shipping_address,
                             latitude: originalOrder.latitude,
                             longitude: originalOrder.longitude,
                             total: 0,
                             subtotal: 0,
                             total_weight_kg: replacementWeightKg,
-                            admin_notes: `[REPOSICIÓN DE GARANTÍA $0 COP - ${isPartial ? 'RECHAZO PARCIAL' : 'RECHAZO TOTAL'}] [PEDIDO HIJO DE #${originalOrder.sequence_id} | PARENT_ORDER_ID: ${originalOrder.id} | PQR_ID: ${pqr.id}] Generado por PQR #${pqr.id.substring(0, 8)} del Pedido #${originalOrder.sequence_id}.\n\nNotas: ${baseCleanNotes}`
+                            admin_notes: `[REPOSICIÓN DE GARANTÍA $0 COP - ${isPartial ? 'RECHAZO PARCIAL' : 'RECHAZO TOTAL'}] [PEDIDO HIJO DE #${originalOrder.sequence_id} | PARENT_ORDER_ID: ${originalOrder.id} | PQR_ID: ${pqr.id}] Programado para ${scheduledDate} (Ventana Sucursal: ${branchWindowLabel}${branchRestrNote}). Generado por PQR #${pqr.id.substring(0, 8)} del Pedido #${originalOrder.sequence_id}.${swapAuditLine}\n\nNotas: ${baseCleanNotes}`
                         }])
                         .select()
                         .single();
 
                     if (newOrderErr || !newOrder) throw new Error(`Error creando pedido de reposición: ${newOrderErr?.message}`);
 
-                    const parentChildTag = `[HIJO_REPOSICION_D1: #${newOrder.sequence_id} | ID: ${newOrder.id} | ENTREGA: ${tomorrow}]`;
+                    const parentChildTag = `[HIJO_REPOSICION_D1: #${newOrder.sequence_id} | ID: ${newOrder.id} | ENTREGA: ${scheduledDate} (${branchWindowLabel})]`;
                     const updatedParentNotes = originalOrder.admin_notes
                         ? `${originalOrder.admin_notes}\n${parentChildTag}`
                         : parentChildTag;
@@ -1298,16 +1547,19 @@ export default function PqrAuditModal({
                     const { error: insertItemsErr } = await supabase.from('order_items').insert(itemsWithOrderId);
                     if (insertItemsErr) throw new Error(`Error insertando artículos de reposición: ${insertItemsErr.message}`);
 
-                    if (isPartial && pendingReturns) {
+                    if (pendingReturns && pendingReturns.length > 0) {
                         for (const novelty of pendingReturns) {
                             await supabase
                                 .from('billing_returns')
-                                .update({ status: 'approved', reason: `${novelty.reason} - Reprogramado en Pedido #${newOrder.sequence_id}` })
+                                .update({
+                                    status: 'approved',
+                                    reason: `${novelty.reason} - Reprogramado en Pedido #${newOrder.sequence_id} (${scheduledDate} ${branchWindowLabel})${swapDescriptions.length > 0 ? ` [${swapDescriptions.join('; ')}]` : ''}`
+                                })
                                 .eq('id', novelty.id);
                         }
                     }
 
-                    conceptBlock = `[CONCEPTO: Opción 2 - Reponer D+1 ($0 COP) (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Pedido Hijo de Reposición generado con folio #${newOrder.sequence_id} (Ampara Pedido Padre #${originalOrder.sequence_id} • Entrega D+1: ${tomorrow})`;
+                    conceptBlock = `[CONCEPTO: Opción 2 - Reponer Físicamente ($0 COP) (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Pedido Hijo de Reposición generado con folio #${newOrder.sequence_id} (Ampara Pedido Padre #${originalOrder.sequence_id} • Entrega programada: ${scheduledDate} Ventana ${branchWindowLabel}${branchRestrNote} • Canasta: ${itemsSummaryText})${swapAuditLine}`;
                     redirectUrl = `/admin/orders/${newOrder.id}`;
 
                 } else if (resolutionOption === 'opt3' || resolutionOption === 'opt4') {
@@ -1321,7 +1573,8 @@ export default function PqrAuditModal({
                         notes: rcaEvidenceNotes || '',
                         isReplacementRejection: isReplacementRejection,
                         imputedTargetType: imputedTargetType,
-                        imputedEntities: imputedEntities
+                        imputedEntities: imputedEntities,
+                        auditedBy: auditorDisplayName
                     });
                     const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
                     const prelimNotes = `${baseCleanNotes}\n\n${prelimConcept}\n\n${prelimRcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
@@ -1361,7 +1614,8 @@ export default function PqrAuditModal({
                 notes: rcaEvidenceNotes || '',
                 isReplacementRejection: isReplacementRejection,
                 imputedTargetType: imputedTargetType,
-                imputedEntities: finalizedImputedEntities
+                imputedEntities: finalizedImputedEntities,
+                auditedBy: auditorDisplayName
             });
             const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
             const finalNotes = `${baseCleanNotes}${conceptBlock ? `\n\n${conceptBlock}` : ''}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
@@ -1399,12 +1653,32 @@ export default function PqrAuditModal({
         setActionLoading(true);
         try {
             let cleanNotes = cleanHumanResolutionNotes(resolutionNotes);
+            const hasAveriaItems = caseReturns.some((r: any) => !(r.reason || '').toLowerCase().includes('faltante'));
+            const activeSanitaryTmpl = resolutionOption === 'opt1'
+                ? DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === 'producto_conforme_sin_baja')
+                : hasAveriaItems
+                    ? DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === (hasPhysicalReturn ? sanitaryKey : 'disposicion_cliente_sin_retorno'))
+                    : null;
+            if (activeSanitaryTmpl && !cleanNotes.includes('[DISPOSICIÓN SANITARIA:')) {
+                cleanNotes = `${cleanNotes}\n\n${activeSanitaryTmpl.textTemplate}`.trim();
+            }
 
             // Re-apply concept tag if not present
             if (resolutionOption === 'opt1' && !cleanNotes.includes('[CONCEPTO:')) {
-                cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Cerrado conforme sin impacto económico]`;
+                cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Opción 1 - Cerrado conforme sin impacto económico ($0 COP)]`;
+                if (pqr.order_id) {
+                    await supabase
+                        .from('billing_returns')
+                        .update({
+                            status: 'rejected',
+                            reason: `[CERRADO CONFORME - SIN COSTO] Reclamo aclarado con cliente / desestimado en PQR #${pqr.id.substring(0, 8)}. Se factura 100% original.`,
+                            notes: `Desestimado sin costo comercial. PQR #${pqr.id.substring(0, 8)}`
+                        })
+                        .eq('order_id', pqr.order_id)
+                        .eq('status', 'pending_review');
+                }
             } else if (resolutionOption === 'opt2' && !cleanNotes.includes('[CONCEPTO:')) {
-                cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Opción 2 - Reponer D+1 ($0 COP)]`;
+                cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Opción 2 - Reponer Físicamente ($0 COP)]`;
             } else if (resolutionOption === 'opt3' && !cleanNotes.includes('[CONCEPTO:')) {
                 cleanNotes = `${cleanNotes}\n\n[CONCEPTO: Opción 3 - Nota Crédito]`;
             } else if (resolutionOption === 'opt4' && !cleanNotes.includes('[CONCEPTO:')) {
@@ -1428,7 +1702,8 @@ export default function PqrAuditModal({
                 notes: rcaEvidenceNotes || '',
                 isReplacementRejection: isReplacementRejection,
                 imputedTargetType: imputedTargetType,
-                imputedEntities: finalizedImputedEntities
+                imputedEntities: finalizedImputedEntities,
+                auditedBy: auditorDisplayName
             });
             const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
             const finalNotes = `${cleanNotes}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
@@ -1518,11 +1793,28 @@ export default function PqrAuditModal({
                                     {pqr.type || 'RECLAMO'}
                                 </span>
                                 <h2 style={{ fontSize: '0.95rem', fontWeight: '800', color: 'white', margin: 0 }}>
-                                    Auditoría Técnica PQR #{pqr.id.substring(0, 8)}
+                                    {isClosedCase ? `Expediente de Auditoría ${formatPqrFolio(pqr)}` : `Auditoría Técnica ${formatPqrFolio(pqr)}`}
                                 </h2>
                                 {pqr.order_id && (
                                     <span style={{ fontSize: '0.7rem', fontWeight: '700', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#1E293B', color: '#94A3B8', border: '1px solid #334155' }}>
                                         Pedido #{pqr.orders?.sequence_id || 'N/A'}
+                                    </span>
+                                )}
+                                {isClosedCase && (
+                                    <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: '800',
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        backgroundColor: isReadOnlyClosed ? '#064E3B' : '#78350F',
+                                        color: isReadOnlyClosed ? '#A7F3D0' : '#FDE68A',
+                                        border: isReadOnlyClosed ? '1px solid #059669' : '1px solid #D97706'
+                                    }}>
+                                        {isReadOnlyClosed ? <Lock size={11} /> : <Unlock size={11} />}
+                                        <span>{isReadOnlyClosed ? 'CERRADO • SOLO LECTURA' : 'MODO RECTIFICACIÓN ACTIVO'}</span>
                                     </span>
                                 )}
                             </div>
@@ -1532,8 +1824,32 @@ export default function PqrAuditModal({
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        {isDraftRestored ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <a
+                            href={`/admin/customer-service/rnc/${pqr.id}/print`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                backgroundColor: isClosedCase ? '#0D7A57' : '#1E293B',
+                                border: isClosedCase ? '1px solid #10B981' : '1px solid #334155',
+                                color: 'white',
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
+                                textDecoration: 'none',
+                                boxShadow: isClosedCase ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none'
+                            }}
+                            title="Abrir e imprimir el Informe Oficial de Auditoría / Acta RNC en formato PDF"
+                        >
+                            <Printer size={13} />
+                            <span>Descargar Informe PDF</span>
+                        </a>
+
+                        {!isClosedCase && isDraftRestored ? (
                             <div style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
@@ -1566,7 +1882,7 @@ export default function PqrAuditModal({
                                     Descartar
                                 </button>
                             </div>
-                        ) : lastSavedDraftTime ? (
+                        ) : !isClosedCase && lastSavedDraftTime ? (
                             <span style={{
                                 fontSize: '0.65rem',
                                 color: '#94A3B8',
@@ -1679,7 +1995,14 @@ export default function PqrAuditModal({
 
                     <button
                         type="button"
-                        onClick={() => setCurrentStep(3)}
+                        onClick={() => {
+                            if (!resolutionOption && !isClosedCase) {
+                                showToast('Selecciona primero una de las 4 opciones de resolución comercial en el Paso 2.', 'warning');
+                                setCurrentStep(2);
+                                return;
+                            }
+                            setCurrentStep(3);
+                        }}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -1712,8 +2035,74 @@ export default function PqrAuditModal({
                     </button>
                 </div>
 
+                {/* 2B. Closed Case Consultation Banner */}
+                {isClosedCase && (
+                    <div style={{
+                        padding: '10px 24px',
+                        backgroundColor: isReadOnlyClosed ? '#F0FDF4' : '#FFFBEB',
+                        borderBottom: isReadOnlyClosed ? '1px solid #BBF7D0' : '1px solid #FDE68A',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        flexWrap: 'wrap'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.76rem', color: isReadOnlyClosed ? '#166534' : '#92400E', fontWeight: '700' }}>
+                            {isReadOnlyClosed ? <Lock size={15} style={{ color: '#0D7A57', flexShrink: 0 }} /> : <Unlock size={15} style={{ color: '#D97706', flexShrink: 0 }} />}
+                            <span>
+                                {isReadOnlyClosed
+                                    ? 'Expediente Cerrado en Modo Consulta (Solo Lectura). Los campos están protegidos para preservar la trazabilidad contable y de auditoría.'
+                                    : 'Modo Rectificación de Auditoría Habilitado. Cualquier cambio que guardes actualizará el acta RNC del expediente.'}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <a
+                                href={`/admin/customer-service/rnc/${pqr.id}/print`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '5px 11px',
+                                    borderRadius: '7px',
+                                    backgroundColor: '#0D7A57',
+                                    color: 'white',
+                                    fontSize: '0.71rem',
+                                    fontWeight: '800',
+                                    textDecoration: 'none'
+                                }}
+                            >
+                                <FileText size={12} />
+                                <span>Ver / Bajar Informe RNC (PDF)</span>
+                            </a>
+                            <button
+                                type="button"
+                                onClick={() => setIsRectifyingClosedCase(prev => !prev)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '5px 10px',
+                                    borderRadius: '7px',
+                                    backgroundColor: 'white',
+                                    border: isReadOnlyClosed ? '1px solid #CBD5E1' : '1px solid #F59E0B',
+                                    color: isReadOnlyClosed ? '#475569' : '#B45309',
+                                    fontSize: '0.7rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                {isReadOnlyClosed ? <Unlock size={12} /> : <Lock size={12} />}
+                                <span>{isReadOnlyClosed ? 'Habilitar Rectificación' : 'Volver a Solo Lectura'}</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* 3. Modal Scrollable Content Area */}
                 <div style={{ flex: '1', overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <fieldset disabled={isReadOnlyClosed} style={{ border: 'none', margin: 0, padding: 0, minWidth: 0, display: 'contents' }}>
                     {/* ================= STEP 1: CONTEXT & EVIDENCE ================= */}
                     {currentStep === 1 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1827,7 +2216,7 @@ export default function PqrAuditModal({
                                             <span>Opción B: Retiro Limpio / Col K</span>
                                         </button>
 
-                                        {/* Opción C: Anexar a Próximo Pedido D+1 */}
+                                        {/* Opción C: Anexar a Próximo Pedido */}
                                         <button
                                             type="button"
                                             onClick={handleExecuteShortageAppendNextOrder}
@@ -1848,7 +2237,7 @@ export default function PqrAuditModal({
                                             }}
                                         >
                                             <Truck size={14} />
-                                            <span>Opción C: Anexar a Próximo Pedido (D+1)</span>
+                                            <span>Opción C: Anexar a Próximo Pedido</span>
                                         </button>
 
                                         {/* Auto-Liberación Express */}
@@ -1879,7 +2268,7 @@ export default function PqrAuditModal({
                                     </div>
 
                                     <div style={{ fontSize: '0.68rem', color: '#92400E', fontStyle: 'italic', borderTop: '1px solid #FDE68A', paddingTop: '6px' }}>
-                                        * Regla Poka-Yoke: Respuestas tardías se consolidan automáticamente en el siguiente pedido habitual del cliente ($D+1$). Prohibido desviar camiones en ruta para micro-cantidades.
+                                        * Regla Poka-Yoke: Respuestas tardías se consolidan automáticamente en el siguiente pedido habitual del cliente. Prohibido desviar camiones en ruta para micro-cantidades.
                                     </div>
                                 </div>
                             )}
@@ -1896,7 +2285,7 @@ export default function PqrAuditModal({
                                             {new Date(pqr.created_at).toLocaleString('es-CO')}
                                         </span>
                                     </div>
-                                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0F172A' }}>{pqr.subject || 'Sin asunto'}</div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0F172A' }}>{formatCleanPqrSubject(pqr.subject)}</div>
                                     <div style={{ fontSize: '0.74rem', color: '#334155', lineHeight: '1.5', whiteSpace: 'pre-line', backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                         {(pqr.description || 'Sin descripción ingresada.').replace(/\s*\[Radicado por[^\]]+\]/gi, '').trim()}
                                     </div>
@@ -2203,61 +2592,72 @@ export default function PqrAuditModal({
                                         </div>
 
                                         {/* Message Preview Box (Expanded height & legible typography) */}
-                                        <div style={{
-                                            backgroundColor: '#F0FDF4',
-                                            border: '1px solid #BBF7D0',
-                                            borderRadius: '10px',
-                                            padding: '12px 14px',
-                                            fontSize: '0.78rem',
-                                            color: '#166534',
-                                            lineHeight: '1.5',
-                                            whiteSpace: 'pre-wrap',
-                                            minHeight: '195px',
-                                            maxHeight: '340px',
-                                            overflowY: 'auto'
-                                        }}>
-                                            {buildPqrWhatsAppMessage(pqr, selectedWaTemplate)}
-                                        </div>
+                                        {(() => {
+                                            const activeReplacementWaConfig = {
+                                                deliveryDate: replacementDeliveryDate,
+                                                deliverySlot: branchScheduleInfo.windowLabel,
+                                                itemsSummary: replacementPlanItems
+                                                    .filter(it => it.targetProductName && Number(it.targetQty) > 0)
+                                                    .map(it => `${it.targetQty} ${it.targetUnit} de ${it.targetProductName}`)
+                                                    .join(', ')
+                                            };
+                                            const waPreviewText = buildPqrWhatsAppMessage(pqr, selectedWaTemplate, activeReplacementWaConfig);
+                                            return (
+                                                <>
+                                                    <div style={{
+                                                        backgroundColor: '#F0FDF4',
+                                                        border: '1px solid #BBF7D0',
+                                                        borderRadius: '10px',
+                                                        padding: '12px 14px',
+                                                        fontSize: '0.78rem',
+                                                        color: '#166534',
+                                                        lineHeight: '1.5',
+                                                        whiteSpace: 'pre-wrap',
+                                                        minHeight: '195px',
+                                                        maxHeight: '340px',
+                                                        overflowY: 'auto'
+                                                    }}>
+                                                        {waPreviewText}
+                                                    </div>
 
-                                        {/* Buttons Bar */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                            {authorInfo.phoneParsed.isValid ? (
-                                                <a
-                                                    href={`https://wa.me/${authorInfo.phoneParsed.waNumber}?text=${encodeURIComponent(buildPqrWhatsAppMessage(pqr, selectedWaTemplate))}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '6px',
-                                                        padding: '6px 12px',
-                                                        backgroundColor: '#059669',
-                                                        color: 'white',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '800',
-                                                        textDecoration: 'none',
-                                                        boxShadow: '0 2px 4px rgba(5, 150, 105, 0.25)',
-                                                        transition: 'background-color 0.15s'
-                                                    }}
-                                                >
-                                                    <MessageCircle size={13} />
-                                                    <span>Abrir WhatsApp ({authorInfo.phoneParsed.display})</span>
-                                                </a>
-                                            ) : (
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', color: '#B45309', backgroundColor: '#FEF3C7', padding: '4px 8px', borderRadius: '6px', border: '1px solid #FDE68A' }}>
-                                                    <AlertTriangle size={11} style={{ flexShrink: 0 }} />
-                                                    <span>Sin número celular válido</span>
-                                                </span>
-                                            )}
+                                                    {/* Buttons Bar */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                        {authorInfo.phoneParsed.isValid ? (
+                                                            <a
+                                                                href={`https://wa.me/${authorInfo.phoneParsed.waNumber}?text=${encodeURIComponent(waPreviewText)}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '6px',
+                                                                    padding: '6px 12px',
+                                                                    backgroundColor: '#059669',
+                                                                    color: 'white',
+                                                                    borderRadius: '8px',
+                                                                    fontSize: '0.72rem',
+                                                                    fontWeight: '800',
+                                                                    textDecoration: 'none',
+                                                                    boxShadow: '0 2px 4px rgba(5, 150, 105, 0.25)',
+                                                                    transition: 'background-color 0.15s'
+                                                                }}
+                                                            >
+                                                                <MessageCircle size={13} />
+                                                                <span>Abrir WhatsApp ({authorInfo.phoneParsed.display})</span>
+                                                            </a>
+                                                        ) : (
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', color: '#B45309', backgroundColor: '#FEF3C7', padding: '4px 8px', borderRadius: '6px', border: '1px solid #FDE68A' }}>
+                                                                <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+                                                                <span>Sin número celular válido</span>
+                                                            </span>
+                                                        )}
 
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const msg = buildPqrWhatsAppMessage(pqr, selectedWaTemplate);
-                                                    navigator.clipboard.writeText(msg);
-                                                    showToast('Mensaje de WhatsApp copiado al portapapeles.', 'success');
-                                                }}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(waPreviewText);
+                                                                showToast('Mensaje de WhatsApp copiado al portapapeles.', 'success');
+                                                            }}
                                                 style={{
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
@@ -2273,10 +2673,13 @@ export default function PqrAuditModal({
                                                 }}
                                                 title="Copiar texto del mensaje"
                                             >
-                                                <Copy size={11} />
-                                                <span>Copiar</span>
-                                            </button>
-                                        </div>
+                                                            <Copy size={11} />
+                                                            <span>Copiar</span>
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
 
@@ -2364,12 +2767,28 @@ export default function PqrAuditModal({
                                                         <div style={{ display: 'flex', gap: '6px' }}>
                                                             <input
                                                                 ref={noveltyQtyInputRef}
-                                                                type="number"
-                                                                min="0.1"
-                                                                step="0.1"
+                                                                type="text"
+                                                                inputMode="decimal"
                                                                 placeholder="Cant."
-                                                                value={noveltyQty || ''}
-                                                                onChange={e => setNoveltyQty(parseFloat(e.target.value) || 0)}
+                                                                value={noveltyQtyInput !== '' ? noveltyQtyInput : (noveltyQty === 0 ? '' : String(noveltyQty))}
+                                                                onFocus={e => e.currentTarget.select()}
+                                                                onChange={e => {
+                                                                    let raw = e.target.value.replace(/[^0-9.,]/g, '');
+                                                                    const parts = raw.split(/[.,]/);
+                                                                    if (parts.length > 2) {
+                                                                        const sepMatch = raw.match(/[.,]/);
+                                                                        const sep = sepMatch ? sepMatch[0] : ',';
+                                                                        raw = parts[0] + sep + parts.slice(1).join('');
+                                                                    }
+                                                                    raw = raw.replace(/^0+(?=\d)/, '');
+                                                                    setNoveltyQtyInput(raw);
+                                                                    const normalized = raw.replace(',', '.');
+                                                                    const parsed = normalized === '' || normalized === '.' ? 0 : parseFloat(normalized);
+                                                                    setNoveltyQty(isNaN(parsed) ? 0 : Math.max(0, parsed));
+                                                                }}
+                                                                onBlur={() => {
+                                                                    setNoveltyQtyInput(noveltyQty === 0 ? '' : String(noveltyQty).replace('.', ','));
+                                                                }}
                                                                 onKeyDown={e => {
                                                                     if (e.key === 'Enter' && selectedItemId && noveltyQty > 0 && !actionLoading) {
                                                                         e.preventDefault();
@@ -2624,6 +3043,7 @@ export default function PqrAuditModal({
                                         type="button"
                                         onClick={() => {
                                             setResolutionOption('opt1');
+                                            setSelectedWaTemplate('closing');
                                             if (!hasPhysicalReturn) {
                                                 setSanitaryKey('producto_conforme_sin_baja');
                                             }
@@ -2646,12 +3066,11 @@ export default function PqrAuditModal({
                                         </p>
                                     </button>
 
-                                    {/* Opt 2: Reposición D+1 $0 COP */}
+                                    {/* Opt 2: Reposición Física Configurable $0 COP */}
                                     {(() => {
                                         const isPingPongBlocked = parseRcaFromRecord(pqr).isReplacementRejection;
-                                        const bogotaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-                                        const [bY, bM, bD] = bogotaToday.split('-').map(Number);
-                                        const d1DateStr = new Date(Date.UTC(bY, bM - 1, bD + 1)).toISOString().split('T')[0];
+                                        const d1DateStr = getBogotaFutureDate(1);
+                                        const activeDateStr = replacementDeliveryDate || d1DateStr;
                                         return (
                                             <button
                                                 type="button"
@@ -2661,6 +3080,7 @@ export default function PqrAuditModal({
                                                         return;
                                                     }
                                                     setResolutionOption('opt2');
+                                                    setSelectedWaTemplate('replacement');
                                                     if (sanitaryKey === 'producto_conforme_sin_baja') {
                                                         setSanitaryKey(hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno');
                                                     }
@@ -2678,7 +3098,7 @@ export default function PqrAuditModal({
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', fontWeight: '800', color: isPingPongBlocked ? '#991B1B' : '#1A231E', fontSize: '0.75rem', marginBottom: '4px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <Truck size={16} style={{ color: isPingPongBlocked ? '#DC2626' : resolutionOption === 'opt2' ? '#0D7A57' : '#64748B' }} />
-                                                        <span>Opción 2: Reponer Físicamente D+1 ($0 COP)</span>
+                                                        <span>Opción 2: Reponer Físicamente ($0 COP)</span>
                                                     </div>
                                                     {isPingPongBlocked && (
                                                         <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: '800' }}>
@@ -2689,7 +3109,7 @@ export default function PqrAuditModal({
                                                 <p style={{ fontSize: '0.7rem', color: isPingPongBlocked ? '#991B1B' : '#64748B', margin: 0, lineHeight: '1.3' }}>
                                                     {isPingPongBlocked
                                                         ? 'Bloqueado: El pedido origen ya es una reposición ($0 COP). Liquida con Nota Crédito o Ajuste.'
-                                                        : <>Genera pedido de reposición valorizado en <strong>$0 COP</strong> para entrega <strong>D+1 ({d1DateStr})</strong> en estado <strong>Aprobado</strong> para Picking.</>}
+                                                        : <>Configura y programa pedido de reposición en <strong>$0 COP</strong> (Entrega: <strong>{activeDateStr} • {branchScheduleInfo.windowLabel}</strong> • Permite cambio/trueque de producto y fecha).</>}
                                                 </p>
                                             </button>
                                         );
@@ -2700,6 +3120,7 @@ export default function PqrAuditModal({
                                         type="button"
                                         onClick={() => {
                                             setResolutionOption('opt3');
+                                            setSelectedWaTemplate('credit_note');
                                             if (sanitaryKey === 'producto_conforme_sin_baja') {
                                                 setSanitaryKey(hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno');
                                             }
@@ -2727,6 +3148,7 @@ export default function PqrAuditModal({
                                         type="button"
                                         onClick={() => {
                                             setResolutionOption('opt4');
+                                            setSelectedWaTemplate('credit_note');
                                             if (sanitaryKey === 'producto_conforme_sin_baja') {
                                                 setSanitaryKey(hasPhysicalReturn ? 'destruccion_biologica' : 'disposicion_cliente_sin_retorno');
                                             }
@@ -2751,17 +3173,600 @@ export default function PqrAuditModal({
                                 </div>
                             </div>
 
+                            {/* Interactive Replacement Order Configurator (Escenario 246) ONLY when Opt 2 is selected */}
+                            {resolutionOption === 'opt2' && (() => {
+                                const d1Date = getBogotaFutureDate(1);
+                                const d2Date = getBogotaFutureDate(2);
+                                const d3Date = getBogotaFutureDate(3);
+                                const minTodayDate = getBogotaFutureDate(0);
+
+                                const originalClaimedVal = replacementPlanItems.reduce(
+                                    (sum, it) => sum + (Number(it.originalQty || 0) * Number(it.originalUnitPrice || 0)),
+                                    0
+                                ) || nominalNoveltiesCoQ;
+
+                                const estimatedReplacementVal = replacementPlanItems.reduce(
+                                    (sum, it) => sum + (Number(it.targetQty || 0) * Number(it.referenceUnitPrice || 0)),
+                                    0
+                                );
+
+                                const diffVal = estimatedReplacementVal - originalClaimedVal;
+                                const isParity = Math.abs(diffVal) <= 1000;
+                                const isExceeded = diffVal > 1000;
+
+                                // Merge catalog products with orderItems so any product in the order or catalog is selectable with price
+                                const catalogSelectOptions = (() => {
+                                    const map = new Map<string, { value: string; label: string; sublabel: string; badge: string; unit: string; refPrice: number; name: string }>();
+                                    orderItems.forEach((oi: any) => {
+                                        if (!oi.product_id) return;
+                                        const pName = oi.products?.name || oi.nickname || 'Producto del pedido';
+                                        const pUnit = oi.products?.unit_of_measure || 'Kg';
+                                        const pPrice = Number(oi.unit_price || 0);
+                                        map.set(oi.product_id, {
+                                            value: oi.product_id,
+                                            name: pName,
+                                            unit: pUnit,
+                                            refPrice: pPrice,
+                                            label: `${pName} (${pUnit})`,
+                                            sublabel: `Precio en Pedido Padre: ${formatMoney(pPrice)} / ${pUnit}`,
+                                            badge: 'En Pedido Original'
+                                        });
+                                    });
+                                    availableCatalogProducts.forEach(cp => {
+                                        if (map.has(cp.id)) return;
+                                        const pUnit = cp.unit_of_measure || 'Kg';
+                                        const pPrice = Number(cp.base_price || 0);
+                                        map.set(cp.id, {
+                                            value: cp.id,
+                                            name: cp.name,
+                                            unit: pUnit,
+                                            refPrice: pPrice,
+                                            label: `${cp.name} (${pUnit})`,
+                                            sublabel: `Precio Catálogo Base: ${formatMoney(pPrice)} / ${pUnit}${cp.sku ? ` • SKU: ${cp.sku}` : ''}`,
+                                            badge: 'Catálogo FruFresco'
+                                        });
+                                    });
+                                    return Array.from(map.values());
+                                })();
+
+                                return (
+                                    <div style={{
+                                        padding: '14px 16px',
+                                        backgroundColor: '#F0FDF4',
+                                        border: '2px solid #86EFAC',
+                                        borderRadius: '12px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '12px'
+                                    }}>
+                                        {/* Header */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{ padding: '6px', backgroundColor: '#0D7A57', color: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Truck size={15} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '0.76rem', fontWeight: '800', textTransform: 'uppercase', color: '#065F46' }}>
+                                                        2. Configurador de la Orden de Reposición a Programar ($0 COP en Remisión)
+                                                    </div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#047857' }}>
+                                                        El pedido hijo solo se creará en firme al confirmar el cierre en el Paso 3. Puedes ajustar la fecha de entrega o cambiar productos (trueque).
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {isReplacementPlanCustomized && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIsReplacementPlanCustomized(false);
+                                                        setReplacementPlanItems(buildDefaultReplacementPlanItems(caseReturns, orderItems));
+                                                        setReplacementDeliveryDate(branchScheduleInfo.nextValidBranchDate);
+                                                        setReplacementDeliverySlot(pqr?.orders?.delivery_slot === 'PM' ? 'PM' : 'AM');
+                                                        showToast('Se restauraron los productos y fecha original de reposición.', 'success');
+                                                    }}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        padding: '5px 10px',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '700',
+                                                        backgroundColor: 'white',
+                                                        color: '#0F172A',
+                                                        border: '1px solid #CBD5E1',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    <RotateCcw size={12} />
+                                                    <span>Restaurar original</span>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Sub-block A: Delivery Date & Branch Receiving Schedule Restrictions */}
+                                        {(() => {
+                                            const selectedDateCheck = branchScheduleInfo.checkDateForBranch(replacementDeliveryDate);
+                                            return (
+                                                <div style={{
+                                                    backgroundColor: 'white',
+                                                    border: selectedDateCheck.allowed ? '1px solid #BBF7D0' : '1px solid #F59E0B',
+                                                    borderRadius: '10px',
+                                                    padding: '10px 12px',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '8px'
+                                                }}>
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        flexWrap: 'wrap',
+                                                        gap: '10px'
+                                                    }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                            <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase' }}>
+                                                                A. Fecha de Despacho Acordada con el Cliente
+                                                            </span>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                {[
+                                                                    { label: 'Mañana', date: d1Date },
+                                                                    { label: 'Pasado mañana', date: d2Date },
+                                                                    { label: 'En 3 días', date: d3Date }
+                                                                ].map(pill => {
+                                                                    const active = replacementDeliveryDate === pill.date;
+                                                                    const check = branchScheduleInfo.checkDateForBranch(pill.date);
+                                                                    return (
+                                                                        <button
+                                                                            key={pill.date}
+                                                                            type="button"
+                                                                            onClick={() => setReplacementDeliveryDate(pill.date)}
+                                                                            title={check.allowed
+                                                                                ? `Día habilitado para recepción en sucursal (${check.dayName})`
+                                                                                : `Atención: ${check.dayName} está fuera de los días habituales de recepción de la sucursal (${branchScheduleInfo.allowedDaysLabel})`}
+                                                                            style={{
+                                                                                padding: '5px 10px',
+                                                                                borderRadius: '8px',
+                                                                                fontSize: '0.7rem',
+                                                                                fontWeight: '800',
+                                                                                cursor: 'pointer',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px',
+                                                                                backgroundColor: active
+                                                                                    ? (check.allowed ? '#0D7A57' : '#D97706')
+                                                                                    : (check.allowed ? '#F8FAFC' : '#FFFBEB'),
+                                                                                color: active
+                                                                                    ? 'white'
+                                                                                    : (check.allowed ? '#334155' : '#92400E'),
+                                                                                border: active
+                                                                                    ? (check.allowed ? '1px solid #0D7A57' : '1px solid #D97706')
+                                                                                    : (check.allowed ? '1px solid #CBD5E1' : '1px dashed #F59E0B')
+                                                                            }}
+                                                                        >
+                                                                            <span>{pill.label} {check.shortDayName ? `${check.shortDayName} ` : ''}({pill.date})</span>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '3px 8px' }}>
+                                                                    <Clock size={12} style={{ color: '#0D7A57' }} />
+                                                                    <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#475569' }}>Otra fecha:</span>
+                                                                    <input
+                                                                        type="date"
+                                                                        min={minTodayDate}
+                                                                        value={replacementDeliveryDate}
+                                                                        onChange={e => {
+                                                                            if (e.target.value) setReplacementDeliveryDate(e.target.value);
+                                                                        }}
+                                                                        style={{
+                                                                            border: 'none',
+                                                                            backgroundColor: 'transparent',
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: '800',
+                                                                            color: '#0F172A',
+                                                                            outline: 'none',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            gap: '3px',
+                                                            backgroundColor: '#F8FAFC',
+                                                            border: '1px solid #E2E8F0',
+                                                            borderRadius: '8px',
+                                                            padding: '6px 10px',
+                                                            minWidth: '250px'
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                                <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>
+                                                                    Horario de Recepción Sucursal
+                                                                </span>
+                                                                <span style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: '900',
+                                                                    color: '#065F46',
+                                                                    backgroundColor: '#DCFCE7',
+                                                                    padding: '2px 7px',
+                                                                    borderRadius: '6px',
+                                                                    border: '1px solid #86EFAC'
+                                                                }}>
+                                                                    <Clock size={11} />
+                                                                    <span>{branchScheduleInfo.windowLabel}</span>
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0F172A', lineHeight: '1.25' }}>
+                                                                {branchScheduleInfo.restrictionsText}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: '600' }}>
+                                                                Días habilitados: <strong style={{ color: '#334155' }}>{branchScheduleInfo.allowedDaysLabel}</strong>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {!selectedDateCheck.allowed && (
+                                                        <div style={{
+                                                            backgroundColor: '#FFFBEB',
+                                                            border: '1px solid #FDE68A',
+                                                            borderRadius: '8px',
+                                                            padding: '6px 10px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            flexWrap: 'wrap',
+                                                            gap: '8px'
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.69rem', color: '#92400E', fontWeight: '700' }}>
+                                                                <AlertTriangle size={13} style={{ color: '#D97706', flexShrink: 0 }} />
+                                                                <span>
+                                                                    La fecha seleccionada ({replacementDeliveryDate} — {selectedDateCheck.dayName}) está fuera de los días habituales de recepción de esta sucursal ({branchScheduleInfo.allowedDaysLabel}).
+                                                                </span>
+                                                            </div>
+                                                            {branchScheduleInfo.nextValidBranchDate !== replacementDeliveryDate && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setReplacementDeliveryDate(branchScheduleInfo.nextValidBranchDate)}
+                                                                    style={{
+                                                                        padding: '4px 9px',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '0.67rem',
+                                                                        fontWeight: '800',
+                                                                        backgroundColor: '#D97706',
+                                                                        color: 'white',
+                                                                        border: 'none',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >
+                                                                    Ajustar al próximo día habilitado ({branchScheduleInfo.nextValidBranchDate})
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Sub-block B: Financial Equivalence Thermometer (Poka-Yoke for Product Swaps) */}
+                                        <div style={{
+                                            backgroundColor: isExceeded ? '#FFFBEB' : 'white',
+                                            border: isExceeded ? '1px solid #FDE68A' : '1px solid #BBF7D0',
+                                            borderRadius: '10px',
+                                            padding: '9px 12px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            flexWrap: 'wrap',
+                                            gap: '10px'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '0.64rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                                                        Valor Reclamado Original
+                                                    </div>
+                                                    <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0F172A' }}>
+                                                        {formatMoney(originalClaimedVal)}
+                                                    </div>
+                                                </div>
+                                                <ArrowRight size={14} style={{ color: '#94A3B8' }} />
+                                                <div>
+                                                    <div style={{ fontSize: '0.64rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                                                        Valor Comercial a Reponer (Ref.)
+                                                    </div>
+                                                    <div style={{ fontSize: '0.84rem', fontWeight: '800', color: isExceeded ? '#B45309' : '#0D7A57' }}>
+                                                        {formatMoney(estimatedReplacementVal)}
+                                                    </div>
+                                                </div>
+                                                <ArrowRight size={14} style={{ color: '#94A3B8' }} />
+                                                <div>
+                                                    <div style={{ fontSize: '0.64rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                                                        Total Facturado Pedido Hijo
+                                                    </div>
+                                                    <div style={{ fontSize: '0.84rem', fontWeight: '900', color: '#059669' }}>
+                                                        $0 COP (Garantía)
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '5px 10px',
+                                                borderRadius: '999px',
+                                                fontSize: '0.68rem',
+                                                fontWeight: '800',
+                                                backgroundColor: isParity ? '#DCFCE7' : isExceeded ? '#FEF3C7' : '#E0F2FE',
+                                                color: isParity ? '#166534' : isExceeded ? '#92400E' : '#075985',
+                                                border: isParity ? '1px solid #86EFAC' : isExceeded ? '1px solid #FCD34D' : '1px solid #BAE6FD'
+                                            }}>
+                                                {isExceeded ? <AlertTriangle size={13} /> : <ShieldCheck size={13} />}
+                                                <span>
+                                                    {isParity
+                                                        ? 'Equivalencia Comercial Exacta (100% Paridad)'
+                                                        : isExceeded
+                                                            ? `Atención: Trueque supera reclamo en +${formatMoney(diffVal)}`
+                                                            : `Trueque a favor de FruFresco (-${formatMoney(Math.abs(diffVal))})`}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Sub-block C: Editable Replacement Basket (Product Swap & Quantity Adjustment) */}
+                                        <div style={{
+                                            backgroundColor: 'white',
+                                            border: '1px solid #BBF7D0',
+                                            borderRadius: '10px',
+                                            padding: '10px 12px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '8px'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase' }}>
+                                                    B. Canasta Editable de Productos a Reponer (Permite Trueque de SKU y Ajuste de Cantidad)
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const firstOption = catalogSelectOptions[0];
+                                                        setIsReplacementPlanCustomized(true);
+                                                        setReplacementPlanItems(prev => [
+                                                            ...prev,
+                                                            {
+                                                                id: `rep-custom-${Date.now()}`,
+                                                                originalProductId: '',
+                                                                originalProductName: 'Ítem adicional de reposición',
+                                                                originalUnit: firstOption?.unit || 'Kg',
+                                                                originalQty: 0,
+                                                                originalUnitPrice: 0,
+                                                                targetProductId: firstOption?.value || '',
+                                                                targetProductName: firstOption?.name || '',
+                                                                targetUnit: firstOption?.unit || 'Kg',
+                                                                targetQty: 1,
+                                                                referenceUnitPrice: firstOption?.refPrice || 0
+                                                            }
+                                                        ]);
+                                                    }}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        padding: '4px 10px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        backgroundColor: '#ECFDF5',
+                                                        color: '#0D7A57',
+                                                        border: '1px solid #A7F3D0',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    <Plus size={12} />
+                                                    <span>Agregar producto a reponer</span>
+                                                </button>
+                                            </div>
+
+                                            {replacementPlanItems.length === 0 ? (
+                                                <div style={{ padding: '12px', textAlign: 'center', fontSize: '0.73rem', color: '#64748B', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px dashed #CBD5E1' }}>
+                                                    No hay productos cargados en la canasta de reposición. Haz clic en <strong>+ Agregar producto a reponer</strong>.
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {replacementPlanItems.map((planItem, idx) => {
+                                                        const isSwapped = Boolean(
+                                                            planItem.originalProductId &&
+                                                            planItem.targetProductId &&
+                                                            planItem.originalProductId !== planItem.targetProductId
+                                                        );
+                                                        const isQtyEdited = Boolean(
+                                                            planItem.originalProductId &&
+                                                            Math.abs(Number(planItem.targetQty) - Number(planItem.originalQty)) > 0.001
+                                                        );
+                                                        return (
+                                                            <div
+                                                                key={planItem.id || idx}
+                                                                style={{
+                                                                    display: 'grid',
+                                                                    gridTemplateColumns: 'minmax(180px, 1.1fr) minmax(240px, 1.6fr) minmax(130px, 0.8fr) auto',
+                                                                    alignItems: 'center',
+                                                                    gap: '10px',
+                                                                    padding: '8px 10px',
+                                                                    borderRadius: '8px',
+                                                                    backgroundColor: isSwapped ? '#FFFBEB' : '#F8FAFC',
+                                                                    border: isSwapped ? '1px solid #FCD34D' : '1px solid #E2E8F0'
+                                                                }}
+                                                            >
+                                                                {/* Col 1: Original Claimed */}
+                                                                <div>
+                                                                    <div style={{ fontSize: '0.63rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                                                                        Reclamado Original
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.74rem', fontWeight: '800', color: '#1E293B' }}>
+                                                                        {planItem.originalProductName}
+                                                                    </div>
+                                                                    {planItem.originalQty > 0 && (
+                                                                        <div style={{ fontSize: '0.67rem', color: '#475569' }}>
+                                                                            {planItem.originalQty} {planItem.originalUnit} • {formatMoney(planItem.originalQty * planItem.originalUnitPrice)}
+                                                                        </div>
+                                                                    )}
+                                                                    {(isSwapped || isQtyEdited) && (
+                                                                        <span style={{
+                                                                            display: 'inline-block',
+                                                                            marginTop: '3px',
+                                                                            padding: '1px 6px',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '0.6rem',
+                                                                            fontWeight: '800',
+                                                                            backgroundColor: isSwapped ? '#FEF3C7' : '#DBEAFE',
+                                                                            color: isSwapped ? '#92400E' : '#1E40AF'
+                                                                        }}>
+                                                                            {isSwapped ? 'TRUEQUE DE PRODUCTO' : 'CANTIDAD AJUSTADA'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Col 2: Product Selector (Swap / Barter) */}
+                                                                <div>
+                                                                    <div style={{ fontSize: '0.63rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: '2px' }}>
+                                                                        Producto a Entregar (Permite Trueque)
+                                                                    </div>
+                                                                    <SearchableSelect
+                                                                        value={planItem.targetProductId}
+                                                                        onChange={newProdId => {
+                                                                            const foundOpt = catalogSelectOptions.find(o => o.value === newProdId);
+                                                                            if (!foundOpt) return;
+                                                                            setIsReplacementPlanCustomized(true);
+                                                                            setReplacementPlanItems(prev => prev.map((row, rIdx) => {
+                                                                                if (rIdx !== idx) return row;
+                                                                                return {
+                                                                                    ...row,
+                                                                                    targetProductId: foundOpt.value,
+                                                                                    targetProductName: foundOpt.name,
+                                                                                    targetUnit: foundOpt.unit,
+                                                                                    referenceUnitPrice: foundOpt.refPrice
+                                                                                };
+                                                                            }));
+                                                                        }}
+                                                                        placeholder="Seleccionar producto a reponer..."
+                                                                        searchPlaceholder="Buscar por nombre (ej. Fresa, Mora, Aguacate)..."
+                                                                        options={catalogSelectOptions}
+                                                                    />
+                                                                </div>
+
+                                                                {/* Col 3: Editable Quantity */}
+                                                                <div>
+                                                                    <div style={{ fontSize: '0.63rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: '2px' }}>
+                                                                        Cantidad ({planItem.targetUnit || 'Kg'})
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <input
+                                                                            type="text"
+                                                                            inputMode="decimal"
+                                                                            placeholder="0"
+                                                                            value={planItem.targetQtyInput !== undefined
+                                                                                ? planItem.targetQtyInput
+                                                                                : (planItem.targetQty === 0 ? '' : String(planItem.targetQty).replace('.', ','))}
+                                                                            onFocus={e => e.currentTarget.select()}
+                                                                            onChange={e => {
+                                                                                let raw = e.target.value.replace(/[^0-9.,]/g, '');
+                                                                                const parts = raw.split(/[.,]/);
+                                                                                if (parts.length > 2) {
+                                                                                    const sepMatch = raw.match(/[.,]/);
+                                                                                    const sep = sepMatch ? sepMatch[0] : ',';
+                                                                                    raw = parts[0] + sep + parts.slice(1).join('');
+                                                                                }
+                                                                                raw = raw.replace(/^0+(?=\d)/, '');
+                                                                                const normalized = raw.replace(',', '.');
+                                                                                const parsed = normalized === '' || normalized === '.' ? 0 : parseFloat(normalized);
+                                                                                const val = isNaN(parsed) ? 0 : Math.max(0, parsed);
+                                                                                setIsReplacementPlanCustomized(true);
+                                                                                setReplacementPlanItems(prev => prev.map((row, rIdx) => (
+                                                                                    rIdx === idx ? { ...row, targetQty: val, targetQtyInput: raw } : row
+                                                                                )));
+                                                                            }}
+                                                                            onBlur={() => {
+                                                                                setReplacementPlanItems(prev => prev.map((row, rIdx) => (
+                                                                                    rIdx === idx
+                                                                                        ? { ...row, targetQtyInput: row.targetQty === 0 ? '' : String(row.targetQty).replace('.', ',') }
+                                                                                        : row
+                                                                                )));
+                                                                            }}
+                                                                            style={{
+                                                                                width: '76px',
+                                                                                padding: '6px 8px',
+                                                                                borderRadius: '6px',
+                                                                                border: '1px solid #CBD5E1',
+                                                                                fontSize: '0.78rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#0F172A',
+                                                                                backgroundColor: 'white'
+                                                                            }}
+                                                                        />
+                                                                        <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#475569' }}>
+                                                                            {planItem.targetUnit || 'Kg'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Col 4: Commercial Ref Value & Delete */}
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                                                                    <div style={{ textAlign: 'right' }}>
+                                                                        <div style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '700' }}>
+                                                                            Ref: {formatMoney(Number(planItem.targetQty || 0) * Number(planItem.referenceUnitPrice || 0))}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#059669' }}>
+                                                                            Factura: $0 COP
+                                                                        </div>
+                                                                    </div>
+                                                                    {replacementPlanItems.length > 1 && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setIsReplacementPlanCustomized(true);
+                                                                                setReplacementPlanItems(prev => prev.filter((_, rIdx) => rIdx !== idx));
+                                                                            }}
+                                                                            style={{
+                                                                                padding: '5px',
+                                                                                borderRadius: '6px',
+                                                                                border: '1px solid #FECACA',
+                                                                                backgroundColor: '#FEF2F2',
+                                                                                color: '#DC2626',
+                                                                                cursor: 'pointer'
+                                                                            }}
+                                                                            title="Quitar línea de la reposición"
+                                                                        >
+                                                                            <Trash2 size={13} />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
                             {/* Sanitary Warehouse Destination ONLY when product returned in truck and case is not Opt 1 */}
                             {(() => {
                                 const hasAveriaItems = caseReturns.some((r: any) => !(r.reason || '').toLowerCase().includes('faltante'));
                                 const showWarehouseSanitarySelector = resolutionOption !== 'opt1' && hasPhysicalReturn && (hasAveriaItems || caseReturns.length === 0);
                                 if (!showWarehouseSanitarySelector) return null;
+                                const sanitaryStepNumber = resolutionOption === 'opt2' ? '3' : '2';
 
                                 return (
                                     <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div>
                                             <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
-                                                2. Destino en Bodega del Producto Devuelto (Protocolo Invima Res. 2674/2013)
+                                                {sanitaryStepNumber}. Destino en Bodega del Producto Devuelto (Protocolo Invima Res. 2674/2013)
                                             </label>
                                             <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
                                                 Como en el Paso 1 marcaste que el producto regresó en camión a FruFresco, selecciona qué hará Calidad con esta mercancía en muelle:
@@ -2797,7 +3802,19 @@ export default function PqrAuditModal({
                             {(() => {
                                 const hasAveriaItems = caseReturns.some((r: any) => !(r.reason || '').toLowerCase().includes('faltante'));
                                 const showWarehouseSanitarySelector = resolutionOption !== 'opt1' && hasPhysicalReturn && (hasAveriaItems || caseReturns.length === 0);
-                                const sectionNumber = showWarehouseSanitarySelector ? '3' : '2';
+                                const sectionNumber = resolutionOption === 'opt2'
+                                    ? (showWarehouseSanitarySelector ? '4' : '3')
+                                    : (showWarehouseSanitarySelector ? '3' : '2');
+
+                                const repSummaryForPills = replacementPlanItems
+                                    .filter(it => it.targetProductName && Number(it.targetQty) > 0)
+                                    .map(it => {
+                                        const isSwapped = it.originalProductId && it.originalProductId !== it.targetProductId;
+                                        return isSwapped
+                                            ? `${it.targetQty} ${it.targetUnit} de ${it.targetProductName} (en trueque por ${it.originalQty} ${it.originalUnit} de ${it.originalProductName})`
+                                            : `${it.targetQty} ${it.targetUnit} de ${it.targetProductName}`;
+                                    })
+                                    .join(', ') || 'los productos reclamados';
 
                                 const quickDictamenPills = resolutionOption === 'opt1'
                                     ? [
@@ -2817,12 +3834,16 @@ export default function PqrAuditModal({
                                     : resolutionOption === 'opt2'
                                     ? [
                                         {
-                                            label: 'Reposición física autorizada D+1 ($0 COP)',
-                                            text: 'Se autoriza reposición física de garantía ($0 COP) en la siguiente ventana de entrega (D+1) para cubrir la novedad validada con el cliente.'
+                                            label: `Reposición programada (${replacementDeliveryDate} • ${branchScheduleInfo.windowLabel})`,
+                                            text: `Se autoriza reposición física de garantía ($0 COP) de ${repSummaryForPills}, programada para entrega el ${replacementDeliveryDate} en horario de recepción ${branchScheduleInfo.windowLabel}.`
                                         },
                                         {
-                                            label: 'Faltante de ruta reprogramado D+1',
-                                            text: 'Se confirma faltante físico en la entrega y se programa envío prioritario de reposición sin costo ($0 COP) para primera hora D+1.'
+                                            label: 'Trueque / cambio de producto autorizado ($0 COP)',
+                                            text: `Por acuerdo comercial con el cliente, se autoriza reposición en modalidad de trueque entregando ${repSummaryForPills} sin costo ($0 COP) para el día ${replacementDeliveryDate} (${branchScheduleInfo.windowLabel}).`
+                                        },
+                                        {
+                                            label: 'Faltante de ruta reprogramado ($0 COP)',
+                                            text: `Se confirma faltante físico en la entrega y se programa envío de reposición sin costo ($0 COP) de ${repSummaryForPills} para el ${replacementDeliveryDate} (${branchScheduleInfo.windowLabel}).`
                                         }
                                     ]
                                     : resolutionOption === 'opt3'
@@ -3082,7 +4103,7 @@ export default function PqrAuditModal({
                                         </span>
                                     ) : (
                                         <span>
-                                            <strong>Imputación Patrimonial Activa ({resolutionOption === 'opt2' ? 'Opción 2: Reposición D+1' : resolutionOption === 'opt3' ? 'Opción 3: Nota Crédito' : 'Opción 4: Ajuste de Factura'}):</strong> En el Paso 2 aprobaste reconocer la novedad por <strong>{formatMoney(nominalNoveltiesCoQ)}</strong>. La cuota asignada abajo se cargará a nómina / estado de cuenta del responsable.
+                                            <strong>Imputación Patrimonial Activa ({resolutionOption === 'opt2' ? `Opción 2: Reposición Física (${replacementDeliveryDate})` : resolutionOption === 'opt3' ? 'Opción 3: Nota Crédito' : 'Opción 4: Ajuste de Factura'}):</strong> En el Paso 2 aprobaste reconocer la novedad por <strong>{formatMoney(nominalNoveltiesCoQ)}</strong>. La cuota asignada abajo se cargará a nómina / estado de cuenta del responsable.
                                         </span>
                                     )}
                                 </div>
@@ -3265,6 +4286,7 @@ export default function PqrAuditModal({
                             </div>
                         </div>
                     )}
+                    </fieldset>
                 </div>
 
                 {/* 4. Modal Footer Navigation */}
@@ -3361,7 +4383,13 @@ export default function PqrAuditModal({
                                 ) : (
                                     <button
                                         type="button"
-                                        onClick={() => setCurrentStep((currentStep + 1) as any)}
+                                        onClick={() => {
+                                            if (currentStep === 2 && !resolutionOption && pqr.status !== 'resolved') {
+                                                showToast('Selecciona primero una de las 4 opciones de resolución comercial.', 'warning');
+                                                return;
+                                            }
+                                            setCurrentStep((currentStep + 1) as any);
+                                        }}
                                         style={{
                                             padding: '8px 18px',
                                             backgroundColor: '#0F172A',
@@ -3432,7 +4460,7 @@ export default function PqrAuditModal({
                                         {resolutionOption === 'opt1'
                                             ? 'Confirmar Cierre Conforme ($0 COP)'
                                             : resolutionOption === 'opt2'
-                                            ? 'Confirmar Reposición D+1 ($0 COP)'
+                                            ? `Confirmar y Crear Pedido de Reposición (${replacementDeliveryDate} • ${branchScheduleInfo.windowLabel} — $0 COP)`
                                             : resolutionOption === 'opt3'
                                             ? 'Continuar a Emisión de Nota Crédito'
                                             : 'Continuar a Ajuste de Factura'}
