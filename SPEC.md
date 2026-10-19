@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.215 (Configurador Interactivo de Orden de Reposición en Opción 2 SAC con Fecha Flexible D+N, Trueque Controlado de SKU/Cantidad y Termómetro de Equivalencia Financiera — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.217 (Modo Consulta de Expediente Cerrado en SAC con Descarga Directa de Informe RNC PDF, Rediseño de Detalle de Pedido `/admin/orders/[id]` y Estándar de Inputs Numéricos sin Cero a la Izquierda con Coma/Punto Decimal — 76/76 Pantallas Certificadas)  
 > **Fecha:** 19 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 246 Escenarios BDD Ininterrumpidos (1..246)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 248 Escenarios BDD Ininterrumpidos (1..248)
 
 ---
 
@@ -19,16 +19,16 @@
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246 (§42.1 - §42.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248 (§39.1 - §39.6) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **247 Escenarios Canónicos (1..247)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **248 Escenarios Canónicos (1..248)** | **🟢 100%** |
 
 ---
 
@@ -10732,17 +10732,7 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
 
 ---
 
-### Escenario 247: Invarianza de Ancho de Columnas y Homologacion de Altura de Fila en Consola SAC (/admin/customer-service — SDD v1.9.216)
-- **Given** la tabla maestra de casos y PQRs en /admin/customer-service,
-- **When** el usuario conmuta entre los badges de filtro Pendientes, Resueltos y Todos,
-- **Then** el sistema garantiza estabilidad visual e invarianza de layout:
-  1. **Anchos Proporcionales Fijos en <thead>:** Folio & Fecha (14%), Cliente & Canal (18%), Asunto & Pedido (20%), Evidencia (6%), Diagnostico RCA (14%), Imputabilidad & Cobro (14%), Estado (9%) y Acciones (5%), eliminando saltos dinamicos de 	able-layout: auto.
-  2. **Estructura Canónica a Doble Renglon:** Diagnostico RCA, Imputabilidad & Cobro y Estado & Resolucion homologados a dos lineas simetricas en todos los estados.
-  3. **Invarianza de Altura Vertical de Fila:** Altura uniforme (48-52px) sin desbordamientos por lexWrap al mostrar cobros o imputaciones.
-
----
-
-### Escenario 246: Configurador Interactivo de Orden de Reposición Física en `Opción 2` SAC (Fecha Flexible `D+N`, Franja `AM/PM`, Trueque Controlado de Producto/Cantidad y Termómetro de Equivalencia Financiera — SDD v1.9.215)
+### Escenario 246: Configurador Interactivo de Orden de Reposición Física en `Opción 2` SAC (Fecha Flexible `D+N`, Restricciones Horarias Reales de Sucursal, Trueque Controlado de Producto/Cantidad y Termómetro de Equivalencia Financiera — SDD v1.9.215)
 - **Given** una PQR con novedades declaradas abierta en el **Paso 2 (`2 — Decisión Comercial`)** de `src/app/admin/customer-service/components/PqrAuditModal.tsx`,
 - **When** el analista de Calidad y SAC selecciona la **Opción 2 (`Reponer Físicamente — Garantía $0 COP`)**,
 - **Then** el sistema despliega en línea dentro del Paso 2 el **Configurador de la Orden de Reposición a Programar** con las siguientes reglas de negocio y controles Poka-Yoke:
@@ -10761,6 +10751,31 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        - **`Valor Reclamado Original (COP):`** Suma de $\text{Cantidad Reclamada} \times \text{Precio Unitario en Pedido Padre}$.
        - **`Valor Comercial Estimado a Reponer (COP):`** Suma de $\text{Cantidad a Reponer} \times \text{Precio Unitario de Referencia del SKU a Enviar}$ (tomado del pedido padre si existe, o de `base_price` del catálogo).
        - **`Diferencia / Equivalencia:`** Semáforo verde si el valor a reponer es menor o hasta un $+10\%$ del valor reclamado, y alerta ámbar/roja si el trueque supera el valor original reclamado, registrando en `orders.admin_notes` del Pedido Hijo y en `customer_service_pqrs.resolution_notes` el detalle exacto de la fecha programada y de cualquier trueque/cambio de producto autorizado.
+
+---
+
+### Escenario 247: Invarianza de Ancho de Columnas y Homologación de Altura de Fila en Consola SAC (`/admin/customer-service` — SDD v1.9.216)
+- **Given** la tabla maestra de casos y PQRs en `/admin/customer-service`,
+- **When** el usuario conmuta entre los badges de filtro `Pendientes`, `Resueltos` y `Todos`,
+- **Then** el sistema garantiza estabilidad visual e invarianza de layout:
+  1. **Anchos Proporcionales Fijos en `<thead>`:** Folio & Fecha (14%), Cliente & Canal (18%), Asunto & Pedido (20%), Evidencia (6%), Diagnóstico RCA (14%), Imputabilidad & Cobro (14%), Estado (9%) y Acciones (5%), eliminando saltos dinámicos de `table-layout: auto`.
+  2. **Estructura Canónica a Doble Renglón:** Diagnóstico RCA, Imputabilidad & Cobro y Estado & Resolución homologados a dos líneas simétricas en todos los estados.
+  3. **Invarianza de Altura Vertical de Fila:** Altura uniforme (48-52px) sin desbordamientos por `flexWrap` al mostrar cobros o imputaciones.
+
+---
+
+### Escenario 248: Modo Consulta de Expediente Cerrado (`Solo Lectura`) con Descarga Directa de Informe RNC (PDF), Estándar de Inputs Numéricos sin Cero a la Izquierda + Coma/Punto Decimal y Rediseño Industrial de `/admin/orders/[id]` (SDD v1.9.217)
+- **Given** un expediente PQRS ya resuelto (`status === 'resolved'` o `'rejected'`) en `/admin/customer-service`, los campos numéricos de captura de cantidades/montos en `PqrAuditModal.tsx` y `FinancialAdjustmentModal.tsx`, y la vista de detalle de pedido en `/admin/orders/[id]`,
+- **When** un auditor consulta un caso cerrado, digita cantidades enteras o decimales con coma (`,`) o punto (`.`), o inspecciona una orden padre/hija en `/admin/orders/[id]`,
+- **Then** el sistema garantiza:
+  1. **Apertura de Casos Cerrados en Modo Consulta (`CERRADO • SOLO LECTURA`) y Visibilidad del Informe RNC (PDF):**
+     - En la tabla principal de `/admin/customer-service` (`page.tsx`), las filas con estado `resolved` o `rejected` presentan el botón **`[ Ver Expediente ]`** (en lugar de `Auditar`) acompañado del botón explícito **`[ Informe PDF ]`** hacia `/admin/customer-service/rnc/[id]/print`.
+     - Al abrir `PqrAuditModal.tsx` sobre un caso cerrado (`isClosedCase`), el modal inicia en **Modo Consulta (`isReadOnlyClosed = true`)**: desactiva la restauración y el autoguardado de borradores en `localStorage`, protege todos los controles de edición mediante `<fieldset disabled={isReadOnlyClosed}>` (permitiendo navegar libremente entre los Pasos 1, 2 y 3, ampliar evidencias y consultar enlaces), proyecta un banner informativo con botón secundario **`[ Habilitar Rectificación ]`** para desbloqueo consciente de administrador, e incorpora el botón primario **`[ Descargar / Imprimir Informe RNC (PDF) ]`** tanto en la cabecera como en el pie del modal.
+  2. **Estándar de Inputs Numéricos Anti-Cero a la Izquierda y Soporte Dual de Coma/Punto Decimal (`,` / `.`):**
+     - Todos los inputs de cantidades y montos en `PqrAuditModal.tsx` (Paso 1 `noveltyQty` y Paso 2 `replacementPlanItems.targetQty`) y `FinancialAdjustmentModal.tsx` (`affected_quantity` y `customGlobalAmount`) operan con `type="text" inputMode="decimal"` y estado dual texto/número (`targetQtyInput`, `noveltyQtyInput`, `affected_quantity_input`).
+     - Al enfocar (`onFocus`), el texto se autoselecciona; al digitar (`onChange`), se purgan automáticamente los ceros a la izquierda antes de dígitos enteros (`raw.replace(/^0+(?=\d)/, '')`) y se admiten indistintamente la coma (`,`) o el punto (`.`) como separador decimal (ej. `1,5` o `1.5`), normalizando internamente a flotante estándar.
+  3. **Rediseño Industrial de la Vista de Detalle de Pedido (`/admin/orders/[id]/page.tsx` — Estándar `disenador-web`):**
+     - Contenedor homologado a `1240px` sobre lienzo `#F8FAFC` con barra de navegación superior limpia, banner esmeralda corporativo para Pedidos Hijos de Reposición (`#F0FDF4` / `#0D7A57` con píldora de `Trueque / Cambio Autorizado`), tarjeta ejecutiva unificada con 4 KPIs (`Fecha de Entrega`, `Horario Recepción Sucursal`, `Aforo & Peso Total`, `Total Facturado en Remisión`), monograma tipográfico en productos sin foto (erradicando placeholders rotos `64 x 64`) y limpieza de tags técnicos internos (`[REPOSICIÓN DE GARANTÍA...]`) en las observaciones humanas.
 
 ---
 

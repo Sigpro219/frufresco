@@ -1379,8 +1379,8 @@ export default function PqrAuditModal({
                             .from('billing_returns')
                             .update({
                                 status: 'rejected',
-                                reason: `[CERRADO CONFORME - SIN COSTO] Reclamo aclarado con cliente / desestimado en PQR #${pqr.id.substring(0, 8)}. Se factura 100% original.`,
-                                notes: `Desestimado sin costo comercial. PQR #${pqr.id.substring(0, 8)}`
+                                reason: `[CERRADO CONFORME - SIN COSTO] Reclamo aclarado con cliente / cerrado en RNC #${pqr.orders?.sequence_id || pqr.id.substring(0, 8)}. Se factura 100% original.`,
+                                notes: `Cerrado sin costo comercial. RNC #${pqr.orders?.sequence_id || pqr.id.substring(0, 8)}`
                             })
                             .eq('order_id', pqr.order_id)
                             .eq('status', 'pending_review');
@@ -1671,8 +1671,8 @@ export default function PqrAuditModal({
                         .from('billing_returns')
                         .update({
                             status: 'rejected',
-                            reason: `[CERRADO CONFORME - SIN COSTO] Reclamo aclarado con cliente / desestimado en PQR #${pqr.id.substring(0, 8)}. Se factura 100% original.`,
-                            notes: `Desestimado sin costo comercial. PQR #${pqr.id.substring(0, 8)}`
+                            reason: `[CERRADO CONFORME - SIN COSTO] Reclamo aclarado con cliente / cerrado en RNC #${pqr.orders?.sequence_id || pqr.id.substring(0, 8)}. Se factura 100% original.`,
+                            notes: `Cerrado sin costo comercial. RNC #${pqr.orders?.sequence_id || pqr.id.substring(0, 8)}`
                         })
                         .eq('order_id', pqr.order_id)
                         .eq('status', 'pending_review');
@@ -4298,18 +4298,29 @@ export default function PqrAuditModal({
                     backgroundColor: '#F8FAFC',
                     borderTop: '1px solid #E2E8F0'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>
                             Paso {currentStep} de 3
                         </span>
-                        {pqr.status === 'resolved' && (
-                            <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: '700' }}>
-                                Caso Previamente Resuelto
+                        {isClosedCase && (
+                            <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.68rem',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                backgroundColor: isReadOnlyClosed ? '#DCFCE7' : '#FEF3C7',
+                                color: isReadOnlyClosed ? '#166534' : '#92400E',
+                                fontWeight: '700'
+                            }}>
+                                {isReadOnlyClosed ? <Lock size={11} /> : <Unlock size={11} />}
+                                <span>{isReadOnlyClosed ? 'Expediente Cerrado (Solo Lectura)' : 'Rectificación de Auditoría Activa'}</span>
                             </span>
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         {currentStep > 1 && (
                             <button
                                 type="button"
@@ -4335,7 +4346,30 @@ export default function PqrAuditModal({
 
                         {currentStep < 3 ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {currentStep === 2 && resolutionOption === 'opt1' && pqr.status !== 'resolved' ? (
+                                {isClosedCase && (
+                                    <a
+                                        href={`/admin/customer-service/rnc/${pqr.id}/print`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            padding: '8px 16px',
+                                            backgroundColor: '#0D7A57',
+                                            color: 'white',
+                                            borderRadius: '10px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            textDecoration: 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                                        }}
+                                    >
+                                        <Printer size={14} />
+                                        <span>Descargar Informe RNC (PDF)</span>
+                                    </a>
+                                )}
+                                {currentStep === 2 && resolutionOption === 'opt1' && !isClosedCase ? (
                                     <>
                                         <button
                                             type="button"
@@ -4384,7 +4418,7 @@ export default function PqrAuditModal({
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            if (currentStep === 2 && !resolutionOption && pqr.status !== 'resolved') {
+                                            if (currentStep === 2 && !resolutionOption && !isClosedCase) {
                                                 showToast('Selecciona primero una de las 4 opciones de resolución comercial.', 'warning');
                                                 return;
                                             }
@@ -4409,30 +4443,56 @@ export default function PqrAuditModal({
                                     </button>
                                 )}
                             </div>
-                        ) : pqr.status === 'resolved' ? (
+                        ) : isClosedCase ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <button
-                                    type="button"
-                                    onClick={handleSaveAuditUpdate}
-                                    disabled={actionLoading}
+                                <a
+                                    href={`/admin/customer-service/rnc/${pqr.id}/print`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     style={{
                                         padding: '8px 18px',
-                                        backgroundColor: '#059669',
+                                        backgroundColor: '#0D7A57',
                                         color: 'white',
                                         borderRadius: '10px',
                                         fontSize: '0.75rem',
                                         fontWeight: '800',
-                                        border: 'none',
-                                        cursor: 'pointer',
+                                        textDecoration: 'none',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '6px',
-                                        boxShadow: '0 2px 6px rgba(5, 150, 105, 0.3)'
+                                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.3)'
                                     }}
                                 >
-                                    {actionLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />}
-                                    <span>Guardar Cambios de Auditoría</span>
-                                </button>
+                                    <Printer size={14} />
+                                    <span>Descargar / Imprimir Informe RNC (PDF)</span>
+                                </a>
+                                {isRectifyingClosedCase && (
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            await handleSaveAuditUpdate();
+                                            setIsRectifyingClosedCase(false);
+                                        }}
+                                        disabled={actionLoading}
+                                        style={{
+                                            padding: '8px 16px',
+                                            backgroundColor: '#D97706',
+                                            color: 'white',
+                                            borderRadius: '10px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)'
+                                        }}
+                                    >
+                                        {actionLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />}
+                                        <span>Guardar Rectificación</span>
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

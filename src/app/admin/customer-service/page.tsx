@@ -1343,46 +1343,57 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             </button>
                                                         )}
 
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleOpenAuditModal(pqr)}
-                                                            style={{
-                                                                padding: '6px 12px',
-                                                                backgroundColor: '#0D7A57',
-                                                                color: 'white',
-                                                                fontWeight: '700',
-                                                                fontSize: '0.75rem',
-                                                                borderRadius: '8px',
-                                                                border: 'none',
-                                                                cursor: 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '5px',
-                                                                boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)'
-                                                            }}
-                                                        >
-                                                            <ShieldCheck size={13} />
-                                                            <span>Auditar</span>
-                                                        </button>
+                                                        {(() => {
+                                                            const isRowClosed = pqr.status === 'resolved' || pqr.status === 'rejected';
+                                                            return (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenAuditModal(pqr)}
+                                                                        style={{
+                                                                            padding: '6px 12px',
+                                                                            backgroundColor: isRowClosed ? '#F8FAFC' : '#0D7A57',
+                                                                            color: isRowClosed ? '#0F172A' : 'white',
+                                                                            fontWeight: '700',
+                                                                            fontSize: '0.74rem',
+                                                                            borderRadius: '8px',
+                                                                            border: isRowClosed ? '1px solid #CBD5E1' : 'none',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '5px',
+                                                                            boxShadow: isRowClosed ? 'none' : '0 2px 4px rgba(13, 122, 87, 0.25)'
+                                                                        }}
+                                                                    >
+                                                                        {isRowClosed ? <Eye size={13} style={{ color: '#0D7A57' }} /> : <ShieldCheck size={13} />}
+                                                                        <span>{isRowClosed ? 'Ver Expediente' : 'Auditar'}</span>
+                                                                    </button>
 
-                                                        <Link
-                                                            href={`/admin/customer-service/rnc/${pqr.id}/print`}
-                                                            target="_blank"
-                                                            style={{
-                                                                padding: '6px 8px',
-                                                                color: '#475569',
-                                                                backgroundColor: 'white',
-                                                                border: '1px solid #CBD5E1',
-                                                                borderRadius: '8px',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                textDecoration: 'none'
-                                                            }}
-                                                            title="Imprimir Acta RNC (PDF)"
-                                                        >
-                                                            <FileText size={14} />
-                                                        </Link>
+                                                                    <Link
+                                                                        href={`/admin/customer-service/rnc/${pqr.id}/print`}
+                                                                        target="_blank"
+                                                                        style={{
+                                                                            padding: '6px 10px',
+                                                                            color: isRowClosed ? '#0D7A57' : '#475569',
+                                                                            backgroundColor: isRowClosed ? '#F0FDF4' : 'white',
+                                                                            border: isRowClosed ? '1px solid #86EFAC' : '1px solid #CBD5E1',
+                                                                            borderRadius: '8px',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            gap: '5px',
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: '700',
+                                                                            textDecoration: 'none'
+                                                                        }}
+                                                                        title="Ver / Descargar Informe de Auditoría RNC (PDF)"
+                                                                    >
+                                                                        <FileText size={13} />
+                                                                        <span>Informe PDF</span>
+                                                                    </Link>
+                                                                </>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </td>
                                             </tr>
