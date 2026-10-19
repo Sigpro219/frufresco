@@ -28,6 +28,8 @@ export interface SearchableSelectProps {
     wrapOptions?: boolean;
     allowCustomValue?: boolean;
     autoFlip?: boolean;
+    onNext?: () => void;
+    onPrev?: () => void;
 }
 
 function normalizeStr(text: string): string {
@@ -54,7 +56,9 @@ export default function SearchableSelect({
     size = 'sm',
     wrapOptions = false,
     allowCustomValue = false,
-    autoFlip = true
+    autoFlip = true,
+    onNext,
+    onPrev
 }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -100,14 +104,23 @@ export default function SearchableSelect({
         }
     }, [highlightedIndex, isOpen]);
 
-    const selectOption = (optValue: string) => {
+    const selectOption = (optValue: string, shouldAdvance: boolean = false) => {
         onChange(optValue);
         setIsOpen(false);
         setSearchQuery('');
         if (onSelectComplete) {
-            setTimeout(() => onSelectComplete(optValue), 0);
+            setTimeout(() => {
+                onSelectComplete(optValue);
+                if (shouldAdvance && onNext) {
+                    onNext();
+                }
+            }, 0);
         } else {
-            setTimeout(() => triggerButtonRef.current?.focus(), 0);
+            if (shouldAdvance && onNext) {
+                setTimeout(() => onNext(), 0);
+            } else {
+                setTimeout(() => triggerButtonRef.current?.focus(), 0);
+            }
         }
     };
 
@@ -320,19 +333,37 @@ export default function SearchableSelect({
                                     if (totalOptionsCount > 0) {
                                         setHighlightedIndex(prev => (prev - 1 + totalOptionsCount) % totalOptionsCount);
                                     }
-                                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                } else if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
                                     if (filteredOptions.length > 0 && highlightedIndex < filteredOptions.length) {
-                                        e.preventDefault();
-                                        e.stopPropagation();
                                         const targetOpt = filteredOptions[highlightedIndex] || filteredOptions[0];
-                                        selectOption(targetOpt.value);
+                                        selectOption(targetOpt.value, true);
                                     } else if (allowCustomValue && searchQuery.trim()) {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        selectOption(searchQuery.trim());
-                                    } else if (e.key === 'Tab') {
+                                        selectOption(searchQuery.trim(), true);
+                                    } else if (onNext) {
                                         setIsOpen(false);
                                         setSearchQuery('');
+                                        onNext();
+                                    }
+                                } else if (e.key === 'Tab') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (e.shiftKey) {
+                                        setIsOpen(false);
+                                        setSearchQuery('');
+                                        if (onPrev) onPrev();
+                                    } else {
+                                        if (filteredOptions.length > 0 && highlightedIndex < filteredOptions.length && searchQuery.trim()) {
+                                            const targetOpt = filteredOptions[highlightedIndex] || filteredOptions[0];
+                                            selectOption(targetOpt.value, true);
+                                        } else if (allowCustomValue && searchQuery.trim()) {
+                                            selectOption(searchQuery.trim(), true);
+                                        } else {
+                                            setIsOpen(false);
+                                            setSearchQuery('');
+                                            if (onNext) onNext();
+                                        }
                                     }
                                 } else if (e.key === 'Escape') {
                                     e.preventDefault();

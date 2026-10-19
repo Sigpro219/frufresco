@@ -630,6 +630,32 @@ export default function HRManagement() {
         }
     };
 
+    const advanceToNextAssignRow = (currentRowId: string, direction: 'next' | 'prev' = 'next') => {
+        setTimeout(() => {
+            const allContainers = Array.from(document.querySelectorAll<HTMLElement>('.assign-collab-select'));
+            if (!allContainers.length) return;
+
+            const currentIdx = allContainers.findIndex(el => el.getAttribute('data-row-id') === currentRowId);
+            
+            let targetIdx = 0;
+            if (currentIdx !== -1) {
+                targetIdx = direction === 'next' ? currentIdx + 1 : currentIdx - 1;
+            } else {
+                targetIdx = 0;
+            }
+
+            if (targetIdx >= 0 && targetIdx < allContainers.length) {
+                const targetContainer = allContainers[targetIdx];
+                const btn = targetContainer.querySelector('button');
+                if (btn) {
+                    btn.focus();
+                    btn.click();
+                    btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
+            }
+        }, 50);
+    };
+
     const handleExportPayrollExcel = async () => {
         try {
             const XLSX = await import('xlsx');
@@ -2455,20 +2481,26 @@ export default function HRManagement() {
                                                             <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700' }}>{item.qty.toFixed(2)} {item.uom}</td>
                                                             <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '800', color: '#0D7A57' }}>${item.totalVal.toLocaleString('es-CO')}</td>
                                                             <td style={{ padding: '0.45rem 0.85rem' }}>
-                                                                <div style={{ width: '100%', maxWidth: '320px' }}>
+                                                                <div
+                                                                    className="assign-collab-select"
+                                                                    data-row-id={item.raw.id}
+                                                                    style={{ width: '100%', maxWidth: '320px' }}
+                                                                >
                                                                     <SearchableSelect
                                                                         value=""
                                                                         onChange={() => {}}
                                                                         onSelectComplete={(collaboratorName) => {
                                                                             handleAssignPayrollInHR(item.raw.id, collaboratorName, item.totalVal);
                                                                         }}
+                                                                        onNext={() => advanceToNextAssignRow(item.raw.id, 'next')}
+                                                                        onPrev={() => advanceToNextAssignRow(item.raw.id, 'prev')}
                                                                         disabled={isSavingPayrollAssign && payrollAssigningRowId === item.raw.id}
                                                                         placeholder={
                                                                             isSavingPayrollAssign && payrollAssigningRowId === item.raw.id
                                                                                 ? 'Asignando en nómina...'
                                                                                 : 'Buscar o asignar colaborador...'
                                                                         }
-                                                                        searchPlaceholder="Nombre, cédula o cargo (↑↓ Enter)..."
+                                                                        searchPlaceholder="Nombre, cédula o cargo (↑↓ Enter/Tab)..."
                                                                         size="sm"
                                                                         options={collaboratorOptions}
                                                                         allowCustomValue={true}

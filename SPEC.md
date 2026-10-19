@@ -10810,6 +10810,11 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
       - Navegación táctica 100% por teclado: flechas `ArrowDown` / `ArrowUp` para alternar la selección destacada, `Enter` para vincular de inmediato con persistencia en `inventory_movements`, `Escape` para cancelar y reubicación inteligente hacia arriba (`autoFlip`) ante proximidad al borde inferior de pantalla.
       - Admite ingreso de texto libre (`allowCustomValue`) con `Enter` para colaboradores eventuales no registrados previamente en la plantilla.
 
+   7. **Navegación Continua en Cadena por Teclado (`Enter` / `Tab` Auto-Advance):**
+      - Al presionar `Enter` en el buscador, el sistema formaliza la asignación del colaborador en `inventory_movements` y transfiere inmediatamente el foco a la siguiente casilla disponible abriendo su menú desplegable de forma automática.
+      - Al presionar `Tab`, el operador avanza a la siguiente fila abriendo su buscador interactivo (o asignando la opción filtrada si había una búsqueda activa), permitiendo auditar decenas de compras huérfanas en ráfaga continua sin tocar el mouse.
+      - Al presionar `Shift+Tab`, el flujo retrocede a la fila previa de forma simétrica.
+
 
 ---
 
