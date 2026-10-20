@@ -902,28 +902,28 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', tableLayout: 'fixed' }}>
                             <thead style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                    <th style={{ width: '10%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
+                                    <th style={{ width: '9%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
                                         Folio & Fecha
                                     </th>
-                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Cliente & Canal
                                     </th>
-                                    <th style={{ width: '15%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '15%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Asunto & Pedido
                                     </th>
-                                    <th style={{ width: '5%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 6px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'center' }}>
+                                    <th style={{ width: '4%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 4px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'center' }}>
                                         Evidencia
                                     </th>
-                                    <th style={{ width: '17%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '17%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Diagnóstico RCA
                                     </th>
-                                    <th style={{ width: '20%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '19%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Imputabilidad & Cobro
                                     </th>
-                                    <th style={{ width: '9%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '10%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Estado
                                     </th>
-                                    <th style={{ width: '10%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
+                                    <th style={{ width: '12%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
                                         Acciones
                                     </th>
                                 </tr>
@@ -1342,21 +1342,21 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                     </div>
                                                 </td>
 
-                                                {/* 8. Acciones (Botones Compactos 10%) */}
-                                                <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px', flexWrap: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                                                {/* 8. Acciones (Botones Compactos 12%) */}
+                                                <td style={{ padding: '8px 8px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', flexWrap: 'nowrap' }} onClick={e => e.stopPropagation()}>
                                                         {author.phoneParsed.isValid ? (
                                                             <a
                                                                 href={`https://wa.me/${author.phoneParsed.waNumber}?text=${encodeURIComponent(buildCaseResolutionWhatsAppSummary(pqr))}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 style={{
-                                                                    width: '28px',
-                                                                    height: '28px',
+                                                                    width: '26px',
+                                                                    height: '26px',
                                                                     backgroundColor: '#ECFDF5',
                                                                     color: '#047857',
                                                                     border: '1px solid #A7F3D0',
-                                                                    borderRadius: '7px',
+                                                                    borderRadius: '6px',
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
@@ -1367,19 +1367,19 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 title={`Enviar respuesta al cliente por WhatsApp (${author.phoneParsed.display})`}
                                                                 aria-label={`WhatsApp ${author.phoneParsed.display}`}
                                                             >
-                                                                <MessageCircle size={14} style={{ color: '#059669' }} />
+                                                                <MessageCircle size={13} style={{ color: '#059669' }} />
                                                             </a>
                                                         ) : (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => showToast('El cliente no tiene un teléfono celular válido registrado.', 'warning')}
                                                                 style={{
-                                                                    width: '28px',
-                                                                    height: '28px',
+                                                                    width: '26px',
+                                                                    height: '26px',
                                                                     backgroundColor: '#F8FAFC',
                                                                     color: '#94A3B8',
                                                                     border: '1px solid #E2E8F0',
-                                                                    borderRadius: '7px',
+                                                                    borderRadius: '6px',
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
@@ -1389,7 +1389,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 title="Sin teléfono registrado (clic para ver aviso)"
                                                                 aria-label="WhatsApp no disponible"
                                                             >
-                                                                <MessageCircle size={14} />
+                                                                <MessageCircle size={13} />
                                                             </button>
                                                         )}
 
@@ -1401,25 +1401,25 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                         type="button"
                                                                         onClick={() => handleOpenAuditModal(pqr)}
                                                                         style={{
-                                                                            height: '28px',
-                                                                            padding: '0 8px',
+                                                                            height: '26px',
+                                                                            padding: '0 7px',
                                                                             backgroundColor: isRowClosed ? '#F8FAFC' : '#0D7A57',
                                                                             color: isRowClosed ? '#0F172A' : 'white',
                                                                             fontWeight: '700',
-                                                                            fontSize: '0.7rem',
-                                                                            borderRadius: '7px',
+                                                                            fontSize: '0.68rem',
+                                                                            borderRadius: '6px',
                                                                             border: isRowClosed ? '1px solid #CBD5E1' : 'none',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center',
-                                                                            gap: '4px',
+                                                                            gap: '3px',
                                                                             cursor: 'pointer',
                                                                             boxShadow: isRowClosed ? 'none' : '0 1px 2px rgba(13, 122, 87, 0.2)',
                                                                             flexShrink: 0
                                                                         }}
                                                                         title={isRowClosed ? "Ver Auditoría Completa" : "Auditar y Resolver Caso"}
                                                                     >
-                                                                        <Eye size={13} />
+                                                                        <Eye size={12} />
                                                                         <span>{isRowClosed ? 'Ver' : 'Auditar'}</span>
                                                                     </button>
 
@@ -1427,24 +1427,24 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                         href={`/admin/customer-service/rnc/${pqr.id}/print`}
                                                                         target="_blank"
                                                                         style={{
-                                                                            height: '28px',
-                                                                            padding: '0 7px',
+                                                                            height: '26px',
+                                                                            padding: '0 6px',
                                                                             color: isRowClosed ? '#0D7A57' : '#475569',
                                                                             backgroundColor: isRowClosed ? '#F0FDF4' : 'white',
                                                                             border: isRowClosed ? '1px solid #86EFAC' : '1px solid #CBD5E1',
-                                                                            borderRadius: '7px',
+                                                                            borderRadius: '6px',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center',
-                                                                            gap: '3px',
-                                                                            fontSize: '0.68rem',
+                                                                            gap: '2px',
+                                                                            fontSize: '0.67rem',
                                                                             fontWeight: '700',
                                                                             textDecoration: 'none',
                                                                             flexShrink: 0
                                                                         }}
                                                                         title="Ver / Descargar Informe de Auditoría RNC (PDF)"
                                                                     >
-                                                                        <FileText size={13} />
+                                                                        <FileText size={12} />
                                                                         <span>PDF</span>
                                                                     </Link>
                                                                 </>
