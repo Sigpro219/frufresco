@@ -899,31 +899,31 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                         boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
                         overflow: 'visible'
                     }}>
-                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', tableLayout: 'fixed' }}>
                             <thead style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
+                                    <th style={{ width: '11%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
                                         Folio & Fecha
                                     </th>
-                                    <th style={{ width: '18%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '15%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Cliente & Canal
                                     </th>
-                                    <th style={{ width: '20%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '15%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Asunto & Pedido
                                     </th>
-                                    <th style={{ width: '6%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'center' }}>
+                                    <th style={{ width: '5%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 6px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'center' }}>
                                         Evidencia
                                     </th>
-                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '12%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Diagnóstico RCA
                                     </th>
-                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Imputabilidad & Cobro
                                     </th>
-                                    <th style={{ width: '9%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '9%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Estado
                                     </th>
-                                    <th style={{ width: '5%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
+                                    <th style={{ width: '19%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
                                         Acciones
                                     </th>
                                 </tr>
@@ -950,7 +950,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'white' : '#FAFAFA')}
                                             >
                                                 {/* 1. Folio & Fecha */}
-                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                             <span style={{
@@ -976,16 +976,16 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 </td>
 
                                                 {/* 2. Cliente & Canal */}
-                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         <div style={{
-                                                            width: '32px',
-                                                            height: '32px',
+                                                            width: '28px',
+                                                            height: '28px',
                                                             borderRadius: '50%',
                                                             backgroundColor: '#EAEFEA',
                                                             color: '#0D7A57',
                                                             fontWeight: '900',
-                                                            fontSize: '0.75rem',
+                                                            fontSize: '0.72rem',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
@@ -993,7 +993,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                         }}>
                                                             {getClientInitials(author.clientDisplayName)}
                                                         </div>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '210px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
                                                             <div style={{ fontWeight: '800', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                 {author.clientDisplayName}
                                                             </div>
@@ -1017,7 +1017,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 </td>
 
                                                 {/* 3. Asunto & Pedido */}
-                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', maxWidth: '280px' }}>
+                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                                         <div style={{ fontWeight: '600', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatCleanPqrSubject(pqr.subject)}>
                                                             {formatCleanPqrSubject(pqr.subject)}
@@ -1042,7 +1042,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 </td>
 
                                                 {/* 4. Evidencia */}
-                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'center' }}>
+                                                <td style={{ padding: '10px 6px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'center' }}>
                                                     {photos.length > 0 ? (
                                                         <div
                                                             style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
@@ -1055,9 +1055,9 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 src={photos[0]}
                                                                 alt="Evidencia"
                                                                 style={{
-                                                                    width: '42px',
-                                                                    height: '42px',
-                                                                    borderRadius: '8px',
+                                                                    width: '36px',
+                                                                    height: '36px',
+                                                                    borderRadius: '7px',
                                                                     objectFit: 'cover',
                                                                     border: '1px solid #E2E8F0',
                                                                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
@@ -1093,7 +1093,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 </td>
 
                                                 {/* 5. Diagnóstico RCA */}
-                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
                                                     {(!rca.isExplicitRca && pqr.status === 'pending') ? (
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                             <span style={{
@@ -1140,7 +1140,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 </td>
 
                                                 {/* 6. Imputabilidad & Cobro */}
-                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
                                                     {(() => {
                                                         const isUnauditedPending = !rca.isExplicitRca && pqr.status === 'pending' && (!rca.imputedEntities || rca.imputedEntities.length === 0);
                                                         if (isUnauditedPending) {
@@ -1243,7 +1243,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 </td>
 
                                                 {/* 7. Estado & Resolución */}
-                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
                                                         {pqr.status === 'resolved' ? (
                                                             <>
@@ -1292,54 +1292,53 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 </td>
 
                                                 {/* 8. Acciones */}
-                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                                                <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', flexWrap: 'nowrap' }} onClick={e => e.stopPropagation()}>
                                                         {author.phoneParsed.isValid ? (
                                                             <a
                                                                 href={`https://wa.me/${author.phoneParsed.waNumber}?text=${encodeURIComponent(buildCaseResolutionWhatsAppSummary(pqr))}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 style={{
-                                                                    padding: '6px 10px',
+                                                                    width: '28px',
+                                                                    height: '28px',
                                                                     backgroundColor: '#ECFDF5',
                                                                     color: '#047857',
                                                                     border: '1px solid #A7F3D0',
-                                                                    borderRadius: '8px',
+                                                                    borderRadius: '7px',
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
-                                                                    gap: '5px',
-                                                                    fontSize: '0.74rem',
-                                                                    fontWeight: '700',
-                                                                    textDecoration: 'none',
+                                                                    justifyContent: 'center',
                                                                     boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                                                                    cursor: 'pointer'
+                                                                    cursor: 'pointer',
+                                                                    flexShrink: 0
                                                                 }}
-                                                                title={`Enviar respuesta corta al cliente por WhatsApp (${author.phoneParsed.display})`}
+                                                                title={`Enviar respuesta al cliente por WhatsApp (${author.phoneParsed.display})`}
+                                                                aria-label={`WhatsApp ${author.phoneParsed.display}`}
                                                             >
-                                                                <MessageCircle size={13} style={{ color: '#059669' }} />
-                                                                <span>WhatsApp</span>
+                                                                <MessageCircle size={15} style={{ color: '#059669' }} />
                                                             </a>
                                                         ) : (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => showToast('El cliente no tiene un teléfono celular válido registrado.', 'warning')}
                                                                 style={{
-                                                                    padding: '6px 10px',
+                                                                    width: '28px',
+                                                                    height: '28px',
                                                                     backgroundColor: '#F8FAFC',
                                                                     color: '#94A3B8',
                                                                     border: '1px solid #E2E8F0',
-                                                                    borderRadius: '8px',
+                                                                    borderRadius: '7px',
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
-                                                                    gap: '5px',
-                                                                    fontSize: '0.74rem',
-                                                                    fontWeight: '600',
-                                                                    cursor: 'pointer'
+                                                                    justifyContent: 'center',
+                                                                    cursor: 'pointer',
+                                                                    flexShrink: 0
                                                                 }}
                                                                 title="Sin teléfono registrado (clic para ver aviso)"
+                                                                aria-label="WhatsApp no disponible"
                                                             >
-                                                                <MessageCircle size={13} />
-                                                                <span>WhatsApp</span>
+                                                                <MessageCircle size={15} />
                                                             </button>
                                                         )}
 
@@ -1351,45 +1350,49 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                         type="button"
                                                                         onClick={() => handleOpenAuditModal(pqr)}
                                                                         style={{
-                                                                            padding: '6px 12px',
+                                                                            height: '28px',
+                                                                            padding: '0 9px',
                                                                             backgroundColor: isRowClosed ? '#F8FAFC' : '#0D7A57',
                                                                             color: isRowClosed ? '#0F172A' : 'white',
                                                                             fontWeight: '700',
-                                                                            fontSize: '0.74rem',
-                                                                            borderRadius: '8px',
+                                                                            fontSize: '0.72rem',
+                                                                            borderRadius: '7px',
                                                                             border: isRowClosed ? '1px solid #CBD5E1' : 'none',
                                                                             cursor: 'pointer',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
-                                                                            gap: '5px',
-                                                                            boxShadow: isRowClosed ? 'none' : '0 2px 4px rgba(13, 122, 87, 0.25)'
+                                                                            gap: '4px',
+                                                                            boxShadow: isRowClosed ? 'none' : '0 2px 4px rgba(13, 122, 87, 0.25)',
+                                                                            flexShrink: 0
                                                                         }}
                                                                     >
                                                                         {isRowClosed ? <Eye size={13} style={{ color: '#0D7A57' }} /> : <ShieldCheck size={13} />}
-                                                                        <span>{isRowClosed ? 'Ver Expediente' : 'Auditar'}</span>
+                                                                        <span>{isRowClosed ? 'Ver' : 'Auditar'}</span>
                                                                     </button>
 
                                                                     <Link
                                                                         href={`/admin/customer-service/rnc/${pqr.id}/print`}
                                                                         target="_blank"
                                                                         style={{
-                                                                            padding: '6px 10px',
+                                                                            height: '28px',
+                                                                            padding: '0 8px',
                                                                             color: isRowClosed ? '#0D7A57' : '#475569',
                                                                             backgroundColor: isRowClosed ? '#F0FDF4' : 'white',
                                                                             border: isRowClosed ? '1px solid #86EFAC' : '1px solid #CBD5E1',
-                                                                            borderRadius: '8px',
+                                                                            borderRadius: '7px',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center',
-                                                                            gap: '5px',
-                                                                            fontSize: '0.72rem',
+                                                                            gap: '4px',
+                                                                            fontSize: '0.7rem',
                                                                             fontWeight: '700',
-                                                                            textDecoration: 'none'
+                                                                            textDecoration: 'none',
+                                                                            flexShrink: 0
                                                                         }}
                                                                         title="Ver / Descargar Informe de Auditoría RNC (PDF)"
                                                                     >
                                                                         <FileText size={13} />
-                                                                        <span>Informe PDF</span>
+                                                                        <span>PDF</span>
                                                                     </Link>
                                                                 </>
                                                             );
@@ -1426,7 +1429,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                         boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
                         overflow: 'visible'
                     }}>
-                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', tableLayout: 'fixed' }}>
                             <thead style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
                                     <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
