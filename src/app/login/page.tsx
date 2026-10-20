@@ -1610,10 +1610,21 @@ export default function LoginPage() {
             </div>
 
             <style jsx global>{`
+                .login-input {
+                    background-color: #FFFFFF !important;
+                }
                 .login-input:focus {
-                    background-color: rgba(255,255,255,0.1) !important;
+                    background-color: #FFFFFF !important;
                     border-color: var(--secondary) !important;
-                    box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.1) !important;
+                    box-shadow: 0 0 0 4px rgba(247, 181, 0, 0.25) !important;
+                }
+                .login-input:-webkit-autofill,
+                .login-input:-webkit-autofill:hover,
+                .login-input:-webkit-autofill:focus,
+                .login-input:-webkit-autofill:active {
+                    -webkit-box-shadow: 0 0 0 40px #FFFFFF inset !important;
+                    -webkit-text-fill-color: #0F172A !important;
+                    transition: background-color 5000s ease-in-out 0s;
                 }
                 .animate-pulse {
                     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
