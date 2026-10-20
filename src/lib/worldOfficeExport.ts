@@ -309,7 +309,26 @@ export async function downloadWorldOfficeExcel(
     XLSX.utils.book_append_sheet(workbook, worksheet, WORLD_OFFICE_SHEET_NAME);
 
     const cleanDate = new Date().toISOString().split('T')[0];
-    const fullFileName = `${fileNamePrefix}_${cleanDate}.xlsx`;
+    const hasDateInPrefix = /\d{4}-\d{2}-\d{2}/.test(fileNamePrefix);
+    const fullFileName = hasDateInPrefix
+        ? `${fileNamePrefix}.xlsx`
+        : `${fileNamePrefix}_${cleanDate}.xlsx`;
 
-    XLSX.writeFile(workbook, fullFileName);
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fullFileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(url), 1500);
+    } else {
+        XLSX.writeFile(workbook, fullFileName);
+    }
 }

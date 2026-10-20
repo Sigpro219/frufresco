@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.217 (Modo Consulta de Expediente Cerrado en SAC con Descarga Directa de Informe RNC PDF, Rediseño de Detalle de Pedido `/admin/orders/[id]` y Estándar de Inputs Numéricos sin Cero a la Izquierda con Coma/Punto Decimal — 76/76 Pantallas Certificadas)  
-> **Fecha:** 19 de Octubre, 2026  
+> **Versión:** 1.9.224 (Unidad de Facturación en Kilos por Defecto vs Libras Eventual en Casa Matriz con Conversión Invariante 1 Kg = 2 Lb, Descuento Comercial X% a Fecha del Pedido, Facturación por Lotes y Corte 5:00 PM — 76/76 Pantallas Certificadas)  
+> **Fecha:** 20 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 248 Escenarios BDD Ininterrumpidos (1..248)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 254 Escenarios BDD Ininterrumpidos (1..254)
 
 ---
 
@@ -18,17 +18,17 @@
 | Dominio | Nombre del Dominio | Pantallas | Capítulos SDD | Rango de Escenarios BDD | Cobertura |
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
-| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248 | 🟢 100% |
+| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243, 252, 254 (§41.1 - §41.4) | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248, 250, 252, 253, 254 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248 (§39.1 - §39.6) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254 (§7.1 - §7.18) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254 (§39.1 - §39.6) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248 (§42.1 - §42.7) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **248 Escenarios Canónicos (1..248)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **254 Escenarios Canónicos (1..254)** | **🟢 100%** |
 
 ---
 
@@ -1014,7 +1014,7 @@ Para la integración con **World Office Desktop (instalación local sobre Micros
      | 10-28 | `Encab: Personalizado 1` a `15` | `""` |
      | 29 | `Encab: Sucursal` | Razón social o sede de entrega del cliente |
      | 30 | `Encab: Clasificación` | `""` |
-     | 31 | `Detalle: Producto` | ID numérico del producto en catálogo FruFresco |
+     | 31 | `Detalle: Producto` | ID contable numérico del producto en World Office (`products.accounting_id`, con fallback a `products.sku` solo si no existiera) |
      | 32 | `Detalle: Bodega` | `"Principal"` |
      | 33 | `Detalle: UnidadDeMedida` | `"kg"`, `"Und."` |
      | 34 | `Detalle: Cantidad` | Cantidad entregada a satisfacción |
@@ -3569,43 +3569,39 @@ El pipeline de integración con Google Cloud (Google Maps Geocoding API y Google
 #### B. Diagrama de Secuencia del Pipeline (Mermaid)
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Dispatcher as Despachador (4:30 AM)
-    participant UI as RoutePlanner.tsx
-    participant OptAPI as /api/transport/optimize
-    participant ConfAPI as /api/transport/confirm
-    participant Cache as OAuth2 Token Cache
-    participant GCP as Google Cloud Route Optimization
-    participant DB as Supabase PostgreSQL
-
-    Dispatcher->>UI: Clic en "Optimizar Rutas Automáticamente"
-    UI->>OptAPI: POST /api/transport/optimize (orders, vehicles, params)
-    OptAPI->>OptAPI: Validar Zod + Inyectar x-request-id + Verificar Coordenadas
-    OptAPI->>Cache: Obtener Token OAuth2 (Memoria TTL 55m)
-    OptAPI->>GCP: POST /v1/projects/:optimizeTours (timeout: "6s", Abort: 8s)
-    alt Google Cloud Responde OK (< 6s)
-        GCP-->>OptAPI: Solución Combinatoria + skippedShipments
-    else Falla de Conexión o Timeout (> 8s)
-        GCP--xOptAPI: AbortError / Error de Red
-        OptAPI->>OptAPI: Conmutar a Heurística Greedy Local (Simulation Fallback)
+flowchart TD
+    subgraph PEDIDOS["1. MÓDULO DE PEDIDOS (/admin/orders)"]
+        P_NEW["Nuevo Pedido Generado"]
     end
-    OptAPI-->>UI: HTTP 200 OK (routes, start_times, stop_etas, skipped_orders, warnings)
-    UI-->>Dispatcher: Muestra Rutas y Advertencias en Pantalla
 
-    Dispatcher->>UI: Clic en "Confirmar Rutas"
-    UI->>ConfAPI: POST /api/transport/confirm (assignments, vehicles, metrics)
-    ConfAPI->>ConfAPI: Validar ConfirmRequestSchema + x-request-id
-    ConfAPI->>DB: Consultar pedidos ya asignados en route_stops activos
-    alt Pedidos ya cuentan con ruta (Conflicto / Doble Clic)
-        ConfAPI-->>UI: HTTP 409 Conflict (RFC 7807)
-    else Asignación Válida
-        ConfAPI->>DB: Insertar cabecera en routes (status = 'loading')
-        ConfAPI->>DB: Batch Insert route_stops (1 sola transacción)
-        ConfAPI->>DB: Parallel Update orders (status = 'picking', bahías 1..150)
-        ConfAPI-->>UI: HTTP 200 OK (routeConfirmations, requestId)
-        UI-->>Dispatcher: Rutas cerradas y enviadas a picking
+    P_NEW -->|"Aparición Inmediata en Facturación"| ROUTER{"¿Modalidad Documental y Día de Entrega?"}
+
+    subgraph FASE_1["2. ANTES DE LAS 5:00 PM — CIERRE DE REMISIONES DE HOY (Día D)"]
+        R_HOY["Pedidos Remisionados de HOY (Día D) - Remisión con/sin Precios"]
+        R_CLOSE["Cierre Progresivo en Facturación (Antes de 5:00 PM) - Asigna Consecutivos: 10, 11, ... 25"]
+        R_HOY --> R_CLOSE
     end
+
+    subgraph CORTE["5:00 PM (17:00) — CORTE DE FACTURACIÓN (Cambio de Día)"]
+        CUT["Última Factura Usada = 25 -> Siguiente Consecutivo = 26 (Última Usada + 1)"]
+    end
+
+    subgraph FASE_2["3. DESPUÉS DE LAS 5:00 PM — FACTURAS IMPRESAS DEL DÍA SIGUIENTE (Día D+1)"]
+        F_MAN["Pedidos del Día Siguiente (D+1) de Clientes con Factura Impresa"]
+        F_PRINT["Asignación e Impresión Post-Cierre (Después de 5:00 PM) - Consecutivos: 26, 27, 28..."]
+        REM_MAN["Pedidos del Día Siguiente (D+1) de Clientes con Remisión"]
+        REM_WAIT["Viajan mañana con Remisión Física (REM-XXXX) - Se cierran mañana antes de 5:00 PM"]
+        F_MAN --> F_PRINT
+        REM_MAN --> REM_WAIT
+    end
+
+    ROUTER -->|"Remisión de Hoy (D)"| R_HOY
+    ROUTER -->|"Factura Impresa de Mañana (D+1)"| F_MAN
+    ROUTER -->|"Remisión de Mañana (D+1)"| REM_MAN
+
+    R_CLOSE --> CUT
+    CUT --> F_PRINT
+    REM_WAIT -.->|"Al día siguiente (Antes de 5:00 PM)"| R_HOY
 ```
 
 ---
@@ -4735,27 +4731,39 @@ Para evitar colisiones entre documentos de débito y crédito:
 - **Notas Crédito / Ajustes (`billing_returns` / `billing_invoices` tipo NC):** Gobernadas por `billing_nc_prefix` (ej. `NC`) y `billing_nc_next_number` (ej. `501`).
 - **Avance Atómico:** Al confirmar un corte masivo o selectivo, la secuencia global en `public.app_settings` se incrementa atómicamente en $+N$ (`N = cantidad de documentos emitidos`).
 
-### 21.3 Matriz de Tipos de Emisión Documental por Cliente & Sucursal
-El motor `resolveOrderBillingInfo` evalúa las cinco (5) modalidades de documento aplicables:
-1. **Factura Impresa (`FAC-IMP`):** Clientes B2B con `document_type = 'invoice'` y `print_invoice = true` o empresas que exigen factura física al momento de la descarga.
-2. **Factura Digital (`FAC-DIG`):** Clientes B2C o clientes B2B con `document_type = 'invoice'` y `print_invoice = false` (radicación electrónica vía email/XML DIAN).
-3. **Remisión con Valor (`REM-VALOR`):** Clientes B2B con `document_type = 'remission'` y `remission_with_prices = true`.
-4. **Remisión sin Precios (`REM-S/S`):** Clientes con entrega a ciegas en muelle (`document_type = 'remission'` y `remission_with_prices = false`).
-5. **Remisión Obsequio (`REM-OBSEQUIO`):** Clientes o sucursales de cortesía con `document_type = 'gift_remission'`. Todo pedido para una sucursal con esta modalidad nace exonerado de cobro (`unit_price = $0`, `subtotal = $0`, `tax = $0`, `total = $0`, `payment_status = 'Exonerado'`, `payment_method = 'obsequio_cortesia'`), exento de bloqueo de cartera y de Poka-Yoke de tarifa cero, e imprime en su documento físico (`REMISIÓN DE OBSEQUIO`) todos los precios en `$0` junto con el mensaje institucional de cortesía de entrega.
+### 21.3 Matriz de 5 Modalidades Documentales en Ficha de Cliente (Reemplazo de Factura Digital por Facturación por Lotes)
+Dado que por mandato DIAN el **100% de los clientes reciben su Factura Electrónica Digital por correo electrónico (XML/PDF)** una vez se factura su pedido, la antigua opción `Factura Digital` se da por descontada. Todo cliente que anteriormente tuviera `Factura Digital` (`document_type = 'invoice'`, `print_invoice = false`) pasa automáticamente a **`Factura Impresa` (`print_invoice = true`)**, y la primera tarjeta de la Ficha Maestra de Cliente/Sucursal (`ClientsModule.tsx`) se reutiliza para parametrizar **`Facturación por Lotes`**:
+
+1. **Facturación por Lotes (`REM-LOTE`):** Clientes con `document_type = 'batch_remission'` (o pedidos enviados a lote desde la galería). El pedido viaja en el camión con **Remisión Física**, no se factura en el cierre diario de las 5:00 PM ni consume consecutivo diario, sino que se acumula en el segmentador **`Acumulados (N)`** para ser facturado en cualquier periodo libre elegido por el operador (ya sea **unificando varios pedidos en 1 sola factura sumatoria** o **facturando 1 a 1** directamente desde la galería).
+2. **Factura Impresa (`FAC-IMP`):** Clientes con `document_type = 'invoice'` (`print_invoice = true`). El pedido viaja en el camión con la **Factura Oficial Impresa**. Su consecutivo fiscal se asigna en el bloque post-cierre (**después de las 5:00 PM del día $D$**) para los despachos del día siguiente ($D+1$), iniciando en `última_usada + 1`.
+3. **Remisión con Precios (`REM-VALOR`):** Clientes con `document_type = 'remission'` y `remission_with_prices = true`. El pedido viaja en el camión con **Remisión Valorizada** y toma consecutivo de factura **post-entrega (antes de las 5:00 PM del día de entrega $D$)** una vez superada la ventana de recepción y ajustes SAC.
+4. **Remisión sin Precios (`REM-S/S`):** Clientes con entrega a ciegas en muelle (`document_type = 'remission'` y `remission_with_prices = false`). Viaja en el camión con **Remisión Ciega (solo cantidades)** y toma consecutivo de factura **post-entrega (antes de las 5:00 PM del día de entrega $D$)**.
+5. **Remisión Obsequio (`REM-OBSEQUIO`):** Clientes o sucursales de cortesía con `document_type = 'gift_remission'`. Todo pedido nace exonerado de cobro (`$0 COP`, `payment_status = 'Exonerado'`), exento de bloqueo de cartera y de Poka-Yoke de tarifa cero, y no consume consecutivo de factura de venta.
 - **Plazos de Pago:**
   - **B2B Institucional:** Hereda `payment_days` de la sucursal o matriz (ej. 15, 30, 45, 60 días de crédito; nunca contado, salvo `gift_remission` que es Cortesía $0 COP).
   - **B2C Hogar:** `Contra Entrega` o `Pasarela de Pagos (Pagado Previamente)`.
 
-### 21.4 Protocolo de Auditoría y Corte Masivo / Selectivo AM/PM
-1. **Selección Granular por Checkboxes:**
-   - Checkbox individual en cada fila de pedido con aislamiento de eventos (`e.stopPropagation()`).
-   - Checkbox maestro en el thead sticky (`top: 169px`) para selección total de pedidos filtrados.
-2. **Helpers Inteligentes de Auditoría:**
-   - `[✓ Solo Listos (N)]`: Marca únicamente pedidos con gracia expirada y cero reclamaciones.
-   - `[Todos (N)]`: Marca el universo filtrado por el omnibox o fecha.
-   - `[Limpiar]`: Deselecciona el lote actual.
-3. **Emisión de Corte Selectivo:**
-   - El modal de previsualización asigna números consecutivos DIAN en orden estricto de ruta y parada exclusivamente a los pedidos seleccionados, preservando la continuidad fiscal.
+### 21.4 Pipeline Cronológico de Corte Diario (5:00 PM / 17:00), Segmentador de Acumulados por Lote y Unificación N-a-1 en 1 Sola Factura
+1. **Aparición Instantánea Pedidos $\rightarrow$ Facturación (Realtime):**
+   - Todo pedido nuevo generado en el Módulo de Pedidos (`/admin/orders`) aparece de inmediato en el Módulo de Facturación (`/admin/commercial/billing`) sin requerir recarga manual ni quedar oculto por filtros de estado operativo.
+2. **Ciclo Bifásico de Consecutivos Fiscales alrededor del Corte de las 5:00 PM (`17:00` Hora Bogotá):**
+   - **Fase A — Antes de las 5:00 PM (Cierre Progresivo de Pedidos Remisionados de Hoy $D$):**
+     * Facturación va cerrando los pedidos **remisionados del día de hoy ($D$)** (`Remisión con Precios` y `Remisión sin Precios`) que ya fueron entregados y cumplieron su ventana de recepción/ajustes SAC.
+     * Se asignan en firme los consecutivos fiscales del día (ej. **`FV-10, FV-11, ... FV-25`**), dejando el puntero en la última factura usada (`25`).
+   - **Corte de las 5:00 PM (`17:00` — Cambio de Día Operativo):**
+     * Marca la frontera entre el cierre de remisiones entregadas en el día $D$ y el alistamiento documental de la ruta del día siguiente ($D+1$).
+   - **Fase B — Después de las 5:00 PM (Facturación e Impresión de Clientes con `Factura Impresa` del Día Siguiente $D+1$):**
+     * Cerrado el bloque de hoy en la factura `25`, se facturan e imprimen los pedidos del **día siguiente ($D+1$)** pertenecientes exclusivamente a clientes que exigen **`Factura Impresa`**, asignándoles consecutivo a partir de **`última_usada + 1` (ej. `FV-26, FV-27, ...` )** para que el documento físico viaje en el camión al amanecer.
+     * Los pedidos del día siguiente ($D+1$) de clientes con modalidad **`Remisión`** NO consumen consecutivo de factura en la noche; viajan con su Remisión Física y quedan en la bandeja para ser cerrados mañana antes de las 5:00 PM.
+3. **Acumulación por Lotes Persistente y Unificación N-a-1 en 1 Sola Factura accionada por Checkboxes en la Galería:**
+   - **Persistencia en Base de Datos (`orders.logistics_data.is_batch_accumulated`):** Todo pedido cuyo cliente/sucursal tenga `document_type = 'batch_remission'` nace con `logistics_data.is_batch_accumulated = true`. Asimismo, al marcar 1 o varios pedidos con checkboxes en la galería principal y pulsar `[ Acumular p/ Lote (N sel) ]`, el sistema persiste `logistics_data.is_batch_accumulated = true` en `public.orders` (y permite revertirlo a `false` con `[ Devolver a Corte Diario ]`), sacándolos de la galería del corte diario de las 5:00 PM y liberando de inmediato sus consecutivos proyectados.
+   - **Elección Libre de Periodos y Clientes en `Acumulados (N)`:** El segmentador `Acumulados (N)` no ata a tiempos fijos (semanal/mensual rígido); permite filtrar libremente por cliente y por cualquier rango de fechas (`Desde / Hasta` o todo el histórico pendiente) para seleccionar con checkboxes el subconjunto exacto a procesar.
+   - **Decisión Operativa en Galería (`Unificar en 1 Sola Factura` vs `Facturar 1 a 1`):** Sin requerir parametrización previa en la ficha del cliente, cuando el operador filtra un cliente y selecciona $N$ pedidos con los checkboxes (tanto en la galería diaria como en `Acumulados`), dispone en la barra superior de dos modos de procesamiento:
+     * **`[ Unificar en 1 Sola Factura (N sel) ]`:**
+       1. **Poka-Yoke de Homogeneidad Tributaria:** Valida estrictamente que los $N \ge 2$ pedidos seleccionados pertenezcan al **mismo NIT receptor de factura**, posean el **mismo `% de descuento comercial`**, y que **ninguno** tenga bloqueo de precio `$0`, PQRS/devolución sin resolver, ni sea `gift_remission` o `replacement`. Si hay mezcla de NITs o bloqueos, aborta con alerta explicativa.
+       2. **Integridad Relacional N-a-1 (`orders.invoice_id` + `billing_invoices`):** Inserta **1 único registro** en `billing_invoices` con el consecutivo `FV-XXXX`, donde `order_id` referencia al pedido líder del lote y los totales (`total_base`, `total_tax`, `total_final`) corresponden a la sumatoria neta exacta de los $N$ pedidos. Atómicamente, actualiza los $N$ registros en `public.orders` asignándoles el mismo `invoice_id = billing_invoices.id` y `billing_cut_id = newCut.id`.
+       3. **Trazabilidad en Cartera y World Office:** Tanto el módulo de Cartera B2B como el exportador World Office resuelven el número de factura de cada pedido a través de `orders.invoice_id` (con fallback a `billing_invoices.order_id`), garantizando que todas las líneas de producto (`order_items`) de los $N$ pedidos unificados se exporten al `.xlsx` bajo el mismo `Encab: Documento Número = FV-XXXX`, detallando en `Detalle: Nota` el número de remisión origen (`Remisión #SEQ`). El consecutivo global en `app_settings` avanza únicamente en **$+1$** (`última_usada + 1`).
+     * **`[ Auditar y Generar Corte (N sel) ]` (1 a 1):** Asigna un consecutivo individual a cada pedido seleccionado (`FV-26, FV-27...`) y avanza el consecutivo fiscal en **$+N$**.
 
 ### 21.5 Módulo de Cartera B2B, Aging Buckets & Expedientes de Crédito (Dossiers)
 - **Aging Buckets (Antigüedad de Saldos):**
@@ -10198,10 +10206,10 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
      - Al crearse la Remisión a `$0`, se inserta automáticamente una tarea crítica en `admin_tasks` (`🚨 ASIGNAR PRECIO URGENTE`) visible en el Dashboard Comercial (`/admin/commercial`).
      - En la Mesa de Facturación (`/admin/commercial/billing`), `getOrderGraceInfo` clasifica todo pedido con `DESPACHADO SIN PRECIO` en estado **`novelty` (`Con Novedad — Asignar Precio`)**, excluyéndolo de la selección rápida de *"Listos p/ Corte"* mientras siga en `$0`.
      - La barra de progreso y el reloj de cuenta regresiva (**Countdown**) calculan en tiempo real los minutos/horas restantes contra la **Hora de Cierre de Corte** parametrizada (`billing_cut_close_time`, por defecto `17:00` Hora Bogotá).
-  4. **Liquidación Comercial Puntual por SKU del Día e Inmunidad del Acuerdo Comercial (`/api/commercial/billing/assign-off-agreement-prices`):**
-     - Las remisiones con `FUERA DE ACUERDO - DESPACHADO SIN PRECIO` no usan la liquidación automática ciega de *Consumo Abierto*, sino el modal **`Asignar Precio Comercial ($0)`**.
-     - El Jefe del Área Comercial visualiza todos los SKUs despachados en remisión a `$0` para una fecha específica, ingresa el precio unitario de venta autorizado para ese día y confirma.
-     - El sistema actualiza `order_items.unit_price`, recalcula `subtotal`, `tax` y `total` descontando cualquier devolución física aprobada en recepción (`billing_returns`), remueve el bloqueo `DESPACHADO SIN PRECIO` dejando constancia auditada en `admin_notes`, cierra la tarea en `admin_tasks` y habilita el documento para facturación en el corte.
+  4. **Liquidación Comercial Puntual por SKU del Día bajo Segregación de Funciones SoD (`/api/commercial/billing/assign-off-agreement-prices` — Homologado con Escenario 251):**
+     - Por mandato de Segregación de Funciones (**Escenario 251**), la fijación y guardado (`POST`) de precios unitarios para remisiones con `FUERA DE ACUERDO - DESPACHADO SIN PRECIO` es competencia exclusiva del **Área Comercial** desde sus módulos autorizados (`/admin/commercial` y `/admin/orders`).
+     - En la consola de Facturación (`/admin/commercial/billing`), el modal opera estrictamente en **modo informativo de solo lectura (`GET`)** mostrando el Cliente, la Sucursal, el `#Pedido` y los SKUs en `$0` pendientes de tarifa comercial.
+     - Una vez el Área Comercial asigna el precio, el sistema actualiza `order_items.unit_price`, recalcula `subtotal`, `tax` y `total` descontando cualquier devolución física aprobada en recepción (`billing_returns`), remueve el bloqueo `DESPACHADO SIN PRECIO` dejando constancia auditada en `admin_notes`, cierra la tarea en `admin_tasks` y habilita el documento para facturación en el corte.
      - **Inmunidad Contractual:** El precio asignado es estrictamente puntual para las remisiones del día y **nunca** inserta ni modifica ítems dentro del acuerdo comercial (`quotes` / `quote_items`) del cliente.
 
 ---
@@ -10831,14 +10839,142 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   3. **Aislamiento Contable:** El total a facturar se fija inmutablemente en **`$0 COP`**, excluyendo el pedido del corte de facturación electrónica y de las cuentas por cobrar a cartera.
   4. **Blindaje de Backend contra Sobrescritura de Precios:** El endpoint de liquidación (`/api/commercial/billing/liquidate-open-order`) descarta y bloquea de forma absoluta cualquier pedido donde `isReplacement === true` o `origin_source === 'customer_service'`, garantizando que jamás se altere su tarifa de garantía.
 
-### Escenario 251: Segregación Estricta de Funciones (SoD) Comercial vs Facturación: Erradicación de la Fijación o Liquidación Discrecional de Precios en Facturación & Poka-Yoke de Tarifa Comercial Pendiente (SDD v1.9.220)
+### Escenario 251: Segregación Estricta de Funciones (SoD) Comercial vs Facturación: Prohibición de Asignación de Precios en Facturación & Modal Informativo de Productos y Clientes Pendientes de Tarifa ($0) (SDD v1.9.221)
 - **Given** un operador contable o analista de facturación autenticado en `/admin/commercial/billing`,
-- **When** se cargan remisiones o pedidos con ítems despachados sin precio o fuera de acuerdo comercial,
+- **When** se cargan remisiones o pedidos con ítems despachados sin precio o fuera de acuerdo comercial (`$0 COP`),
 - **Then**:
-  1. **Principio Rector de Segregación de Funciones (SoD / Separation of Duties):** La fijación de precios de venta, tarifas unitarias, recargos y márgenes comerciales es una competencia privativa e indelegable del **Área Comercial** (`commercial_director`, `commercial_agent`, permiso `admin.commercial.pricing`). Queda terminantemente prohibido que los funcionarios de facturación digiten o muten precios de venta a discreción en la consola contable.
-  2. **Erradicación de Controles de Mutación en Facturación:** Se retiran de la barra de herramientas de facturación los botones de asignación manual de tarifas (`Asignar Precios Fuera de Acuerdo`) y de liquidación masiva a costo vigente (`Liquidar Costo Vigente`), cerrando la brecha de control interno que permitía al facturador inventar precios en caliente.
-  3. **Poka-Yoke de Retención por Tarifa Comercial Pendiente:** Si un pedido comercial ordinario posee ítems con tarifa `$0 COP` no autorizados, Facturación proyecta la alerta visual preventiva **`⚠️ Retenido: Pendiente Tarifa Comercial`**.
-  4. **Bloqueo de Facturación:** La orden queda retenida y bloqueada para el corte fiscal hasta que un funcionario comercial autorizado parametrize la tarifa legal correspondiente desde el módulo comercial de Pedidos (`/admin/orders/[id]`) o Acuerdos Comerciales (`/admin/commercial/agreements`).
+  1. **Principio Rector de Segregación de Funciones (SoD / Separation of Duties):** La fijación de precios de venta, tarifas unitarias, recargos y márgenes comerciales es una competencia privativa e indelegable del **Área Comercial** (`commercial_director`, `commercial_agent`, permiso `admin.commercial.pricing`). Queda terminantemente prohibido que desde el módulo de Facturación se digiten, asignen o muten precios de venta sobre pedidos sin precio.
+  2. **Modal Informativo de Consulta en Facturación (`Detalle de Productos y Clientes sin Precio Asignado`):** Aunque desde Facturación no se puede asignar precio, al consultar la alerta de remisiones fuera de acuerdo o ítems en `$0`, el modal informativo en `/admin/commercial/billing` muestra claramente en modo de **solo lectura**:
+     - El **Cliente / Razón Social y Sucursal** afectada, junto con el número de pedido (`#REM-XXXX`) y fecha de entrega.
+     - La **lista detallada de Productos (SKUs), presentaciones y cantidades despachadas** que se encuentran a `$0 COP` pendientes de asignación comercial, permitiendo a Facturación identificar de inmediato a qué cliente y a qué productos debe asignárseles tarifa por parte del Área Comercial.
+  3. **Poka-Yoke de Retención y Bloqueo de Corte:** Mientras el pedido comercial ordinario posea ítems en `$0 COP` (salvo `Remisión Obsequio` o `Reposición de Garantía SAC`), Facturación proyecta la alerta **`Retenido: Pendiente Tarifa Comercial`** y bloquea su inclusión en el corte fiscal hasta que Comercial asigne los precios correspondientes.
+
+---
+
+### Escenario 252: Reemplazo de Factura Digital por Facturación por Lotes, Visibilidad Inmediata Pedidos ↔ Facturación, Segmentador de Acumulados por Elección Libre, Unificación N-a-1 en 1 Sola Factura vs 1 a 1 en Galería y Pipeline del Corte de las 5:00 PM (`10..25` → `26..N`) (SDD v1.9.223)
+- **Given** el flujo transversal entre la Ficha Maestra de Clientes (`src/components/ClientsModule.tsx`), el Módulo de Pedidos (`/admin/orders`) y el Módulo de Facturación (`/admin/commercial/billing`),
+- **When** se parametriza la modalidad documental de un cliente, se genera un nuevo pedido, se acumulan remisiones para facturación periódica o se ejecuta el proceso de facturación (1 a 1 o unificada en una sola factura) alrededor de la hora de corte (**5:00 PM / 17:00**),
+- **Then** el sistema cumple estrictamente las siguientes reglas canónicas:
+  1. **Migración de `Factura Digital` a `Factura Impresa` y Tarjeta de `Facturación por Lotes` en Ficha de Cliente:**
+     - Dado que todos los clientes reciben por defecto su factura electrónica digital por email, todo cliente que tenía `Factura Digital` (`document_type = 'invoice'`, `print_invoice = false`) pasa automáticamente a **`Factura Impresa` (`print_invoice = true`)**.
+     - En `ClientsModule.tsx`, la primera tarjeta del selector de Documento Base se destina a **`Facturación por Lotes`** (`document_type = 'batch_remission'`), manteniendo las 5 tarjetas simétricas:
+       1. `Facturación por Lotes` (`document_type = 'batch_remission'` — Viaja con remisión y nace con `logistics_data.is_batch_accumulated = true` para corte por lote en fecha libre)
+       2. `Factura Impresa` (`document_type = 'invoice'`, `print_invoice = true`)
+       3. `Remisión con Precios` (`document_type = 'remission'`, `remission_with_prices = true`)
+       4. `Remisión sin Precios` (`document_type = 'remission'`, `remission_with_prices = false`)
+       5. `Remisión Obsequio` (`document_type = 'gift_remission'`)
+  2. **Visibilidad Inmediata de Nuevos Pedidos en el Módulo de Facturación:**
+     - Cuando en el Módulo de Pedidos (`/admin/orders`) se genera un pedido nuevo, este aparece de inmediato en el Módulo de Facturación (`/admin/commercial/billing`) vía suscripción en tiempo real (`billing-live-sync`) e inclusión automática de los estados operativos activos.
+  3. **Secuencia Cronológica del Corte de las 5:00 PM (`17:00`) y Continuidad del Consecutivo Fiscal (`10..25` $\rightarrow$ `26..N`):**
+     - **Antes de las 5:00 PM (Cierre del Día de Hoy $D$):** Facturación va cerrando los pedidos **remisionados del día de hoy ($D$)** (`Remisión con Precios` / `Remisión sin Precios` entregados hoy) y el sistema les asigna los consecutivos fiscales en orden continuo (ej. **`10, 11, ... 25`**). El filtro rápido `Solo Listos` selecciona en esta franja únicamente remisiones entregadas del día $D$ aptas para cierre.
+     - **Corte de las 5:00 PM (`17:00` — Cambio de Día en Facturación):** Se cierra el bloque de remisiones del día $D$ (quedando la última factura usada en `25`).
+     - **Después de las 5:00 PM (Impresión de Facturas del Día Siguiente $D+1$):** Se emiten e imprimen las facturas de los clientes que piden **`Factura Impresa` del día siguiente ($D+1$)**, asignándoles consecutivo a partir de **`última_usada + 1` (ej. `26, 27, ...` )**. Los pedidos del día siguiente ($D+1$) cuya modalidad es **`Remisión`** quedan excluidos del consumo de consecutivos nocturnos; viajan con remisión física y se facturarán al día siguiente antes de las 5:00 PM.
+  4. **Función Persistente `Acumular Factura` (`logistics_data.is_batch_accumulated`) y Segmentador `Acumulados (N)` por Elección Libre de Periodos:**
+     - En la galería principal de `Pedidos Pendientes por Facturar`, al seleccionar 1 o más pedidos con los checkboxes y pulsar **`[ Acumular p/ Lote (N sel) ]`**, el sistema persiste en base de datos `orders.logistics_data.is_batch_accumulated = true` (y permite revertirlo a `false` mediante `[ Devolver a Corte Diario ]`).
+     - Los pedidos con `is_batch_accumulated === true` salen de la galería principal del corte diario (liberando los consecutivos proyectados) y pasan al segmentador **`Acumulados (N)`**.
+     - Al abrir el segmentador **`Acumulados (N)`**, la galería consulta todos los pedidos acumulados pendientes sin restricción de día único, permitiendo filtrar por **rango libre de fechas (`Desde / Hasta`)** y por **Cliente / NIT** para seleccionar con checkboxes el subconjunto exacto a procesar.
+  5. **Lógica Directa en Galería y Relación N-a-1: `Unificar en 1 Sola Factura (N sel)` vs `Facturar 1 a 1 (N sel)`:**
+     - Sin necesidad de parametrizar en la ficha del cliente si el lote se factura consolidado o individual, el operador filtra en la galería los pedidos pendientes de un cliente, marca su selección con los checkboxes y elige la acción en la barra superior:
+       * **`[ Unificar en 1 Sola Factura (N sel) ]`:**
+         - **Poka-Yoke de Homogeneidad Tributaria:** Exige que los $N \ge 2$ pedidos seleccionados pertenezcan estrictamente al **mismo NIT receptor**, tengan el **mismo `% de descuento comercial`**, y que **ninguno** esté retenido por tarifa `$0`, PQRS abierta o sea obsequio/reposición. Si se seleccionan NITs distintos o pedidos bloqueados, el sistema impide la unificación con alerta explicativa.
+         - **Persistencia N-a-1 (`orders.invoice_id`):** Crea **1 solo registro en `billing_invoices`** con el consecutivo `FV-XXXX` por la sumatoria neta de los $N$ pedidos (apuntando `billing_invoices.order_id` al pedido líder del lote) y actualiza los $N$ pedidos en `public.orders` con `invoice_id = billing_invoices.id` y `billing_cut_id = cut.id`. Tanto Cartera como el exportador World Office resuelven el consecutivo fiscal mediante `orders.invoice_id` (con fallback a `billing_invoices.order_id`), exportando todas las líneas de los $N$ pedidos bajo el mismo `Encab: Documento Número = FV-XXXX` y avanzando el consecutivo global en solo **$+1$** (`última_usada + 1`).
+       * **`[ Auditar y Generar Corte (N sel) ]` (1 a 1):** El sistema genera una factura individual por cada pedido seleccionado (`FV-26, FV-27, ...`) y avanza el consecutivo en **$+N$**.
+  6. **Pipeline Canónico de Referencia (SDD):**
+
+```mermaid
+flowchart TD
+    subgraph PEDIDOS["1. MÓDULO DE PEDIDOS (/admin/orders)"]
+        P_NEW["Nuevo Pedido Generado"]
+    end
+
+    P_NEW -->|"Aparición Inmediata en Facturación"| ROUTER{"¿Modalidad Documental y Día de Entrega?"}
+
+    subgraph FASE_1["2. ANTES DE LAS 5:00 PM — CIERRE DE REMISIONES DE HOY (Día D)"]
+        R_HOY["Pedidos Remisionados de HOY (Día D) - Remisión con/sin Precios"]
+        R_CLOSE["Cierre Progresivo en Facturación (Antes de 5:00 PM) - Asigna Consecutivos: 10, 11, ... 25"]
+        R_HOY --> R_CLOSE
+    end
+
+    subgraph CORTE["5:00 PM (17:00) — CORTE DE FACTURACIÓN (Cambio de Día)"]
+        CUT["Última Factura Usada = 25 -> Siguiente Consecutivo = 26 (Última Usada + 1)"]
+    end
+
+    subgraph FASE_2["3. DESPUÉS DE LAS 5:00 PM — FACTURAS IMPRESAS DEL DÍA SIGUIENTE (Día D+1)"]
+        F_MAN["Pedidos del Día Siguiente (D+1) de Clientes con Factura Impresa"]
+        F_PRINT["Asignación e Impresión Post-Cierre (Después de 5:00 PM) - Consecutivos: 26, 27, 28..."]
+        REM_MAN["Pedidos del Día Siguiente (D+1) de Clientes con Remisión"]
+        REM_WAIT["Viajan mañana con Remisión Física (REM-XXXX) - Se cierran mañana antes de 5:00 PM"]
+        F_MAN --> F_PRINT
+        REM_MAN --> REM_WAIT
+    end
+
+    subgraph LOTES["4. SEGMENTADOR 'ACUMULADOS / POR LOTE (N)' (Elección Libre de Periodos)"]
+        ACUM_POOL["Bolsa de Remisiones Acumuladas (logistics_data.is_batch_accumulated = true)"]
+        SEL_LIBRE["Operador filtra por Cliente y Rango Libre de Fechas + Selecciona Checkboxes (N sel)"]
+        OPT_UNI["Opción A: 'Unificar en 1 Sola Factura (N sel)' -> 1 Único Consecutivo (FV-26) en orders.invoice_id (+1)"]
+        OPT_1A1["Opción B: 'Facturar 1 a 1 (N sel)' -> N Consecutivos Individuales (FV-26..FV-30) (+N)"]
+        ACUM_POOL --> SEL_LIBRE
+        SEL_LIBRE --> OPT_UNI
+        SEL_LIBRE --> OPT_1A1
+    end
+
+    ROUTER -->|"Remisión de Hoy (D)"| R_HOY
+    ROUTER -->|"Factura Impresa de Mañana (D+1)"| F_MAN
+    ROUTER -->|"Remisión de Mañana (D+1)"| REM_MAN
+    ROUTER -->|"Cliente Lotes o Checkbox 'Acumular Factura'"| ACUM_POOL
+    R_HOY -.->|"Checkbox 'Acumular Factura'"| ACUM_POOL
+
+    R_CLOSE --> CUT
+    CUT --> F_PRINT
+    REM_WAIT -.->|"Al día siguiente (Antes de 5:00 PM)"| R_HOY
+```
+
+---
+
+### Escenario 253: Asignación de Descuento Comercial (`X%`) durante la Vigencia del Acuerdo Aplicado a la Fecha del Pedido y Triple Consecuencia Transversal: Remisiones Impresas, Badge Exclusivo en Facturación (Sustitución de `Crédito 30d`) y Columna 38 del Archivo Plano World Office (SDD v1.9.223)
+- **Given** la consola de Acuerdos Comerciales (`src/components/CommercialAgreementsModule.tsx`), el motor de resolución de acuerdos (`src/app/api/orders/resolve-agreement-pricing/route.ts`), el generador de remisiones y documentos impresos (`src/app/admin/orders/contingency-print/page.tsx`), la galería de Facturación (`src/app/admin/commercial/billing/page.tsx`) y el motor de exportación contable World Office (`src/lib/worldOfficeExport.ts`),
+- **When** el usuario comercial sube un nuevo acuerdo comercial o edita uno existente y le asigna al cliente un porcentaje de descuento del `X%` durante la vigencia del acuerdo (`start_date` a `valid_until`),
+- **Then** el sistema aplica automáticamente las siguientes reglas de persistencia, cálculo anti-doble-descuento y tres (3) consecuencias obligatorias:
+  1. **Esquema en BD (`quotes.discount_percentage`), Evaluación por Fecha del Pedido y Snapshot Inmutable (`orders.logistics_data.agreement_discount_pct`):**
+     - **Columna en `public.quotes`:** La tabla `quotes` incorpora la columna `discount_percentage NUMERIC(5,2) NOT NULL DEFAULT 0` (rango `0` a `100`). En los modales de creación/carga y edición de Acuerdos Comerciales (`quotes` con `status = 'agreement'`), el operador define el campo **`% Descuento Comercial (Vigencia)`** (por defecto `0%`).
+     - **Regla Temporal Canónica (Vigencia evaluada contra la Fecha del Pedido):** El descuento aplica estrictamente según la **fecha del pedido (`order_date` / `orders.created_at` en zona horaria `America/Bogota`)**. Si en la fecha en que se realiza el pedido existe un acuerdo comercial vigente (`start_date <= fecha_del_pedido <= valid_until`) para el cliente o su Casa Matriz con `discount_percentage = X > 0`, el sistema estampa de forma inmutable en el pedido `orders.logistics_data.agreement_discount_pct = X` y `orders.logistics_data.agreement_id = quote.id`. De este modo, aunque el pedido se entregue después o se facture semanas más tarde en un corte por lotes cuando el acuerdo ya venció, **conserva intacto el `X%` de descuento que regía en la fecha del pedido**.
+     - **Regla Matemática Anti-Doble-Descuento:** `order_items.unit_price` almacena siempre el **precio unitario bruto del acuerdo** (sin restar el `X%`). El descuento se liquida transversalmente sobre la cantidad neta entregada (`qty_neta`):
+       * $\text{Subtotal Bruto} = \sum (\text{qty\_neta} \times \text{unit\_price})$
+       * $\text{Descuento COP} = \text{round}\left(\text{Subtotal Bruto} \times \frac{X}{100}\right)$
+       * $\text{Subtotal Neto (`orders.subtotal` / `billing_invoices.total_base`)} = \text{Subtotal Bruto} - \text{Descuento COP}$
+       * $\text{IVA Neto (`orders.tax` / `billing_invoices.total_tax`)} = \sum \text{round}\left(\text{qty\_neta} \times \text{unit\_price} \times \left(1 - \frac{X}{100}\right) \times \frac{\text{iva\_rate}}{100}\right)$
+       * $\text{Total Neto (`orders.total` / `billing_invoices.total_final`)} = \text{Subtotal Neto} + \text{IVA Neto}$
+  2. **Consecuencia 1 — Visualización y Desglose en las Remisiones Impresas (`contingency-print/page.tsx`):**
+     - Cuando el pedido posee descuento comercial activo (`agreement_discount_pct = X > 0`), la remisión física muestra explícitamente el porcentaje de descuento del acuerdo comercial.
+     - En las remisiones valorizadas y facturas impresas, el bloque financiero desglosa el **Subtotal Bruto**, el renglón **`Descuento Acuerdo Comercial (-X%)`** y el **Total Neto**, garantizando claridad total en muelle de recepción.
+  3. **Consecuencia 2 — Badge Exclusivo de Descuento en Galería de Facturación (`billing/page.tsx` — Eliminación de `Crédito 30d`):**
+     - En la columna `DOCUMENTO` de la tabla de `Pedidos Pendientes por Facturar`, se elimina de forma permanente el segundo badge de plazo de pago (`Crédito 30d` / `Contado`) por no aportar valor operativo al proceso de corte.
+     - **Regla de Excepcionalidad Visual (Cero Ruido si es 0%):**
+       * **Si el pedido TIENE descuento activo (`X% > 0`):** Se renderiza debajo del tipo de documento el badge destacado **`Dto. Acuerdo -X%`** (con ícono vectorial Lucide y tooltip detallando el monto descontado en `$ COP`).
+       * **Si el pedido NO tiene descuento (`0%`):** **No se muestra ningún segundo badge**, manteniendo la celda limpia con únicamente el badge del tipo de documento (`Factura Impresa`, `Remisión con Valor`, etc.), dado que el descuento es un caso particular.
+  4. **Consecuencia 3 — Inyección Directa en Carga Masiva de World Office (`worldOfficeExport.ts` — Columna 38 `'Detalle: Descuento'`):**
+     - Al exportar el archivo plano `.xlsx` de 57 columnas (`Hoja: 'Detalle migración'`) tanto desde cortes cerrados como desde pre-corte o pendientes, cada línea de producto exportada envía en `'Detalle: Valor Unitario'` el precio unitario bruto del acuerdo (`unit_price`) y en la **Columna 38 (`'Detalle: Descuento'`)** el porcentaje de descuento del pedido expresado en decimal (`X / 100`, ej. `0.05` para `5%`, homologado con `'Detalle: IVA'` que envía `0.19`), permitiendo que World Office liquide y contabilice el descuento automáticamente en la importación masiva sin doble descuento.
+
+---
+
+### Escenario 254: Parametrización de Unidad de Peso para Facturación (`KG` por Defecto vs `Libras LB` Eventual) en Ficha de Casa Matriz (`logistics_data.billing_weight_unit`) y Conversión Invariante ($1\text{ Kg} = 2\text{ Lb}$) en Remisiones, Facturas y Plano World Office (SDD v1.9.224)
+- **Given** que el ~99% de los clientes institucionales operan y se facturan en **Kilogramos (`KG`)**, mientras que una minoría eventual (~1% de clientes) exige que sus remisiones y facturas expresen los productos de peso en **Libras (`LB`, donde $1\text{ Kg} = 2\text{ Lb}$ / $500\text{ g}$)**,
+- **When** el administrador parametriza la tarjeta de una Casa Matriz B2B (o cuenta institucional) en `src/components/ClientsModule.tsx` y se emiten remisiones (`contingency-print/page.tsx`), vistas de facturación (`billing/page.tsx`) o archivos planos para World Office (`worldOfficeExport.ts`),
+- **Then** el sistema garantiza:
+  1. **Persistencia Cero-Migración en `public.profiles` (`logistics_data.billing_weight_unit`):**
+     - Sin requerir alteración de columnas físicas en PostgreSQL, la preferencia se almacena dentro del campo JSONB `profiles.logistics_data.billing_weight_unit` con valores permitidos `'kg'` (valor por defecto para el 99% de clientes cuando es `undefined` o `'kg'`) o `'lb'` (Libras).
+     - En el modal **`Editar Casa Matriz B2B`** (`ClientsModule.tsx`), dentro de la fila superior de configuración maestra (junto a `Requiere Canastillas de Logística` y `Permite Compras Fuera de Convenio`), se dispone el selector interactivo **`UNIDAD DE FACTURACIÓN: [ KILOS (KG) | LIBRAS (LB) ]`**.
+     - Cuando la opción *Heredar automáticamente a sucursales* (o *Replicar a Sucursales*) está activa en la Casa Matriz, `logistics_data.billing_weight_unit` se propaga automáticamente a todas sus sucursales hijas.
+  2. **Invarianza Operativa en Bodega, Compras e Inventario (`WMS` 100% en `Kg`):**
+     - El catálogo maestro (`products`), el abastecimiento, el alistamiento en células de picking y los movimientos de inventario (`inventory_movements`) continúan operando **100% en Kilogramos (`Kg`)**, evitando duplicar SKUs o confundir a los operarios de báscula en bodega.
+  3. **Transformación Matemática Invariante ($1\text{ Kg} = 2\text{ Lb}$) en Remisiones, Facturas y Plano World Office:**
+     - Cuando el cliente (o su Casa Matriz) tiene configurado `billing_weight_unit === 'lb'`, para toda línea de pedido cuya unidad de medida sea de peso en kilogramos (`Kg` / `Kilogramo` / `Kilo`, manteniendo intactas las unidades discretas como `Und`, `Atado`, `Bandeja`, etc.):
+       * **Unidad Expuesta (`Detalle: UnidadDeMedida` / Columna Unidad):** Se proyecta como **`Lb`** (*Libra*).
+       * **Cantidad Facturada / Remisionada (`Detalle: Cantidad`):** Se multiplica por $2$:
+         $\text{Cantidad}_{\text{Lb}} = \text{Cantidad}_{\text{Kg}} \times 2$
+       * **Valor Unitario (`Detalle: Valor Unitario`):** Se divide entre $2$:
+         $\text{Precio Unitario}_{\text{Lb}} = \frac{\text{Precio Unitario}_{\text{Kg}}}{2}$
+       * **Invarianza Financiera Total:** El subtotal de la línea, el descuento comercial, el IVA y el total del documento en `$ COP` permanecen **exactamente idénticos al centavo** ($\text{Cantidad}_{\text{Lb}} \times \text{Precio Unitario}_{\text{Lb}} = (\text{Cantidad}_{\text{Kg}} \times 2) \times (\frac{\text{Precio}_{\text{Kg}}}{2}) = \text{Subtotal}_{\text{COP}}$).
 
 ---
 

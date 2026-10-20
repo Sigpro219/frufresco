@@ -443,6 +443,7 @@ export default function CommercialAgreementsModule() {
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [durationValue, setDurationValue] = useState<number | string>(2);
     const [durationUnit, setDurationUnit] = useState<string>('weeks');
+    const [agreementDiscountPct, setAgreementDiscountPct] = useState<number>(0);
     const [uploadedItems, setUploadedItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
     const [excelPreviewData, setExcelPreviewData] = useState<{
         items: Array<{
@@ -497,6 +498,7 @@ export default function CommercialAgreementsModule() {
     const [editStartDate, setEditStartDate] = useState('');
     const [editDurationValue, setEditDurationValue] = useState<number | string>(2);
     const [editDurationUnit, setEditDurationUnit] = useState<string>('weeks');
+    const [editDiscountPct, setEditDiscountPct] = useState<number>(0);
     const [editUploadedItems, setEditUploadedItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
     const [editExcelPreviewData, setEditExcelPreviewData] = useState<{
         items: Array<{
@@ -2776,9 +2778,11 @@ export default function CommercialAgreementsModule() {
                             .in('id', quoteIds);
                     }
 
-                    const clientAgreementName = isNameManuallyEdited && agreementName.trim()
+                    const dtoTag = agreementDiscountPct > 0 ? ` [DTO_COMERCIAL: ${agreementDiscountPct}%]` : '';
+                    const rawClientName = isNameManuallyEdited && agreementName.trim()
                         ? `${agreementName.trim()} (${client.company_name})`
                         : (agreementName.trim() || `${client.company_name || client.contact_name} - ${dateSuffix}`);
+                    const clientAgreementName = `${rawClientName}${dtoTag}`;
 
                     const { data: newQuote, error: insertQErr } = await supabase
                         .from('quotes')
@@ -2799,6 +2803,23 @@ export default function CommercialAgreementsModule() {
                         .single();
                          
                     if (insertQErr) throw insertQErr;
+
+                    // Persist discount % to client logistics_data for fast lookup & inheritance (Escenario 253)
+                    const updatedLogistics = {
+                        ...(client.logistics_data || {}),
+                        agreement_discount_pct: agreementDiscountPct
+                    };
+                    await supabase
+                        .from('profiles')
+                        .update({ logistics_data: updatedLogistics })
+                        .eq('id', client.id);
+
+                    if (client.is_corporate_parent) {
+                        await supabase
+                            .from('profiles')
+                            .update({ logistics_data: updatedLogistics })
+                            .eq('parent_id', client.id);
+                    }
                     
                     if (itemsTemplate.length > 0) {
                         const finalItemsToInsert = itemsTemplate.map(item => ({
@@ -2873,6 +2894,9 @@ export default function CommercialAgreementsModule() {
         
         setEditDurationValue(val);
         setEditDurationUnit(unit);
+        const dtoMatch = agreement.model_snapshot_name?.match(/\[DTO_COMERCIAL:\s*(\d+(\.\d+)?)%\]/i);
+        const initialDiscount = dtoMatch ? Number(dtoMatch[1]) : Number((agreement.profiles as any)?.logistics_data?.agreement_discount_pct || 0);
+        setEditDiscountPct(initialDiscount);
         setEditParsedFile(null);
         setEditUploadedItems([]);
         setEditExcelPreviewData(null);
@@ -2993,7 +3017,9 @@ export default function CommercialAgreementsModule() {
             }
             const calculatedValidUntil = expiry.toISOString();
             
-            const defaultUpdatedName = editingAgreement.model_snapshot_name || `${editingAgreement.profiles?.company_name || editingAgreement.client_name || 'Acuerdo'} - ${editStartDate.split('-').reverse().join('-')}`;
+            const cleanBaseName = (editingAgreement.model_snapshot_name || `${editingAgreement.profiles?.company_name || editingAgreement.client_name || 'Acuerdo'} - ${editStartDate.split('-').reverse().join('-')}`).replace(/\s*\[DTO_COMERCIAL:\s*\d+(\.\d+)?%\]/gi, '');
+            const dtoTag = editDiscountPct > 0 ? ` [DTO_COMERCIAL: ${editDiscountPct}%]` : '';
+            const defaultUpdatedName = `${cleanBaseName}${dtoTag}`;
             // 1. Update the quote record itself
             const { error: updateErr } = await supabase
                 .from('quotes')
@@ -3005,6 +3031,21 @@ export default function CommercialAgreementsModule() {
                 .eq('id', editingAgreement.id);
                 
             if (updateErr) throw updateErr;
+
+            // Persist discount % to client logistics_data for fast lookup & inheritance (Escenario 253)
+            if (editingAgreement.client_id) {
+                const { data: cProf } = await supabase.from('profiles').select('id, logistics_data, is_corporate_parent').eq('id', editingAgreement.client_id).maybeSingle();
+                if (cProf) {
+                    const updatedLog = {
+                        ...(cProf.logistics_data || {}),
+                        agreement_discount_pct: editDiscountPct
+                    };
+                    await supabase.from('profiles').update({ logistics_data: updatedLog }).eq('id', cProf.id);
+                    if (cProf.is_corporate_parent) {
+                        await supabase.from('profiles').update({ logistics_data: updatedLog }).eq('parent_id', cProf.id);
+                    }
+                }
+            }
             
             // 2. If new excel file uploaded, replace items
             if (editUploadedItems.length > 0) {
@@ -3931,6 +3972,23 @@ export default function CommercialAgreementsModule() {
                                                                         Consumo Abierto ($0)
                                                                     </span>
                                                                 )}
+                                                                {(() => {
+                                                                    const dtoM = agreement.model_snapshot_name?.match(/\[DTO_COMERCIAL:\s*(\d+(\.\d+)?)%\]/i);
+                                                                    if (!dtoM) return null;
+                                                                    return (
+                                                                        <span style={{ 
+                                                                            fontSize: '0.66rem', 
+                                                                            backgroundColor: '#ECFDF5', 
+                                                                            color: '#065F46', 
+                                                                            border: '1px solid #10B981', 
+                                                                            padding: '1px 6px', 
+                                                                            borderRadius: '4px', 
+                                                                            fontWeight: '800' 
+                                                                        }}>
+                                                                            Dto. -{dtoM[1]}%
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                                 {agreement.profiles?.parent_id ? (
                                                                     <span style={{ 
                                                                         fontSize: '0.66rem', 
@@ -4183,6 +4241,23 @@ export default function CommercialAgreementsModule() {
                                                 fontWeight: '600' 
                                             }}>
                                                 {badgeName}
+                                            </span>
+                                        );
+                                    })()}
+                                    {(() => {
+                                        const dtoM = selectedAgreement.model_snapshot_name?.match(/\[DTO_COMERCIAL:\s*(\d+(\.\d+)?)%\]/i);
+                                        if (!dtoM) return null;
+                                        return (
+                                            <span style={{ 
+                                                fontSize: '0.72rem', 
+                                                backgroundColor: '#ECFDF5', 
+                                                color: '#065F46', 
+                                                border: '1px solid #10B981', 
+                                                padding: '2px 8px', 
+                                                borderRadius: '6px', 
+                                                fontWeight: '800' 
+                                            }}>
+                                                Dto. Vigencia -{dtoM[1]}%
                                             </span>
                                         );
                                     })()}
@@ -7021,7 +7096,7 @@ export default function CommercialAgreementsModule() {
                                                 <button
                                                     type="button"
                                                     onClick={() => { setDurationValue(15); setDurationUnit('days'); }}
-                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: Number(durationValue) === 15 && durationUnit === 'days' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: Number(durationValue) === 15 && durationUnit === 'days' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: Number(durationValue) === 15 && durationUnit === 'days' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: Number(durationValue) === 15 && durationUnit === 'days' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: Number(durationValue) === 15 && durationUnit === 'days' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: Number(durationValue) === 1 && durationUnit === 'days' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
                                                     15 Días (Quincenal)
                                                 </button>
@@ -7040,6 +7115,81 @@ export default function CommercialAgreementsModule() {
                                                     3 Meses (Trimestral)
                                                 </button>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Descuento Comercial en Vigencia (Escenario 253) */}
+                                    <div style={{
+                                        backgroundColor: agreementDiscountPct > 0 ? '#ECFDF5' : '#F8FAFC',
+                                        border: `1.5px solid ${agreementDiscountPct > 0 ? '#10B981' : THEME.colors.border}`,
+                                        borderRadius: '10px',
+                                        padding: '12px 16px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '8px',
+                                        transition: 'all 0.2s ease'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Tag size={18} style={{ color: agreementDiscountPct > 0 ? '#059669' : '#64748B' }} />
+                                                <div>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: '800', color: agreementDiscountPct > 0 ? '#065F46' : THEME.colors.textSecondary, textTransform: 'uppercase' }}>
+                                                        Descuento Comercial en Vigencia (% Dto)
+                                                    </span>
+                                                    <div style={{ fontSize: '0.72rem', color: agreementDiscountPct > 0 ? '#047857' : '#64748B' }}>
+                                                        {agreementDiscountPct > 0 
+                                                            ? `Aplica -${agreementDiscountPct}% en remisiones, facturación y World Office (Col 38) a la fecha del pedido.`
+                                                            : 'Sin descuento global pactado para este acuerdo (0%).'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <input 
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    step="0.5"
+                                                    value={agreementDiscountPct}
+                                                    onChange={(e) => {
+                                                        const v = parseFloat(e.target.value);
+                                                        setAgreementDiscountPct(isNaN(v) ? 0 : Math.max(0, Math.min(100, v)));
+                                                    }}
+                                                    style={{
+                                                        width: '75px',
+                                                        padding: '6px 10px',
+                                                        borderRadius: '8px',
+                                                        border: `1.5px solid ${agreementDiscountPct > 0 ? '#059669' : THEME.colors.border}`,
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: '800',
+                                                        textAlign: 'center',
+                                                        color: agreementDiscountPct > 0 ? '#065F46' : THEME.colors.textMain,
+                                                        backgroundColor: 'white'
+                                                    }}
+                                                />
+                                                <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569' }}>%</span>
+                                            </div>
+                                        </div>
+                                        {/* Quick Discount Presets */}
+                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                            {[0, 3, 5, 7, 10].map(pct => (
+                                                <button
+                                                    key={pct}
+                                                    type="button"
+                                                    onClick={() => setAgreementDiscountPct(pct)}
+                                                    style={{
+                                                        padding: '3px 8px',
+                                                        borderRadius: '6px',
+                                                        border: agreementDiscountPct === pct ? '1.5px solid #059669' : '1px solid #CBD5E1',
+                                                        backgroundColor: agreementDiscountPct === pct ? '#D1FAE5' : 'white',
+                                                        fontSize: '0.70rem',
+                                                        color: agreementDiscountPct === pct ? '#065F46' : '#334155',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {pct === 0 ? 'Sin Dto (0%)' : `-${pct}%`}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
 
@@ -8304,6 +8454,81 @@ export default function CommercialAgreementsModule() {
                                                     <option value="years">Años</option>
                                                 </select>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Descuento Comercial en Vigencia (Escenario 253) */}
+                                    <div style={{
+                                        backgroundColor: editDiscountPct > 0 ? '#ECFDF5' : '#F8FAFC',
+                                        border: `1.5px solid ${editDiscountPct > 0 ? '#10B981' : THEME.colors.border}`,
+                                        borderRadius: '10px',
+                                        padding: '12px 16px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '8px',
+                                        transition: 'all 0.2s ease'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Tag size={18} style={{ color: editDiscountPct > 0 ? '#059669' : '#64748B' }} />
+                                                <div>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: '800', color: editDiscountPct > 0 ? '#065F46' : THEME.colors.textSecondary, textTransform: 'uppercase' }}>
+                                                        Descuento Comercial en Vigencia (% Dto)
+                                                    </span>
+                                                    <div style={{ fontSize: '0.72rem', color: editDiscountPct > 0 ? '#047857' : '#64748B' }}>
+                                                        {editDiscountPct > 0 
+                                                            ? `Aplica -${editDiscountPct}% en remisiones, facturación y World Office (Col 38) a la fecha del pedido.`
+                                                            : 'Sin descuento global pactado para este acuerdo (0%).'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <input 
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    step="0.5"
+                                                    value={editDiscountPct}
+                                                    onChange={(e) => {
+                                                        const v = parseFloat(e.target.value);
+                                                        setEditDiscountPct(isNaN(v) ? 0 : Math.max(0, Math.min(100, v)));
+                                                    }}
+                                                    style={{
+                                                        width: '75px',
+                                                        padding: '6px 10px',
+                                                        borderRadius: '8px',
+                                                        border: `1.5px solid ${editDiscountPct > 0 ? '#059669' : THEME.colors.border}`,
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: '800',
+                                                        textAlign: 'center',
+                                                        color: editDiscountPct > 0 ? '#065F46' : THEME.colors.textMain,
+                                                        backgroundColor: 'white'
+                                                    }}
+                                                />
+                                                <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569' }}>%</span>
+                                            </div>
+                                        </div>
+                                        {/* Quick Discount Presets */}
+                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                            {[0, 3, 5, 7, 10].map(pct => (
+                                                <button
+                                                    key={pct}
+                                                    type="button"
+                                                    onClick={() => setEditDiscountPct(pct)}
+                                                    style={{
+                                                        padding: '3px 8px',
+                                                        borderRadius: '6px',
+                                                        border: editDiscountPct === pct ? '1.5px solid #059669' : '1px solid #CBD5E1',
+                                                        backgroundColor: editDiscountPct === pct ? '#D1FAE5' : 'white',
+                                                        fontSize: '0.70rem',
+                                                        color: editDiscountPct === pct ? '#065F46' : '#334155',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {pct === 0 ? 'Sin Dto (0%)' : `-${pct}%`}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
 

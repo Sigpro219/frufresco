@@ -4538,11 +4538,18 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         )}
                         <div style={{ backgroundColor: '#F8FAFC', color: '#475569', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <FileText size={12} strokeWidth={1.5} /> {
-                                profileData.document_type === 'invoice' 
-                                    ? (profileData.print_invoice ? 'FACTURA IMPRESA' : 'FACTURA DIGITAL')
-                                    : (profileData.remission_with_prices ? 'REMISIÓN ($)' : 'REMISIÓN (Sin $)')
+                                profileData.document_type === 'batch_remission'
+                                    ? 'FACTURACIÓN POR LOTES'
+                                    : (profileData.document_type === 'invoice' 
+                                        ? 'FACTURA IMPRESA'
+                                        : (profileData.remission_with_prices ? 'REMISIÓN ($)' : 'REMISIÓN (Sin $)'))
                             }
                         </div>
+                        {profileData?.logistics_data?.billing_weight_unit === 'lb' && (
+                            <div style={{ backgroundColor: '#F5F3FF', color: '#6D28D9', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #DDD6FE', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Scale size={12} strokeWidth={1.5} /> FACTURACIÓN: LIBRAS (LB)
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -4866,8 +4873,13 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                 return null;
                             })()}
                             {client.document_type === 'invoice' && (
-                                <span title="Facturación Electrónica Solicitada" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                    <FileText size={10} strokeWidth={1.5} /> {client.print_invoice ? 'FAC-IMP' : 'FAC-DIG'}
+                                <span title="Factura Impresa Solicitada" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                    <FileText size={10} strokeWidth={1.5} /> FAC-IMP
+                                </span>
+                            )}
+                            {(client.document_type as string) === 'batch_remission' && (
+                                <span title="Facturación por Lotes / Remisiones Acumuladas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                    <FileText size={10} strokeWidth={1.5} /> REM-LOTE
                                 </span>
                             )}
                         </div>
@@ -4892,8 +4904,13 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                             ) : null}
                             {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}><Package size={10} strokeWidth={1.5} /> SI</span>}
                             <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.document_type === 'gift_remission' ? 'REM-OBSEQUIO' : (client.remission_with_prices ? 'REM-$' : 'REM-S/S'))}
+                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'batch_remission' ? 'REM-LOTE' : (client.document_type === 'invoice' ? 'FAC-IMP' : (client.document_type === 'gift_remission' ? 'REM-OBSEQUIO' : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')))}
                             </span>
+                            {client.logistics_data?.billing_weight_unit === 'lb' && (
+                                <span title="Facturación en Libras (1 Kg = 2 Lb)" style={{ fontSize: '0.6rem', backgroundColor: '#F5F3FF', color: '#6D28D9', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #DDD6FE', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                    <Scale size={10} strokeWidth={1.5} /> LB
+                                </span>
+                            )}
                         </div>
                     </>
                 )}
@@ -5862,7 +5879,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     allow_off_agreement_purchases: formData.allow_off_agreement_purchases,
                     document_type: formData.document_type,
                     remission_with_prices: formData.remission_with_prices,
-                    print_invoice: formData.print_invoice
+                    print_invoice: formData.print_invoice,
+                    logistics_data: formData.logistics_data
                 })
                 .eq('parent_id', editData.id);
                 
@@ -6211,7 +6229,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             allow_off_agreement_purchases: formData.allow_off_agreement_purchases,
                             document_type: formData.document_type,
                             remission_with_prices: formData.remission_with_prices,
-                            print_invoice: formData.print_invoice
+                            print_invoice: formData.print_invoice,
+                            logistics_data: formData.logistics_data
                         })
                         .eq('parent_id', (editData as Profile).id);
                 }
@@ -6686,7 +6705,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                     {/* Row 1: Operations Toggles */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                                         {/* Canastillas */}
                                         <div 
                                             onClick={() => {
@@ -6730,7 +6749,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 {formData.allow_off_agreement_purchases !== false ? (
-                                                    <Unlock size={16} style={{ color: '#059669', flexShrink: 0 }} />
+                                                     <Unlock size={16} style={{ color: '#059669', flexShrink: 0 }} />
                                                 ) : (
                                                     <Lock size={16} style={{ color: '#DC2626', flexShrink: 0 }} />
                                                 )}
@@ -6759,6 +6778,62 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 {formData.allow_off_agreement_purchases !== false ? 'Abierto' : 'Solo Convenio'}
                                             </span>
                                         </div>
+
+                                        {/* Unidad de Facturación: Kilos (Kg) vs Libras (Lb) - Escenario 254 */}
+                                        <div 
+                                            onClick={() => {
+                                                if (isReadOnly) return;
+                                                const currentUnit = formData.logistics_data?.billing_weight_unit || 'kg';
+                                                const nextUnit = currentUnit === 'lb' ? 'kg' : 'lb';
+                                                setFormData({
+                                                    ...formData,
+                                                    logistics_data: {
+                                                        ...(formData.logistics_data || {}),
+                                                        billing_weight_unit: nextUnit
+                                                    }
+                                                });
+                                            }}
+                                            style={{ 
+                                                padding: '0.65rem 1rem', 
+                                                borderRadius: THEME.radius.md, 
+                                                border: `1.5px solid ${formData.logistics_data?.billing_weight_unit === 'lb' ? '#8B5CF6' : THEME.colors.border}`, 
+                                                backgroundColor: formData.logistics_data?.billing_weight_unit === 'lb' ? '#F5F3FF' : 'white', 
+                                                cursor: isReadOnly ? 'default' : 'pointer', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'space-between',
+                                                gap: '8px', 
+                                                transition: 'all 0.2s ease',
+                                                boxShadow: formData.logistics_data?.billing_weight_unit === 'lb' ? '0 2px 8px rgba(139, 92, 246, 0.15)' : 'none',
+                                                opacity: isReadOnly ? 0.9 : 1
+                                            }}
+                                            title="Haz clic para alternar: Unidad de facturación por defecto Kilos (KG) o Libras (LB) para este cliente y sus sucursales"
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Scale size={16} style={{ color: formData.logistics_data?.billing_weight_unit === 'lb' ? '#7C3AED' : '#64748B', flexShrink: 0 }} />
+                                                <span style={{ 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '800', 
+                                                    color: formData.logistics_data?.billing_weight_unit === 'lb' ? '#5B21B6' : THEME.colors.textMain, 
+                                                    fontFamily: THEME.typography.fontFamilySecondary 
+                                                }}>
+                                                    UNIDAD FACTURACIÓN
+                                                </span>
+                                            </div>
+                                            <span style={{
+                                                fontSize: '0.65rem',
+                                                fontWeight: '800',
+                                                padding: '2px 8px',
+                                                borderRadius: '9999px',
+                                                backgroundColor: formData.logistics_data?.billing_weight_unit === 'lb' ? '#DDD6FE' : '#F1F5F9',
+                                                color: formData.logistics_data?.billing_weight_unit === 'lb' ? '#5B21B6' : '#475569',
+                                                border: `1px solid ${formData.logistics_data?.billing_weight_unit === 'lb' ? '#C4B5FD' : '#CBD5E1'}`,
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.04em'
+                                            }}>
+                                                {formData.logistics_data?.billing_weight_unit === 'lb' ? 'LIBRAS (LB)' : 'KILOS (KG)'}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     {/* Row 2: 5 Base Document Selector Cards */}
@@ -6768,7 +6843,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         </label>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem' }}>
                                             {[
-                                                { id: 'invoice_digital', label: 'Factura Digital', icon: Mail, doc: 'invoice', withPrices: true, print: false },
+                                                { id: 'batch_remission', label: 'Facturación por Lotes', icon: Layers, doc: 'batch_remission', withPrices: true, print: true },
                                                 { id: 'invoice_printed', label: 'Factura Impresa', icon: Printer, doc: 'invoice', withPrices: true, print: true },
                                                 { id: 'remission_prices', label: 'Remisión con Precios', icon: FileText, doc: 'remission', withPrices: true, print: true },
                                                 { id: 'remission_no_prices', label: 'Remisión sin Precios', icon: FileText, doc: 'remission', withPrices: false, print: true },
@@ -6776,7 +6851,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             ].map((opt) => {
                                                 const isActive = opt.doc === 'gift_remission'
                                                     ? formData.document_type === 'gift_remission'
-                                                    : (formData.document_type === opt.doc && (opt.doc === 'invoice' ? formData.print_invoice === opt.print : (formData.document_type !== 'gift_remission' && formData.remission_with_prices === opt.withPrices)));
+                                                    : opt.doc === 'batch_remission'
+                                                        ? formData.document_type === 'batch_remission'
+                                                        : (formData.document_type === opt.doc && (opt.doc === 'invoice' ? formData.print_invoice === opt.print : (formData.document_type !== 'gift_remission' && formData.remission_with_prices === opt.withPrices)));
                                                 const IconComponent = opt.icon;
                                                 
                                                 return (
@@ -6790,6 +6867,17 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                     document_type: 'gift_remission',
                                                                     remission_with_prices: false,
                                                                     print_invoice: true
+                                                                });
+                                                            } else if (opt.doc === 'batch_remission') {
+                                                                setFormData({
+                                                                    ...formData,
+                                                                    document_type: 'batch_remission',
+                                                                    remission_with_prices: true,
+                                                                    print_invoice: true,
+                                                                    logistics_data: {
+                                                                        ...(formData.logistics_data || {}),
+                                                                        is_batch_accumulated: true
+                                                                    }
                                                                 });
                                                             } else {
                                                                 setFormData({
@@ -8085,7 +8173,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                          </label>
                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem' }}>
                                              {[
-                                                 { id: 'invoice_digital', label: 'Factura Digital', icon: Mail, doc: 'invoice', withPrices: true, print: false },
+                                                 { id: 'batch_remission', label: 'Facturación por Lotes', icon: Layers, doc: 'batch_remission', withPrices: true, print: true },
                                                  { id: 'invoice_printed', label: 'Factura Impresa', icon: Printer, doc: 'invoice', withPrices: true, print: true },
                                                  { id: 'remission_prices', label: 'Remisión con Precios', icon: FileText, doc: 'remission', withPrices: true, print: true },
                                                  { id: 'remission_no_prices', label: 'Remisión sin Precios', icon: FileText, doc: 'remission', withPrices: false, print: true },
@@ -8093,7 +8181,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                              ].map((opt) => {
                                                  const isActive = opt.doc === 'gift_remission'
                                                      ? formData.document_type === 'gift_remission'
-                                                     : (formData.document_type === opt.doc && (opt.doc === 'invoice' ? formData.print_invoice === opt.print : (formData.document_type !== 'gift_remission' && formData.remission_with_prices === opt.withPrices)));
+                                                     : opt.doc === 'batch_remission'
+                                                         ? formData.document_type === 'batch_remission'
+                                                         : (formData.document_type === opt.doc && (opt.doc === 'invoice' ? formData.print_invoice === opt.print : (formData.document_type !== 'gift_remission' && formData.remission_with_prices === opt.withPrices)));
                                                  const IconComponent = opt.icon;
                                                  
                                                  return (
@@ -8107,6 +8197,17 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                      document_type: 'gift_remission',
                                                                      remission_with_prices: false,
                                                                      print_invoice: true
+                                                                 });
+                                                             } else if (opt.doc === 'batch_remission') {
+                                                                 setFormData({
+                                                                     ...formData,
+                                                                     document_type: 'batch_remission',
+                                                                     remission_with_prices: true,
+                                                                     print_invoice: true,
+                                                                     logistics_data: {
+                                                                         ...(formData.logistics_data || {}),
+                                                                         is_batch_accumulated: true
+                                                                     }
                                                                  });
                                                              } else {
                                                                  setFormData({

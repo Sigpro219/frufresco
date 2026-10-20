@@ -71,9 +71,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('client_id');
     const deliveryDate = searchParams.get('delivery_date') || new Date().toISOString().split('T')[0];
+    const orderDate = searchParams.get('order_date') || searchParams.get('orderDate') || null;
     const clientType = searchParams.get('client_type') || (clientId ? 'B2B' : 'B2C');
 
-    return handleResolve(clientId, deliveryDate, clientType);
+    return handleResolve(clientId, deliveryDate, clientType, orderDate);
 }
 
 export async function POST(request: Request) {
@@ -81,17 +82,19 @@ export async function POST(request: Request) {
         const body = await request.json();
         const clientId = body.client_id;
         const deliveryDate = body.delivery_date || new Date().toISOString().split('T')[0];
+        const orderDate = body.order_date || body.orderDate || null;
         const clientType = body.client_type || (clientId ? 'B2B' : 'B2C');
 
-        return handleResolve(clientId, deliveryDate, clientType);
+        return handleResolve(clientId, deliveryDate, clientType, orderDate);
     } catch {
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 }
 
-async function handleResolve(clientId: string | null, deliveryDate: string, clientType: string) {
+async function handleResolve(clientId: string | null, deliveryDate: string, clientType: string, orderDate?: string | null) {
     const supabase = getSupabase();
-    const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
+    // Brecha A5: El descuento y la vigencia aplican prioritariamente a la FECHA DEL PEDIDO
+    const checkDate = orderDate ? orderDate.split('T')[0] : (deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0]);
     const isB2B = clientType === 'B2B' || Boolean(clientId);
 
     if (!clientId) {
@@ -437,10 +440,18 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             }
         }
 
+        // Extract agreement discount percentage (Escenario 253)
+        const candidateName = candidateAgreement?.model_snapshot_name || activeAgreement?.model_snapshot_name || '';
+        const dtoMatch = candidateName.match(/\[DTO_COMERCIAL:\s*(\d+(\.\d+)?)%\]/i);
+        const agreementDiscountPct = dtoMatch 
+            ? Number(dtoMatch[1]) 
+            : Number(currentProfile?.logistics_data?.agreement_discount_pct || parentProfile?.logistics_data?.agreement_discount_pct || 0);
+
         return NextResponse.json({
             success: true,
             resolvedModel,
             activeAgreement,
+            agreementDiscountPct,
             candidateAgreement: candidateAgreement ? {
                 id: candidateAgreement.id,
                 quote_number: candidateAgreement.quote_number,

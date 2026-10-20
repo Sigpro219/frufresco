@@ -12,13 +12,17 @@ export interface TimeWindow {
 }
 
 export interface LogisticsData {
-  windows: TimeWindow[];
-  days: number[]; // 0=Sunday, 1=Monday...
-  allowed_days: number[]; // Flat field for UI compatibility
-  start_time: string;    // Flat field for UI compatibility
-  end_time: string;      // Flat field for UI compatibility
+  windows?: TimeWindow[];
+  days?: number[]; // 0=Sunday, 1=Monday...
+  allowed_days?: number[]; // Flat field for UI compatibility
+  start_time?: string;    // Flat field for UI compatibility
+  end_time?: string;      // Flat field for UI compatibility
   special_notes?: string;
-  parsing_date: string;
+  parsing_date?: string;
+  billing_weight_unit?: 'kg' | 'lb';
+  is_batch_accumulated?: boolean;
+  agreement_discount_pct?: number;
+  [key: string]: any;
 }
 
 const NUMBER_WORDS: Record<string, number> = {

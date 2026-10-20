@@ -67,7 +67,9 @@ import {
     Banknote,
     MapPin,
     Phone,
-    Zap
+    Zap,
+    Archive,
+    Copy
 } from 'lucide-react';
 import { downloadWorldOfficeExcel } from '@/lib/worldOfficeExport';
 
@@ -607,7 +609,12 @@ export default function BillingDashboard() {
     const [parentProfilesMap, setParentProfilesMap] = useState<Map<string, any>>(new Map());
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'invoicing' | 'portfolio' | 'configuration'>('invoicing');
-    const [subTab, setSubTab] = useState<'pending' | 'cuts' | 'returns'>('pending');
+    const [subTab, setSubTab] = useState<'pending' | 'batch_accumulated' | 'cuts' | 'returns'>('pending');
+    const [batchAccumulatedOrders, setBatchAccumulatedOrders] = useState<any[]>([]);
+    const [batchAccumulatedCount, setBatchAccumulatedCount] = useState<number>(0);
+    const [batchClientFilter, setBatchClientFilter] = useState<string>('all');
+    const [batchStartDate, setBatchStartDate] = useState<string>('');
+    const [batchEndDate, setBatchEndDate] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -1345,8 +1352,39 @@ export default function BillingDashboard() {
                     }
                 }
 
-                setPendingOrders(pOrdersData as any[]);
-                setPendingOrdersCount(pOrdersData.length);
+                // Escenario 252: Separar pedidos por Lote Acumulado vs Pendientes Diarios
+                const { data: allUnbilledOrders } = await supabase
+                    .from('orders')
+                    .select(`
+                        id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, invoice_id,
+                        profiles:profile_id (
+                            id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
+                        ),
+                        order_items (
+                            count
+                        ),
+                        billing_returns (
+                            id, quantity_returned, status, reason
+                        ),
+                        customer_service_pqrs (
+                            id, type, category, status, priority, subject, description, created_at, resolved_at
+                        )
+                    `)
+                    .is('billing_cut_id', null)
+                    .is('invoice_id', null)
+                    .order('delivery_date', { ascending: false });
+
+                const accumulatedOrders = (allUnbilledOrders || []).filter((o: any) => 
+                    o.logistics_data?.is_batch_accumulated === true || o.profiles?.document_type === 'batch_remission'
+                );
+                setBatchAccumulatedOrders(accumulatedOrders);
+                setBatchAccumulatedCount(accumulatedOrders.length);
+
+                const dailyOrders = (pOrdersData || []).filter((o: any) => 
+                    !o.logistics_data?.is_batch_accumulated && o.profiles?.document_type !== 'batch_remission'
+                );
+                setPendingOrders(dailyOrders as any[]);
+                setPendingOrdersCount(dailyOrders.length);
 
                 // Fetch parent profiles for branch inheritance
                 const parentIds = Array.from(new Set((pOrdersData as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
@@ -1676,9 +1714,9 @@ export default function BillingDashboard() {
         }).length;
     }, [pendingOrders, parentProfilesMap]);
 
-    // Filter & Sort Pending Orders
+    // Filter & Sort Pending Orders (Excluye pedidos acumulados en lote)
     const filteredPendingOrders = useMemo(() => {
-        let result = pendingOrders;
+        let result = pendingOrders.filter(o => !o.logistics_data?.is_batch_accumulated && o.profiles?.document_type !== 'batch_remission');
 
         // 1. Universal Search Query
         if (billingSearchQuery) {
@@ -2638,6 +2676,319 @@ export default function BillingDashboard() {
         }
     };
 
+    // Escenario 252: Memoria de Filtros para Pedidos Acumulados por Lote
+    const filteredBatchAccumulatedOrders = useMemo(() => {
+        let result = batchAccumulatedOrders;
+        if (batchClientFilter !== 'all') {
+            result = result.filter(o => (o.profiles?.nit || o.profiles?.id) === batchClientFilter);
+        }
+        if (batchStartDate) {
+            result = result.filter(o => (o.delivery_date || o.created_at?.slice(0, 10)) >= batchStartDate);
+        }
+        if (batchEndDate) {
+            result = result.filter(o => (o.delivery_date || o.created_at?.slice(0, 10)) <= batchEndDate);
+        }
+        if (billingSearchQuery) {
+            result = result.filter(order => matchesUniversalSearch(
+                order,
+                billingSearchQuery,
+                o => [
+                    o.sequence_id ? `#${o.sequence_id}` : '',
+                    getFriendlyOrderId(o),
+                    o.profiles?.company_name || '',
+                    o.profiles?.razon_social || '',
+                    o.profiles?.nit || '',
+                    o.purchase_order_number ? `OC ${o.purchase_order_number}` : '',
+                    o.status || '',
+                    o.delivery_slot || ''
+                ],
+                o => o.sequence_id
+            ));
+        }
+        return result;
+    }, [batchAccumulatedOrders, batchClientFilter, batchStartDate, batchEndDate, billingSearchQuery]);
+
+    const batchClientsList = useMemo(() => {
+        const map = new Map<string, { id: string; name: string; nit: string; count: number }>();
+        batchAccumulatedOrders.forEach(o => {
+            const key = o.profiles?.nit || o.profiles?.id || 'sin_cliente';
+            const name = o.profiles?.company_name || o.profiles?.razon_social || 'Cliente sin nombre';
+            const nit = o.profiles?.nit || 'S/N';
+            if (!map.has(key)) {
+                map.set(key, { id: key, name, nit, count: 1 });
+            } else {
+                map.get(key)!.count += 1;
+            }
+        });
+        return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    }, [batchAccumulatedOrders]);
+
+    // Acciones para Acumulados por Lote (Escenario 252)
+    const handleAccumulateOrdersForBatch = async (targetOrderIds: string[]) => {
+        if (!targetOrderIds || targetOrderIds.length === 0) return;
+        setIsProcessing(true);
+        try {
+            for (const orderId of targetOrderIds) {
+                const ord = pendingOrders.find(o => o.id === orderId);
+                const nextLogistics = {
+                    ...(ord?.logistics_data || {}),
+                    is_batch_accumulated: true
+                };
+                await supabase
+                    .from('orders')
+                    .update({ logistics_data: nextLogistics })
+                    .eq('id', orderId);
+            }
+            showToast({
+                type: 'success',
+                title: 'Pedidos Acumulados p/ Lote',
+                message: `Se enviaron ${targetOrderIds.length} pedidos a la pestaña "Acumulados por Lote".`
+            });
+            clearOrderSelection();
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error accumulating orders:', err);
+            showToast({ type: 'error', message: `Error acumulando pedidos: ${err.message}` });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleDeaccumulateOrders = async (targetOrderIds: string[]) => {
+        if (!targetOrderIds || targetOrderIds.length === 0) return;
+        setIsProcessing(true);
+        try {
+            for (const orderId of targetOrderIds) {
+                const ord = batchAccumulatedOrders.find(o => o.id === orderId);
+                const nextLogistics = {
+                    ...(ord?.logistics_data || {}),
+                    is_batch_accumulated: false
+                };
+                await supabase
+                    .from('orders')
+                    .update({ logistics_data: nextLogistics })
+                    .eq('id', orderId);
+            }
+            showToast({
+                type: 'info',
+                title: 'Pedidos Regresados a Pendientes',
+                message: `Se desacumularon ${targetOrderIds.length} pedidos y volvieron a la lista de pendientes diarios.`
+            });
+            clearOrderSelection();
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error deaccumulating orders:', err);
+            showToast({ type: 'error', message: `Error desacumulando pedidos: ${err.message}` });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleUnifyOrdersIntoSingleInvoice = async (targetOrderIds: string[]) => {
+        if (!targetOrderIds || targetOrderIds.length === 0) return;
+        const allKnown = [...pendingOrders, ...batchAccumulatedOrders];
+        const selected = allKnown.filter(o => targetOrderIds.includes(o.id));
+        if (selected.length === 0) return;
+
+        // 1. Validar que todos los pedidos pertenezcan al mismo cliente / NIT
+        const firstNit = selected[0].profiles?.nit || selected[0].profile_id;
+        const isSingleClient = selected.every(o => (o.profiles?.nit || o.profile_id) === firstNit);
+        if (!isSingleClient) {
+            showToast({
+                type: 'error',
+                title: 'NIT / Clientes Diferentes',
+                message: 'Para unificar en 1 sola factura, todos los pedidos seleccionados deben pertenecer al mismo cliente / NIT.'
+            });
+            return;
+        }
+
+        // 2. Validar que ninguno tenga ítems en $0 sin tarifa comercial
+        const hasUnpriced = selected.some(o => 
+            o.admin_notes?.includes('DESPACHADO SIN PRECIO') || 
+            o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') ||
+            (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced)
+        );
+        if (hasUnpriced) {
+            showToast({
+                type: 'warning',
+                title: 'Remisiones con Ítems en $0',
+                message: 'No es posible facturar pedidos con ítems en $0. El área Comercial debe asignar la tarifa previamente.'
+            });
+            return;
+        }
+
+        setIsProcessing(true);
+        try {
+            const { data: fullOrders, error: fullErr } = await supabase
+                .from('orders')
+                .select(`
+                    id, total, subtotal, tax, sequence_id, profiles ( id, nit, company_name, razon_social, iva_responsible, payment_days )
+                `)
+                .in('id', targetOrderIds);
+
+            if (fullErr) throw fullErr;
+
+            const totalBase = (fullOrders || []).reduce((acc, o) => acc + Number(o.subtotal || o.total || 0), 0);
+            const totalTax = (fullOrders || []).reduce((acc, o) => acc + Number(o.tax || 0), 0);
+            const totalFinal = (fullOrders || []).reduce((acc, o) => acc + Number(o.total || 0), 0);
+
+            const invoiceNum = `${invoicePrefix}-${invoiceNextNumber}`;
+            const primaryOrderId = selected[0].id;
+
+            const { data: newInvoice, error: invErr } = await supabase
+                .from('billing_invoices')
+                .insert({
+                    order_id: primaryOrderId,
+                    invoice_number: invoiceNum,
+                    total_base: totalBase,
+                    total_tax: totalTax,
+                    total_final: totalFinal,
+                    status: 'pending'
+                })
+                .select('id, invoice_number')
+                .single();
+
+            if (invErr) throw invErr;
+
+            for (const ord of selected) {
+                const nextLogistics = {
+                    ...(ord.logistics_data || {}),
+                    is_batch_accumulated: true,
+                    unified_invoice_id: newInvoice.id,
+                    unified_invoice_number: newInvoice.invoice_number
+                };
+                await supabase
+                    .from('orders')
+                    .update({
+                        invoice_id: newInvoice.id,
+                        logistics_data: nextLogistics
+                    })
+                    .eq('id', ord.id);
+            }
+
+            const nextNum = invoiceNextNumber + 1;
+            await supabase
+                .from('app_settings')
+                .upsert({
+                    key: 'billing_invoice_next_number',
+                    value: String(nextNum),
+                    description: 'Próximo consecutivo numérico Facturas de Venta',
+                    updated_at: new Date().toISOString()
+                });
+            setInvoiceNextNumber(nextNum);
+
+            showToast({
+                type: 'success',
+                title: 'Factura Unificada Generada',
+                message: `Se unificaron ${selected.length} pedidos en la factura ${invoiceNum} por un total de ${formatMoney(totalFinal)}.`
+            });
+
+            clearOrderSelection();
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error unifying orders:', err);
+            showToast({ type: 'error', message: `Error al unificar factura: ${err.message}` });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleBillOrdersOneByOne = async (targetOrderIds: string[]) => {
+        if (!targetOrderIds || targetOrderIds.length === 0) return;
+        const allKnown = [...pendingOrders, ...batchAccumulatedOrders];
+        const selected = allKnown.filter(o => targetOrderIds.includes(o.id));
+        if (selected.length === 0) return;
+
+        setIsProcessing(true);
+        try {
+            let currentNext = invoiceNextNumber;
+            for (let i = 0; i < selected.length; i++) {
+                const ord = selected[i];
+                const invNum = `${invoicePrefix}-${currentNext + i}`;
+                const sub = Number(ord.subtotal || ord.total || 0);
+                const tx = Number(ord.tax || 0);
+                const tot = Number(ord.total || 0);
+
+                const { data: newInv, error: invErr } = await supabase
+                    .from('billing_invoices')
+                    .insert({
+                        order_id: ord.id,
+                        invoice_number: invNum,
+                        total_base: sub,
+                        total_tax: tx,
+                        total_final: tot,
+                        status: 'pending'
+                    })
+                    .select('id, invoice_number')
+                    .single();
+
+                if (invErr) throw invErr;
+
+                await supabase
+                    .from('orders')
+                    .update({
+                        invoice_id: newInv.id
+                    })
+                    .eq('id', ord.id);
+            }
+
+            const nextNum = currentNext + selected.length;
+            await supabase
+                .from('app_settings')
+                .upsert({
+                    key: 'billing_invoice_next_number',
+                    value: String(nextNum),
+                    description: 'Próximo consecutivo numérico Facturas de Venta',
+                    updated_at: new Date().toISOString()
+                });
+            setInvoiceNextNumber(nextNum);
+
+            showToast({
+                type: 'success',
+                title: 'Facturas Individuales Generadas',
+                message: `Se generaron ${selected.length} facturas individuales (${invoicePrefix}-${currentNext} a ${invoicePrefix}-${nextNum - 1}).`
+            });
+
+            clearOrderSelection();
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error billing 1-to-1:', err);
+            showToast({ type: 'error', message: `Error facturando 1 a 1: ${err.message}` });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Escenario 251: Copiar Novedades de Remisiones $0 para el Equipo Comercial
+    const handleCopyNoveltiesToCommercial = () => {
+        let text = `📋 *REPORTE DE REMISIONES RETENIDAS POR PRECIO $0*\n`;
+        text += `Módulo: Facturación | Segregación de Funciones (SoD)\n`;
+        text += `Fecha de Auditoría: ${new Date().toLocaleDateString('es-CO')}\n\n`;
+
+        assignPriceOrders.forEach((o: any) => {
+            const client = o.profiles?.company_name || o.profiles?.razon_social || 'Cliente';
+            const remNum = o.sequence_id ? `#${o.sequence_id}` : o.id.slice(0, 8);
+            text += `• *Remisión ${remNum}* - ${client} (Entrega: ${o.delivery_date || 'N/A'})\n`;
+            (o.unpriced_items || []).forEach((it: any) => {
+                const name = it.products?.name || it.nickname || 'Producto';
+                const sku = it.products?.sku || 'S/N';
+                const qty = it.billable_quantity ?? it.quantity ?? 0;
+                const unit = it.unit || it.products?.unit_of_measure || 'Und';
+                const refCost = it.reference_cost ? ` (Costo Ref: ${Number(it.reference_cost).toLocaleString('es-CO')})` : '';
+                text += `   - SKU ${sku}: ${name} x ${qty} ${unit}${refCost}\n`;
+            });
+            text += `\n`;
+        });
+        text += `⚠️ *Acción requerida:* Asignar tarifa comercial en el Módulo de Pedidos/Acuerdos para liberar la facturación de estos pedidos.`;
+
+        navigator.clipboard.writeText(text);
+        showToast({
+            type: 'success',
+            title: 'Reporte Copiado',
+            message: 'Se copió el reporte de novedades al portapapeles. Listo para enviar al equipo Comercial.'
+        });
+    };
+
     // Save Configuration Settings in app_settings (COM-29)
     const handleSaveConfiguration = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -3011,6 +3362,25 @@ export default function BillingDashboard() {
                                 }}
                             >
                                 <ShoppingCart size={12} style={{ color: subTab === 'pending' ? '#0D7A57' : '#64748B' }} /> Pedidos por Facturar ({pendingOrdersCount})
+                            </button>
+                            <button
+                                onClick={() => setSubTab('batch_accumulated')}
+                                style={{ 
+                                    backgroundColor: subTab === 'batch_accumulated' ? 'white' : 'transparent', 
+                                    color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B', 
+                                    padding: '0.26rem 0.65rem', 
+                                    borderRadius: '6px', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.72rem', 
+                                    cursor: 'pointer', 
+                                    boxShadow: subTab === 'batch_accumulated' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                <Archive size={12} style={{ color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B' }} /> Acumulados por Lote ({batchAccumulatedCount})
                             </button>
                             <button
                                 onClick={() => setSubTab('cuts')}
@@ -3618,6 +3988,346 @@ export default function BillingDashboard() {
                             </div>
                         )}
 
+                        {/* SUBTAB: PEDIDOS ACUMULADOS POR LOTE (ESCENARIO 252) */}
+                        {subTab === 'batch_accumulated' && (
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '14px', border: `1px solid ${THEME.colors.border}`, overflow: 'visible', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+                                {/* Header / Filter Toolbar */}
+                                <div style={{ padding: '0.75rem 1rem', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', borderTopLeftRadius: '14px', borderTopRightRadius: '14px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Archive size={16} style={{ color: '#0D7A57' }} />
+                                            <h3 style={{ margin: 0, fontSize: '0.86rem', fontWeight: '900', color: '#0F172A' }}>
+                                                Pedidos Acumulados por Lote
+                                            </h3>
+                                            <span style={{ fontSize: '0.70rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0', padding: '1px 7px', borderRadius: '99px' }}>
+                                                {filteredBatchAccumulatedOrders.length} {filteredBatchAccumulatedOrders.length === 1 ? 'pedido acumulado' : 'pedidos acumulados'}
+                                            </span>
+                                        </div>
+
+                                        {/* Filtro de Cliente */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>Cliente:</span>
+                                            <select
+                                                value={batchClientFilter}
+                                                onChange={(e) => setBatchClientFilter(e.target.value)}
+                                                style={{
+                                                    padding: '0.28rem 0.55rem',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #CBD5E1',
+                                                    fontSize: '0.74rem',
+                                                    fontWeight: '700',
+                                                    color: '#0F172A',
+                                                    backgroundColor: 'white'
+                                                }}
+                                            >
+                                                <option value="all">Todos los Clientes ({batchAccumulatedOrders.length})</option>
+                                                {batchClientsList.map(c => (
+                                                    <option key={c.id} value={c.id}>
+                                                        {c.name} ({c.count} pedidos) - NIT {c.nit}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Filtro Rango de Fechas */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>Desde:</span>
+                                            <input
+                                                type="date"
+                                                value={batchStartDate}
+                                                onChange={(e) => setBatchStartDate(e.target.value)}
+                                                style={{
+                                                    padding: '0.24rem 0.45rem',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #CBD5E1',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '700',
+                                                    color: '#0F172A'
+                                                }}
+                                            />
+                                            <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>Hasta:</span>
+                                            <input
+                                                type="date"
+                                                value={batchEndDate}
+                                                onChange={(e) => setBatchEndDate(e.target.value)}
+                                                style={{
+                                                    padding: '0.24rem 0.45rem',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #CBD5E1',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '700',
+                                                    color: '#0F172A'
+                                                }}
+                                            />
+                                            {(batchStartDate || batchEndDate || batchClientFilter !== 'all') && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setBatchStartDate('');
+                                                        setBatchEndDate('');
+                                                        setBatchClientFilter('all');
+                                                    }}
+                                                    style={{
+                                                        padding: '0.24rem 0.5rem',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid #FECACA',
+                                                        backgroundColor: '#FEF2F2',
+                                                        color: '#991B1B',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Limpiar
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Acciones para Acumulados */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                        {selectedOrderIds.length > 0 && (
+                                            <>
+                                                {/* Botón Desacumular / Regresar a Pendientes */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeaccumulateOrders(selectedOrderIds)}
+                                                    disabled={isProcessing}
+                                                    style={{
+                                                        backgroundColor: 'white',
+                                                        color: '#475569',
+                                                        border: '1px solid #CBD5E1',
+                                                        padding: '0.38rem 0.75rem',
+                                                        borderRadius: '8px',
+                                                        fontWeight: '700',
+                                                        fontSize: '0.73rem',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                    title="Regresar los pedidos seleccionados a la bandeja de pendientes diarios"
+                                                >
+                                                    <RotateCcw size={12} />
+                                                    <span>Regresar a Pendientes ({selectedOrderIds.length} sel)</span>
+                                                </button>
+
+                                                {/* Botón Facturar 1 a 1 */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleBillOrdersOneByOne(selectedOrderIds)}
+                                                    disabled={isProcessing}
+                                                    style={{
+                                                        backgroundColor: 'white',
+                                                        color: '#0F172A',
+                                                        border: '1px solid #0D7A57',
+                                                        padding: '0.38rem 0.75rem',
+                                                        borderRadius: '8px',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.73rem',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                    title="Generar una Factura de Venta individual para cada uno de los pedidos seleccionados"
+                                                >
+                                                    <FileText size={12} style={{ color: '#0D7A57' }} />
+                                                    <span>Facturar 1 a 1 ({selectedOrderIds.length} sel)</span>
+                                                </button>
+
+                                                {/* Botón Unificar en 1 Sola Factura (si son del mismo cliente) */}
+                                                {(() => {
+                                                    const selectedOrdersList = filteredBatchAccumulatedOrders.filter(o => selectedOrderIds.includes(o.id));
+                                                    if (selectedOrdersList.length === 0) return null;
+                                                    const firstClient = selectedOrdersList[0].profiles?.nit || selectedOrdersList[0].profile_id;
+                                                    const isSameClient = selectedOrdersList.every(o => (o.profiles?.nit || o.profile_id) === firstClient);
+                                                    if (!isSameClient) {
+                                                        return (
+                                                            <span style={{ fontSize: '0.68rem', color: '#DC2626', fontWeight: '800', backgroundColor: '#FEF2F2', padding: '3px 8px', borderRadius: '6px', border: '1px solid #FECACA' }}>
+                                                                Mismo NIT requerido para Unificar
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleUnifyOrdersIntoSingleInvoice(selectedOrderIds)}
+                                                            disabled={isProcessing}
+                                                            style={{
+                                                                backgroundColor: '#0D7A57',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                padding: '0.38rem 0.85rem',
+                                                                borderRadius: '8px',
+                                                                fontWeight: '900',
+                                                                fontSize: '0.73rem',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                                                            }}
+                                                            title="Unificar todos los pedidos seleccionados en una sola Factura de Venta acumulada"
+                                                        >
+                                                            <CheckCircle2 size={13} />
+                                                            <span>Unificar en 1 Sola Factura ({selectedOrderIds.length} sel)</span>
+                                                        </button>
+                                                    );
+                                                })()}
+                                            </>
+                                        )}
+
+                                        {/* Exportar a World Office */}
+                                        <button
+                                            type="button"
+                                            onClick={handleExportPendingToWorldOffice}
+                                            disabled={filteredBatchAccumulatedOrders.length === 0 || isProcessing}
+                                            style={{
+                                                backgroundColor: '#FFFFFF',
+                                                color: '#0F172A',
+                                                border: '1px solid #CBD5E1',
+                                                padding: '0.38rem 0.75rem',
+                                                borderRadius: '8px',
+                                                fontWeight: '700',
+                                                fontSize: '0.73rem',
+                                                cursor: filteredBatchAccumulatedOrders.length === 0 ? 'not-allowed' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px'
+                                            }}
+                                            title="Descargar archivo Excel (.xlsx) con la plantilla oficial de World Office para los pedidos acumulados"
+                                        >
+                                            <FileSpreadsheet size={13} style={{ color: '#0D7A57' }} />
+                                            <span>Descargar Excel World Office {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length} sel)` : `(${filteredBatchAccumulatedOrders.length})`}</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Tabla de Pedidos Acumulados */}
+                                <div style={{ overflow: 'visible' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
+                                        <thead style={{ position: 'sticky', top: '169px', zIndex: 30 }}>
+                                            <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={filteredBatchAccumulatedOrders.length > 0 && filteredBatchAccumulatedOrders.every(o => selectedOrderIds.includes(o.id))}
+                                                        onChange={() => {
+                                                            const allSelected = filteredBatchAccumulatedOrders.length > 0 && filteredBatchAccumulatedOrders.every(o => selectedOrderIds.includes(o.id));
+                                                            if (allSelected) {
+                                                                setSelectedOrderIds(prev => prev.filter(id => !filteredBatchAccumulatedOrders.some(o => o.id === id)));
+                                                            } else {
+                                                                const visibleIds = filteredBatchAccumulatedOrders.map(o => o.id);
+                                                                setSelectedOrderIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+                                                            }
+                                                        }}
+                                                        style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '14px', height: '14px' }}
+                                                    />
+                                                </th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Remisión / Pedido</th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Cliente / Razón Social</th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Entrega</th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'center' }}>Ítems</th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'right' }}>Total Pedido</th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'center' }}>Modalidad</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredBatchAccumulatedOrders.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={7} style={{ padding: '2.5rem 1.5rem', textAlign: 'center' }}>
+                                                        <div style={{ maxWidth: '400px', margin: '0 auto', color: '#64748B' }}>
+                                                            <Archive size={32} style={{ margin: '0 auto 8px auto', display: 'block', color: '#94A3B8' }} />
+                                                            <div style={{ fontWeight: '800', fontSize: '0.86rem', color: '#334155' }}>No hay pedidos acumulados por lote para los filtros seleccionados</div>
+                                                            <div style={{ fontSize: '0.72rem', marginTop: '4px' }}>
+                                                                En la pestaña de &quot;Pedidos por Facturar&quot;, selecciona pedidos y presiona &quot;Acumular p/ Lote&quot; para agruparlos aquí.
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                filteredBatchAccumulatedOrders.map((order) => {
+                                                    const isSelected = selectedOrderIds.includes(order.id);
+                                                    const clientName = order.profiles?.company_name || order.profiles?.razon_social || 'Cliente sin nombre';
+                                                    const clientNit = order.profiles?.nit || 'S/N';
+                                                    const itemCount = order.order_items?.[0]?.count ?? (order.order_items?.length || 0);
+                                                    const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+
+                                                    return (
+                                                        <tr
+                                                            key={order.id}
+                                                            style={{
+                                                                borderBottom: `1px solid ${THEME.colors.border}`,
+                                                                backgroundColor: isSelected ? '#F0FDF4' : 'transparent',
+                                                                transition: 'background-color 0.15s ease',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                            onClick={() => handleOpenOrderDetail(order)}
+                                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                                        >
+                                                            <td
+                                                                style={{ padding: '0.5rem 0.5rem', textAlign: 'center' }}
+                                                                onClick={e => { e.stopPropagation(); toggleOrderSelection(order.id); }}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => toggleOrderSelection(order.id)}
+                                                                    style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '14px', height: '14px' }}
+                                                                />
+                                                            </td>
+                                                            <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                                <div style={{ fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                                                    REM-{order.sequence_id || order.id.slice(0, 8)}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
+                                                                    ID: {order.id.slice(0, 8)}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                                <div style={{ fontWeight: '800', color: '#0D7A57' }}>
+                                                                    {clientName}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                    <span>NIT: {clientNit}</span>
+                                                                    {discountPct > 0 && (
+                                                                        <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0', padding: '0 4px', borderRadius: '3px', fontWeight: '800', fontSize: '0.58rem' }}>
+                                                                            Dto. -{discountPct}%
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                                <div style={{ fontWeight: '700', color: '#334155' }}>
+                                                                    {order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('es-CO') : 'Sin fecha'}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
+                                                                    Franja: {order.delivery_slot || 'AM'}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: '700', color: '#334155' }}>
+                                                                {itemCount}
+                                                            </td>
+                                                            <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                                                {formatMoney(order.total || 0)}
+                                                            </td>
+                                                            <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+                                                                <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.62rem', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                                    Lote Acumulado
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
                         {/* SUBTAB: PEDIDOS POR FACTURAR */}
                         {subTab === 'pending' && (
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '14px', border: `1px solid ${THEME.colors.border}`, overflow: 'visible', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
@@ -3829,7 +4539,8 @@ export default function BillingDashboard() {
 
                                         {unpricedOffAgreementCount > 0 && (
                                             <div 
-                                                title="Las tarifas de remisiones fuera de acuerdo deben ser asignadas exclusivamente por el Área Comercial en el módulo de Pedidos o Acuerdos"
+                                                onClick={() => handleOpenAssignPriceModal()}
+                                                title="Las tarifas de remisiones fuera de acuerdo deben ser asignadas exclusivamente por el Área Comercial en el módulo de Pedidos o Acuerdos. Haz clic para ver el detalle informativo (SoD)."
                                                 style={{
                                                     backgroundColor: '#FEF2F2',
                                                     color: '#991B1B',
@@ -3841,12 +4552,70 @@ export default function BillingDashboard() {
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
                                                     gap: '6px',
-                                                    boxShadow: '0 1px 3px rgba(220, 38, 38, 0.15)'
+                                                    boxShadow: '0 1px 3px rgba(220, 38, 38, 0.15)',
+                                                    cursor: 'pointer'
                                                 }}
                                             >
                                                 <AlertTriangle size={13} style={{ color: '#DC2626' }} />
                                                 <span>{unpricedOffAgreementCount} {unpricedOffAgreementCount === 1 ? 'pedido retenido' : 'pedidos retenidos'}: Pendiente Tarifa Comercial</span>
                                             </div>
+                                        )}
+
+                                        {selectedOrderIds.length > 0 && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAccumulateOrdersForBatch(selectedOrderIds)}
+                                                    style={{
+                                                        backgroundColor: '#F8FAFC',
+                                                        color: '#0F172A',
+                                                        border: '1px solid #CBD5E1',
+                                                        padding: '0.4rem 0.75rem',
+                                                        borderRadius: '8px',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.74rem',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px'
+                                                    }}
+                                                    title="Enviar pedidos seleccionados a la bandeja de facturación por lote acumulado"
+                                                >
+                                                    <Archive size={13} style={{ color: '#0D7A57' }} />
+                                                    <span>Acumular p/ Lote ({selectedOrderIds.length} sel)</span>
+                                                </button>
+                                                {(() => {
+                                                    const selectedOrdersList = filteredPendingOrders.filter(o => selectedOrderIds.includes(o.id));
+                                                    if (selectedOrdersList.length < 2) return null;
+                                                    const firstClient = selectedOrdersList[0].profiles?.nit || selectedOrdersList[0].profile_id;
+                                                    const isSameClient = selectedOrdersList.every(o => (o.profiles?.nit || o.profile_id) === firstClient);
+                                                    if (!isSameClient) return null;
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleUnifyOrdersIntoSingleInvoice(selectedOrderIds)}
+                                                            style={{
+                                                                backgroundColor: '#0D7A57',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                padding: '0.4rem 0.85rem',
+                                                                borderRadius: '8px',
+                                                                fontWeight: '900',
+                                                                fontSize: '0.74rem',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                                                            }}
+                                                            title="Unificar los pedidos seleccionados del mismo cliente en una sola Factura de Venta"
+                                                        >
+                                                            <CheckCircle2 size={13} />
+                                                            <span>Unificar en 1 Sola Factura ({selectedOrderIds.length} sel)</span>
+                                                        </button>
+                                                    );
+                                                })()}
+                                            </>
                                         )}
 
                                         <button
@@ -6251,7 +7020,7 @@ export default function BillingDashboard() {
                     );
                 })()}
 
-                {/* MODAL DE ASIGNACIÓN DE PRECIOS FUERA DE ACUERDO DEL DÍA (ESCENARIO 221) */}
+                {/* MODAL DE AUDITORÍA INFORMATIVA SoD — REMISIONES RETENIDAS POR PRECIO $0 (ESCENARIO 251) */}
                 {isAssignPriceModalOpen && (
                     <div
                         style={{
@@ -6308,27 +7077,27 @@ export default function BillingDashboard() {
                                                 letterSpacing: '0.04em'
                                             }}
                                         >
-                                            SLA CIERRE DE CORTE: {cutCloseTime}
+                                            SEGREGACIÓN DE FUNCIONES (SoD) — SOLO LECTURA
                                         </span>
                                         <span
                                             style={{
-                                                backgroundColor: '#ECFDF5',
-                                                color: '#065F46',
-                                                border: '1px solid #A7F3D0',
+                                                backgroundColor: '#FEE2E2',
+                                                color: '#991B1B',
+                                                border: '1px solid #FCA5A5',
                                                 padding: '2px 8px',
                                                 borderRadius: '999px',
                                                 fontSize: '0.66rem',
                                                 fontWeight: '800'
                                             }}
                                         >
-                                            Aislamiento Contractual Activo (No altera el Acuerdo Comercial)
+                                            Retenido por Tarifa Comercial ($0)
                                         </span>
                                     </div>
                                     <h3 style={{ margin: '6px 0 2px 0', fontSize: '1.05rem', fontWeight: '900', color: '#7F1D1D' }}>
-                                        Asignar Tarifa Comercial — Remisiones Fuera de Acuerdo ($0)
+                                        Remisiones Retenidas — Pendiente Tarifa Comercial ($0)
                                     </h3>
                                     <p style={{ margin: 0, fontSize: '0.74rem', color: '#991B1B', fontWeight: '600' }}>
-                                        Asigna el precio unitario negociado para los SKU despachados en remisión a $0 del día ({selectedBillingDate === 'all' ? 'Todas las fechas' : selectedBillingDate}). Una vez valorizadas, quedarán listas para facturar en el corte.
+                                        Estas remisiones contienen productos despachados a $0 fuera de acuerdo. Por normativa interna y segregación de funciones, las tarifas deben ser asignadas exclusivamente por el equipo Comercial en el módulo de Pedidos o Acuerdos Comerciales.
                                     </p>
                                 </div>
                                 <button
@@ -6348,7 +7117,7 @@ export default function BillingDashboard() {
                                         fontWeight: '800'
                                     }}
                                 >
-                                    
+                                    ✕
                                 </button>
                             </div>
 
@@ -6356,159 +7125,20 @@ export default function BillingDashboard() {
                             <div style={{ padding: '1.15rem 1.35rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 {loadingAssignPriceOrders ? (
                                     <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748B', fontWeight: '700', fontSize: '0.85rem' }}>
-                                        Cargando remisiones fuera de acuerdo en $0...
+                                        Cargando remisiones retenidas en $0...
                                     </div>
                                 ) : assignPriceOrders.length === 0 ? (
                                     <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', color: '#166534' }}>
                                         <CheckCircle2 size={28} style={{ margin: '0 auto 8px auto', display: 'block' }} />
-                                        <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>No hay remisiones fuera de acuerdo pendientes de precio para este filtro.</div>
-                                        <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Todas las remisiones ya cuentan con tarifa comercial asignada.</div>
+                                        <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>No hay remisiones fuera de acuerdo retenidas por precio para este filtro.</div>
+                                        <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Todas las remisiones ya cuentan con tarifa comercial asignada y están listas para facturación.</div>
                                     </div>
                                 ) : (
                                     <>
-                                        {/* Resumen Rápido por SKU del Día (Permite fijar tarifa a un SKU para todas las remisiones del día de un golpe) */}
-                                        {(() => {
-                                            const uniqueSkusMap = new Map<string, any>();
-                                            assignPriceOrders.forEach((o: any) => {
-                                                (o.unpriced_items || []).forEach((it: any) => {
-                                                    if (it.product_id && !uniqueSkusMap.has(it.product_id)) {
-                                                        uniqueSkusMap.set(it.product_id, {
-                                                            product_id: it.product_id,
-                                                            name: it.products?.name || it.nickname || 'Producto',
-                                                            sku: it.products?.sku || 'S/N',
-                                                            unit: it.unit || it.products?.unit_of_measure || 'Und',
-                                                            reference_cost: Number(it.reference_cost || 0),
-                                                            reference_general_price: Number(it.reference_general_price || 0),
-                                                            countOrders: 1
-                                                        });
-                                                    } else if (it.product_id) {
-                                                        const entry = uniqueSkusMap.get(it.product_id);
-                                                        entry.countOrders += 1;
-                                                    }
-                                                });
-                                            });
-                                            const uniqueSkus = Array.from(uniqueSkusMap.values());
-                                            if (uniqueSkus.length === 0) return null;
-
-                                            return (
-                                                <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '12px', padding: '0.85rem 1rem' }}>
-                                                    <div style={{ fontSize: '0.72rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '8px' }}>
-                                                        Asignación Rápida por SKU para el Día ({uniqueSkus.length} SKU fuera de acuerdo)
-                                                    </div>
-                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px' }}>
-                                                        {uniqueSkus.map(skuInfo => (
-                                                            <div
-                                                                key={skuInfo.product_id}
-                                                                style={{
-                                                                    backgroundColor: 'white',
-                                                                    border: '1px solid #FCD34D',
-                                                                    borderRadius: '8px',
-                                                                    padding: '0.55rem 0.7rem',
-                                                                    display: 'flex',
-                                                                    flexDirection: 'column',
-                                                                    gap: '5px'
-                                                                }}
-                                                            >
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
-                                                                    <span style={{ fontWeight: '800', fontSize: '0.76rem', color: '#0F172A' }}>
-                                                                        {skuInfo.name} <span style={{ color: '#64748B', fontWeight: '600' }}>({skuInfo.unit})</span>
-                                                                    </span>
-                                                                    <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '99px' }}>
-                                                                        {skuInfo.countOrders} {skuInfo.countOrders === 1 ? 'remisión' : 'remisiones'}
-                                                                    </span>
-                                                                </div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                                    <input
-                                                                        type="number"
-                                                                        placeholder="Precio unitario $ COP"
-                                                                        value={assignPriceSkuInputs[skuInfo.product_id] || ''}
-                                                                        onChange={(e) => {
-                                                                            const val = e.target.value;
-                                                                            setAssignPriceSkuInputs(prev => ({ ...prev, [skuInfo.product_id]: val }));
-                                                                            // Propagar a todos los ítems de este SKU en las remisiones cargadas
-                                                                            setAssignPriceItemInputs(prev => {
-                                                                                const next = { ...prev };
-                                                                                assignPriceOrders.forEach((ord: any) => {
-                                                                                    (ord.unpriced_items || []).forEach((it: any) => {
-                                                                                        if (it.product_id === skuInfo.product_id) {
-                                                                                            next[it.id] = val;
-                                                                                        }
-                                                                                    });
-                                                                                });
-                                                                                return next;
-                                                                            });
-                                                                        }}
-                                                                        style={{
-                                                                            flex: 1,
-                                                                            minWidth: '110px',
-                                                                            padding: '0.32rem 0.55rem',
-                                                                            borderRadius: '6px',
-                                                                            border: '1.5px solid #CBD5E1',
-                                                                            fontSize: '0.76rem',
-                                                                            fontWeight: '800',
-                                                                            color: '#0F172A'
-                                                                        }}
-                                                                    />
-                                                                    {skuInfo.reference_general_price > 0 && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                const val = String(Math.round(skuInfo.reference_general_price));
-                                                                                setAssignPriceSkuInputs(prev => ({ ...prev, [skuInfo.product_id]: val }));
-                                                                                setAssignPriceItemInputs(prev => {
-                                                                                    const next = { ...prev };
-                                                                                    assignPriceOrders.forEach((ord: any) => {
-                                                                                        (ord.unpriced_items || []).forEach((it: any) => {
-                                                                                            if (it.product_id === skuInfo.product_id) {
-                                                                                                next[it.id] = val;
-                                                                                            }
-                                                                                        });
-                                                                                    });
-                                                                                    return next;
-                                                                                });
-                                                                            }}
-                                                                            title="Usar precio de lista General Institucional como referencia"
-                                                                            style={{
-                                                                                backgroundColor: '#EFF6FF',
-                                                                                color: '#1E40AF',
-                                                                                border: '1px solid #BFDBFE',
-                                                                                borderRadius: '5px',
-                                                                                padding: '0.22rem 0.45rem',
-                                                                                fontSize: '0.64rem',
-                                                                                fontWeight: '800',
-                                                                                cursor: 'pointer',
-                                                                                whiteSpace: 'nowrap'
-                                                                            }}
-                                                                        >
-                                                                            Inst: {formatMoney(skuInfo.reference_general_price)}
-                                                                        </button>
-                                                                    )}
-                                                                    {skuInfo.reference_cost > 0 && (
-                                                                        <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '700' }}>
-                                                                            Costo: {formatMoney(skuInfo.reference_cost)}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
-
                                         {/* Detalle por Remisión */}
                                         {assignPriceOrders.map((ord: any) => {
                                             const clientLabel = ord.profiles?.company_name || ord.profiles?.razon_social || 'Cliente Institucional';
-                                            const isIvaClient = Boolean(ord.profiles?.iva_responsible);
                                             const itemsList = ord.unpriced_items || [];
-
-                                            const projectedTotal = itemsList.reduce((acc: number, it: any) => {
-                                                const p = Number(assignPriceItemInputs[it.id] || assignPriceSkuInputs[it.product_id] || 0);
-                                                const billableQty = Number(it.billable_quantity ?? it.quantity ?? 0);
-                                                const sub = p * billableQty;
-                                                const ivaRate = isIvaClient ? Number(it.products?.iva_rate || 0) : 0;
-                                                return acc + sub + (sub * (ivaRate / 100));
-                                            }, 0);
 
                                             return (
                                                 <div
@@ -6544,31 +7174,28 @@ export default function BillingDashboard() {
                                                             </span>
                                                             {ord.logistics_data?.parent_order_sequence_id && (
                                                                 <span style={{ fontSize: '0.64rem', backgroundColor: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: '99px', fontWeight: '800' }}>
-                                                                    Vinculada a Pedido Acuerdo #{ord.logistics_data.parent_order_sequence_id}
+                                                                    Vinculada a Pedido #{ord.logistics_data.parent_order_sequence_id}
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div style={{ fontSize: '0.78rem', fontWeight: '900', color: projectedTotal > 0 ? '#065F46' : '#DC2626' }}>
-                                                            Total Proyectado: {formatMoney(Math.round(projectedTotal))}
+                                                        <div style={{ fontSize: '0.74rem', fontWeight: '800', color: '#DC2626', backgroundColor: '#FEF2F2', padding: '2px 8px', borderRadius: '6px', border: '1px solid #FECACA' }}>
+                                                            Tarifa Comercial Pendiente ($0)
                                                         </div>
                                                     </div>
 
                                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
                                                         <thead>
                                                             <tr style={{ backgroundColor: '#F1F5F9', color: '#475569', textAlign: 'left' }}>
-                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800' }}>SKU / Producto Fuera de Acuerdo</th>
+                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800' }}>SKU / Producto Despachado a $0</th>
                                                                 <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'center' }}>Cant. Entregada</th>
                                                                 <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'right' }}>Referencias (Costo / Inst.)</th>
-                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'right', width: '190px' }}>Tarifa Unitaria Comercial ($ COP)</th>
-                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'right' }}>Subtotal Neto</th>
+                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'center' }}>Estado en Facturación</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
                                                             {itemsList.map((it: any) => {
-                                                                const currentPrice = Number(assignPriceItemInputs[it.id] || assignPriceSkuInputs[it.product_id] || 0);
                                                                 const billableQty = Number(it.billable_quantity ?? it.quantity ?? 0);
                                                                 const returnedQty = Number(it.quantity_returned || 0);
-                                                                const lineSubtotal = Math.round(currentPrice * billableQty);
 
                                                                 return (
                                                                     <tr key={it.id} style={{ borderTop: '1px solid #F1F5F9' }}>
@@ -6589,34 +7216,13 @@ export default function BillingDashboard() {
                                                                             )}
                                                                         </td>
                                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.68rem', color: '#475569' }}>
-                                                                            <div>Costo: <b>{it.reference_cost > 0 ? formatMoney(it.reference_cost) : 'N/A'}</b></div>
-                                                                            <div>Gral Inst: <b>{it.reference_general_price > 0 ? formatMoney(it.reference_general_price) : 'N/A'}</b></div>
+                                                                            <div>Costo Ref: <b>{it.reference_cost > 0 ? formatMoney(it.reference_cost) : 'N/A'}</b></div>
+                                                                            <div>Lista Inst: <b>{it.reference_general_price > 0 ? formatMoney(it.reference_general_price) : 'N/A'}</b></div>
                                                                         </td>
-                                                                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
-                                                                            <input
-                                                                                type="number"
-                                                                                min="0"
-                                                                                placeholder="$ 0"
-                                                                                value={assignPriceItemInputs[it.id] ?? ''}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value;
-                                                                                    setAssignPriceItemInputs(prev => ({ ...prev, [it.id]: val }));
-                                                                                }}
-                                                                                style={{
-                                                                                    width: '145px',
-                                                                                    padding: '0.35rem 0.55rem',
-                                                                                    borderRadius: '6px',
-                                                                                    border: `1.5px solid ${currentPrice > 0 ? '#10B981' : '#FCA5A5'}`,
-                                                                                    backgroundColor: currentPrice > 0 ? '#ECFDF5' : '#FEF2F2',
-                                                                                    fontWeight: '900',
-                                                                                    fontSize: '0.78rem',
-                                                                                    textAlign: 'right',
-                                                                                    color: '#0F172A'
-                                                                                }}
-                                                                            />
-                                                                        </td>
-                                                                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontWeight: '900', color: lineSubtotal > 0 ? '#0F172A' : '#DC2626' }}>
-                                                                            {formatMoney(lineSubtotal)}
+                                                                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+                                                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#991B1B', backgroundColor: '#FEF2F2', padding: '2px 7px', borderRadius: '4px', border: '1px solid #FCA5A5' }}>
+                                                                                Bloqueado para facturación
+                                                                            </span>
                                                                         </td>
                                                                     </tr>
                                                                 );
@@ -6644,9 +7250,32 @@ export default function BillingDashboard() {
                                 }}
                             >
                                 <div style={{ fontSize: '0.70rem', color: '#475569', fontWeight: '600' }}>
-                                    Al confirmar, se cerrará la tarea urgente en el Dashboard Comercial y la remisión pasará a estado facturable.
+                                    Por control interno (SoD), Facturación no tiene permisos para fijar tarifas. Contacta al equipo Comercial para su valoración.
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {assignPriceOrders.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyNoveltiesToCommercial}
+                                            style={{
+                                                backgroundColor: '#EFF6FF',
+                                                color: '#1E40AF',
+                                                border: '1px solid #BFDBFE',
+                                                padding: '0.5rem 1rem',
+                                                borderRadius: '8px',
+                                                fontWeight: '800',
+                                                fontSize: '0.76rem',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px'
+                                            }}
+                                            title="Copiar reporte estructurado para enviar por WhatsApp o Teams al área Comercial"
+                                        >
+                                            <Copy size={13} />
+                                            <span>Copiar Novedades para Comercial</span>
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={() => setIsAssignPriceModalOpen(false)}
@@ -6661,32 +7290,8 @@ export default function BillingDashboard() {
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        Cancelar
+                                        Cerrar
                                     </button>
-                                    {assignPriceOrders.length > 0 && (
-                                        <button
-                                            type="button"
-                                            onClick={handleSaveAssignedOffAgreementPrices}
-                                            disabled={savingAssignPrices}
-                                            style={{
-                                                backgroundColor: '#0D7A57',
-                                                color: 'white',
-                                                border: 'none',
-                                                padding: '0.5rem 1.2rem',
-                                                borderRadius: '8px',
-                                                fontWeight: '900',
-                                                fontSize: '0.78rem',
-                                                cursor: savingAssignPrices ? 'wait' : 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                boxShadow: '0 2px 8px rgba(13, 122, 87, 0.3)'
-                                            }}
-                                        >
-                                            <CheckCircle2 size={14} />
-                                            {savingAssignPrices ? 'Guardando Tarifas...' : `Confirmar y Valorizar (${assignPriceOrders.length} ${assignPriceOrders.length === 1 ? 'Remisión' : 'Remisiones'})`}
-                                        </button>
-                                    )}
                                 </div>
                             </div>
                         </div>

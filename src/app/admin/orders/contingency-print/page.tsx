@@ -1527,6 +1527,14 @@ function ContingencyPrintContent() {
                                                         })();
                                                         const qty = Number(itm.quantity || 0);
                                                         const price = isZeroCostDoc ? 0 : Number(itm.unit_price || 0);
+
+                                                        // Escenario 254: Conversión visual de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
+                                                        const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb');
+                                                        const isKgUnit = unit === 'Kg';
+                                                        const displayUnit = (isClientInLb && isKgUnit) ? 'Lb' : unit;
+                                                        const displayQty = (isClientInLb && isKgUnit) ? (qty * 2) : qty;
+                                                        const displayPrice = (isClientInLb && isKgUnit && price > 0) ? (price / 2) : price;
+
                                                         const lineSubtotal = qty * price;
                                                         const ivaPct = isZeroCostDoc ? 0 : Number(itm.products?.iva_rate || 0);
                                                         const ivaVal = lineSubtotal * (ivaPct / 100);
@@ -1542,13 +1550,13 @@ function ContingencyPrintContent() {
                                                                     </strong>
                                                                 </td>
                                                                 <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, color: '#0F172A', fontVariantNumeric: 'tabular-nums', padding: rowPad }}>
-                                                                    {qty.toLocaleString('es-CO')}
+                                                                    {displayQty.toLocaleString('es-CO')}
                                                                 </td>
                                                                 <td style={{ textAlign: 'center', fontSize: isDense ? '7pt' : '7.5pt', fontWeight: '600', color: '#334155', padding: rowPad }}>
-                                                                    {unit}
+                                                                    {displayUnit}
                                                                 </td>
                                                                 <td style={{ textAlign: 'right', fontSize: isDense ? '7.1pt' : '7.6pt', fontVariantNumeric: 'tabular-nums', color: '#334155', padding: rowPad }}>
-                                                                    {price > 0 ? formatMoney(price) : formatMoney(0)}
+                                                                    {displayPrice > 0 ? formatMoney(displayPrice) : formatMoney(0)}
                                                                 </td>
                                                                 <td style={{ textAlign: 'center', fontSize: smallFontSize, fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: rowPad }}>
                                                                     {ivaPct > 0 ? `${ivaPct}%` : '0%'}
@@ -1617,20 +1625,34 @@ function ContingencyPrintContent() {
                                                         </div>
                                                     </div>
 
-                                                    <div style={{ width: isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isDense ? '3px 6px' : '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isDense ? '6.6pt' : '7pt' }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                                                            <span style={{ color: '#475569' }}>Subtotal:</span>
-                                                            <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(subtotal)}</span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                                                            <span style={{ color: '#475569' }}>IVA (0% / Excluido):</span>
-                                                            <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(order.tax || 0)}</span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '1px', fontSize: isDense ? '7.8pt' : '8.4pt', fontWeight: '900' }}>
-                                                            <span style={{ color: '#0F172A' }}>TOTAL:</span>
-                                                            <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(order.total || subtotal)}</span>
-                                                        </div>
-                                                    </div>
+                                                    {(() => {
+                                                        const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+                                                        const discountAmount = (!isZeroCostDoc && discountPct > 0) ? Math.round(subtotal * (discountPct / 100)) : 0;
+                                                        const finalPrintTotal = isZeroCostDoc ? 0 : Math.max(0, subtotal - discountAmount + Number(order.tax || 0));
+
+                                                        return (
+                                                            <div style={{ width: isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isDense ? '3px 6px' : '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isDense ? '6.6pt' : '7pt' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                                                                    <span style={{ color: '#475569' }}>{discountPct > 0 ? 'Subtotal Bruto:' : 'Subtotal:'}</span>
+                                                                    <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(subtotal)}</span>
+                                                                </div>
+                                                                {discountPct > 0 && !isZeroCostDoc && (
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                                                                        <span style={{ color: '#059669', fontWeight: 'bold' }}>Dto. Acuerdo (-{discountPct}%):</span>
+                                                                        <span style={{ fontVariantNumeric: 'tabular-nums', color: '#059669', fontWeight: 'bold' }}>-{formatMoney(discountAmount)}</span>
+                                                                    </div>
+                                                                )}
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                                                                    <span style={{ color: '#475569' }}>IVA (0% / Excluido):</span>
+                                                                    <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(order.tax || 0)}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '1px', fontSize: isDense ? '7.8pt' : '8.4pt', fontWeight: '900' }}>
+                                                                    <span style={{ color: '#0F172A' }}>TOTAL:</span>
+                                                                    <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(finalPrintTotal)}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
 
                                                 {/* Signatures Block Compact at Bottom con QR Vectorial de Radicación */}
