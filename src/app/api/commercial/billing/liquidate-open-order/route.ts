@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
+import { getOrderReplacementInfo } from '@/lib/orderUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,9 +56,17 @@ export async function POST(req: NextRequest) {
         for (const orderId of orderIds) {
             const { data: ordHeader } = await supabaseAdmin
                 .from('orders')
-                .select('id, admin_notes, logistics_data')
+                .select('id, admin_notes, logistics_data, origin_source')
                 .eq('id', orderId)
                 .maybeSingle();
+
+            // Poka-Yoke: Jamás liquidar precios comerciales a Pedidos Hijos de Reposición por Calidad ($0 COP)
+            if (
+                ordHeader?.origin_source === 'customer_service' ||
+                getOrderReplacementInfo(ordHeader).isReplacement
+            ) {
+                continue;
+            }
 
             const notesUpper = (ordHeader?.admin_notes || '').toUpperCase();
             if (

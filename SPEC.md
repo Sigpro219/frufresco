@@ -10818,6 +10818,30 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
 
 ---
 
+### Escenario 250: Trazabilidad Visual de Linaje Padre ↔ Hijo en Torre de Control (`/admin/orders/loading`), Tarifa Canónica $0 COP y Aislamiento Contable en Facturación (`/admin/commercial/billing` — SDD v1.9.219)
+- **Given** un Pedido Hijo de Reposición por Calidad (`isReplacement: true`, generado desde SAC `Opción 2` con tarifa $0 COP amparado a un Pedido Padre `#XXXX`),
+- **When** se consulta en la Torre de Control de Pedidos (`/admin/orders/loading`),
+- **Then**:
+  1. **Linaje Interactivo en Tabla Principal:** En la columna de Canal / Tipo de la fila del pedido, el sistema proyecta la insignia canónica interactiva **`[ 🔄 HIJO DE #XXXX ]`** en tono índigo/esmeralda con enlace directo al detalle del Pedido Padre (`/admin/orders/[parent_id]`), permitiendo al operador de despacho auditar la ascendencia de la garantía en un solo clic.
+  2. **Inmutabilidad de Tarifa $0 COP en Torre de Control:** En la columna `VALOR`, el sistema proyecta obligatoriamente **`$0 COP`** acompañado del distintivo **`Garantía / Sin Cobro`**, prohibiendo terminantemente recalcular o proyectar tarifas comerciales de catálogo o acuerdos para pedidos de reposición física.
+- **And When** se consulta en el Cockpit de Facturación (`/admin/commercial/billing`),
+- **Then**:
+  1. **Exoneración de Numeración Fiscal Comercial (`FV-XXXXX`):** La orden de reposición jamás debe recibir un consecutivo fiscal de factura de venta ordinaria, garantizando que el cliente no sea gravado ni facturado por segunda vez sobre una entrega de garantía.
+  2. **Identidad de Remisión de Garantía:** En la columna `Consecutivo Fiscal`, el sistema proyecta el distintivo esmeralda **`REMISIÓN $0 COP (Garantía)`** con etiqueta de linaje `Ampara Pedido Padre #XXXX`.
+  3. **Aislamiento Contable:** El total a facturar se fija inmutablemente en **`$0 COP`**, excluyendo el pedido del corte de facturación electrónica y de las cuentas por cobrar a cartera.
+  4. **Blindaje de Backend contra Sobrescritura de Precios:** El endpoint de liquidación (`/api/commercial/billing/liquidate-open-order`) descarta y bloquea de forma absoluta cualquier pedido donde `isReplacement === true` o `origin_source === 'customer_service'`, garantizando que jamás se altere su tarifa de garantía.
+
+### Escenario 251: Segregación Estricta de Funciones (SoD) Comercial vs Facturación: Erradicación de la Fijación o Liquidación Discrecional de Precios en Facturación & Poka-Yoke de Tarifa Comercial Pendiente (SDD v1.9.220)
+- **Given** un operador contable o analista de facturación autenticado en `/admin/commercial/billing`,
+- **When** se cargan remisiones o pedidos con ítems despachados sin precio o fuera de acuerdo comercial,
+- **Then**:
+  1. **Principio Rector de Segregación de Funciones (SoD / Separation of Duties):** La fijación de precios de venta, tarifas unitarias, recargos y márgenes comerciales es una competencia privativa e indelegable del **Área Comercial** (`commercial_director`, `commercial_agent`, permiso `admin.commercial.pricing`). Queda terminantemente prohibido que los funcionarios de facturación digiten o muten precios de venta a discreción en la consola contable.
+  2. **Erradicación de Controles de Mutación en Facturación:** Se retiran de la barra de herramientas de facturación los botones de asignación manual de tarifas (`Asignar Precios Fuera de Acuerdo`) y de liquidación masiva a costo vigente (`Liquidar Costo Vigente`), cerrando la brecha de control interno que permitía al facturador inventar precios en caliente.
+  3. **Poka-Yoke de Retención por Tarifa Comercial Pendiente:** Si un pedido comercial ordinario posee ítems con tarifa `$0 COP` no autorizados, Facturación proyecta la alerta visual preventiva **`⚠️ Retenido: Pendiente Tarifa Comercial`**.
+  4. **Bloqueo de Facturación:** La orden queda retenida y bloqueada para el corte fiscal hasta que un funcionario comercial autorizado parametrize la tarifa legal correspondiente desde el módulo comercial de Pedidos (`/admin/orders/[id]`) o Acuerdos Comerciales (`/admin/commercial/agreements`).
+
+---
+
 ## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
 
 > **Referencia:** Documento maestro [`TECHNICAL_DEBT.md`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/TECHNICAL_DEBT.md) en la raíz del repositorio.  

@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
-import { 
-    getFriendlyOrderId, 
-    formatStructuredSpecification
+import {
+    getFriendlyOrderId,
+    formatStructuredSpecification,
+    getOrderReplacementInfo
 } from '@/lib/orderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
@@ -1657,11 +1658,11 @@ export default function BillingDashboard() {
 
     const { ready: readyCount, grace: graceCount, inRoute: inRouteCount, novelties: noveltiesCount, inProcess: inProcessCount } = pendingGraceCounts;
     const unpricedOffAgreementCount = useMemo(() => {
-        return pendingOrders.filter(o =>
-            o.admin_notes?.includes('DESPACHADO SIN PRECIO') ||
-            o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') ||
-            (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced)
-        ).length;
+        return pendingOrders.filter(o => {
+            const rep = getOrderReplacementInfo(o);
+            if (rep.isReplacement || o.origin_source === 'customer_service') return false;
+            return o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced);
+        }).length;
     }, [pendingOrders]);
 
     const openConsumptionCount = useMemo(() => {
@@ -3827,113 +3828,24 @@ export default function BillingDashboard() {
                                         </div>
 
                                         {unpricedOffAgreementCount > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleOpenAssignPriceModal()}
-                                                disabled={isProcessing}
+                                            <div 
+                                                title="Las tarifas de remisiones fuera de acuerdo deben ser asignadas exclusivamente por el Área Comercial en el módulo de Pedidos o Acuerdos"
                                                 style={{
-                                                    backgroundColor: '#DC2626',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    padding: '0.4rem 0.85rem',
+                                                    backgroundColor: '#FEF2F2',
+                                                    color: '#991B1B',
+                                                    border: '1.2px solid #F87171',
+                                                    padding: '0.35rem 0.75rem',
                                                     borderRadius: '8px',
                                                     fontWeight: '800',
-                                                    fontSize: '0.74rem',
-                                                    cursor: isProcessing ? 'wait' : 'pointer',
+                                                    fontSize: '0.72rem',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '5px',
-                                                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)'
+                                                    gap: '6px',
+                                                    boxShadow: '0 1px 3px rgba(220, 38, 38, 0.15)'
                                                 }}
-                                                title="Asignar tarifa comercial a las remisiones de productos fuera de acuerdo despachadas con precio $0 para la fecha seleccionada"
                                             >
-                                                <AlertTriangle size={13} />
-                                                {`Asignar Precios Fuera de Acuerdo ($0) (${unpricedOffAgreementCount})`}
-                                            </button>
-                                        )}
-
-                                        {openConsumptionCount > 0 && (
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                {confirmBatchLiquidation ? (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleLiquidateSelectedOrAllOpenOrders}
-                                                            disabled={isProcessing}
-                                                            style={{
-                                                                backgroundColor: '#DC2626',
-                                                                color: 'white',
-                                                                border: 'none',
-                                                                padding: '0.4rem 0.8rem',
-                                                                borderRadius: '8px',
-                                                                fontWeight: '800',
-                                                                fontSize: '0.74rem',
-                                                                cursor: isProcessing ? 'wait' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '5px',
-                                                                boxShadow: '0 2px 6px rgba(220, 38, 38, 0.3)'
-                                                            }}
-                                                        >
-                                                            <CheckCircle2 size={13} className={isProcessing ? "animate-spin" : ""} />
-                                                            {isProcessing ? 'Liquidando...' : `¿Confirmar Liquidar ${selectedOrderIds.length > 0 ? `${selectedOrderIds.length} sel` : `${openConsumptionCount}`}?`}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setConfirmBatchLiquidation(false)}
-                                                            style={{
-                                                                backgroundColor: '#F1F5F9',
-                                                                color: '#64748B',
-                                                                border: '1px solid #CBD5E1',
-                                                                padding: '0.4rem 0.6rem',
-                                                                borderRadius: '8px',
-                                                                fontSize: '0.74rem',
-                                                                fontWeight: '700',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            Cancelar
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const targetIds = selectedOrderIds.length > 0 
-                                                                ? selectedOrderIds 
-                                                                : pendingOrders.filter(o => {
-                                                                    const isOffAgreement = o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced);
-                                                                    if (isOffAgreement) return false;
-                                                                    return o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO');
-                                                                }).map(o => o.id);
-                                                            if (targetIds.length === 0) {
-                                                                showToast({ type: 'info', message: 'No hay pedidos sobre lista abierta para liquidar.' });
-                                                                return;
-                                                            }
-                                                            setConfirmBatchLiquidation(true);
-                                                        }}
-                                                        disabled={isProcessing}
-                                                        style={{
-                                                            backgroundColor: '#7C3AED',
-                                                            color: 'white',
-                                                            border: 'none',
-                                                            padding: '0.4rem 0.8rem',
-                                                            borderRadius: '8px',
-                                                            fontWeight: '800',
-                                                            fontSize: '0.74rem',
-                                                            cursor: isProcessing ? 'wait' : 'pointer',
-                                                            opacity: isProcessing ? 0.7 : 1,
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '5px',
-                                                            boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)'
-                                                        }}
-                                                        title="Liquidar precios de pedidos en lista abierta aplicando el costo vigente actual"
-                                                    >
-                                                        <Zap size={13} className={isProcessing ? "animate-spin" : ""} />
-                                                        {`Liquidar Costo Vigente (${selectedOrderIds.length > 0 ? `${selectedOrderIds.length} sel` : `${openConsumptionCount}`})`}
-                                                    </button>
-                                                )}
+                                                <AlertTriangle size={13} style={{ color: '#DC2626' }} />
+                                                <span>{unpricedOffAgreementCount} {unpricedOffAgreementCount === 1 ? 'pedido retenido' : 'pedidos retenidos'}: Pendiente Tarifa Comercial</span>
                                             </div>
                                         )}
 
@@ -4161,13 +4073,29 @@ export default function BillingDashboard() {
                                                     >
                                                         {/* 0. Checkbox de Fila */}
                                                         <td style={{ padding: '0.45rem 0.5rem', textAlign: 'center', width: '38px' }} onClick={(e) => e.stopPropagation()}>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isSelected}
-                                                                onChange={() => toggleOrderSelection(order.id)}
-                                                                style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '14px', height: '14px' }}
-                                                                title={isSelected ? "Desmarcar pedido para este corte" : "Marcar pedido para incluir en corte"}
-                                                            />
+                                                            {(() => {
+                                                                const rep = getOrderReplacementInfo(order);
+                                                                if (rep.isReplacement) {
+                                                                    return (
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            disabled
+                                                                            checked={false}
+                                                                            style={{ cursor: 'not-allowed', opacity: 0.3, width: '14px', height: '14px' }}
+                                                                            title="Los pedidos de reposición ($0 COP) viajan con Remisión Oficial y no generan Factura de Venta comercial"
+                                                                        />
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isSelected}
+                                                                        onChange={() => toggleOrderSelection(order.id)}
+                                                                        style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '14px', height: '14px' }}
+                                                                        title={isSelected ? "Desmarcar pedido para este corte" : "Marcar pedido para incluir en corte"}
+                                                                    />
+                                                                );
+                                                            })()}
                                                         </td>
 
                                                         {/* 1. # Pedido & Fechas / Trazabilidad */}
@@ -4205,25 +4133,56 @@ export default function BillingDashboard() {
 
                                                         {/* 2. Consecutivo Fiscal Autoasignado */}
                                                         <td style={{ padding: '0.5rem 0.75rem' }}>
-                                                            <div style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px',
-                                                                backgroundColor: order.billing_invoices?.invoice_number ? '#ECFDF5' : '#F8FAFC',
-                                                                border: `1px solid ${order.billing_invoices?.invoice_number ? '#A7F3D0' : '#CBD5E1'}`,
-                                                                padding: '0.18rem 0.45rem',
-                                                                borderRadius: '6px',
-                                                                fontVariantNumeric: 'tabular-nums',
-                                                                fontWeight: '800',
-                                                                fontSize: '0.74rem',
-                                                                color: order.billing_invoices?.invoice_number ? '#065F46' : '#0F172A'
-                                                            }}>
-                                                                <FileCheck size={11} style={{ color: order.billing_invoices?.invoice_number ? '#059669' : '#64748B' }} />
-                                                                <span>{projectedInvoiceNumber}</span>
-                                                            </div>
-                                                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '2px' }}>
-                                                                {order.billing_invoices?.invoice_number ? 'Asignado en corte' : `Auto-asignado (#${idx + 1})`}
-                                                            </div>
+                                                            {(() => {
+                                                                const rep = getOrderReplacementInfo(order);
+                                                                if (rep.isReplacement) {
+                                                                    return (
+                                                                        <div>
+                                                                            <div style={{
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px',
+                                                                                backgroundColor: '#ECFDF5',
+                                                                                border: '1px solid #A7F3D0',
+                                                                                padding: '0.18rem 0.45rem',
+                                                                                borderRadius: '6px',
+                                                                                fontWeight: '800',
+                                                                                fontSize: '0.70rem',
+                                                                                color: '#065F46'
+                                                                            }}>
+                                                                                <RotateCcw size={10} style={{ color: '#059669' }} />
+                                                                                <span>REMISIÓN $0 (Garantía)</span>
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.62rem', color: '#047857', fontWeight: '700', marginTop: '2px' }}>
+                                                                                {rep.parentSequenceId ? `Hijo de Pedido #${rep.parentSequenceId}` : 'Garantía SAC'}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <>
+                                                                        <div style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px',
+                                                                            backgroundColor: order.billing_invoices?.invoice_number ? '#ECFDF5' : '#F8FAFC',
+                                                                            border: `1px solid ${order.billing_invoices?.invoice_number ? '#A7F3D0' : '#CBD5E1'}`,
+                                                                            padding: '0.18rem 0.45rem',
+                                                                            borderRadius: '6px',
+                                                                            fontVariantNumeric: 'tabular-nums',
+                                                                            fontWeight: '800',
+                                                                            fontSize: '0.74rem',
+                                                                            color: order.billing_invoices?.invoice_number ? '#065F46' : '#0F172A'
+                                                                        }}>
+                                                                            <FileCheck size={11} style={{ color: order.billing_invoices?.invoice_number ? '#059669' : '#64748B' }} />
+                                                                            <span>{projectedInvoiceNumber}</span>
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '2px' }}>
+                                                                            {order.billing_invoices?.invoice_number ? 'Asignado en corte' : `Auto-asignado (#${idx + 1})`}
+                                                                        </div>
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </td>
 
                                                         {/* 3. Cliente & NIT */}
@@ -4499,6 +4458,21 @@ export default function BillingDashboard() {
                                                         {/* 8. Total Pedido */}
                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
                                                             {(() => {
+                                                                const rep = getOrderReplacementInfo(order);
+                                                                if (rep.isReplacement) {
+                                                                    return (
+                                                                        <div>
+                                                                            <div style={{ fontWeight: '800', color: '#047857', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
+                                                                                $0 COP
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.60rem', color: '#065F46', fontWeight: '800', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '1px 5px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                                                                                <CheckCircle2 size={9} style={{ color: '#059669', flexShrink: 0 }} />
+                                                                                <span>Garantía / Sin Cobro</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+
                                                                 const isUnpricedDispatch = order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (order.logistics_data?.is_off_agreement_split && !order.logistics_data?.off_agreement_priced);
                                                                 const isOpenConsumption = !isUnpricedDispatch && (order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO'));
 
@@ -4548,51 +4522,34 @@ export default function BillingDashboard() {
                                                         {/* 9. Acciones Rápidas */}
                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
                                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                {(order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (order.logistics_data?.is_off_agreement_split && !order.logistics_data?.off_agreement_priced)) ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleOpenAssignPriceModal(order.id, order.delivery_date)}
-                                                                        disabled={isProcessing}
-                                                                        title="Asignar tarifa comercial a los ítems fuera de acuerdo de esta remisión ($0) sin modificar el acuerdo del cliente"
-                                                                        style={{
-                                                                            backgroundColor: '#FEF2F2',
-                                                                            color: '#DC2626',
-                                                                            border: '1px solid #FCA5A5',
-                                                                            padding: '0.25rem 0.5rem',
-                                                                            borderRadius: '5px',
-                                                                            cursor: isProcessing ? 'wait' : 'pointer',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '3px',
-                                                                            fontSize: '0.70rem',
-                                                                            fontWeight: '800'
-                                                                        }}
-                                                                    >
-                                                                        <AlertTriangle size={11} style={{ color: '#DC2626' }} /> Asignar Precio
-                                                                    </button>
-                                                                ) : (order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO')) ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleLiquidateOpenOrder(order.id)}
-                                                                        disabled={isProcessing}
-                                                                        title="Liquidar precios de este pedido con el costo vigente actual"
-                                                                        style={{
-                                                                            backgroundColor: '#FAF5FF',
-                                                                            color: '#7C3AED',
-                                                                            border: '1px solid #DDD6FE',
-                                                                            padding: '0.25rem 0.45rem',
-                                                                            borderRadius: '5px',
-                                                                            cursor: isProcessing ? 'wait' : 'pointer',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '3px',
-                                                                            fontSize: '0.70rem',
-                                                                            fontWeight: '700'
-                                                                        }}
-                                                                    >
-                                                                        <Zap size={11} style={{ color: '#7C3AED' }} /> Liquidar
-                                                                    </button>
-                                                                ) : null}
+                                                                {(() => {
+                                                                    const rep = getOrderReplacementInfo(order);
+                                                                    if (rep.isReplacement) return null;
+
+                                                                    const isUnpricedDispatch = order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (order.logistics_data?.is_off_agreement_split && !order.logistics_data?.off_agreement_priced);
+                                                                    if (isUnpricedDispatch) {
+                                                                        return (
+                                                                            <span 
+                                                                                title="La fijación de precios fuera de acuerdo es competencia exclusiva del Área Comercial (gestión en módulo de Pedidos)"
+                                                                                style={{
+                                                                                    backgroundColor: '#FEF2F2',
+                                                                                    color: '#991B1B',
+                                                                                    border: '1px solid #FCA5A5',
+                                                                                    padding: '0.20rem 0.40rem',
+                                                                                    borderRadius: '5px',
+                                                                                    fontSize: '0.64rem',
+                                                                                    fontWeight: '800',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '3px'
+                                                                                }}
+                                                                            >
+                                                                                <AlertTriangle size={10} style={{ color: '#DC2626' }} /> Tarifa Comercial Pendiente
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })()}
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleOpenOrderDetail(order)}

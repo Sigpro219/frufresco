@@ -4099,7 +4099,66 @@ function OrderLoadingContent() {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
-                                                        {getChannelBadge(order.origin_source, isB2B)}
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+                                                            {getChannelBadge(order.origin_source, isB2B)}
+                                                            {(() => {
+                                                                const rep = getOrderReplacementInfo(order);
+                                                                if (!rep.isReplacement && !rep.childReplacementSequenceId) return null;
+                                                                if (rep.isReplacement) {
+                                                                    return (
+                                                                        <Link
+                                                                            href={rep.parentOrderId ? `/admin/orders/${rep.parentOrderId}` : '#'}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            title={rep.parentSequenceId ? `Haga clic para ver el Pedido Padre #${rep.parentSequenceId}` : 'Reposición de Garantía ($0 COP)'}
+                                                                            style={{
+                                                                                backgroundColor: '#EEF2FF',
+                                                                                color: '#4338CA',
+                                                                                border: '1.2px solid #818CF8',
+                                                                                borderRadius: '5px',
+                                                                                padding: '1px 6px',
+                                                                                fontSize: '0.64rem',
+                                                                                fontWeight: '900',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px',
+                                                                                textDecoration: 'none',
+                                                                                boxShadow: '0 1px 2px rgba(67, 56, 202, 0.12)'
+                                                                            }}
+                                                                        >
+                                                                            <RotateCcw size={9} strokeWidth={2.8} />
+                                                                            <span>HIJO DE #{rep.parentSequenceId || ''}</span>
+                                                                        </Link>
+                                                                    );
+                                                                }
+                                                                if (rep.childReplacementSequenceId) {
+                                                                    return (
+                                                                        <Link
+                                                                            href={rep.childReplacementOrderId ? `/admin/orders/${rep.childReplacementOrderId}` : '#'}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            title={`Haga clic para ver el Pedido Hijo de Reposición #${rep.childReplacementSequenceId}`}
+                                                                            style={{
+                                                                                backgroundColor: '#ECFDF5',
+                                                                                color: '#047857',
+                                                                                border: '1.2px solid #6EE7B7',
+                                                                                borderRadius: '5px',
+                                                                                padding: '1px 6px',
+                                                                                fontSize: '0.64rem',
+                                                                                fontWeight: '900',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px',
+                                                                                textDecoration: 'none',
+                                                                                boxShadow: '0 1px 2px rgba(4, 120, 87, 0.12)'
+                                                                            }}
+                                                                        >
+                                                                            <RotateCcw size={9} strokeWidth={2.8} />
+                                                                            <span>TIENE HIJO #{rep.childReplacementSequenceId}</span>
+                                                                        </Link>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            })()}
+                                                        </div>
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
                                                         <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.85rem' }}>
@@ -4112,65 +4171,69 @@ function OrderLoadingContent() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'right' }}>
-                                                        <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem' }}>
-                                                            {formatMoney(order.total)}
-                                                        </div>
-                                                        {isB2B ? (
-                                                            <div 
-                                                                title={order.profiles?.payment_days ? `Acuerdo Institucional de Precios Vigente · Cartera: ${order.profiles.payment_days} días` : 'Acuerdo Institucional de Precios Vigente'}
-                                                                style={{
-                                                                    marginTop: '3px',
-                                                                    fontSize: '0.62rem',
-                                                                    fontWeight: '800',
-                                                                    color: '#4338CA',
-                                                                    backgroundColor: '#EEF2FF',
-                                                                    border: '1px solid #C7D2FE',
-                                                                    padding: '1px 6px',
-                                                                    borderRadius: '4px',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '3px',
-                                                                    whiteSpace: 'nowrap'
-                                                                }}
-                                                            >
-                                                                <FileText size={10} strokeWidth={2} /> Acuerdo Institucional
-                                                            </div>
-                                                        ) : (order.payment_status === 'Pagado' || order.paymentMethod?.toLowerCase().includes('pagado') || order.payment_method === 'wompi') ? (
-
-                                                            <div style={{
-                                                                marginTop: '3px',
-                                                                fontSize: '0.62rem',
-                                                                fontWeight: '800',
-                                                                color: '#059669',
-                                                                backgroundColor: '#ECFDF5',
-                                                                border: '1px solid #A7F3D0',
-                                                                padding: '1px 6px',
-                                                                borderRadius: '4px',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '3px',
-                                                                whiteSpace: 'nowrap'
-                                                            }}>
-                                                                <CheckCircle2 size={10} strokeWidth={2} /> Pagado (Wompi)
-                                                            </div>
-                                                        ) : (
-                                                            <div style={{
-                                                                marginTop: '3px',
-                                                                fontSize: '0.62rem',
-                                                                fontWeight: '800',
-                                                                color: '#B45309',
-                                                                backgroundColor: '#FEF3C7',
-                                                                border: '1px solid #FDE68A',
-                                                                padding: '1px 6px',
-                                                                borderRadius: '4px',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '3px',
-                                                                whiteSpace: 'nowrap'
-                                                            }}>
-                                                                <Coins size={10} strokeWidth={2} /> Por Cobrar
-                                                            </div>
-                                                        )}
+                                                        {(() => {
+                                                            const rep = getOrderReplacementInfo(order);
+                                                            if (rep.isReplacement) {
+                                                                return (
+                                                                    <div>
+                                                                        <div style={{ fontWeight: '900', color: '#047857', fontSize: '0.95rem' }}>
+                                                                            $0 COP
+                                                                        </div>
+                                                                        <div 
+                                                                            title={`Reposición de Garantía por Calidad · Ampara Pedido #${rep.parentSequenceId || ''}`}
+                                                                            style={{
+                                                                                marginTop: '3px',
+                                                                                fontSize: '0.62rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#065F46',
+                                                                                backgroundColor: '#D1FAE5',
+                                                                                border: '1px solid #A7F3D0',
+                                                                                padding: '1px 6px',
+                                                                                borderRadius: '4px',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}
+                                                                        >
+                                                                            Garantía / Sin Cobro
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <>
+                                                                    <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem' }}>
+                                                                        {formatMoney(order.total)}
+                                                                    </div>
+                                                                    {isB2B ? (
+                                                                        <div 
+                                                                            title={order.profiles?.payment_days ? `Acuerdo Institucional de Precios Vigente · Cartera: ${order.profiles.payment_days} días` : 'Acuerdo Institucional de Precios Vigente'}
+                                                                            style={{
+                                                                                marginTop: '3px',
+                                                                                fontSize: '0.62rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#4338CA',
+                                                                                backgroundColor: '#EEF2FF',
+                                                                                border: '1px solid #C7D2FE',
+                                                                                padding: '1px 6px',
+                                                                                borderRadius: '4px',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}
+                                                                        >
+                                                                            Acuerdo Institucional
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div style={{ marginTop: '3px', fontSize: '0.62rem', fontWeight: '800', color: '#BE185D', backgroundColor: '#FCE7F3', border: '1px solid #FBCFE8', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
+                                                                            B2C Estándar
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
                                                         <div style={{
