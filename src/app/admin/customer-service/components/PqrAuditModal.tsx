@@ -359,6 +359,15 @@ export default function PqrAuditModal({
         setImputedTargetType(rca.imputedTargetType || (currentResp === 'proveedor' ? 'provider' : currentResp === 'transporte' ? 'driver' : 'employee'));
         if (rca.imputedEntities && rca.imputedEntities.length > 0) {
             setImputedEntities(rca.imputedEntities);
+        } else if (currentResp === 'proveedor') {
+            setImputedEntities([{
+                id: 'proveedor-origen',
+                name: 'Asignado al Proveedor (Campo / Origen)',
+                role: 'Proveedor',
+                entityType: 'provider' as const,
+                sharePercent: 100,
+                deductionAmount: nominalNoveltiesCoQ
+            }]);
         } else {
             setImputedEntities([]);
         }
@@ -393,6 +402,15 @@ export default function PqrAuditModal({
 
         if (rca.imputedEntities && rca.imputedEntities.length > 0) {
             setImputedEntities(rca.imputedEntities);
+        } else if (currentResp === 'proveedor') {
+            setImputedEntities([{
+                id: 'proveedor-origen',
+                name: 'Asignado al Proveedor (Campo / Origen)',
+                role: 'Proveedor',
+                entityType: 'provider' as const,
+                sharePercent: 100,
+                deductionAmount: nominalNoveltiesCoQ
+            }]);
         } else {
             setImputedEntities([]);
         }
@@ -941,7 +959,19 @@ export default function PqrAuditModal({
 
         setImputedTargetType(newTargetType);
         setSelectedImputedToAdd('');
-        setImputedEntities([]);
+        
+        if (newResp === 'proveedor') {
+            setImputedEntities([{
+                id: 'proveedor-origen',
+                name: 'Asignado al Proveedor (Campo / Origen)',
+                role: 'Proveedor',
+                entityType: 'provider' as const,
+                sharePercent: 100,
+                deductionAmount: resolutionOption === 'opt1' ? 0 : nominalNoveltiesCoQ
+            }]);
+        } else {
+            setImputedEntities([]);
+        }
     };
 
 
@@ -984,7 +1014,7 @@ export default function PqrAuditModal({
                     name: prov.name,
                     documentId: prov.nit,
                     role: 'proveedor',
-                    entityType: 'provider',
+                    entityType: 'provider' as const,
                     sharePercent: 100,
                     deductionAmount: 0
                 };
@@ -1603,9 +1633,18 @@ export default function PqrAuditModal({
             }
 
             const isZeroDeductionCase = resolutionOption === 'opt1' || status === 'rejected' || caseCoQ === 0;
-            const finalizedImputedEntities = isZeroDeductionCase
-                ? imputedEntities.map(e => ({ ...e, deductionAmount: 0 }))
-                : imputedEntities;
+            const finalizedImputedEntities: ImputedEntity[] = rcaResponsible === 'proveedor'
+                ? [{
+                    id: 'proveedor-origen',
+                name: 'Asignado al Proveedor (Campo / Origen)',
+                role: 'Proveedor',
+                entityType: 'provider' as const,
+                    sharePercent: 100,
+                    deductionAmount: isZeroDeductionCase ? 0 : nominalNoveltiesCoQ
+                }]
+                : isZeroDeductionCase
+                    ? imputedEntities.map(e => ({ ...e, deductionAmount: 0 }))
+                    : imputedEntities;
 
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
@@ -1691,9 +1730,18 @@ export default function PqrAuditModal({
                 (pqr.description || '').includes('ALERTA CORTE DE BUCLE');
 
             const isZeroDeductionCase = resolutionOption === 'opt1' || pqr.status === 'rejected' || caseCoQ === 0;
-            const finalizedImputedEntities = isZeroDeductionCase
-                ? imputedEntities.map(e => ({ ...e, deductionAmount: 0 }))
-                : imputedEntities;
+            const finalizedImputedEntities: ImputedEntity[] = rcaResponsible === 'proveedor'
+                ? [{
+                    id: 'proveedor-origen',
+                name: 'Asignado al Proveedor (Campo / Origen)',
+                role: 'Proveedor',
+                entityType: 'provider' as const,
+                    sharePercent: 100,
+                    deductionAmount: isZeroDeductionCase ? 0 : nominalNoveltiesCoQ
+                }]
+                : isZeroDeductionCase
+                    ? imputedEntities.map(e => ({ ...e, deductionAmount: 0 }))
+                    : imputedEntities;
 
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
@@ -4080,194 +4128,281 @@ export default function PqrAuditModal({
                                     </div>
                                 </div>
 
-                                <div style={{
-                                    padding: '8px 12px',
-                                    backgroundColor: resolutionOption === 'opt1' ? '#EFF6FF' : '#FFF1F2',
-                                    border: resolutionOption === 'opt1' ? '1px solid #BFDBFE' : '1px solid #FECDD3',
-                                    borderRadius: '8px',
-                                    fontSize: '0.72rem',
-                                    color: resolutionOption === 'opt1' ? '#1E40AF' : '#9F1239',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    lineHeight: '1.4'
-                                }}>
-                                    {resolutionOption === 'opt1' ? (
-                                        <ShieldCheck size={16} style={{ flexShrink: 0, color: '#2563EB' }} />
-                                    ) : (
-                                        <ShieldAlert size={16} style={{ flexShrink: 0, color: '#E11D48' }} />
-                                    )}
-                                    {resolutionOption === 'opt1' ? (
+                                {rcaResponsible === 'proveedor' ? (
+                                    <div style={{
+                                        padding: '10px 14px',
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #FDE68A',
+                                        borderRadius: '8px',
+                                        fontSize: '0.72rem',
+                                        color: '#92400E',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        lineHeight: '1.4'
+                                    }}>
+                                        <Building2 size={18} style={{ flexShrink: 0, color: '#D97706' }} />
                                         <span>
-                                            <strong>Trazabilidad Formativa ISO 9001 (Opción 1 — Cerrar Conforme):</strong> En el Paso 2 determinaste cerrar el caso sin impacto económico. La asignación de funcionario o área se registra exclusivamente con fines estadísticos y formativos: <strong>la deducción en nómina es estrictamente $0 COP (Exonerado)</strong>.
+                                            <strong>Responsabilidad Institucional en Origen (Campo / Proveedor):</strong> Se traslada la no conformidad técnica a Compras y Abastecimiento para trazabilidad de muelle y lote ({resolutionOption === 'opt1' ? '$0 COP' : formatMoney(nominalNoveltiesCoQ)}). <strong>No aplica deducción de nómina a funcionarios.</strong>
                                         </span>
-                                    ) : (
-                                        <span>
-                                            <strong>Imputación Patrimonial Activa ({resolutionOption === 'opt2' ? `Opción 2: Reposición Física (${replacementDeliveryDate})` : resolutionOption === 'opt3' ? 'Opción 3: Nota Crédito' : 'Opción 4: Ajuste de Factura'}):</strong> En el Paso 2 aprobaste reconocer la novedad por <strong>{formatMoney(nominalNoveltiesCoQ)}</strong>. La cuota asignada abajo se cargará a nómina / estado de cuenta del responsable.
-                                        </span>
-                                    )}
-                                </div>
-
-                                {/* Selector to Add Entity */}
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <div style={{ flex: '1', minWidth: 0 }}>
-                                        <SearchableSelect
-                                            value={selectedImputedToAdd}
-                                            onChange={val => {
-                                                if (val) {
-                                                    handleAddImputedEntity(val);
-                                                } else {
-                                                    setSelectedImputedToAdd('');
-                                                }
-                                            }}
-                                            placeholder={`-- Seleccionar ${rcaResponsible === 'proveedor' ? 'Proveedor' : rcaResponsible === 'cliente' ? 'Cliente' : 'Funcionario'} para Imputar --`}
-                                            searchPlaceholder={rcaResponsible === 'proveedor' ? "Buscar proveedor por nombre o NIT..." : rcaResponsible === 'cliente' ? "Buscar cliente..." : "Buscar funcionario por nombre o cargo..."}
-                                            clearable
-                                            options={rcaResponsible === 'proveedor' ? (
-                                                providersList.map(prov => ({
-                                                    value: prov.id,
-                                                    label: prov.name,
-                                                    sublabel: prov.nit ? `NIT: ${prov.nit}` : undefined,
-                                                    badge: 'Proveedor'
-                                                }))
-                                            ) : rcaResponsible === 'cliente' ? (
-                                                pqr?.profiles ? [{
-                                                    value: pqr.client_id,
-                                                    label: pqr.profiles.company_name || pqr.profiles.contact_name || 'Cliente de la PQR',
-                                                    sublabel: pqr.profiles.nit ? `NIT: ${pqr.profiles.nit}` : undefined,
-                                                    badge: 'Cliente'
-                                                }] : []
-                                            ) : (
-                                                [
-                                                    ...(rcaResponsible === 'transporte' && assignedRouteDriver && !collaboratorsList.some(c => c.id === assignedRouteDriver.id)
-                                                        ? [{
-                                                            value: assignedRouteDriver.id || 'driver-route',
-                                                            label: `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`,
-                                                            badge: 'Conductor de Ruta'
-                                                        }]
-                                                        : []),
-                                                    ...collaboratorsList.map(colab => ({
-                                                        value: colab.id,
-                                                        label: colab.contact_name,
-                                                        sublabel: colab.phone || undefined,
-                                                        badge: colab.role || 'Operativo'
-                                                    }))
-                                                ]
-                                            )}
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAddImputedEntity(selectedImputedToAdd)}
-                                        disabled={!selectedImputedToAdd}
-                                        style={{ padding: '8px 14px', backgroundColor: '#0F172A', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0, height: '34px' }}
-                                    >
-                                        <Plus size={13} />
-                                        <span>Agregar</span>
-                                    </button>
-                                </div>
-
-                                {/* Imputed Entities List with % Split Sliders */}
-                                {imputedEntities.length > 0 ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {imputedEntities.length > 1 && (
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '2px' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleResetEqualSplit}
-                                                    style={{
-                                                        padding: '4px 10px',
-                                                        backgroundColor: '#ECFDF5',
-                                                        border: '1px solid #A7F3D0',
-                                                        borderRadius: '6px',
-                                                        fontSize: '0.68rem',
-                                                        fontWeight: '700',
-                                                        color: '#065F46',
-                                                        cursor: 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}
-                                                    title="Dividir el dinero y porcentaje en partes iguales exactas"
-                                                >
-                                                    <RotateCcw size={11} />
-                                                    <span>Dividir en Partes Iguales ({imputedEntities.length})</span>
-                                                </button>
-                                            </div>
-                                        )}
-                                        {imputedEntities.map(entity => (
-                                            <div
-                                                key={entity.id}
-                                                style={{
-                                                    backgroundColor: 'white',
-                                                    padding: '10px 14px',
-                                                    borderRadius: '10px',
-                                                    border: '1px solid #E2E8F0',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    flexWrap: 'wrap',
-                                                    gap: '10px'
-                                                }}
-                                            >
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <strong style={{ color: '#0F172A', fontSize: '0.78rem' }}>{entity.name}</strong>
-                                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0' }}>
-                                                            {entity.role}
-                                                        </span>
-                                                    </div>
-                                                    {entity.documentId && <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Doc: {entity.documentId}</span>}
-                                                </div>
-
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                                    {/* % Split Slider */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <input
-                                                            type="range"
-                                                            min="0"
-                                                            max="100"
-                                                            step="0.5"
-                                                            value={entity.sharePercent || 0}
-                                                            onChange={e => handleUpdateEntityPercent(entity.id, parseFloat(e.target.value))}
-                                                            style={{ width: '90px', accentColor: '#0D7A57', cursor: 'pointer' }}
-                                                        />
-                                                        <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.75rem', color: '#334155', minWidth: '42px', textAlign: 'right' }}>
-                                                            {Number(entity.sharePercent || 0).toFixed(1)}%
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Calculated COP Deduction */}
-                                                    <div style={{ textAlign: 'right', minWidth: '95px' }}>
-                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Cuota Imputada</span>
-                                                        <strong style={{ fontSize: '0.82rem', color: resolutionOption === 'opt1' ? '#059669' : '#BE123C' }}>
-                                                            {resolutionOption === 'opt1' ? (
-                                                                <>
-                                                                    $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Exonerado)</span>
-                                                                </>
-                                                            ) : (
-                                                                formatMoney(entity.deductionAmount !== undefined && entity.deductionAmount > 0 
-                                                                    ? entity.deductionAmount 
-                                                                    : Math.round((nominalNoveltiesCoQ * (entity.sharePercent || 0)) / 100))
-                                                            )}
-                                                        </strong>
-                                                    </div>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveImputedEntity(entity.id)}
-                                                        style={{ padding: '6px', color: '#94A3B8', background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '6px' }}
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
                                     </div>
                                 ) : (
-                                    <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: '0.75rem' }}>
-                                        No hay funcionarios o proveedores imputados nominalmente. Agrega al menos uno usando el selector superior.
+                                    <div style={{
+                                        padding: '8px 12px',
+                                        backgroundColor: resolutionOption === 'opt1' ? '#EFF6FF' : '#FFF1F2',
+                                        border: resolutionOption === 'opt1' ? '1px solid #BFDBFE' : '1px solid #FECDD3',
+                                        borderRadius: '8px',
+                                        fontSize: '0.72rem',
+                                        color: resolutionOption === 'opt1' ? '#1E40AF' : '#9F1239',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        lineHeight: '1.4'
+                                    }}>
+                                        {resolutionOption === 'opt1' ? (
+                                            <ShieldCheck size={16} style={{ flexShrink: 0, color: '#2563EB' }} />
+                                        ) : (
+                                            <ShieldAlert size={16} style={{ flexShrink: 0, color: '#E11D48' }} />
+                                        )}
+                                        {resolutionOption === 'opt1' ? (
+                                            <span>
+                                                <strong>Trazabilidad Formativa ISO 9001 (Opción 1 — Cerrar Conforme):</strong> En el Paso 2 determinaste cerrar el caso sin impacto económico. La asignación de funcionario o área se registra exclusivamente con fines estadísticos y formativos: <strong>la deducción en nómina es estrictamente $0 COP (Exonerado)</strong>.
+                                            </span>
+                                        ) : (
+                                            <span>
+                                                <strong>Imputación Patrimonial Activa ({resolutionOption === 'opt2' ? `Opción 2: Reposición Física (${replacementDeliveryDate})` : resolutionOption === 'opt3' ? 'Opción 3: Nota Crédito' : 'Opción 4: Ajuste de Factura'}):</strong> En el Paso 2 aprobaste reconocer la novedad por <strong>{formatMoney(nominalNoveltiesCoQ)}</strong>. La cuota asignada abajo se cargará a nómina / estado de cuenta del responsable.
+                                            </span>
+                                        )}
                                     </div>
+                                )}
+
+                                {rcaResponsible === 'proveedor' ? (
+                                    /* Dedicated Institutional Card for Provider Imputation */
+                                    <div style={{
+                                        backgroundColor: '#FFFFFF',
+                                        border: '1px solid #FDE68A',
+                                        borderLeft: '4px solid #D97706',
+                                        borderRadius: '10px',
+                                        padding: '12px 14px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        flexWrap: 'wrap',
+                                        gap: '10px'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <div style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '8px',
+                                                backgroundColor: '#FEF3C7',
+                                                color: '#B45309',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0
+                                            }}>
+                                                <Building2 size={16} />
+                                            </div>
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <strong style={{ color: '#0F172A', fontSize: '0.80rem' }}>
+                                                        Asignado al Proveedor (Campo / Origen)
+                                                    </strong>
+                                                    <span style={{
+                                                        fontSize: '0.65rem',
+                                                        fontWeight: '800',
+                                                        textTransform: 'uppercase',
+                                                        padding: '1px 6px',
+                                                        borderRadius: '4px',
+                                                        backgroundColor: '#FEF3C7',
+                                                        color: '#B45309',
+                                                        border: '1px solid #FDE68A'
+                                                    }}>
+                                                        Proveedor
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '0.65rem',
+                                                        fontWeight: '700',
+                                                        padding: '1px 6px',
+                                                        borderRadius: '4px',
+                                                        backgroundColor: '#F0FDF4',
+                                                        color: '#166534',
+                                                        border: '1px solid #BBF7D0'
+                                                    }}>
+                                                        100% Imputado
+                                                    </span>
+                                                </div>
+                                                <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
+                                                    Clasificación institucional automática por política de calidad FruFresco. Gestión comercial a cargo de Compras.
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ textAlign: 'right' }}>
+                                            <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Impacto Clasificado</span>
+                                            <strong style={{ fontSize: '0.85rem', color: '#B45309', fontFamily: 'monospace' }}>
+                                                {resolutionOption === 'opt1' ? '$0 COP (Exonerado)' : formatMoney(nominalNoveltiesCoQ)}
+                                            </strong>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Selector to Add Entity for employees, drivers, clients */}
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <div style={{ flex: '1', minWidth: 0 }}>
+                                                <SearchableSelect
+                                                    value={selectedImputedToAdd}
+                                                    onChange={val => {
+                                                        if (val) {
+                                                            handleAddImputedEntity(val);
+                                                        } else {
+                                                            setSelectedImputedToAdd('');
+                                                        }
+                                                    }}
+                                                    placeholder={`-- Seleccionar ${rcaResponsible === 'cliente' ? 'Cliente' : 'Funcionario'} para Imputar --`}
+                                                    searchPlaceholder={rcaResponsible === 'cliente' ? "Buscar cliente..." : "Buscar funcionario por nombre o cargo..."}
+                                                    clearable
+                                                    options={rcaResponsible === 'cliente' ? (
+                                                        pqr?.profiles ? [{
+                                                            value: pqr.client_id,
+                                                            label: pqr.profiles.company_name || pqr.profiles.contact_name || 'Cliente de la PQR',
+                                                            sublabel: pqr.profiles.nit ? `NIT: ${pqr.profiles.nit}` : undefined,
+                                                            badge: 'Cliente'
+                                                        }] : []
+                                                    ) : (
+                                                        [
+                                                            ...(rcaResponsible === 'transporte' && assignedRouteDriver && !collaboratorsList.some(c => c.id === assignedRouteDriver.id)
+                                                                ? [{
+                                                                    value: assignedRouteDriver.id || 'driver-route',
+                                                                    label: `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`,
+                                                                    badge: 'Conductor de Ruta'
+                                                                }]
+                                                                : []),
+                                                            ...collaboratorsList.map(colab => ({
+                                                                value: colab.id,
+                                                                label: colab.contact_name,
+                                                                sublabel: colab.phone || undefined,
+                                                                badge: colab.role || 'Operativo'
+                                                            }))
+                                                        ]
+                                                    )}
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAddImputedEntity(selectedImputedToAdd)}
+                                                disabled={!selectedImputedToAdd}
+                                                style={{ padding: '8px 14px', backgroundColor: '#0F172A', color: 'white', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0, height: '34px' }}
+                                            >
+                                                <Plus size={13} />
+                                                <span>Agregar</span>
+                                            </button>
+                                        </div>
+
+                                        {/* Imputed Entities List with % Split Sliders */}
+                                        {imputedEntities.length > 0 ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {imputedEntities.length > 1 && (
+                                                    <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '2px' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleResetEqualSplit}
+                                                            style={{
+                                                                padding: '4px 10px',
+                                                                backgroundColor: '#ECFDF5',
+                                                                border: '1px solid #A7F3D0',
+                                                                borderRadius: '6px',
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: '700',
+                                                                color: '#065F46',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px'
+                                                            }}
+                                                            title="Dividir el dinero y porcentaje en partes iguales exactas"
+                                                        >
+                                                            <RotateCcw size={11} />
+                                                            <span>Dividir en Partes Iguales ({imputedEntities.length})</span>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {imputedEntities.map(entity => (
+                                                    <div
+                                                        key={entity.id}
+                                                        style={{
+                                                            backgroundColor: 'white',
+                                                            padding: '10px 14px',
+                                                            borderRadius: '10px',
+                                                            border: '1px solid #E2E8F0',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            flexWrap: 'wrap',
+                                                            gap: '10px'
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <strong style={{ color: '#0F172A', fontSize: '0.78rem' }}>{entity.name}</strong>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0' }}>
+                                                                    {entity.role}
+                                                                </span>
+                                                            </div>
+                                                            {entity.documentId && <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Doc: {entity.documentId}</span>}
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                            {/* % Split Slider */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <input
+                                                                    type="range"
+                                                                    min="0"
+                                                                    max="100"
+                                                                    step="0.5"
+                                                                    value={entity.sharePercent || 0}
+                                                                    onChange={e => handleUpdateEntityPercent(entity.id, parseFloat(e.target.value))}
+                                                                    style={{ width: '90px', accentColor: '#0D7A57', cursor: 'pointer' }}
+                                                                />
+                                                                <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.75rem', color: '#334155', minWidth: '42px', textAlign: 'right' }}>
+                                                                    {Number(entity.sharePercent || 0).toFixed(1)}%
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Calculated COP Deduction */}
+                                                            <div style={{ textAlign: 'right', minWidth: '95px' }}>
+                                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Cuota Imputada</span>
+                                                                <strong style={{ fontSize: '0.82rem', color: resolutionOption === 'opt1' ? '#059669' : '#BE123C' }}>
+                                                                    {resolutionOption === 'opt1' ? (
+                                                                        <>
+                                                                            $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Exonerado)</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        formatMoney(entity.deductionAmount !== undefined && entity.deductionAmount > 0 
+                                                                            ? entity.deductionAmount 
+                                                                            : Math.round((nominalNoveltiesCoQ * (entity.sharePercent || 0)) / 100))
+                                                                    )}
+                                                                </strong>
+                                                            </div>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveImputedEntity(entity.id)}
+                                                                style={{ padding: '6px', color: '#94A3B8', background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '6px' }}
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: '0.75rem' }}>
+                                                No hay funcionarios imputados nominalmente. Agrega al menos uno usando el selector superior.
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
 

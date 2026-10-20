@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.224 (Unidad de Facturación en Kilos por Defecto vs Libras Eventual en Casa Matriz con Conversión Invariante 1 Kg = 2 Lb, Descuento Comercial X% a Fecha del Pedido, Facturación por Lotes y Corte 5:00 PM — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.225 (Imputabilidad Institucional Automática a Proveedor de Campo en Auditoría QC — Principio Poka-Yoke & Segregación SoD, Unidad de Facturación en Kilos por Defecto vs Libras Eventual en Casa Matriz, Descuento Comercial X% a Fecha del Pedido, Facturación por Lotes y Corte 5:00 PM — 76/76 Pantallas Certificadas)  
 > **Fecha:** 20 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 254 Escenarios BDD Ininterrumpidos (1..254)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 255 Escenarios BDD Ininterrumpidos (1..255)
 
 ---
 
@@ -25,10 +25,10 @@
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254 (§42.1 - §42.7) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **254 Escenarios Canónicos (1..254)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **255 Escenarios Canónicos (1..255)** | **🟢 100%** |
 
 ---
 
@@ -4714,6 +4714,19 @@ Para preservar la relación comercial B2B, el sistema genera mensajes estructura
 - Reconocimiento explícito del producto afectado y cantidad reportada.
 - Solución acordada (Nota Crédito por $X COP o pedido de reposición `#PED-YYYY` en camino).
 - Despedida con compromiso de calidad y enlace de trazabilidad.
+
+### 20.7 Imputabilidad Institucional a Proveedores de Campo en Auditoría Técnica QC (Segregación SoD & Principio Poka-Yoke)
+Por directriz institucional y política de segregación de funciones (SoD), el funcionario técnico de Control de Calidad (QC) en planta y muelle de recepción no debe buscar, consultar ni seleccionar proveedores comerciales específicos en listas desplegables al momento de auditar una reclamación técnica:
+1. **Ocultamiento de Selección Mercantil:** En el Paso 3 del modal de auditoría (`PqrAuditModal.tsx`), al seleccionar `rcaResponsible = 'proveedor'`, el desplegable de proveedores y el botón `[+ Agregar]` se ocultan de forma automática.
+2. **Auto-Imputación Institucional Invariable:** El sistema genera y enlaza una entidad institucional única con el 100% del Costo de No Calidad (`nominalNoveltiesCoQ`):
+   - `id: 'proveedor-origen'`
+   - `name: 'Asignado al Proveedor (Campo / Origen)'`
+   - `role: 'Proveedor'`
+   - `entityType: 'provider'`
+   - `sharePercent: 100`
+   - `deductionAmount: nominalNoveltiesCoQ`
+3. **Señalización Visual y Desacople de Nómina:** Se erradica la advertencia roja salarial y se despliega una notificación ámbar institucional (`Building2`) confirmando que el valor no afecta la nómina interna y será tramitado como ajuste o reclamación mercantil directa al proveedor en Compras / Cartera.
+4. **Blindaje en Talento Humano (`/admin/hr`):** El motor de liquidación de nómina ignora toda entidad con `entityType: 'provider'` / `role: 'Proveedor'`, garantizando cero retenciones indebidas a los colaboradores de FruFresco.
 
 ---
 
@@ -10975,6 +10988,34 @@ flowchart TD
        * **Valor Unitario (`Detalle: Valor Unitario`):** Se divide entre $2$:
          $\text{Precio Unitario}_{\text{Lb}} = \frac{\text{Precio Unitario}_{\text{Kg}}}{2}$
        * **Invarianza Financiera Total:** El subtotal de la línea, el descuento comercial, el IVA y el total del documento en `$ COP` permanecen **exactamente idénticos al centavo** ($\text{Cantidad}_{\text{Lb}} \times \text{Precio Unitario}_{\text{Lb}} = (\text{Cantidad}_{\text{Kg}} \times 2) \times (\frac{\text{Precio}_{\text{Kg}}}{2}) = \text{Subtotal}_{\text{COP}}$).
+
+---
+
+### Escenario 255: Imputabilidad Institucional Automática a Proveedores de Campo (`Proveedor (Campo / Origen)`) en Auditoría Técnica QC sin Búsqueda Comercial y Blindaje Anti-Descuento de Nómina en Talento Humano (Principio Poka-Yoke & Segregación SoD — SDD v1.9.225)
+- **Given** el módulo de Gestión de Calidad & SAC (`/admin/customer-service`), el modal de auditoría técnica (`src/app/admin/customer-service/components/PqrAuditModal.tsx`), el modal de liquidación de notas crédito o ajustes (`src/components/FinancialAdjustmentModal.tsx`) y el módulo de Talento Humano (`src/app/admin/hr/page.tsx` — pestaña *Deducciones de Nómina Columna N*),
+- **When** el funcionario de Control de Calidad (QC) dictamina una reclamación técnica en los Caminos 2 (Reposición D+1), 3 (Nota Crédito Financiera) o 4 (Ajuste Directo de Factura) e imputa la causa raíz técnica a un origen agrícola (`rcaResponsible === 'proveedor'`),
+- **Then** el sistema garantiza el estricto cumplimiento del principio Poka-Yoke, la segregación de funciones (SoD) y el aislamiento de nómina:
+  1. **Ocultamiento del Selector de Búsqueda Comercial de Proveedores (Segregación SoD):**
+     - Por políticas de la compañía, el funcionario operativo de Calidad en planta/muelle no debe buscar a los proveedores en un desplegable comercial ni asignar identidades mercantiles específicas.
+     - En el Paso 3 (*Causa Raíz & Imputación*), al conmutar a `Proveedor (Campo / Origen)`, el selector de búsqueda de proveedores (`SearchableSelect`) y el botón `[+ Agregar]` quedan completamente ocultos.
+  2. **Asignación Institucional Automática (100% CoQ al Proveedor Global):**
+     - El sistema auto-asigna de forma inmediata e irrevocable una única entidad institucional:
+       ```typescript
+       [{
+         id: 'proveedor-origen',
+         name: 'Asignado al Proveedor (Campo / Origen)',
+         role: 'Proveedor',
+         entityType: 'provider',
+         sharePercent: 100,
+         deductionAmount: nominalNoveltiesCoQ
+       }]
+       ```
+     - Si la reclamación ya traía un proveedor asignado previamente (`imputedEntities`), se preserva su información sin requerir intervención del auditor.
+  3. **Banner Institucional Ámbar de Liquidación Comercial (Sustitución del Banner de Nómina):**
+     - Se suprime la alerta roja de descuento salarial (`AlertTriangle`) y en su lugar se despliega una tarjeta de notificación institucional ámbar con icono `<Building2 size={16} />`:
+       > *Asignación a Proveedor de Origen:* Este costo no afecta la nómina interna. La imputación será gestionada como reclamación comercial o deducción contable directa al proveedor de campo en Compras / Cartera.
+  4. **Blindaje Absoluto en Talento Humano (`/admin/hr`):**
+     - Dado que la entidad imputada posee `entityType: 'provider'` (o `role: 'Proveedor'`), el motor de consolidación de nómina de `src/app/admin/hr/page.tsx` (`fetchPayrollSales`) ignora estrictamente el registro, impidiendo que el Costo de No Calidad (CoQ) sea imputado o descontado a ningún colaborador interno de FruFresco.
 
 ---
 
