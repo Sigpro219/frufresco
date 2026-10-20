@@ -377,7 +377,7 @@ export default function FinancialAdjustmentModal({
 
             const finalizedEntities = (imputedEntities || []).map(e => ({
                 ...e,
-                deductionAmount: Math.round((calculatedCreditAmount * (Number(e.sharePercent) || 100)) / 100)
+                deductionAmount: e.waiveDeduction ? 0 : Math.round((calculatedCreditAmount * (e.sharePercent !== undefined ? Number(e.sharePercent) : 100)) / 100)
             }));
 
             const entitiesFormatted = finalizedEntities.length > 0 
@@ -1183,10 +1183,10 @@ export default function FinancialAdjustmentModal({
                                 {imputedEntities && imputedEntities.length > 0 ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
                                         {imputedEntities.map((ent, i) => {
-                                            const calcCop = Math.round((calculatedCreditAmount * (Number(ent.sharePercent) || 100)) / 100);
+                                            const calcCop = ent.waiveDeduction ? 0 : Math.round((calculatedCreditAmount * (ent.sharePercent !== undefined ? Number(ent.sharePercent) : 100)) / 100);
                                             return (
-                                                <div key={i} style={{ fontSize: '0.72rem', fontWeight: '800', color: '#991B1B' }}>
-                                                    {ent.name} ({ent.sharePercent}% = {formatMoney(calcCop)})
+                                                <div key={i} style={{ fontSize: '0.72rem', fontWeight: '800', color: ent.waiveDeduction ? '#059669' : '#991B1B' }}>
+                                                    {ent.name} ({ent.sharePercent}% = {ent.waiveDeduction ? '$0 COP (Exonerado / Reingreso)' : formatMoney(calcCop)})
                                                 </div>
                                             );
                                         })}

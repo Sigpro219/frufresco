@@ -270,6 +270,27 @@ export default function PqrAuditModal({
         return nominalNoveltiesCoQ;
     }, [pqr, resolutionOption, nominalNoveltiesCoQ]);
 
+    // Total a cobrar en nómina considerando exoneraciones individuales (waiveDeduction)
+    const totalChargeableCoQ = useMemo(() => {
+        if (resolutionOption === 'opt1') return 0;
+        if (rcaResponsible === 'proveedor') return nominalNoveltiesCoQ;
+        if (imputedEntities.length === 0) return nominalNoveltiesCoQ;
+        return imputedEntities.reduce((sum, e) => {
+            if (e.waiveDeduction) return sum;
+            const amt = e.deductionAmount !== undefined 
+                ? e.deductionAmount 
+                : Math.round((nominalNoveltiesCoQ * (e.sharePercent !== undefined ? e.sharePercent : 100)) / 100);
+            return sum + amt;
+        }, 0);
+    }, [resolutionOption, rcaResponsible, imputedEntities, nominalNoveltiesCoQ]);
+
+    const isAllWaived = useMemo(() => {
+        return resolutionOption !== 'opt1' && 
+               rcaResponsible !== 'proveedor' && 
+               imputedEntities.length > 0 && 
+               imputedEntities.every(e => e.waiveDeduction);
+    }, [resolutionOption, rcaResponsible, imputedEntities]);
+
     // Clear saved case draft helper
     const clearCaseDraft = (pqrId: string) => {
         if (!pqrId) return;
@@ -983,7 +1004,7 @@ export default function PqrAuditModal({
             return [{
                 ...entities[0],
                 sharePercent: 100,
-                deductionAmount: totalAmount
+                deductionAmount: entities[0].waiveDeduction ? 0 : totalAmount
             }];
         }
 
@@ -998,7 +1019,7 @@ export default function PqrAuditModal({
             return {
                 ...item,
                 sharePercent: pct,
-                deductionAmount: amount
+                deductionAmount: item.waiveDeduction ? 0 : amount
             };
         });
     };
@@ -1091,7 +1112,7 @@ export default function PqrAuditModal({
             const updated = imputedEntities.map(e => ({
                 ...e,
                 sharePercent: clamped,
-                deductionAmount: Math.round((baseAmountToSplit * clamped) / 100)
+                deductionAmount: e.waiveDeduction ? 0 : Math.round((baseAmountToSplit * clamped) / 100)
             }));
             setImputedEntities(updated);
             return;
@@ -1107,7 +1128,7 @@ export default function PqrAuditModal({
                 return {
                     ...e,
                     sharePercent: isTarget ? clamped : otherPercent,
-                    deductionAmount: isTarget ? amountA : amountB
+                    deductionAmount: e.waiveDeduction ? 0 : (isTarget ? amountA : amountB)
                 };
             });
             setImputedEntities(updated);
@@ -1126,12 +1147,26 @@ export default function PqrAuditModal({
                 return {
                     ...e,
                     sharePercent: clamped,
-                    deductionAmount: Math.round((baseAmountToSplit * clamped) / 100)
+                    deductionAmount: e.waiveDeduction ? 0 : Math.round((baseAmountToSplit * clamped) / 100)
                 };
             }
             return e;
         });
         setImputedEntities(updated);
+    };
+
+    const handleToggleWaiveDeduction = (entityId: string) => {
+        setImputedEntities(prev => prev.map(e => {
+            if (e.id === entityId) {
+                const nextWaive = !e.waiveDeduction;
+                return {
+                    ...e,
+                    waiveDeduction: nextWaive,
+                    deductionAmount: nextWaive ? 0 : Math.round((nominalNoveltiesCoQ * (e.sharePercent !== undefined ? e.sharePercent : 100)) / 100)
+                };
+            }
+            return e;
+        }));
     };
 
     const handleSavePhone = async () => {
@@ -1644,7 +1679,10 @@ export default function PqrAuditModal({
                 }]
                 : isZeroDeductionCase
                     ? imputedEntities.map(e => ({ ...e, deductionAmount: 0 }))
-                    : imputedEntities;
+                    : imputedEntities.map(e => ({
+                        ...e,
+                        deductionAmount: e.waiveDeduction ? 0 : (e.deductionAmount !== undefined ? e.deductionAmount : Math.round((nominalNoveltiesCoQ * (e.sharePercent || 0)) / 100))
+                    }));
 
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
@@ -1741,7 +1779,10 @@ export default function PqrAuditModal({
                 }]
                 : isZeroDeductionCase
                     ? imputedEntities.map(e => ({ ...e, deductionAmount: 0 }))
-                    : imputedEntities;
+                    : imputedEntities.map(e => ({
+                        ...e,
+                        deductionAmount: e.waiveDeduction ? 0 : (e.deductionAmount !== undefined ? e.deductionAmount : Math.round((nominalNoveltiesCoQ * (e.sharePercent || 0)) / 100))
+                    }));
 
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
@@ -4121,8 +4162,8 @@ export default function PqrAuditModal({
                                             border: resolutionOption === 'opt1' ? '1px solid #BFDBFE' : '1px solid #FECDD3'
                                         }}>
                                             <span style={{ fontSize: '0.7rem', color: resolutionOption === 'opt1' ? '#1E40AF' : '#9F1239', fontWeight: '700' }}>Impacto a Cobrar:</span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: resolutionOption === 'opt1' ? '#1D4ED8' : '#BE123C' }}>
-                                                {resolutionOption === 'opt1' ? '$0 COP (Exonerado)' : formatMoney(nominalNoveltiesCoQ)}
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '900', color: (resolutionOption === 'opt1' || isAllWaived || totalChargeableCoQ === 0) ? '#1D4ED8' : '#BE123C' }}>
+                                                {resolutionOption === 'opt1' ? '$0 COP (Exonerado)' : (isAllWaived || totalChargeableCoQ === 0) ? '$0 COP (Exonerado)' : formatMoney(totalChargeableCoQ)}
                                             </span>
                                         </div>
                                     </div>
@@ -4167,6 +4208,10 @@ export default function PqrAuditModal({
                                         {resolutionOption === 'opt1' ? (
                                             <span>
                                                 <strong>Trazabilidad Formativa ISO 9001 (Opción 1 — Cerrar Conforme):</strong> En el Paso 2 determinaste cerrar el caso sin impacto económico. La asignación de funcionario o área se registra exclusivamente con fines estadísticos y formativos: <strong>la deducción en nómina es estrictamente $0 COP (Exonerado)</strong>.
+                                            </span>
+                                        ) : isAllWaived ? (
+                                            <span>
+                                                <strong>Exoneración de Cobro Salarial Activa (Mercancía Reingresada a Inventario):</strong> En el Paso 2 aprobaste reconocer la novedad por <strong>{formatMoney(nominalNoveltiesCoQ)}</strong>. El funcionario queda registrado para trazabilidad estadística y auditoría de calidad, pero <strong>la deducción en nómina es estrictamente $0 COP</strong> al no generarse pérdida de dinero para la empresa.
                                             </span>
                                         ) : (
                                             <span>
@@ -4373,8 +4418,12 @@ export default function PqrAuditModal({
                                                             {/* Calculated COP Deduction */}
                                                             <div style={{ textAlign: 'right', minWidth: '95px' }}>
                                                                 <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block' }}>Cuota Imputada</span>
-                                                                <strong style={{ fontSize: '0.82rem', color: resolutionOption === 'opt1' ? '#059669' : '#BE123C' }}>
+                                                                <strong style={{ fontSize: '0.82rem', color: (resolutionOption === 'opt1' || entity.waiveDeduction) ? '#059669' : '#BE123C' }}>
                                                                     {resolutionOption === 'opt1' ? (
+                                                                        <>
+                                                                            $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Exonerado)</span>
+                                                                        </>
+                                                                    ) : entity.waiveDeduction ? (
                                                                         <>
                                                                             $0 COP <span style={{ fontSize: '0.65rem', fontWeight: '600' }}>(Exonerado)</span>
                                                                         </>
@@ -4385,6 +4434,45 @@ export default function PqrAuditModal({
                                                                     )}
                                                                 </strong>
                                                             </div>
+
+                                                            {/* Waive / Charge Deduction Button (Exonerar de Cobro) */}
+                                                            {resolutionOption !== 'opt1' && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleWaiveDeduction(entity.id)}
+                                                                    disabled={isReadOnlyClosed}
+                                                                    title={entity.waiveDeduction 
+                                                                        ? "Cobro salarial exonerado (Reingreso de mercancía a bodega). Clic para volver a cobrar." 
+                                                                        : "Exonerar cobro en nómina al funcionario (Mercancía devuelta en buen estado sin pérdida de dinero)"
+                                                                    }
+                                                                    style={{
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '5px',
+                                                                        padding: '4px 9px',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '0.68rem',
+                                                                        fontWeight: '700',
+                                                                        cursor: isReadOnlyClosed ? 'default' : 'pointer',
+                                                                        transition: 'all 0.15s ease',
+                                                                        backgroundColor: entity.waiveDeduction ? '#ECFDF5' : '#FFF1F2',
+                                                                        color: entity.waiveDeduction ? '#059669' : '#BE123C',
+                                                                        border: entity.waiveDeduction ? '1px solid #A7F3D0' : '1px solid #FECDD3'
+                                                                    }}
+                                                                >
+                                                                    {entity.waiveDeduction ? (
+                                                                        <>
+                                                                            <ShieldCheck size={13} />
+                                                                            <span>No Cobrar ($0)</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <DollarSign size={13} />
+                                                                            <span>Cobrar Cuota</span>
+                                                                        </>
+                                                                    )}
+                                                                </button>
+                                                            )}
 
                                                             <button
                                                                 type="button"

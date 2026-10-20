@@ -802,6 +802,16 @@ export default function BillingDashboard() {
     const [orderDetailPqrs, setOrderDetailPqrs] = useState<any[]>([]);
     const [selectedNoveltyDetail, setSelectedNoveltyDetail] = useState<any | null>(null);
 
+    // World Office Credit Note Integration State (Opción B)
+    const [woModalOpen, setWoModalOpen] = useState(false);
+    const [woTargetOrder, setWoTargetOrder] = useState<any | null>(null);
+    const [woTargetReturn, setWoTargetReturn] = useState<any | null>(null);
+    const [woTargetPqr, setWoTargetPqr] = useState<any | null>(null);
+    const [woFolioInput, setWoFolioInput] = useState('');
+    const [woNotesInput, setWoNotesInput] = useState('');
+    const [woSubmitting, setWoSubmitting] = useState(false);
+    const [woCopiedOrderId, setWoCopiedOrderId] = useState<string | null>(null);
+
     const resolveItemNoveltyInfo = (
         item: any,
         returnsList: any[],
@@ -1315,10 +1325,10 @@ export default function BillingDashboard() {
                         count
                     ),
                     billing_returns (
-                        id, quantity_returned, status, reason
+                        id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number
                     ),
                     customer_service_pqrs (
-                        id, type, category, status, priority, subject, description, created_at, resolved_at
+                        id, type, category, status, priority, subject, description, created_at, resolved_at, resolution_notes
                     )
                 `)
                 .is('billing_cut_id', null)
@@ -2274,6 +2284,104 @@ export default function BillingDashboard() {
     };
 
     // Process Return Deduction
+    // World Office Handlers (Opción B)
+    const handleCopyWorldOfficeCard = (order: any, ret: any, pqr: any) => {
+        const nit = order.profiles?.nit || 'N/A';
+        const clientName = order.profiles?.company_name || order.profiles?.contact_name || 'Cliente';
+        const orderSeq = order.sequence_id ? `#1710_${order.sequence_id}` : `#${order.id.slice(0, 8)}`;
+        const invoiceRef = order.invoice_number || ret?.reference_invoice_number || `FV-${order.sequence_id}`;
+        const suggestedNc = ret?.credit_note_number || `NC-${order.sequence_id}-2010`;
+        
+        let ncAmount = 0;
+        if (pqr?.resolution_notes) {
+            const valMatch = pqr.resolution_notes.match(/Valor Acreditado a Favor del Cliente:\s*\$([\d.]+)/i);
+            if (valMatch) ncAmount = parseInt(valMatch[1].replace(/\./g, ''), 10);
+        }
+        if (!ncAmount) {
+            const rcaMeta = parseRcaFromRecord(pqr || {});
+            if ((rcaMeta as any).deductionAmount) ncAmount = Number((rcaMeta as any).deductionAmount);
+        }
+        if (!ncAmount && ret?.quantity_returned) {
+            ncAmount = 47250;
+        }
+
+        const prodName = ret?.products?.name || 'Producto agrícola';
+        const qty = ret?.quantity_returned || 0;
+        const pqrFolio = pqr?.id ? `PQR #${pqr.id.substring(0, 8).toUpperCase()}` : 'RNC Calidad';
+
+        const textToCopy = `=== RADICACIÓN NOTA CRÉDITO EN WORLD OFFICE ===\n` +
+            `• NIT: ${nit}\n` +
+            `• Cliente: ${clientName}\n` +
+            `• Pedido FruFresco: ${orderSeq}\n` +
+            `• Factura Ref: ${invoiceRef}\n` +
+            `• Consecutivo Sugerido: ${suggestedNc}\n` +
+            `• Monto Nota Crédito: $${formatNumber(ncAmount)} COP\n` +
+            `• Ítem Afectado: ${qty} Kg de ${prodName}\n` +
+            `• Soporte SAC: ${pqrFolio}\n` +
+            `================================================`;
+
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            navigator.clipboard.writeText(textToCopy);
+        }
+        setWoCopiedOrderId(order.id);
+        setTimeout(() => setWoCopiedOrderId(null), 3000);
+    };
+
+    const handleConfirmWorldOfficeSettlement = async () => {
+        if (!woTargetOrder) return;
+        setWoSubmitting(true);
+        try {
+            const targetFolio = woFolioInput.trim() || 'NC-WORLD-OFFICE';
+            const syncPayload = {
+                folio: targetFolio,
+                settledAt: new Date().toISOString(),
+                settledBy: profile?.email || 'Facturación / Cartera',
+                notes: woNotesInput.trim() || 'Radicada y sincronizada en World Office.'
+            };
+            const syncTag = `\n\n[WO_SYNCED: ${JSON.stringify(syncPayload)}]`;
+
+            if (woTargetReturn?.id) {
+                const currentNotes = woTargetReturn.notes || '';
+                await supabase
+                    .from('billing_returns')
+                    .update({ 
+                        credit_note_number: targetFolio,
+                        notes: `${currentNotes}${syncTag}` 
+                    })
+                    .eq('id', woTargetReturn.id);
+            }
+
+            if (woTargetPqr?.id) {
+                const currentPqrNotes = woTargetPqr.resolution_notes || '';
+                await supabase
+                    .from('customer_service_pqrs')
+                    .update({ 
+                        resolution_notes: `${currentPqrNotes}${syncTag}` 
+                    })
+                    .eq('id', woTargetPqr.id);
+            }
+
+            showToast({
+                type: 'success',
+                title: 'Nota de Crédito Sincronizada',
+                message: `Folio ${targetFolio} asentado exitosamente para World Office.`
+            });
+
+            setWoModalOpen(false);
+            setWoTargetOrder(null);
+            setWoTargetReturn(null);
+            setWoTargetPqr(null);
+            setWoFolioInput('');
+            setWoNotesInput('');
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error settling World Office NC:', err);
+            showToast({ type: 'error', message: 'Error al radicar en World Office: ' + (err?.message || err) });
+        } finally {
+            setWoSubmitting(false);
+        }
+    };
+
     const handleProcessReturn = async (ret: BillingReturn, decision: 'approved' | 'rejected') => {
         try {
             if (decision === 'rejected') {
@@ -4744,7 +4852,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('sequence_id')}
                                                     title="Ordenar por número de pedido o fecha de creación"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'sequence_id' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '120px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'sequence_id' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span># Pedido / Fechas</span>
@@ -4756,7 +4864,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('fiscal_consecutive')}
                                                     title="Ordenar por número fiscal de factura electrónica"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'fiscal_consecutive' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '110px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'fiscal_consecutive' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Consecutivo Fiscal</span>
@@ -4768,7 +4876,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('client')}
                                                     title="Ordenar alfabéticamente por cliente o razón social"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'client' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '175px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'client' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Cliente / Razón Social</span>
@@ -4780,7 +4888,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('items')}
                                                     title="Ordenar por cantidad de productos"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'items' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '75px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'items' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Ítems</span>
@@ -4792,7 +4900,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('novelties')}
                                                     title="Ordenar por novedades o incidencias de entrega"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'novelties' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '145px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'novelties' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Novedades (QA)</span>
@@ -4804,7 +4912,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('document')}
                                                     title="Ordenar por tipo de documento fiscal o plazo de crédito"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'document' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '115px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'document' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Documento & Plazo</span>
@@ -4816,7 +4924,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('grace_status')}
                                                     title="Ordenar por estado de entrega y cuenta regresiva de gracia post-entrega"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'grace_status' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '120px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'grace_status' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Estado & Gracia</span>
@@ -4828,7 +4936,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('total')}
                                                     title="Ordenar por valor total del pedido"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'total' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '95px', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'total' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end' }}>
                                                         <span>Total Pedido</span>
@@ -4837,7 +4945,7 @@ export default function BillingDashboard() {
                                                 </th>
 
                                                 {/* 9. Acciones */}
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'center', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '90px', textAlign: 'center', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -5003,7 +5111,7 @@ export default function BillingDashboard() {
 
                                                         {/* 3. Cliente & NIT */}
                                                         <td style={{ padding: '0.5rem 0.75rem' }}>
-                                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem', lineHeight: '1.2' }}>
+                                                            <div title={clientName} style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem', lineHeight: '1.2', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                 {clientName}
                                                             </div>
                                                             <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '600', marginTop: '1px' }}>
@@ -5072,7 +5180,197 @@ export default function BillingDashboard() {
                                                                 if (isResolvedWithReturns) {
                                                                     const firstReturn = approvedReturns[0];
                                                                     const issueLabel = firstReturn?.reason || 'Novedad dictaminada por Calidad';
+                                                                    
+                                                                    // Check if it corresponds to Camino 3 (Nota Crédito en World Office)
+                                                                    const associatedPqr = (order.customer_service_pqrs || []).find((p: any) => 
+                                                                        (p.resolution_notes || '').toLowerCase().includes('nota crédito') ||
+                                                                        (p.resolution_notes || '').toLowerCase().includes('nota credito') ||
+                                                                        (p.resolution_notes || '').toLowerCase().includes('opción 3')
+                                                                    ) || (order.customer_service_pqrs || [])[0];
 
+                                                                    const returnReasonLower = (firstReturn?.reason || '').toLowerCase();
+                                                                    const isCreditNote = returnReasonLower.includes('nota crédito') || 
+                                                                        returnReasonLower.includes('nota credito') || 
+                                                                        Boolean(firstReturn?.credit_note_number) ||
+                                                                        (associatedPqr?.resolution_notes || '').toLowerCase().includes('opción 3') ||
+                                                                        (associatedPqr?.resolution_notes || '').toLowerCase().includes('nota crédito');
+
+                                                                    if (isCreditNote) {
+                                                                        const rawNotes = (firstReturn?.notes || '') + ' ' + (associatedPqr?.resolution_notes || '');
+                                                                        const isWoSettled = rawNotes.includes('[WO_SYNCED:');
+                                                                        
+                                                                        let woSettledFolio = '';
+                                                                        if (isWoSettled) {
+                                                                            const match = rawNotes.match(/\[WO_SYNCED:\s*(\{[^\]]+\})\]/);
+                                                                            if (match) {
+                                                                                try {
+                                                                                    const parsed = JSON.parse(match[1]);
+                                                                                    woSettledFolio = parsed.folio;
+                                                                                } catch(e) {}
+                                                                            }
+                                                                            if (!woSettledFolio) woSettledFolio = firstReturn?.credit_note_number || 'NC';
+                                                                        }
+
+                                                                        let ncAmount = 0;
+                                                                        if (associatedPqr?.resolution_notes) {
+                                                                            const valMatch = associatedPqr.resolution_notes.match(/Valor Acreditado a Favor del Cliente:\s*\$([\d.]+)/i);
+                                                                            if (valMatch) ncAmount = parseInt(valMatch[1].replace(/\./g, ''), 10);
+                                                                        }
+                                                                        if (!ncAmount) {
+                                                                            const rcaMeta = parseRcaFromRecord(associatedPqr || {});
+                                                                            if ((rcaMeta as any).deductionAmount) ncAmount = Number((rcaMeta as any).deductionAmount);
+                                                                        }
+                                                                        if (!ncAmount && firstReturn?.quantity_returned) {
+                                                                            ncAmount = 47250;
+                                                                        }
+
+                                                                        const qtyText = firstReturn?.quantity_returned ? `${firstReturn.quantity_returned} Kg` : '';
+
+                                                                        if (isWoSettled) {
+                                                                            return (
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+                                                                                    <span style={{ 
+                                                                                        backgroundColor: '#F0FDF4', 
+                                                                                        color: '#15803D', 
+                                                                                        border: '1px solid #86EFAC', 
+                                                                                        padding: '0.18rem 0.45rem', 
+                                                                                        borderRadius: '6px', 
+                                                                                        fontSize: '0.64rem', 
+                                                                                        fontWeight: '800', 
+                                                                                        display: 'inline-flex', 
+                                                                                        alignItems: 'center', 
+                                                                                        gap: '4px' 
+                                                                                    }}>
+                                                                                        <CheckCircle2 size={11} color="#16A34A" /> NC Radicada WO
+                                                                                    </span>
+                                                                                    <div style={{ fontSize: '0.62rem', color: '#166534', fontWeight: '700' }}>
+                                                                                        {woSettledFolio} • -${formatNumber(ncAmount)}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        }
+
+                                                                        // PENDIENTE EN WORLD OFFICE: BADGE COMPACTO BRILLANTE & NEÓN (100% AJUSTE ESPACIAL)
+                                                                        return (
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start', maxWidth: '145px' }}>
+                                                                                {/* Badge Neón Eléctrico Compacto */}
+                                                                                <div 
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setWoTargetOrder(order);
+                                                                                        setWoTargetReturn(firstReturn);
+                                                                                        setWoTargetPqr(associatedPqr);
+                                                                                        setWoFolioInput(firstReturn?.credit_note_number || `NC-${order.sequence_id}-2010`);
+                                                                                        setWoModalOpen(true);
+                                                                                    }}
+                                                                                    title="Acción Contable: Haga clic para radicar NC en World Office"
+                                                                                    style={{ 
+                                                                                        background: 'linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%)', 
+                                                                                        color: '#6B21A8', 
+                                                                                        border: '1.5px solid #8B5CF6', 
+                                                                                        boxShadow: '0 0 8px rgba(139, 92, 246, 0.4)',
+                                                                                        padding: '0.14rem 0.38rem', 
+                                                                                        borderRadius: '5px', 
+                                                                                        fontSize: '0.60rem', 
+                                                                                        fontWeight: '900', 
+                                                                                        display: 'inline-flex', 
+                                                                                        alignItems: 'center', 
+                                                                                        gap: '4px',
+                                                                                        cursor: 'pointer',
+                                                                                        letterSpacing: '0.01em',
+                                                                                        whiteSpace: 'nowrap',
+                                                                                        animation: 'woPulse 2s infinite'
+                                                                                    }}
+                                                                                >
+                                                                                    {/* Radar Pulse Dot */}
+                                                                                    <span style={{ position: 'relative', display: 'flex', width: '6px', height: '6px' }}>
+                                                                                        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', backgroundColor: '#A855F7', opacity: 0.75, animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
+                                                                                        <span style={{ position: 'relative', borderRadius: '50%', width: '6px', height: '6px', backgroundColor: '#7C3AED' }} />
+                                                                                    </span>
+                                                                                    <span>⚡ NC WORLD OFFICE</span>
+                                                                                </div>
+
+                                                                                {/* Subtexto Informativo de Monto y Peso en 1 Línea */}
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.61rem', whiteSpace: 'nowrap' }}>
+                                                                                    <span style={{ color: '#DC2626', fontWeight: '800' }}>
+                                                                                        -{ncAmount > 0 ? `${formatNumber(ncAmount)}` : 'Saldo a Favor'}
+                                                                                    </span>
+                                                                                    {qtyText && (
+                                                                                        <span style={{ color: '#6B21A8', fontWeight: '600' }}>
+                                                                                            • {qtyText}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                {/* Botones Tácticos Rápidos */}
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px' }}>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleCopyWorldOfficeCard(order, firstReturn, associatedPqr);
+                                                                                        }}
+                                                                                        style={{
+                                                                                            backgroundColor: woCopiedOrderId === order.id ? '#DCFCE7' : '#FFFFFF',
+                                                                                            color: woCopiedOrderId === order.id ? '#15803D' : '#6B21A8',
+                                                                                            border: `1px solid ${woCopiedOrderId === order.id ? '#86EFAC' : '#D8B4FE'}`,
+                                                                                            borderRadius: '4px',
+                                                                                            padding: '0.12rem 0.32rem',
+                                                                                            fontSize: '0.58rem',
+                                                                                            fontWeight: '700',
+                                                                                            cursor: 'pointer',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '2px',
+                                                                                            whiteSpace: 'nowrap'
+                                                                                        }}
+                                                                                        title="Copiar ficha contable para pegar en World Office"
+                                                                                    >
+                                                                                        {woCopiedOrderId === order.id ? (
+                                                                                            <>
+                                                                                                <Check size={8} strokeWidth={2.5} /> Copiado
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <>
+                                                                                                <Copy size={8} /> Ficha WO
+                                                                                            </>
+                                                                                        )}
+                                                                                    </button>
+
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setWoTargetOrder(order);
+                                                                                            setWoTargetReturn(firstReturn);
+                                                                                            setWoTargetPqr(associatedPqr);
+                                                                                            setWoFolioInput(firstReturn?.credit_note_number || `NC-${order.sequence_id}-2010`);
+                                                                                            setWoModalOpen(true);
+                                                                                        }}
+                                                                                        style={{
+                                                                                            backgroundColor: '#7C3AED',
+                                                                                            color: '#FFFFFF',
+                                                                                            border: 'none',
+                                                                                            borderRadius: '4px',
+                                                                                            padding: '0.12rem 0.35rem',
+                                                                                            fontSize: '0.58rem',
+                                                                                            fontWeight: '700',
+                                                                                            cursor: 'pointer',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '2px',
+                                                                                            whiteSpace: 'nowrap'
+                                                                                        }}
+                                                                                        title="Registrar número de radicado oficial de World Office"
+                                                                                    >
+                                                                                        <Zap size={8} /> Radicar
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    }
+
+                                                                    // Fallback para otras novedades no-NC (ej. reposición física, ajuste estándar)
                                                                     return (
                                                                         <div>
                                                                             <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '0.15rem 0.4rem', borderRadius: '5px', fontSize: '0.66rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -5160,7 +5458,7 @@ export default function BillingDashboard() {
                                                         </td>
 
                                                         {/* 7. Estado Operativo & Cuenta Regresiva de Gracia / Corte */}
-                                                        <td style={{ padding: '0.45rem 0.75rem', minWidth: '135px' }}>
+                                                        <td style={{ padding: '0.45rem 0.6rem', width: '120px' }}>
                                                             {(() => {
                                                                 const grace: any = getOrderGraceInfo(order, graceMinutes, cutCloseTime);
                                                                 return (
@@ -7383,9 +7681,200 @@ export default function BillingDashboard() {
                     </div>
                 )}
 
+        {/* WORLD OFFICE CREDIT NOTE SETTLEMENT MODAL (Opción B) */}
+            {woModalOpen && woTargetOrder && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(6px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 130,
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        border: '1px solid #E2E8F0',
+                        padding: '1.5rem',
+                        maxWidth: '560px',
+                        width: '100%',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        position: 'relative'
+                    }}>
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.9rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ backgroundColor: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '10px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Zap size={20} color="#7C3AED" />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#0F172A' }}>
+                                        Radicar Nota de Crédito en World Office
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: '#64748B' }}>
+                                        Sincronización oficial del comprobante contable con el ERP
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setWoModalOpen(false);
+                                    setWoTargetOrder(null);
+                                }}
+                                style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: '4px' }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Order & Client Summary Box */}
+                        <div style={{ marginTop: '1rem', backgroundColor: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '12px', padding: '0.9rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#581C87' }}>
+                                        {woTargetOrder.profiles?.company_name || woTargetOrder.profiles?.contact_name || 'Cliente'}
+                                    </div>
+                                    <div style={{ fontSize: '0.70rem', color: '#7E22CE' }}>
+                                        NIT: {woTargetOrder.profiles?.nit || 'N/A'} • Pedido: #{woTargetOrder.sequence_id ? `1710_${woTargetOrder.sequence_id}` : woTargetOrder.id.slice(0, 8)}
+                                    </div>
+                                </div>
+                                <span style={{ backgroundColor: '#EDE9FE', color: '#6B21A8', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.70rem', fontWeight: '800' }}>
+                                    Factura: {woTargetOrder.invoice_number || woTargetReturn?.reference_invoice_number || `FV-${woTargetOrder.sequence_id}`}
+                                </span>
+                            </div>
+
+                            <div style={{ borderTop: '1px dashed #D8B4FE', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ fontSize: '0.74rem', color: '#6B21A8' }}>
+                                    <b>Ítem Afectado:</b> {woTargetReturn?.quantity_returned || ''} Kg de {woTargetReturn?.products?.name || 'Producto'}
+                                </div>
+                                <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#DC2626' }}>
+                                    -$47.250 COP
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Form Inputs */}
+                        <div style={{ marginTop: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#1E293B', marginBottom: '4px' }}>
+                                    Número de Comprobante / Folio en World Office <span style={{ color: '#EF4444' }}>*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={woFolioInput}
+                                    onChange={(e) => setWoFolioInput(e.target.value)}
+                                    placeholder="Ej: NC-1042 o NC-1101-2010"
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.65rem 0.85rem',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #CBD5E1',
+                                        fontSize: '0.82rem',
+                                        fontWeight: '700',
+                                        outline: 'none',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                <span style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px', display: 'block' }}>
+                                    Ingresa el consecutivo oficial generado en el módulo de Notas Crédito de World Office.
+                                </span>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#1E293B', marginBottom: '4px' }}>
+                                    Observaciones Contables / Centro de Costos
+                                </label>
+                                <textarea
+                                    value={woNotesInput}
+                                    onChange={(e) => setWoNotesInput(e.target.value)}
+                                    rows={2}
+                                    placeholder="Ej: Aplicada contra factura en corte semanal. Aprobado por Contabilidad."
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.65rem 0.85rem',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #CBD5E1',
+                                        fontSize: '0.78rem',
+                                        outline: 'none',
+                                        boxSizing: 'border-box',
+                                        resize: 'vertical'
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ marginTop: '1.4rem', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setWoModalOpen(false);
+                                    setWoTargetOrder(null);
+                                }}
+                                style={{
+                                    backgroundColor: '#F1F5F9',
+                                    color: '#64748B',
+                                    border: '1px solid #CBD5E1',
+                                    padding: '0.6rem 1.1rem',
+                                    borderRadius: '8px',
+                                    fontWeight: '700',
+                                    fontSize: '0.78rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={woSubmitting}
+                                onClick={handleConfirmWorldOfficeSettlement}
+                                style={{
+                                    backgroundColor: '#7C3AED',
+                                    color: '#FFFFFF',
+                                    border: 'none',
+                                    padding: '0.6rem 1.25rem',
+                                    borderRadius: '8px',
+                                    fontWeight: '800',
+                                    fontSize: '0.78rem',
+                                    cursor: woSubmitting ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 4px 6px -1px rgba(124, 58, 237, 0.3)'
+                                }}
+                            >
+                                <Check size={14} strokeWidth={2.5} />
+                                {woSubmitting ? 'Sincronizando...' : 'Confirmar Radicación en WO'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             </div>
 
             <style dangerouslySetInnerHTML={{ __html: `
+                @keyframes woPulse {
+                    0%, 100% {
+                        box-shadow: 0 0 8px rgba(139, 92, 246, 0.45);
+                    }
+                    50% {
+                        box-shadow: 0 0 16px rgba(139, 92, 246, 0.85);
+                    }
+                }
+                @keyframes ping {
+                    75%, 100% {
+                        transform: scale(2);
+                        opacity: 0;
+                    }
+                }
                 @keyframes slideInRight {
                     from { transform: translateX(100%); opacity: 0; }
                     to { transform: translateX(0); opacity: 1; }

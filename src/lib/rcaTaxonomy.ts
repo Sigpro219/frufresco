@@ -180,6 +180,7 @@ export interface ImputedEntity {
     sharePercent: number; // 0 a 100
     deductionAmount?: number; // Valor en COP
     notes?: string;
+    waiveDeduction?: boolean;
 }
 
 export interface ParsedRcaResult {
@@ -551,6 +552,7 @@ export function buildRcaMetadataTag(data: {
     subtypeL2: string;
     responsible: string;
     notes?: string;
+    waiveDeduction?: boolean;
     isReplacementRejection?: boolean;
     imputedTargetType?: string;
     imputedEntities?: ImputedEntity[];

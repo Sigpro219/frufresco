@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.225 (Imputabilidad Institucional Automática a Proveedor de Campo en Auditoría QC — Principio Poka-Yoke & Segregación SoD, Unidad de Facturación en Kilos por Defecto vs Libras Eventual en Casa Matriz, Descuento Comercial X% a Fecha del Pedido, Facturación por Lotes y Corte 5:00 PM — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.228 (Exoneración Salarial por Reingreso a Inventario en Auditoría QC, Alerta ERP Notas de Crédito World Office en Facturación, Bandeja CoQ Proveedores en Tesorería — 76/76 Pantallas Certificadas)  
 > **Fecha:** 20 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 255 Escenarios BDD Ininterrumpidos (1..255)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 258 Escenarios BDD Ininterrumpidos (1..258)
 
 ---
 
@@ -20,15 +20,15 @@
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243, 252, 254 (§41.1 - §41.4) | 🟢 100% |
 | **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248, 250, 252, 253, 254 | 🟢 100% |
-| **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
+| **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254 (§39.1 - §39.6) | 🟢 100% |
-| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255 (§42.1 - §42.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257 (§39.1 - §39.7) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **255 Escenarios Canónicos (1..255)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **258 Escenarios Canónicos (1..258)** | **🟢 100%** |
 
 ---
 
@@ -7019,6 +7019,27 @@ A las 05:00 AM, el Jefe de Compras supervisa el muelle de recibo de FruFresco co
 ---
 
 
+### 31.12 Bandeja de Reclamaciones, Saldos por Cruzar y Descuentos a Proveedores de Campo por Calidad (CoQ) en Gestión de Tesorería (`/admin/procurement/treasury`) (Escenario 256)
+
+#### A. Misión y Segregación SoD del Circuito Proveedores de Campo
+Cierra la fisura contable (§362) del Costo de la No Calidad (CoQ). Bajo el principio de Segregación de Funciones (SoD) del Escenario 255, el personal de Calidad (QC/SAC) imputa la causa raíz técnica al proveedor agrícola en el Gemba sin necesidad de seleccionar un proveedor comercial específico en campo. Corresponde a la Dirección de Compras y Tesorería liquidar y compensar estos saldos mercantiles contra las compras y pagos en Corabastos.
+
+#### B. Componentes Arquitectónicos de Tesorería (`/admin/procurement/treasury`)
+1. **Switcher de Pestañas de Navegación Dual:**
+   - **Presupuestos de Plaza:** Gestión habitual de bolsas de efectivo diarias y autorizaciones de fondos de plaza.
+   - **Reclamaciones a Proveedores:** Píldora de alta visibilidad con badge de telemetría reactiva en tiempo real que totaliza el número de reclamos de calidad pendientes de cruce.
+2. **Tarjeta KPI Maestro (Por Cobrar Proveedor - CoQ):**
+   - Incorpora la 5.ª tarjeta de control financiero proyectando el monto consolidado en $ COP pendiente de cruce y el conteo de expedientes técnicos activos.
+3. **Galería Maestra de Novedades de Calidad (Swiss Industrial Gallery):**
+   - Omnibox de búsqueda universal y filtros reactivos (`Todos`, `Pendientes de Cruce`, `Compensados`).
+   - Cards con miniatura fotográfica con zoom modal, datos del cliente, SKU y variedad, masa en kilogramos afectada, causa raíz agrícola (fitopatología, cadena de frío, daño interno), auditor QC responsable y enlace directo al reporte legal inviolable **RNC (PDF)**.
+4. **Modal de Liquidación y Cruce Poka-Yoke:**
+   - Permite asentar la referencia de la compra o liquidación de Corabastos (ej. *Planilla Liquidación Corabastos Bodega 12 #4829*) y las notas de tesorería.
+   - Asienta de forma atómica el tag canónico `[TREASURY_SETTLED: {"settledAt":"...","settledBy":"...","purchaseRef":"...","notes":"..."}]` en `customer_service_pqrs.resolution_notes`.
+   - Transforma de inmediato la tarjeta a estado `✓ COMPENSADO` y desactiva el botón de acción marcándolo como `✓ Liquidado en Tesorería`.
+
+---
+
 ## 32. Especificación Canónica del Motor Universal de Hojas de Cálculo Polimórficas & Resiliencia en Ingesta ODS/Excel (§32)
 
 ### 32.1 Misión & Taxonomía de Formatos Tabulares Admitidos
@@ -9051,6 +9072,38 @@ La mesa de conciliación (`/admin/orders/contingency-reconciliation`) opera como
 
 ---
 
+### 39.7 Alerta de Acción Contable ERP para Notas de Crédito de World Office (Camino 3) en Facturación (`/admin/commercial/billing`) (Escenario 257)
+
+#### A. Misión y Mitigación del Riesgo de Descuadre Contable en World Office
+Cuando una reclamación de cliente se resuelve mediante el **Camino 3 (Opción 3: Nota de Crédito Comercial / Saldo a Favor)**, la factura electrónica se emite al 100% original, pero se genera una obligación ineludible en el área contable: **radicar formalmente la Nota de Crédito en el ERP World Office**. 
+Si el sistema utiliza un badge pasivo o genérico, el facturador ignora la tarea y se desatan descuadres de cartera y retenciones de pago por parte de los clientes institucionales B2B (ej. *Crepes & Waffles*).
+
+#### B. Componentes Arquitectónicos y Protocolo de Tres Niveles (Opción B)
+1. **Badge Neón Eléctrico de Alta Tensión Contable:**
+   - Columna 5 de Novedades (QA) en la tabla principal de pedidos listos para corte.
+   - Fondo gradiente reflectivo púrpura (`#FAF5FF` a `#F3E8FF`), borde de 2px púrpura vibrante (`#8B5CF6`) y resplandor neón pulsante (`@keyframes woPulse`).
+   - Radar Pulse neón parpadeante (`animate-ping`) en la esquina del badge.
+   - Tag imperativo: `⚡ WORLD OFFICE: EMITIR NC`.
+   - Subtexto con el monto exacto en pesos a deducir en rojo (`-$47.250 COP`) y los kilogramos afectados.
+2. **Botón Táctico de 1 Clic (`📋 Ficha WO`):**
+   - Copia al portapapeles en 1 clic la estructura estandarizada requerida por World Office:
+     * NIT del Cliente
+     * Razón Social
+     * Folio del Pedido FruFresco
+     * Factura / Remisión de Referencia
+     * Consecutivo Sugerido
+     * Monto Exacto de la Nota de Crédito en $ COP
+     * Ítem y masa afectada en Kg
+     * Folio de Soporte SAC / RNC
+   - Feedback táctico interactivo: `✓ Copiado` con micro-animación.
+3. **Modal de Radicación Poka-Yoke & Cierre Contable:**
+   - Botón `⚡ Radicar` que abre un modal con resumen ejecutivo del cliente y producto.
+   - Input para ingresar o confirmar el número de comprobante oficial emitido por World Office (ej. `NC-WO-88492`) y observaciones contables.
+   - Asentamiento atómico del tag `[WO_SYNCED: {"folio":"...","settledAt":"...","settledBy":"...","notes":"..."}]` en `billing_returns` y `customer_service_pqrs`.
+   - Mutación inmediata del badge en la tabla a estado `✓ NC Radicada WO` (verde esmeralda, calmo, sin radar pulse) proyectando el folio oficial y el monto deducido.
+
+---
+
 ## 40. Dominio 1: Tienda B2C, Catálogo Público, Pasarela y Checkout
 
 ### 40.1 Misión y Alcance del Dominio
@@ -11056,3 +11109,62 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 
 
 
+
+
+---
+
+### Escenario 256: Bandeja de Reclamaciones, Saldos por Cruzar y Descuentos a Proveedores de Campo por Calidad (CoQ) en Gestión de Tesorería (/admin/procurement/treasury) (SDD v1.9.226)
+- **Given** el módulo de Gestión de Tesorería & Presupuestos de Abastecimiento (/admin/procurement/treasury), las reclamaciones técnicas dictaminadas por Control de Calidad en SAC (/admin/customer-service) imputadas institucionalmente a proveedores agrícolas (rcaResponsible === 'proveedor' / entityType === 'provider' bajo el Escenario 255) y el acta legal RNC emitida en PDF (/admin/customer-service/rnc/[id]/print),
+- **When** el Tesorero o Jefe de Compras ingresa al panel de Gestión de Tesorería para planificar y autorizar los fondos de efectivo de compras en Corabastos,
+- **Then** el sistema activa una consola unificada de compensación y cobro a proveedores que erradica la fisura contable (§362):
+  1. **Switcher de Navegación Dual en Cabecera (Tabs de Tesorería):**
+     - **Pestaña 1 (Presupuestos & Caja de Plaza):** Conserva la gestión habitual de bolsas de efectivo diarias, solicitudes de fondos y circuito de caja menor.
+     - **Pestaña 2 (Reclamaciones Calidad Proveedores):** Despliega una píldora prominente con telemetría reactiva en tiempo real indicando la cantidad de casos pendientes y el saldo total acumulado por recuperar en pesos ($ COP).
+  2. **Tarjeta KPI de Saldos por Recuperar (Monto Total CoQ Proveedores):**
+     - En el dashboard superior de métricas se incorpora la tarjeta 'Saldos por Recuperar (Calidad Proveedores)', totalizando el valor monetario de las no conformidades técnicas imputadas a campo aún no compensadas en compras.
+  3. **Galería Maestra de Novedades de Calidad para Cruce Mercantil:**
+     - Cada expediente resuelto con imputabilidad a proveedor proyecta:
+       * **Folio PQR & Fecha:** Número de radicado, fecha del dictamen y pedido padre afectado.
+       * **Producto & Cantidad:** SKU, variedad, masa en kilogramos afectada y fotografía en miniatura con zoom modal.
+       * **Monto a Compensar ($ COP):** Valor monetario nominal o liquidado en la PQR a descontar de futuras compras.
+       * **Dictamen Técnico del Auditor QC:** Causa raíz agrícola (fitopatología, cadena de frío, daño interno) y justificación textual emitida por el inspector de calidad en planta.
+       * **Soporte Legal Inviolable:** Enlace directo de 1 clic al acta oficial **RNC (PDF)** con membrete y firmas oficiales de FruFresco.
+  4. **Poka-Yoke de Compensación y Cierre de Ciclo:**
+     - La interfaz provee un modal interactivo para registrar el cruce de cuentas:
+       * Permite ingresar el número de compra de plaza (purchases.id o folio externo) donde se aplicó el descuento o retención.
+       * Registra notas de tesorería y fecha de compensación.
+       * Asienta de forma atómica e inmutable el tag '[TREASURY_SETTLED: {"settledAt":"...","settledBy":"...","notes":"..."}]' en las notas de resolución de la PQR, actualizando su estado de 'Pendiente de Cruce' a 'Compensado con Proveedor'.
+
+
+---
+
+### Escenario 257: Alerta de Acción Contable ERP para Notas de Crédito de World Office (Camino 3) en Facturación (/admin/commercial/billing) (SDD v1.9.227)
+- **Given** la consola de Facturación Masiva (/admin/commercial/billing), los pedidos institucionales con reclamaciones de calidad resueltas por Servicio al Cliente (SAC) mediante el Camino 3 (Opción 3: Nota de Crédito Comercial / Saldo a Favor) y la integración contable contra el ERP World Office,
+- **When** el analista de facturación o auxiliar contable inspecciona la tabla de pedidos listos para corte diario (5:00 PM),
+- **Then** el sistema aplica el protocolo visual y operativo de blindaje contable de tres niveles:
+  1. **Badge Neón Eléctrico de Alta Visibilidad Contable (World Office Trigger):**
+     - Si la Nota de Crédito autorizada por SAC aún no ha sido radicada formalmente en el ERP World Office, la columna de 'Novedades (QA)' prohíbe el badge azul pasivo tradicional y proyecta un badge púrpura neón eléctrico brillante ('⚡ WORLD OFFICE: EMITIR NC') con efecto de pulso y radar neón ('animate-ping').
+     - Proyecta en la misma celda el valor monetario a deducir en rojo ('-$XX.XXX COP') y el pesaje físico afectado en kilogramos.
+  2. **Botón Táctico de 1 Clic (Copiar Ficha Contable para World Office):**
+     - Provee un botón '📋 Ficha WO' que copia al portapapeles en un solo clic la ficha técnica estructurada lista para pegar en el formulario de Notas Crédito de World Office (NIT, Razón Social, Pedido, Factura Ref, Consecutivo Sugerido, Monto en pesos y Folio de soporte SAC/RNC).
+  3. **Poka-Yoke de Asentamiento y Cierre de Ciclo en ERP:**
+     - Provee el botón '⚡ Radicar' que despliega un modal centrado con resumen del cliente, monto e imputación.
+     - Permite digitar o confirmar el número de comprobante/folio oficial asignado por World Office (ej. 'NC-WO-88492') y las observaciones contables.
+     - Al confirmar, asienta de forma atómica el tag '[WO_SYNCED: {"folio":"...","settledAt":"...","settledBy":"...","notes":"..."}]' en 'billing_returns' y 'customer_service_pqrs', y transforma de inmediato el badge en la tabla a verde esmeralda calmo ('✓ NC Radicada WO' con su folio y monto), apagando la alerta y certificando la sincronización contable.
+
+---
+
+### Escenario 258: Exoneración de Cobro Salarial al Funcionario con Reingreso de Mercancía a Inventario (`waiveDeduction`) en Auditoría Técnica QC y Blindaje Cero-Cobro en Talento Humano (`/admin/hr`) (SDD v1.9.228)
+- **Given** el modal de auditoría técnica SAC (`src/app/admin/customer-service/components/PqrAuditModal.tsx`), el modal de ajuste financiero (`src/components/FinancialAdjustmentModal.tsx`), la consola de Talento Humano y Nómina (`src/app/admin/hr/page.tsx` — pestaña *Deducciones de Nómina Columna N*) y el acta legal de No Conformidad en PDF (`/admin/customer-service/rnc/[id]/print`),
+- **When** el inspector de Control de Calidad (QC) resuelve una reclamación técnica en los Caminos 2 (Reposición D+1), 3 (Nota Crédito) o 4 (Ajuste de Factura) imputada a funcionarios internos (`employee`, `driver`, `sales_rep`), pero la mercancía devuelta por el cliente ingresa a bodega en buen estado comercial (Columna O — Reingreso Vendible) sin ocasionar pérdida de dinero a FruFresco,
+- **Then** el sistema activa el protocolo de justicia laboral y trazabilidad de calidad sin cobro salarial:
+  1. **Botón Toggle Quirúrgico por Funcionario (`[ 🔴 Cobrar Cuota ]` vs `[ 🛡️ No Cobrar ($0) ]`):**
+     - En el Paso 3 (*Causa Raíz & Imputación*), adyacente a la papelera de cada funcionario asignado, se dispone el botón conmutador de exoneración.
+     - Al hacer clic, conmuta el flag inmutable `waiveDeduction: true` en la entidad imputada dentro del bloque `[RCA_METADATA: ...]`.
+     - Visualmente se transforma en badge esmeralda `<ShieldCheck size={13} /> [ No Cobrar ($0) ]` y la cuota individual pasa de rojo al valor formativo **`$0 COP (Exonerado)`**.
+  2. **Preservación Inviolable de Responsabilidad Operativa y Trazabilidad ISO 9001:**
+     - La novedad técnica permanece formalmente registrada a nombre del funcionario (con su porcentaje de imputación, categoría L1 y subtipo L2) para la matriz de Pareto, tasa de reclamos CDR, historial de auditoría y evaluación de desempeño.
+  3. **Blindaje Automático en Talento Humano (`/admin/hr`):**
+     - Al persistir `deductionAmount: 0`, la función `fetchPayrollSales` filtra el caso de forma nativa (`amount > 0`), impidiendo que se traslade descuento alguno a la prenómina quincenal del trabajador.
+  4. **Paridad en Ajustes Financieros y Acta RNC (PDF):**
+     - En `FinancialAdjustmentModal.tsx` se respeta la exoneración individual liquidando la deducción en `$0 COP`, y en el informe oficial RNC se asienta la causal: *Exonerado por Reingreso a Inventario (Sin Pérdida Patrimonial)*.
