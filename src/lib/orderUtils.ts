@@ -275,6 +275,7 @@ export interface StructuredSpecItemInput {
     nickname?: string | null;
     selected_options?: Record<string, any> | null;
     product?: { name?: string | null; [key: string]: any } | null;
+    products?: { name?: string | null; [key: string]: any } | null;
     product_name?: string | null;
     productName?: string | null;
 }
@@ -287,7 +288,7 @@ export interface StructuredSpecItemInput {
 export const getStructuredSpecKey = (item: StructuredSpecItemInput): string => {
     if (!item) return '';
 
-    const prodName = item.product?.name || item.product_name || item.productName || null;
+    const prodName = item.product?.name || item.products?.name || item.product_name || item.productName || null;
     const opts = item.selected_options || {};
     let unitWeightPart = '';
     const attributeParts: string[] = [];
@@ -362,7 +363,7 @@ export const normalizePickingNote = (val?: string | null): string | null => {
 export const formatStructuredSpecification = (item: StructuredSpecItemInput): string | null => {
     if (!item) return null;
 
-    const prodName = item.product?.name || item.product_name || item.productName || null;
+    const prodName = item.product?.name || item.products?.name || item.product_name || item.productName || null;
     const opts = item.selected_options || {};
     let discretePart: string | null = null;
     const attributeParts: string[] = [];

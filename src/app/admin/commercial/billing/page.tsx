@@ -6,8 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { 
     getFriendlyOrderId, 
-    formatStructuredSpecification, 
-    resolveProductCharacteristicsBadges 
+    formatStructuredSpecification
 } from '@/lib/orderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
@@ -5981,7 +5980,6 @@ export default function BillingDashboard() {
                                                     {orderDetailItems.map((item: any, idx: number) => {
                                                         const prodName = item.products?.name || item.nickname || 'Producto sin nombre';
                                                         const itemTotal = Number(item.quantity || 0) * Number(item.unit_price || 0);
-                                                        const badges = resolveProductCharacteristicsBadges(item);
                                                         const structuredSpec = formatStructuredSpecification(item);
                                                         const presentation = formatItemQuantityPresentation(item);
                                                         const isLast = idx === orderDetailItems.length - 1;
@@ -6032,16 +6030,8 @@ export default function BillingDashboard() {
                                                                     )}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem' }}>
-                                                                    {badges.length > 0 ? (
-                                                                        <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
-                                                                            {badges.map((b, bi) => (
-                                                                                <span key={bi} style={{ backgroundColor: b.backgroundColor, color: b.color, border: `1px solid ${b.borderColor || 'transparent'}`, padding: '1px 5px', borderRadius: '4px', fontSize: '0.64rem', fontWeight: '700' }}>
-                                                                                    {b.text}
-                                                                                </span>
-                                                                            ))}
-                                                                        </div>
-                                                                    ) : structuredSpec ? (
-                                                                        <span style={{ fontSize: '0.69rem', color: '#334155', fontWeight: '600' }}>
+                                                                    {structuredSpec ? (
+                                                                        <span style={{ fontSize: '0.72rem', color: '#334155', fontWeight: '600' }}>
                                                                             {structuredSpec}
                                                                         </span>
                                                                     ) : (
