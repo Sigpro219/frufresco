@@ -902,10 +902,10 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', tableLayout: 'fixed' }}>
                             <thead style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                    <th style={{ width: '11%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
+                                    <th style={{ width: '10%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
                                         Folio & Fecha
                                     </th>
-                                    <th style={{ width: '15%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Cliente & Canal
                                     </th>
                                     <th style={{ width: '15%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
@@ -914,16 +914,16 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                     <th style={{ width: '5%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 6px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'center' }}>
                                         Evidencia
                                     </th>
-                                    <th style={{ width: '12%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '17%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Diagnóstico RCA
                                     </th>
-                                    <th style={{ width: '14%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '20%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Imputabilidad & Cobro
                                     </th>
                                     <th style={{ width: '9%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Estado
                                     </th>
-                                    <th style={{ width: '19%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
+                                    <th style={{ width: '10%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 10px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
                                         Acciones
                                     </th>
                                 </tr>
@@ -949,9 +949,9 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
                                                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'white' : '#FAFAFA')}
                                             >
-                                                {/* 1. Folio & Fecha */}
-                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                {/* 1. Folio & Fecha (3 Filas) */}
+                                                <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                             <span style={{
                                                                 fontSize: '0.65rem',
@@ -969,14 +969,17 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 {formatPqrFolio(pqr)}
                                                             </span>
                                                         </div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
-                                                            {formatDateFriendly(pqr.created_at)} • {new Date(pqr.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                                                        <div style={{ fontSize: '0.69rem', fontWeight: '600', color: '#475569' }}>
+                                                            {formatDateFriendly(pqr.created_at)}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.65rem', color: '#94A3B8' }}>
+                                                            {new Date(pqr.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                                                         </div>
                                                     </div>
                                                 </td>
 
-                                                {/* 2. Cliente & Canal */}
-                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
+                                                {/* 2. Cliente & Canal (3 Filas) */}
+                                                <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         <div style={{
                                                             width: '28px',
@@ -994,11 +997,11 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             {getClientInitials(author.clientDisplayName)}
                                                         </div>
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
-                                                            <div style={{ fontWeight: '800', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            <div style={{ fontWeight: '800', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={author.clientDisplayName}>
                                                                 {author.clientDisplayName}
                                                             </div>
-                                                            <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                {author.nit && <span>NIT: {author.nit}</span>}
+                                                            <div style={{ fontSize: '0.69rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                {author.nit ? <span>NIT: {author.nit}</span> : <span>Consumidor Final</span>}
                                                                 {author.phoneParsed.isValid && (
                                                                     <a
                                                                         href={`https://wa.me/${author.phoneParsed.waNumber}?text=${encodeURIComponent(buildPqrWhatsAppMessage(pqr, 'initial'))}`}
@@ -1012,14 +1015,17 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                     </a>
                                                                 )}
                                                             </div>
+                                                            <div style={{ fontSize: '0.65rem', color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {pqr.profiles?.corporate_role ? pqr.profiles.corporate_role.toUpperCase() : 'CANAL INSTITUCIONAL'}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
 
-                                                {/* 3. Asunto & Pedido */}
-                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                        <div style={{ fontWeight: '600', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatCleanPqrSubject(pqr.subject)}>
+                                                {/* 3. Asunto & Pedido (3 Filas) */}
+                                                <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                        <div style={{ fontWeight: '700', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatCleanPqrSubject(pqr.subject)}>
                                                             {formatCleanPqrSubject(pqr.subject)}
                                                         </div>
                                                         {pqr.order_id ? (
@@ -1028,21 +1034,24 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                     Pedido #{pqr.orders?.sequence_id || 'N/A'}
                                                                 </span>
                                                                 {pqr.orders?.total && (
-                                                                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                                                                    <span style={{ fontSize: '0.69rem', color: '#64748B', fontWeight: '600', fontVariantNumeric: 'tabular-nums' }}>
                                                                         {formatMoney(pqr.orders.total)}
                                                                     </span>
                                                                 )}
                                                             </div>
                                                         ) : (
-                                                            <span style={{ fontSize: '0.68rem', color: '#64748B', backgroundColor: '#F8FAFC', padding: '1px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', display: 'inline-block', width: 'fit-content' }}>
+                                                            <span style={{ fontSize: '0.67rem', color: '#64748B', backgroundColor: '#F8FAFC', padding: '1px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', display: 'inline-block', width: 'fit-content' }}>
                                                                 Sin Pedido Enlazado
                                                             </span>
                                                         )}
+                                                        <div style={{ fontSize: '0.65rem', color: '#94A3B8' }}>
+                                                            {pqr.orders?.delivery_date ? `Entrega: ${pqr.orders.delivery_date}` : 'Registro Directo'}
+                                                        </div>
                                                     </div>
                                                 </td>
 
                                                 {/* 4. Evidencia */}
-                                                <td style={{ padding: '10px 6px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'center' }}>
+                                                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'center' }}>
                                                     {photos.length > 0 ? (
                                                         <div
                                                             style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
@@ -1086,14 +1095,14 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontStyle: 'italic' }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#94A3B8', fontStyle: 'italic' }}>
                                                             Sin fotos
                                                         </span>
                                                     )}
                                                 </td>
 
-                                                {/* 5. Diagnóstico RCA */}
-                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
+                                                {/* 5. Diagnóstico RCA (3 Filas) */}
+                                                <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
                                                     {(!rca.isExplicitRca && pqr.status === 'pending') ? (
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                             <span style={{
@@ -1109,12 +1118,16 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             }}>
                                                                 Pendiente de auditoría
                                                             </span>
-                                                            <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
-                                                                Sin clasificar
+                                                            <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                                                                Sin diagnóstico asignado
+                                                            </span>
+                                                            <span style={{ fontSize: '0.64rem', color: '#CBD5E1' }}>
+                                                                Requiere dictamen técnico
                                                             </span>
                                                         </div>
                                                     ) : (
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                            {/* Fila 1: Categoría L1 */}
                                                             <span style={{
                                                                 fontSize: '0.72rem',
                                                                 fontWeight: '700',
@@ -1125,22 +1138,27 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 border: '1px solid #E2E8F0',
                                                                 display: 'inline-block',
                                                                 width: 'fit-content',
-                                                                maxWidth: '180px',
+                                                                maxWidth: '100%',
                                                                 overflow: 'hidden',
                                                                 textOverflow: 'ellipsis',
                                                                 whiteSpace: 'nowrap'
                                                             }} title={catObj?.label || 'Sin clasificar'}>
                                                                 {catObj?.label.split('.')[1]?.trim() || catObj?.label || 'Sin clasificar'}
                                                             </span>
-                                                            <div style={{ fontSize: '0.68rem', color: '#64748B', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.subtypeL2?.replace(/_/g, ' ') || 'Sin subtipo L2'}>
+                                                            {/* Fila 2: Subtipo L2 */}
+                                                            <div style={{ fontSize: '0.68rem', color: '#475569', fontWeight: '500', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.subtypeL2?.replace(/_/g, ' ') || 'Sin subtipo L2'}>
                                                                 {rca.subtypeL2 ? rca.subtypeL2.replace(/_/g, ' ') : 'Clasificación general'}
+                                                            </div>
+                                                            {/* Fila 3: Taxonomía info */}
+                                                            <div style={{ fontSize: '0.64rem', color: '#94A3B8' }}>
+                                                                Taxonomía RCA Nivel 2
                                                             </div>
                                                         </div>
                                                     )}
                                                 </td>
 
-                                                {/* 6. Imputabilidad & Cobro */}
-                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
+                                                {/* 6. Imputabilidad & Cobro (3 Filas Estrictas) */}
+                                                <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', minWidth: 0 }}>
                                                     {(() => {
                                                         const isUnauditedPending = !rca.isExplicitRca && pqr.status === 'pending' && (!rca.imputedEntities || rca.imputedEntities.length === 0);
                                                         if (isUnauditedPending) {
@@ -1159,7 +1177,10 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                     }}>
                                                                         Sin imputar
                                                                     </span>
-                                                                    <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
+                                                                    <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                                                                        $0 sin cobro definido
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.64rem', color: '#CBD5E1' }}>
                                                                         Pendiente de dictamen
                                                                     </span>
                                                                 </div>
@@ -1168,12 +1189,14 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
                                                         const totalImputedCop = (rca.imputedEntities || []).reduce((acc, e) => acc + (Number(e.deductionAmount) || 0), 0);
                                                         const isClosedCase = pqr.status === 'resolved' || pqr.status === 'rejected';
+
                                                         return (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'nowrap' }}>
+                                                                {/* Fila 1: Responsable Primario */}
+                                                                <div>
                                                                     {rca.responsible && rca.responsible !== 'no_definido' ? (
                                                                         <span style={{
-                                                                            fontSize: '0.68rem',
+                                                                            fontSize: '0.67rem',
                                                                             fontWeight: '800',
                                                                             textTransform: 'uppercase',
                                                                             padding: '2px 6px',
@@ -1182,13 +1205,16 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                             color: '#0D7A57',
                                                                             border: '1px solid #C4D7C4',
                                                                             display: 'inline-block',
+                                                                            maxWidth: '100%',
+                                                                            overflow: 'hidden',
+                                                                            textOverflow: 'ellipsis',
                                                                             whiteSpace: 'nowrap'
-                                                                        }}>
+                                                                        }} title={RESPONSIBLE_PARTIES[rca.responsible as any]?.label || rca.responsible}>
                                                                             {RESPONSIBLE_PARTIES[rca.responsible as any]?.label || rca.responsible}
                                                                         </span>
                                                                     ) : (
                                                                         <span style={{
-                                                                            fontSize: '0.68rem',
+                                                                            fontSize: '0.67rem',
                                                                             fontWeight: '700',
                                                                             textTransform: 'uppercase',
                                                                             padding: '2px 6px',
@@ -1202,48 +1228,61 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                             Sin Asignar
                                                                         </span>
                                                                     )}
+                                                                </div>
+
+                                                                {/* Fila 2: Impacto Financiero / Cobro */}
+                                                                <div>
                                                                     {totalImputedCop > 0 ? (
                                                                         <span style={{
-                                                                            fontSize: '0.65rem',
+                                                                            fontSize: '0.67rem',
                                                                             fontWeight: '800',
-                                                                            padding: '2px 6px',
+                                                                            padding: '1px 6px',
                                                                             borderRadius: '4px',
                                                                             backgroundColor: '#FEF2F2',
                                                                             color: '#DC2626',
                                                                             border: '1px solid #FECACA',
-                                                                            whiteSpace: 'nowrap'
+                                                                            display: 'inline-block',
+                                                                            whiteSpace: 'nowrap',
+                                                                            fontVariantNumeric: 'tabular-nums'
                                                                         }}>
                                                                             Cobro: ${totalImputedCop.toLocaleString('es-CO')}
                                                                         </span>
                                                                     ) : (rca.imputedEntities && rca.imputedEntities.length > 0 && isClosedCase) ? (
                                                                         <span style={{
-                                                                            fontSize: '0.65rem',
+                                                                            fontSize: '0.67rem',
                                                                             fontWeight: '700',
-                                                                            padding: '2px 6px',
+                                                                            padding: '1px 6px',
                                                                             borderRadius: '4px',
                                                                             backgroundColor: '#EFF6FF',
                                                                             color: '#1E40AF',
                                                                             border: '1px solid #BFDBFE',
+                                                                            display: 'inline-block',
                                                                             whiteSpace: 'nowrap'
                                                                         }}>
                                                                             $0 Exonerado
                                                                         </span>
-                                                                    ) : null}
+                                                                    ) : (
+                                                                        <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
+                                                                            Sin cobro monetario
+                                                                        </span>
+                                                                    )}
                                                                 </div>
+
+                                                                {/* Fila 3: Personas Imputadas con porcentaje */}
                                                                 {rca.imputedEntities && rca.imputedEntities.length > 0 ? (
-                                                                    <div style={{ fontSize: '0.68rem', color: '#475569', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.imputedEntities.map(e => `${e.name} (${e.sharePercent}% — $${(Number(e.deductionAmount) || 0).toLocaleString('es-CO')})`).join(', ')}>
+                                                                    <div style={{ fontSize: '0.67rem', color: '#475569', fontWeight: '500', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.imputedEntities.map(e => `${e.name} (${e.sharePercent}% — $${(Number(e.deductionAmount) || 0).toLocaleString('es-CO')})`).join(', ')}>
                                                                         {rca.imputedEntities.map(e => e.name).join(', ')}
                                                                     </div>
                                                                 ) : (
-                                                                    <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>Sin personas imputadas</span>
+                                                                    <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>Sin personas imputadas</span>
                                                                 )}
                                                             </div>
                                                         );
                                                     })()}
                                                 </td>
 
-                                                {/* 7. Estado & Resolución */}
-                                                <td style={{ padding: '10px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                                                {/* 7. Estado & Resolución (3 Filas) */}
+                                                <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
                                                         {pqr.status === 'resolved' ? (
                                                             <>
@@ -1251,9 +1290,12 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                     <CheckCircle2 size={12} />
                                                                     <span>Resuelto</span>
                                                                 </span>
-                                                                <span style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px', paddingLeft: '2px' }} title={`Auditado por: ${rca.auditedBy || 'FruFresco Admin'}`}>
+                                                                <span style={{ fontSize: '0.66rem', color: '#475569', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px', paddingLeft: '2px' }} title={`Auditado por: ${rca.auditedBy || 'FruFresco Admin'}`}>
                                                                     <User size={10} color="#64748B" />
                                                                     <span>Por: {(rca.auditedBy || 'FruFresco Admin').split(' ')[0]}</span>
+                                                                </span>
+                                                                <span style={{ fontSize: '0.64rem', color: '#94A3B8', paddingLeft: '2px' }}>
+                                                                    Dictamen formal
                                                                 </span>
                                                             </>
                                                         ) : pqr.status === 'rejected' ? (
@@ -1262,9 +1304,12 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                     <AlertCircle size={12} />
                                                                     <span>Rechazado</span>
                                                                 </span>
-                                                                <span style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px', paddingLeft: '2px' }} title={`Auditado por: ${rca.auditedBy || 'FruFresco Admin'}`}>
+                                                                <span style={{ fontSize: '0.66rem', color: '#475569', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px', paddingLeft: '2px' }} title={`Auditado por: ${rca.auditedBy || 'FruFresco Admin'}`}>
                                                                     <User size={10} color="#64748B" />
                                                                     <span>Por: {(rca.auditedBy || 'FruFresco Admin').split(' ')[0]}</span>
+                                                                </span>
+                                                                <span style={{ fontSize: '0.64rem', color: '#94A3B8', paddingLeft: '2px' }}>
+                                                                    Caso desestimado
                                                                 </span>
                                                             </>
                                                         ) : pqr.status === 'in_progress' ? (
@@ -1273,27 +1318,33 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                     <Clock size={12} />
                                                                     <span>En Auditoría</span>
                                                                 </span>
-                                                                <span style={{ fontSize: '0.64rem', color: '#64748B', paddingLeft: '2px' }}>
+                                                                <span style={{ fontSize: '0.66rem', color: '#64748B', paddingLeft: '2px' }}>
                                                                     Revisión en curso
+                                                                </span>
+                                                                <span style={{ fontSize: '0.64rem', color: '#94A3B8', paddingLeft: '2px' }}>
+                                                                    En investigación
                                                                 </span>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A' }}>
                                                                     <AlertTriangle size={12} />
                                                                     <span>Pendiente</span>
                                                                 </span>
-                                                                <span style={{ fontSize: '0.64rem', color: '#94A3B8', paddingLeft: '2px' }}>
+                                                                <span style={{ fontSize: '0.66rem', color: '#94A3B8', paddingLeft: '2px' }}>
                                                                     Esperando dictamen
+                                                                </span>
+                                                                <span style={{ fontSize: '0.64rem', color: '#CBD5E1', paddingLeft: '2px' }}>
+                                                                    Sin asignar
                                                                 </span>
                                                             </>
                                                         )}
                                                     </div>
                                                 </td>
 
-                                                {/* 8. Acciones */}
+                                                {/* 8. Acciones (Botones Compactos 10%) */}
                                                 <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', flexWrap: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px', flexWrap: 'nowrap' }} onClick={e => e.stopPropagation()}>
                                                         {author.phoneParsed.isValid ? (
                                                             <a
                                                                 href={`https://wa.me/${author.phoneParsed.waNumber}?text=${encodeURIComponent(buildCaseResolutionWhatsAppSummary(pqr))}`}
@@ -1316,7 +1367,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 title={`Enviar respuesta al cliente por WhatsApp (${author.phoneParsed.display})`}
                                                                 aria-label={`WhatsApp ${author.phoneParsed.display}`}
                                                             >
-                                                                <MessageCircle size={15} style={{ color: '#059669' }} />
+                                                                <MessageCircle size={14} style={{ color: '#059669' }} />
                                                             </a>
                                                         ) : (
                                                             <button
@@ -1338,7 +1389,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 title="Sin teléfono registrado (clic para ver aviso)"
                                                                 aria-label="WhatsApp no disponible"
                                                             >
-                                                                <MessageCircle size={15} />
+                                                                <MessageCircle size={14} />
                                                             </button>
                                                         )}
 
@@ -1351,22 +1402,24 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                         onClick={() => handleOpenAuditModal(pqr)}
                                                                         style={{
                                                                             height: '28px',
-                                                                            padding: '0 9px',
+                                                                            padding: '0 8px',
                                                                             backgroundColor: isRowClosed ? '#F8FAFC' : '#0D7A57',
                                                                             color: isRowClosed ? '#0F172A' : 'white',
                                                                             fontWeight: '700',
-                                                                            fontSize: '0.72rem',
+                                                                            fontSize: '0.7rem',
                                                                             borderRadius: '7px',
                                                                             border: isRowClosed ? '1px solid #CBD5E1' : 'none',
-                                                                            cursor: 'pointer',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
+                                                                            justifyContent: 'center',
                                                                             gap: '4px',
-                                                                            boxShadow: isRowClosed ? 'none' : '0 2px 4px rgba(13, 122, 87, 0.25)',
+                                                                            cursor: 'pointer',
+                                                                            boxShadow: isRowClosed ? 'none' : '0 1px 2px rgba(13, 122, 87, 0.2)',
                                                                             flexShrink: 0
                                                                         }}
+                                                                        title={isRowClosed ? "Ver Auditoría Completa" : "Auditar y Resolver Caso"}
                                                                     >
-                                                                        {isRowClosed ? <Eye size={13} style={{ color: '#0D7A57' }} /> : <ShieldCheck size={13} />}
+                                                                        <Eye size={13} />
                                                                         <span>{isRowClosed ? 'Ver' : 'Auditar'}</span>
                                                                     </button>
 
@@ -1375,7 +1428,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                         target="_blank"
                                                                         style={{
                                                                             height: '28px',
-                                                                            padding: '0 8px',
+                                                                            padding: '0 7px',
                                                                             color: isRowClosed ? '#0D7A57' : '#475569',
                                                                             backgroundColor: isRowClosed ? '#F0FDF4' : 'white',
                                                                             border: isRowClosed ? '1px solid #86EFAC' : '1px solid #CBD5E1',
@@ -1383,8 +1436,8 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center',
-                                                                            gap: '4px',
-                                                                            fontSize: '0.7rem',
+                                                                            gap: '3px',
+                                                                            fontSize: '0.68rem',
                                                                             fontWeight: '700',
                                                                             textDecoration: 'none',
                                                                             flexShrink: 0

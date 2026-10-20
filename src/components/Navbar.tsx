@@ -728,7 +728,7 @@ export default function Navbar() {
                     </button>
                 </div>
 
-                <div className="nav-right-actions" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <div className="nav-right-actions" style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                     {isShoppingContext && (
                     <div className="cart-container" style={{ position: 'relative' }}>
                         <Link href="/checkout">
@@ -989,6 +989,26 @@ export default function Navbar() {
                     75%, 100% {
                         transform: scale(2);
                         opacity: 0;
+                    }
+                }
+
+                
+                /* ── Tablet / Compact Desktop (1024px - 1280px) ── */
+                @media (max-width: 1240px) {
+                    .premium-nav-link { 
+                        font-size: 0.82rem !important; 
+                        padding: 4px 6px !important; 
+                        gap: 3px !important; 
+                    }
+                    .nav-desktop { 
+                        gap: 0.4rem !important; 
+                    }
+                    .nav-right-actions { 
+                        gap: 0.35rem !important; 
+                    }
+                    .nav-right-actions .btn { 
+                        padding: 0.35rem 0.65rem !important; 
+                        font-size: 0.78rem !important; 
                     }
                 }
 

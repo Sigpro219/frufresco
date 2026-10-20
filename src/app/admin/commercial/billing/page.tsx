@@ -3352,7 +3352,7 @@ export default function BillingDashboard() {
     }
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, overflowX: 'clip', overflowY: 'visible', width: '100%' }}>
             {/* FLOATING TOAST NOTIFICATIONS (POKA-YOKE SYSTEM) */}
             <div style={{
                 position: 'fixed',
@@ -3407,583 +3407,765 @@ export default function BillingDashboard() {
             </div>
 
             {/* Contenedor Maestro Universal 1600px */}
-            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0.6rem 1.2rem 2.5rem' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0.6rem 0.8rem 2.5rem', width: '100%', overflowX: 'clip', overflowY: 'visible' }}>
 
-                {/* Línea 1 Sticky: Subtabs Bar (top: 85px, zIndex: 45) */}
+                {/* Línea 1 Sticky: Subtabs Bar Unificada (top: 85px, zIndex: 45) */}
                 <div style={{
                     position: 'sticky',
                     top: '85px',
                     zIndex: 45,
                     backgroundColor: '#FFFFFF',
                     borderBottom: `1px solid ${THEME.colors.border}`,
-                    padding: '0.28rem 0',
+                    padding: '0.24rem 0',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     flexWrap: 'wrap',
-                    gap: '0.5rem',
+                    gap: '0.4rem',
                     marginBottom: '0.35rem'
                 }}>
-                    {/* Left: Main Module Tabs */}
-                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        {hasInvoicingAccess && (
-                            <button
-                                onClick={() => setActiveTab('invoicing')}
-                                style={{ 
-                                    padding: '0.32rem 0.75rem', 
-                                    borderRadius: '7px', 
-                                    border: 'none', 
-                                    background: activeTab === 'invoicing' ? '#0D7A57' : 'transparent', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.76rem', 
-                                    cursor: 'pointer', 
-                                    color: activeTab === 'invoicing' ? 'white' : '#64748B', 
-                                    boxShadow: activeTab === 'invoicing' ? '0 2px 6px rgba(13, 122, 87, 0.25)' : 'none',
-                                    transition: 'all 0.15s ease',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px'
-                                }}
-                            >
-                                <Receipt size={13} /> Facturación
-                            </button>
+                    {/* Left: Main Module Tabs + Integrated Subtabs */}
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center' }}>
+                            {hasInvoicingAccess && (
+                                <button
+                                    onClick={() => setActiveTab('invoicing')}
+                                    style={{ 
+                                        padding: '0.28rem 0.65rem', 
+                                        borderRadius: '6px', 
+                                        border: 'none', 
+                                        background: activeTab === 'invoicing' ? '#0D7A57' : 'transparent', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.74rem', 
+                                        cursor: 'pointer', 
+                                        color: activeTab === 'invoicing' ? 'white' : '#64748B', 
+                                        boxShadow: activeTab === 'invoicing' ? '0 1px 4px rgba(13, 122, 87, 0.2)' : 'none',
+                                        transition: 'all 0.15s ease',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <Receipt size={12} /> Facturación
+                                </button>
+                            )}
+
+                            {hasPortfolioAccess && (
+                                <button
+                                    onClick={() => setActiveTab('portfolio')}
+                                    style={{ 
+                                        padding: '0.28rem 0.65rem', 
+                                        borderRadius: '6px', 
+                                        border: 'none', 
+                                        background: activeTab === 'portfolio' ? '#0D7A57' : 'transparent', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.74rem', 
+                                        cursor: 'pointer', 
+                                        color: activeTab === 'portfolio' ? 'white' : '#64748B', 
+                                        boxShadow: activeTab === 'portfolio' ? '0 1px 4px rgba(13, 122, 87, 0.2)' : 'none',
+                                        transition: 'all 0.15s ease',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <Wallet size={12} /> Cartera
+                                </button>
+                            )}
+
+                            {hasConfigAccess && (
+                                <button
+                                    onClick={() => setActiveTab('configuration')}
+                                    style={{ 
+                                        padding: '0.28rem 0.65rem', 
+                                        borderRadius: '6px', 
+                                        border: 'none', 
+                                        background: activeTab === 'configuration' ? '#0D7A57' : 'transparent', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.74rem', 
+                                        cursor: 'pointer', 
+                                        color: activeTab === 'configuration' ? 'white' : '#64748B', 
+                                        boxShadow: activeTab === 'configuration' ? '0 1px 4px rgba(13, 122, 87, 0.2)' : 'none',
+                                        transition: 'all 0.15s ease',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <Settings size={12} /> Configuración
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Divisor Vertical */}
+                        <div style={{ width: '1px', height: '16px', backgroundColor: '#CBD5E1', margin: '0 4px' }} />
+
+                        {/* Subtabs Operativas */}
+                        {activeTab === 'invoicing' && (
+                            <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '7px' }}>
+                                <button
+                                    onClick={() => setSubTab('pending')}
+                                    style={{ 
+                                        backgroundColor: subTab === 'pending' ? 'white' : 'transparent', 
+                                        color: subTab === 'pending' ? '#0D7A57' : '#64748B', 
+                                        padding: '0.22rem 0.55rem', 
+                                        borderRadius: '5px', 
+                                        border: 'none', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.70rem', 
+                                        cursor: 'pointer', 
+                                        boxShadow: subTab === 'pending' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <ShoppingCart size={11} style={{ color: subTab === 'pending' ? '#0D7A57' : '#64748B' }} /> Pedidos por Facturar ({pendingOrdersCount})
+                                </button>
+                                <button
+                                    onClick={() => setSubTab('batch_accumulated')}
+                                    style={{ 
+                                        backgroundColor: subTab === 'batch_accumulated' ? 'white' : 'transparent', 
+                                        color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B', 
+                                        padding: '0.22rem 0.55rem', 
+                                        borderRadius: '5px', 
+                                        border: 'none', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.70rem', 
+                                        cursor: 'pointer', 
+                                        boxShadow: subTab === 'batch_accumulated' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <Archive size={11} style={{ color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B' }} /> Acumulados por Lote ({batchAccumulatedCount})
+                                </button>
+                                <button
+                                    onClick={() => setSubTab('cuts')}
+                                    style={{ 
+                                        backgroundColor: subTab === 'cuts' ? 'white' : 'transparent', 
+                                        color: subTab === 'cuts' ? '#0F172A' : '#64748B', 
+                                        padding: '0.22rem 0.55rem', 
+                                        borderRadius: '5px', 
+                                        border: 'none', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.70rem', 
+                                        cursor: 'pointer', 
+                                        boxShadow: subTab === 'cuts' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <Layers size={11} style={{ color: subTab === 'cuts' ? '#0D7A57' : '#64748B' }} /> Historial ({cuts.length})
+                                </button>
+                                <button
+                                    onClick={() => setSubTab('returns')}
+                                    style={{ 
+                                        backgroundColor: subTab === 'returns' ? 'white' : 'transparent', 
+                                        color: subTab === 'returns' ? '#DC2626' : '#64748B', 
+                                        padding: '0.22rem 0.55rem', 
+                                        borderRadius: '5px', 
+                                        border: 'none', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.70rem', 
+                                        cursor: 'pointer', 
+                                        boxShadow: subTab === 'returns' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <AlertCircle size={11} style={{ color: subTab === 'returns' ? '#DC2626' : '#64748B' }} /> Devoluciones ({returns.length})
+                                </button>
+                            </div>
                         )}
 
-                        {hasPortfolioAccess && (
-                            <button
-                                onClick={() => setActiveTab('portfolio')}
-                                style={{ 
-                                    padding: '0.32rem 0.75rem', 
-                                    borderRadius: '7px', 
-                                    border: 'none', 
-                                    background: activeTab === 'portfolio' ? '#0D7A57' : 'transparent', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.76rem', 
-                                    cursor: 'pointer', 
-                                    color: activeTab === 'portfolio' ? 'white' : '#64748B', 
-                                    boxShadow: activeTab === 'portfolio' ? '0 2px 6px rgba(13, 122, 87, 0.25)' : 'none',
-                                    transition: 'all 0.15s ease',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px'
-                                }}
-                            >
-                                <Wallet size={13} /> Cartera
-                            </button>
-                        )}
-
-                        {hasConfigAccess && (
-                            <button
-                                onClick={() => setActiveTab('configuration')}
-                                style={{ 
-                                    padding: '0.32rem 0.75rem', 
-                                    borderRadius: '7px', 
-                                    border: 'none', 
-                                    background: activeTab === 'configuration' ? '#0D7A57' : 'transparent', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.76rem', 
-                                    cursor: 'pointer', 
-                                    color: activeTab === 'configuration' ? 'white' : '#64748B', 
-                                    boxShadow: activeTab === 'configuration' ? '0 2px 6px rgba(13, 122, 87, 0.25)' : 'none',
-                                    transition: 'all 0.15s ease',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px'
-                                }}
-                            >
-                                <Settings size={13} /> Configuración
-                            </button>
+                        {activeTab === 'portfolio' && (
+                            <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '7px' }}>
+                                <button
+                                    onClick={() => setPortfolioSubTab('invoices')}
+                                    style={{ 
+                                        backgroundColor: portfolioSubTab === 'invoices' ? 'white' : 'transparent', 
+                                        color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B', 
+                                        padding: '0.22rem 0.55rem', 
+                                        borderRadius: '5px', 
+                                        border: 'none', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.70rem', 
+                                        cursor: 'pointer', 
+                                        boxShadow: portfolioSubTab === 'invoices' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <FileText size={11} style={{ color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B' }} /> Facturas ({invoices.length})
+                                </button>
+                                <button
+                                    onClick={() => setPortfolioSubTab('dossiers')}
+                                    style={{ 
+                                        backgroundColor: portfolioSubTab === 'dossiers' ? 'white' : 'transparent', 
+                                        color: portfolioSubTab === 'dossiers' ? '#0F172A' : '#64748B', 
+                                        padding: '0.22rem 0.55rem', 
+                                        borderRadius: '5px', 
+                                        border: 'none', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.70rem', 
+                                        cursor: 'pointer', 
+                                        boxShadow: portfolioSubTab === 'dossiers' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <FileSignature size={11} style={{ color: portfolioSubTab === 'dossiers' ? '#0D7A57' : '#64748B' }} /> Fichas B2B ({b2bClients.length})
+                                </button>
+                            </div>
                         )}
                     </div>
 
-                    {/* Right: Sub-dock Context Pills */}
-                    {activeTab === 'invoicing' && (
-                        <div style={{ display: 'flex', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '8px' }}>
-                            <button
-                                onClick={() => setSubTab('pending')}
-                                style={{ 
-                                    backgroundColor: subTab === 'pending' ? 'white' : 'transparent', 
-                                    color: subTab === 'pending' ? '#0D7A57' : '#64748B', 
-                                    padding: '0.26rem 0.65rem', 
-                                    borderRadius: '6px', 
-                                    border: 'none', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.72rem', 
-                                    cursor: 'pointer', 
-                                    boxShadow: subTab === 'pending' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                <ShoppingCart size={12} style={{ color: subTab === 'pending' ? '#0D7A57' : '#64748B' }} /> Pedidos por Facturar ({pendingOrdersCount})
-                            </button>
-                            <button
-                                onClick={() => setSubTab('batch_accumulated')}
-                                style={{ 
-                                    backgroundColor: subTab === 'batch_accumulated' ? 'white' : 'transparent', 
-                                    color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B', 
-                                    padding: '0.26rem 0.65rem', 
-                                    borderRadius: '6px', 
-                                    border: 'none', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.72rem', 
-                                    cursor: 'pointer', 
-                                    boxShadow: subTab === 'batch_accumulated' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                <Archive size={12} style={{ color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B' }} /> Acumulados por Lote ({batchAccumulatedCount})
-                            </button>
-                            <button
-                                onClick={() => setSubTab('cuts')}
-                                style={{ 
-                                    backgroundColor: subTab === 'cuts' ? 'white' : 'transparent', 
-                                    color: subTab === 'cuts' ? '#0F172A' : '#64748B', 
-                                    padding: '0.26rem 0.65rem', 
-                                    borderRadius: '6px', 
-                                    border: 'none', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.72rem', 
-                                    cursor: 'pointer', 
-                                    boxShadow: subTab === 'cuts' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                <Layers size={12} style={{ color: subTab === 'cuts' ? '#0D7A57' : '#64748B' }} /> Historial de Cortes ({cuts.length})
-                            </button>
-                            <button
-                                onClick={() => setSubTab('returns')}
-                                style={{ 
-                                    backgroundColor: subTab === 'returns' ? 'white' : 'transparent', 
-                                    color: subTab === 'returns' ? '#DC2626' : '#64748B', 
-                                    padding: '0.26rem 0.65rem', 
-                                    borderRadius: '6px', 
-                                    border: 'none', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.72rem', 
-                                    cursor: 'pointer', 
-                                    boxShadow: subTab === 'returns' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                <AlertCircle size={12} style={{ color: subTab === 'returns' ? '#DC2626' : '#64748B' }} /> Devoluciones ({returns.length})
-                            </button>
-                        </div>
-                    )}
+                    {/* Right: Tanda operativa toggle + EN VIVO telemetría */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {activeTab === 'invoicing' && (
+                            <>
+                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.66rem', fontWeight: '700', color: '#475569', backgroundColor: '#F8FAFC', padding: '2px 6px', borderRadius: '5px', border: '1px solid #E2E8F0' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={includeAllStatuses}
+                                        onChange={(e) => setIncludeAllStatuses(e.target.checked)}
+                                        style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '12px', height: '12px' }}
+                                    />
+                                    Tanda operativa
+                                </label>
 
-                    {activeTab === 'portfolio' && (
-                        <div style={{ display: 'flex', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '8px' }}>
-                            <button
-                                onClick={() => setPortfolioSubTab('invoices')}
-                                style={{ 
-                                    backgroundColor: portfolioSubTab === 'invoices' ? 'white' : 'transparent', 
-                                    color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B', 
-                                    padding: '0.26rem 0.65rem', 
-                                    borderRadius: '6px', 
-                                    border: 'none', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.72rem', 
-                                    cursor: 'pointer', 
-                                    boxShadow: portfolioSubTab === 'invoices' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                <FileText size={12} style={{ color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B' }} /> Facturas ({invoices.length})
-                            </button>
-                            <button
-                                onClick={() => setPortfolioSubTab('dossiers')}
-                                style={{ 
-                                    backgroundColor: portfolioSubTab === 'dossiers' ? 'white' : 'transparent', 
-                                    color: portfolioSubTab === 'dossiers' ? '#0F172A' : '#64748B', 
-                                    padding: '0.26rem 0.65rem', 
-                                    borderRadius: '6px', 
-                                    border: 'none', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.72rem', 
-                                    cursor: 'pointer', 
-                                    boxShadow: portfolioSubTab === 'dossiers' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                <FileSignature size={12} style={{ color: portfolioSubTab === 'dossiers' ? '#0D7A57' : '#64748B' }} /> Fichas B2B ({b2bClients.length})
-                            </button>
-                        </div>
-                    )}
+                                <button
+                                    type="button"
+                                    onClick={() => fetchData(true)}
+                                    title={lastRealtimeSync ? `Sincronización en tiempo real activa (Última: ${lastRealtimeSync}) — Clic para refrescar ahora` : 'Sincronización en tiempo real activa — Clic para refrescar ahora'}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        backgroundColor: '#ECFDF5',
+                                        border: '1px solid #A7F3D0',
+                                        padding: '0.18rem 0.5rem',
+                                        borderRadius: '5px',
+                                        fontSize: '0.62rem',
+                                        fontWeight: '800',
+                                        color: '#065F46',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <span style={{
+                                        width: '5px',
+                                        height: '5px',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#10B981',
+                                        boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)'
+                                    }} />
+                                    <span>EN VIVO</span>
+                                    <RefreshCw
+                                        size={9}
+                                        style={{
+                                            color: '#059669',
+                                            animation: isRefreshingRealtime ? 'spin 0.8s linear infinite' : 'none'
+                                        }}
+                                    />
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
 
-                {/* Línea 2 Sticky: Toolbar con Superbuscador Omnibox Universal (top: 122px, zIndex: 40) */}
+                {/* Línea 2 Sticky: Frosted Command Dock Unificado (top: 122px, zIndex: 40) */}
                 {activeTab !== 'configuration' && (
                     <div style={{
                         position: 'sticky',
                         top: '122px',
                         zIndex: 40,
                         backgroundColor: '#FFFFFF',
-                        borderRadius: '12px',
+                        borderRadius: '10px',
                         border: '1px solid #E2E8F0',
                         boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
-                        padding: '0.42rem 0.75rem',
-                        marginBottom: '0.55rem',
+                        padding: '0.36rem 0.65rem',
+                        marginBottom: '0.45rem',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         flexWrap: 'wrap',
-                        gap: '0.6rem'
+                        gap: '0.45rem'
                     }}>
-                        {/* Superbuscador Omnibox Universal */}
-                        <GalleryOmnibox
-                            value={billingSearchQuery}
-                            onChange={setBillingSearchQuery}
-                            placeholder={
-                                activeTab === 'invoicing'
-                                    ? (subTab === 'cuts' ? 'Buscar cortes por # número, fecha, franja AM/PM o estado...' : subTab === 'pending' ? 'Buscar pedidos por cliente, NIT, # número o estado...' : 'Buscar devoluciones por # pedido, producto o novedad...')
-                                    : (portfolioSubTab === 'invoices' ? 'Buscar facturas por cliente, NIT, prefijo FE o estado...' : 'Buscar clientes B2B, NIT, razón social o estado...')
-                            }
-                            filteredCount={
-                                activeTab === 'invoicing'
-                                    ? (subTab === 'cuts' ? filteredCuts.length : subTab === 'pending' ? filteredPendingOrders.length : filteredReturns.length)
-                                    : (portfolioSubTab === 'invoices' ? filteredInvoices.length : filteredDossiers.length)
-                            }
-                            totalCount={
-                                activeTab === 'invoicing'
-                                    ? (subTab === 'cuts' ? cuts.length : subTab === 'pending' ? pendingOrders.length : returns.length)
-                                    : (portfolioSubTab === 'invoices' ? invoices.length : b2bClients.length)
-                            }
-                            style={{ flex: 1, maxWidth: '440px' }}
-                        />
+                        {/* Flanco Izquierdo: Omnibox + Quick Status Pills */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                            <GalleryOmnibox
+                                value={billingSearchQuery}
+                                onChange={setBillingSearchQuery}
+                                placeholder={
+                                    activeTab === 'invoicing'
+                                        ? (subTab === 'cuts' ? 'Buscar cortes...' : subTab === 'pending' ? 'Buscar cliente, NIT, pedido...' : 'Buscar devoluciones...')
+                                        : (portfolioSubTab === 'invoices' ? 'Buscar facturas...' : 'Buscar clientes B2B...')
+                                }
+                                filteredCount={
+                                    activeTab === 'invoicing'
+                                        ? (subTab === 'cuts' ? filteredCuts.length : subTab === 'pending' ? filteredPendingOrders.length : filteredReturns.length)
+                                        : (portfolioSubTab === 'invoices' ? filteredInvoices.length : filteredDossiers.length)
+                                }
+                                totalCount={
+                                    activeTab === 'invoicing'
+                                        ? (subTab === 'cuts' ? cuts.length : subTab === 'pending' ? pendingOrders.length : returns.length)
+                                        : (portfolioSubTab === 'invoices' ? invoices.length : b2bClients.length)
+                                }
+                                style={{ width: '230px', minWidth: '180px' }}
+                            />
 
-                        {/* Telemetría contextual en vivo & Filtros de Jornada */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {activeTab === 'invoicing' && (
-                                <>
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', backgroundColor: '#F8FAFC', padding: '2px 5px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
-                                        <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B' }}>Tanda:</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedBillingDate(getBogotaDate(1))}
-                                            style={{
-                                                border: 'none',
-                                                padding: '2px 5px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.66rem',
-                                                fontWeight: selectedBillingDate === getBogotaDate(1) ? '800' : '600',
-                                                backgroundColor: selectedBillingDate === getBogotaDate(1) ? '#0D7A57' : 'transparent',
-                                                color: selectedBillingDate === getBogotaDate(1) ? 'white' : '#475569',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Mañana ({getBogotaDate(1)})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedBillingDate(getBogotaDate(0))}
-                                            style={{
-                                                border: 'none',
-                                                padding: '2px 5px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.66rem',
-                                                fontWeight: selectedBillingDate === getBogotaDate(0) ? '800' : '600',
-                                                backgroundColor: selectedBillingDate === getBogotaDate(0) ? '#0D7A57' : 'transparent',
-                                                color: selectedBillingDate === getBogotaDate(0) ? 'white' : '#475569',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Hoy ({getBogotaDate(0)})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedBillingDate(getBogotaDate(-1))}
-                                            style={{
-                                                border: 'none',
-                                                padding: '2px 5px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.66rem',
-                                                fontWeight: selectedBillingDate === getBogotaDate(-1) ? '800' : '600',
-                                                backgroundColor: selectedBillingDate === getBogotaDate(-1) ? '#0D7A57' : 'transparent',
-                                                color: selectedBillingDate === getBogotaDate(-1) ? 'white' : '#475569',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Ayer ({getBogotaDate(-1)})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedBillingDate('all')}
-                                            style={{
-                                                border: 'none',
-                                                padding: '2px 5px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.66rem',
-                                                fontWeight: selectedBillingDate === 'all' ? '800' : '600',
-                                                backgroundColor: selectedBillingDate === 'all' ? '#0D7A57' : 'transparent',
-                                                color: selectedBillingDate === 'all' ? 'white' : '#475569',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Todas
-                                        </button>
-                                        {/* COM-32: Selector de fecha extemporáneo con Lucide Icons */}
-                                        {(() => {
-                                            const isCustomDate = selectedBillingDate !== getBogotaDate(1) && selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all';
-                                            return (
-                                                <div
-                                                    title="Seleccionar fecha histórica de despacho"
-                                                    style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '3px',
-                                                        padding: '1px 6px',
-                                                        borderRadius: '4px',
-                                                        backgroundColor: isCustomDate ? '#0D7A57' : '#FFFFFF',
-                                                        border: isCustomDate ? '1px solid #0D7A57' : '1px solid #CBD5E1',
-                                                        transition: 'all 0.15s',
-                                                        position: 'relative'
-                                                    }}
-                                                >
-                                                    <Calendar size={11} strokeWidth={2.2} style={{ color: isCustomDate ? '#FFFFFF' : '#0D7A57', flexShrink: 0 }} />
-                                                    <input
-                                                        type="date"
-                                                        max={getBogotaDate(7)}
-                                                        value={isCustomDate ? selectedBillingDate : ''}
-                                                        onChange={(e) => {
-                                                            if (e.target.value) {
-                                                                setSelectedBillingDate(e.target.value);
-                                                            }
-                                                        }}
-                                                        className="clean-date-input"
-                                                        style={{
-                                                            position: 'relative',
-                                                            border: 'none',
-                                                            outline: 'none',
-                                                            backgroundColor: 'transparent',
-                                                            color: isCustomDate ? '#FFFFFF' : '#334155',
-                                                            fontSize: '0.66rem',
-                                                            fontWeight: isCustomDate ? '800' : '600',
-                                                            cursor: 'pointer',
-                                                            padding: 0,
-                                                            fontFamily: 'inherit',
-                                                            width: isCustomDate ? '78px' : '72px'
-                                                        }}
-                                                    />
-                                                    {isCustomDate && (
-                                                        <button
-                                                            type="button"
-                                                            title="Restablecer tanda a Hoy"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedBillingDate(getBogotaDate(0));
-                                                            }}
-                                                            style={{
-                                                                position: 'relative',
-                                                                zIndex: 2,
-                                                                border: 'none',
-                                                                background: 'rgba(255, 255, 255, 0.25)',
-                                                                color: 'white',
-                                                                borderRadius: '50%',
-                                                                width: '13px',
-                                                                height: '13px',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                cursor: 'pointer',
-                                                                padding: 0,
-                                                                marginLeft: '1px'
-                                                            }}
-                                                        >
-                                                            <X size={8} strokeWidth={3} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
-
-                                    {/* Botón & Telemetría Realtime En Vivo */}
+                            {/* Píldoras de Estado Rápido (Quick Status Pills en pending) */}
+                            {activeTab === 'invoicing' && subTab === 'pending' && (
+                                <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
                                     <button
                                         type="button"
-                                        onClick={() => fetchData(true)}
-                                        title={lastRealtimeSync ? `Sincronización en tiempo real activa (Última: ${lastRealtimeSync}) — Clic para refrescar ahora` : 'Sincronización en tiempo real activa — Clic para refrescar ahora'}
+                                        onClick={() => setPendingStatusFilter('all')}
                                         style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '5px',
-                                            backgroundColor: '#ECFDF5',
-                                            border: '1px solid #A7F3D0',
-                                            padding: '0.2rem 0.55rem',
-                                            borderRadius: '6px',
+                                            border: 'none',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
                                             fontSize: '0.64rem',
-                                            fontWeight: '800',
-                                            color: '#065F46',
+                                            fontWeight: pendingStatusFilter === 'all' ? '800' : '600',
+                                            backgroundColor: pendingStatusFilter === 'all' ? '#0F172A' : 'transparent',
+                                            color: pendingStatusFilter === 'all' ? 'white' : '#64748B',
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        <span style={{
-                                            width: '6px',
-                                            height: '6px',
-                                            borderRadius: '50%',
-                                            backgroundColor: '#10B981',
-                                            boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)'
-                                        }} />
-                                        <span>EN VIVO</span>
-                                        <RefreshCw
-                                            size={10}
-                                            style={{
-                                                color: '#059669',
-                                                animation: isRefreshingRealtime ? 'spin 0.8s linear infinite' : 'none'
-                                            }}
-                                        />
+                                        Todos ({pendingOrders.length})
                                     </button>
-
-                                    {/* Indicador de Tanda Activa D+1 (Mañana) */}
-                                    {selectedBillingDate === getBogotaDate(1) && (
-                                        <div style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                            backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0',
-                                            padding: '0.2rem 0.55rem', borderRadius: '5px',
-                                            fontSize: '0.65rem', fontWeight: '800', color: '#065F46'
-                                        }}>
-                                            <Clock size={10} style={{ color: '#059669' }} />
-                                            Tanda Activa: Mañana ({getBogotaDate(1)})
-                                        </div>
-                                    )}
-
-                                    {/* COM-32: Poka-Yoke — Indicador de estado de la fecha seleccionada */}
-                                    {(() => {
-                                        if (selectedBillingDate === 'all' || selectedBillingDate === getBogotaDate(1) || selectedBillingDate === getBogotaDate(0) || selectedBillingDate === getBogotaDate(-1)) return null;
-                                        const closedCutsForDate = cuts.filter(c =>
-                                            c.scheduled_date === selectedBillingDate && (c.status === 'closed' || c.status === 'exported')
-                                        );
-                                        if (closedCutsForDate.length > 0) {
-                                            return (
-                                                <div style={{
-                                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                                    backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1',
-                                                    padding: '0.2rem 0.55rem', borderRadius: '5px',
-                                                    fontSize: '0.65rem', fontWeight: '800', color: '#475569'
-                                                }}>
-                                                    <Lock size={10} style={{ color: '#94A3B8' }} />
-                                                    Modo Consulta — {closedCutsForDate.map(c => `Corte #${c.cut_number.toString().padStart(4,'0')} Cerrado`).join(', ')}
-                                                </div>
-                                            );
-                                        }
-                                        const msAgo = Date.now() - new Date(selectedBillingDate + 'T23:59:59-05:00').getTime();
-                                        const hrsAgo = msAgo / (1000 * 60 * 60);
-                                        if (hrsAgo > 48) {
-                                            return (
-                                                <div style={{
-                                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                                    backgroundColor: '#FFFBEB', border: '1px solid #FDE68A',
-                                                    padding: '0.2rem 0.55rem', borderRadius: '5px',
-                                                    fontSize: '0.65rem', fontWeight: '800', color: '#92400E'
-                                                }}>
-                                                    <AlertTriangle size={10} style={{ color: '#D97706' }} />
-                                                    Tanda extemporánea: {selectedBillingDate} ({Math.floor(hrsAgo)}h sin corte)
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    })()}
-
-                                    {/* Checkbox Tanda Operativa */}
-                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.68rem', fontWeight: '700', color: '#334155', backgroundColor: '#F8FAFC', padding: '3px 7px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={includeAllStatuses}
-                                            onChange={(e) => setIncludeAllStatuses(e.target.checked)}
-                                            style={{ cursor: 'pointer', accentColor: '#0D7A57' }}
-                                        />
-                                        Incluir tanda operativa
-                                    </label>
-                                </>
-                            )}
-
-                            {/* Action Pills */}
-                            {activeTab === 'invoicing' && (subTab === 'cuts' || subTab === 'pending') && pendingOrdersCount > 0 && (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '0.28rem 0.65rem', borderRadius: '6px', fontSize: '0.70rem', fontWeight: '800', color: '#065F46' }}>
-                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#059669' }}></span>
-                                    {pendingOrdersCount} pedidos listos para corte
-                                </div>
-                            )}
-
-                            {activeTab === 'invoicing' && subTab === 'returns' && (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: returns.length > 0 ? '#FEF2F2' : '#F8FAFC', border: `1px solid ${returns.length > 0 ? '#FECACA' : '#E2E8F0'}`, padding: '0.28rem 0.65rem', borderRadius: '6px', fontSize: '0.70rem', fontWeight: '800', color: returns.length > 0 ? '#991B1B' : '#64748B' }}>
-                                    {returns.length} novedades por auditar
-                                </div>
-                            )}
-
-                            {activeTab === 'portfolio' && portfolioSubTab === 'invoices' && (
-                                <>
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '0.28rem 0.65rem', borderRadius: '6px', fontSize: '0.70rem', fontWeight: '800', color: '#065F46' }}>
-                                        <Wallet size={12} style={{ color: '#059669' }} />
-                                        <span>Cartera Pendiente: {formatMoney(aging.totalPendiente)}</span>
-                                    </div>
                                     <button
-                                        onClick={fetchData}
-                                        title="Refrescar cartera"
+                                        type="button"
+                                        onClick={() => setPendingStatusFilter('ready')}
+                                        title="Pedidos entregados con margen de gracia cumplido"
                                         style={{
-                                            background: 'white',
-                                            border: '1px solid #CBD5E1',
-                                            color: '#475569',
-                                            padding: '0.3rem 0.65rem',
-                                            borderRadius: '6px',
-                                            fontSize: '0.72rem',
-                                            fontWeight: '700',
+                                            border: 'none',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            fontSize: '0.64rem',
+                                            fontWeight: pendingStatusFilter === 'ready' ? '800' : '600',
+                                            backgroundColor: pendingStatusFilter === 'ready' ? '#0D7A57' : 'transparent',
+                                            color: pendingStatusFilter === 'ready' ? 'white' : '#065F46',
                                             cursor: 'pointer',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '4px'
+                                            gap: '3px'
                                         }}
                                     >
-                                        <RefreshCw size={11} /> Refrescar
+                                        <Check size={10} /> Listos ({readyCount})
                                     </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPendingStatusFilter('grace')}
+                                        title="Pedidos dentro del margen de 3h de inspección"
+                                        style={{
+                                            border: 'none',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            fontSize: '0.64rem',
+                                            fontWeight: pendingStatusFilter === 'grace' ? '800' : '600',
+                                            backgroundColor: pendingStatusFilter === 'grace' ? '#D97706' : 'transparent',
+                                            color: pendingStatusFilter === 'grace' ? 'white' : '#92400E',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '3px'
+                                        }}
+                                    >
+                                        <Clock size={10} /> En Gracia ({graceCount})
+                                    </button>
+                                    {inRouteCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingStatusFilter('in_route')}
+                                            style={{
+                                                border: 'none',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.64rem',
+                                                fontWeight: pendingStatusFilter === 'in_route' ? '800' : '600',
+                                                backgroundColor: pendingStatusFilter === 'in_route' ? '#0284C7' : 'transparent',
+                                                color: pendingStatusFilter === 'in_route' ? 'white' : '#0369A1',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}
+                                        >
+                                            <Truck size={10} /> En Ruta ({inRouteCount})
+                                        </button>
+                                    )}
+                                    {inProcessCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingStatusFilter('in_process')}
+                                            style={{
+                                                border: 'none',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.64rem',
+                                                fontWeight: pendingStatusFilter === 'in_process' ? '800' : '600',
+                                                backgroundColor: pendingStatusFilter === 'in_process' ? '#475569' : 'transparent',
+                                                color: pendingStatusFilter === 'in_process' ? 'white' : '#475569',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}
+                                        >
+                                            <Layers size={10} /> En Prep. ({inProcessCount})
+                                        </button>
+                                    )}
+                                    {noveltiesCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingStatusFilter('novelties')}
+                                            style={{
+                                                border: 'none',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.64rem',
+                                                fontWeight: pendingStatusFilter === 'novelties' ? '800' : '600',
+                                                backgroundColor: pendingStatusFilter === 'novelties' ? '#DC2626' : 'transparent',
+                                                color: pendingStatusFilter === 'novelties' ? 'white' : '#991B1B',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}
+                                        >
+                                            <AlertTriangle size={10} /> Novedades ({noveltiesCount})
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Centro: Selector compacto de Tanda */}
+                        {activeTab === 'invoicing' && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', backgroundColor: '#F8FAFC', padding: '2px 4px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
+                                <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#64748B', padding: '0 2px' }}>Tanda:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedBillingDate(getBogotaDate(-1))}
+                                    style={{
+                                        border: 'none',
+                                        padding: '2px 5px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.64rem',
+                                        fontWeight: selectedBillingDate === getBogotaDate(-1) ? '800' : '600',
+                                        backgroundColor: selectedBillingDate === getBogotaDate(-1) ? '#0D7A57' : 'transparent',
+                                        color: selectedBillingDate === getBogotaDate(-1) ? 'white' : '#475569',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Ayer
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedBillingDate(getBogotaDate(0))}
+                                    style={{
+                                        border: 'none',
+                                        padding: '2px 5px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.64rem',
+                                        fontWeight: selectedBillingDate === getBogotaDate(0) ? '800' : '600',
+                                        backgroundColor: selectedBillingDate === getBogotaDate(0) ? '#0D7A57' : 'transparent',
+                                        color: selectedBillingDate === getBogotaDate(0) ? 'white' : '#475569',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Hoy
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedBillingDate(getBogotaDate(1))}
+                                    style={{
+                                        border: 'none',
+                                        padding: '2px 5px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.64rem',
+                                        fontWeight: selectedBillingDate === getBogotaDate(1) ? '800' : '600',
+                                        backgroundColor: selectedBillingDate === getBogotaDate(1) ? '#0D7A57' : 'transparent',
+                                        color: selectedBillingDate === getBogotaDate(1) ? 'white' : '#475569',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Mañana
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedBillingDate('all')}
+                                    style={{
+                                        border: 'none',
+                                        padding: '2px 5px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.64rem',
+                                        fontWeight: selectedBillingDate === 'all' ? '800' : '600',
+                                        backgroundColor: selectedBillingDate === 'all' ? '#0D7A57' : 'transparent',
+                                        color: selectedBillingDate === 'all' ? 'white' : '#475569',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Todas
+                                </button>
+                                {/* Datepicker compacto */}
+                                {(() => {
+                                    const isCustomDate = selectedBillingDate !== getBogotaDate(1) && selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all';
+                                    return (
+                                        <div
+                                            title="Seleccionar fecha de despacho"
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '2px',
+                                                padding: '1px 4px',
+                                                borderRadius: '4px',
+                                                backgroundColor: isCustomDate ? '#0D7A57' : '#FFFFFF',
+                                                border: isCustomDate ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                                                position: 'relative'
+                                            }}
+                                        >
+                                            <Calendar size={10} strokeWidth={2.2} style={{ color: isCustomDate ? '#FFFFFF' : '#0D7A57', flexShrink: 0 }} />
+                                            <input
+                                                type="date"
+                                                max={getBogotaDate(7)}
+                                                value={isCustomDate ? selectedBillingDate : ''}
+                                                onChange={(e) => {
+                                                    if (e.target.value) {
+                                                        setSelectedBillingDate(e.target.value);
+                                                    }
+                                                }}
+                                                className="clean-date-input"
+                                                style={{
+                                                    border: 'none',
+                                                    outline: 'none',
+                                                    backgroundColor: 'transparent',
+                                                    color: isCustomDate ? '#FFFFFF' : '#334155',
+                                                    fontSize: '0.64rem',
+                                                    fontWeight: isCustomDate ? '800' : '600',
+                                                    cursor: 'pointer',
+                                                    padding: 0,
+                                                    width: isCustomDate ? '74px' : '68px'
+                                                }}
+                                            />
+                                            {isCustomDate && (
+                                                <button
+                                                    type="button"
+                                                    title="Restablecer tanda a Hoy"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedBillingDate(getBogotaDate(0));
+                                                    }}
+                                                    style={{
+                                                        border: 'none',
+                                                        background: 'rgba(255, 255, 255, 0.25)',
+                                                        color: 'white',
+                                                        borderRadius: '50%',
+                                                        width: '12px',
+                                                        height: '12px',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        cursor: 'pointer',
+                                                        padding: 0
+                                                    }}
+                                                >
+                                                    <X size={8} strokeWidth={3} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {/* Flanco Derecho: Acciones Contextuales y Botones Primarios */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            {activeTab === 'invoicing' && subTab === 'pending' && (
+                                <>
+                                    {unpricedOffAgreementCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenAssignPriceModal()}
+                                            title="Remisiones con tarifa pendiente asignable por Comercial (SoD)"
+                                            style={{
+                                                backgroundColor: '#FEF2F2',
+                                                color: '#991B1B',
+                                                border: '1px solid #F87171',
+                                                padding: '0.28rem 0.55rem',
+                                                borderRadius: '6px',
+                                                fontWeight: '800',
+                                                fontSize: '0.68rem',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <AlertTriangle size={11} style={{ color: '#DC2626' }} />
+                                            <span>{unpricedOffAgreementCount} Retenidos</span>
+                                        </button>
+                                    )}
+
+                                    {selectedOrderIds.length > 0 && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAccumulateOrdersForBatch(selectedOrderIds)}
+                                                style={{
+                                                    backgroundColor: '#F8FAFC',
+                                                    color: '#0F172A',
+                                                    border: '1px solid #CBD5E1',
+                                                    padding: '0.28rem 0.6rem',
+                                                    borderRadius: '6px',
+                                                    fontWeight: '800',
+                                                    fontSize: '0.70rem',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                                title="Enviar pedidos seleccionados a la bandeja de facturación por lote acumulado"
+                                            >
+                                                <Archive size={11} style={{ color: '#0D7A57' }} />
+                                                <span>Acumular Lote ({selectedOrderIds.length})</span>
+                                            </button>
+
+                                            {(() => {
+                                                const selectedOrdersList = filteredPendingOrders.filter(o => selectedOrderIds.includes(o.id));
+                                                if (selectedOrdersList.length < 2) return null;
+                                                const firstClient = selectedOrdersList[0].profiles?.nit || selectedOrdersList[0].profile_id;
+                                                const isSameClient = selectedOrdersList.every(o => (o.profiles?.nit || o.profile_id) === firstClient);
+                                                if (!isSameClient) return null;
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleUnifyOrdersIntoSingleInvoice(selectedOrderIds)}
+                                                        style={{
+                                                            backgroundColor: '#0D7A57',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            padding: '0.28rem 0.65rem',
+                                                            borderRadius: '6px',
+                                                            fontWeight: '900',
+                                                            fontSize: '0.70rem',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            boxShadow: '0 1px 4px rgba(13, 122, 87, 0.25)'
+                                                        }}
+                                                        title="Unificar los pedidos seleccionados del mismo cliente en una sola Factura de Venta"
+                                                    >
+                                                        <CheckCircle2 size={11} />
+                                                        <span>Unificar ({selectedOrderIds.length})</span>
+                                                    </button>
+                                                );
+                                            })()}
+
+                                            <button
+                                                type="button"
+                                                onClick={clearOrderSelection}
+                                                style={{
+                                                    border: '1px solid #FECACA',
+                                                    backgroundColor: '#FEF2F2',
+                                                    color: '#991B1B',
+                                                    padding: '0.25rem 0.5rem',
+                                                    borderRadius: '5px',
+                                                    fontSize: '0.64rem',
+                                                    fontWeight: '700',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Limpiar ({selectedOrderIds.length})
+                                            </button>
+                                        </>
+                                    )}
+
+                                    {/* Exportar Excel World Office */}
+                                    <button
+                                        type="button"
+                                        onClick={handleExportPendingToWorldOffice}
+                                        disabled={pendingOrders.length === 0 || isProcessing}
+                                        style={{
+                                            backgroundColor: '#FFFFFF',
+                                            color: '#0F172A',
+                                            border: '1px solid #CBD5E1',
+                                            padding: '0.32rem 0.65rem',
+                                            borderRadius: '6px',
+                                            fontWeight: '700',
+                                            fontSize: '0.72rem',
+                                            cursor: pendingOrders.length === 0 ? 'not-allowed' : 'pointer',
+                                            opacity: pendingOrders.length === 0 ? 0.6 : 1,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)'
+                                        }}
+                                        title="Descargar archivo Excel (.xlsx) con la plantilla oficial de World Office"
+                                    >
+                                        <FileSpreadsheet size={12} style={{ color: '#0D7A57' }} />
+                                        <span>Excel WO {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${filteredPendingOrders.length})`}</span>
+                                    </button>
+
+                                    {/* Generar Corte AM */}
+                                    <button
+                                        type="button"
+                                        onClick={() => isDateLockedByCut ? undefined : handleOpenCutPreview('AM')}
+                                        disabled={pendingOrdersCount === 0 || isProcessing || isDateLockedByCut}
+                                        title={isDateLockedByCut ? 'Esta fecha ya tiene un corte cerrado. Modo Consulta activo' : 'Generar Corte AM'}
+                                        style={{
+                                            backgroundColor: isDateLockedByCut ? '#E2E8F0' : '#0D7A57',
+                                            color: isDateLockedByCut ? '#64748B' : 'white',
+                                            border: 'none',
+                                            padding: '0.32rem 0.75rem',
+                                            borderRadius: '6px',
+                                            fontWeight: '800',
+                                            fontSize: '0.72rem',
+                                            cursor: (pendingOrdersCount === 0 || isDateLockedByCut) ? 'not-allowed' : 'pointer',
+                                            opacity: (pendingOrdersCount === 0 || isDateLockedByCut) ? 0.6 : 1,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            boxShadow: isDateLockedByCut ? 'none' : '0 2px 6px rgba(13, 122, 87, 0.2)'
+                                        }}
+                                    >
+                                        {isDateLockedByCut ? <Lock size={12} /> : <Sun size={12} />} {isDateLockedByCut ? 'Corte Cerrado' : 'Corte AM ' + (selectedOrderIds.length > 0 ? '(' + selectedOrderIds.length + ')' : '(' + pendingOrdersCount + ')')}
+                                    </button>
+
+                                    {/* Micro-icono HelpCircle con Tooltip */}
+                                    <span
+                                        title={`Margen de inspección y recepción: ${graceMinutes >= 60 ? `${Math.round(graceMinutes/60)}h` : `${graceMinutes}m`} post-entrega. Al expirar la gracia sin novedades, los pedidos pasan a listos automáticamente.`}
+                                        style={{ cursor: 'help', color: '#94A3B8', display: 'inline-flex', alignItems: 'center', padding: '0 2px' }}
+                                    >
+                                        <HelpCircle size={14} />
+                                    </span>
                                 </>
                             )}
 
+                            {/* Acciones en Cartera */}
                             {activeTab === 'portfolio' && portfolioSubTab === 'dossiers' && (
                                 <>
                                     <button
                                         onClick={handleCreateNewDossier}
-                                        style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.34rem 0.75rem', borderRadius: '7px', fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)' }}
+                                        style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.32rem 0.7rem', borderRadius: '6px', fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 5px rgba(13, 122, 87, 0.2)' }}
                                     >
-                                        <Plus size={13} strokeWidth={2.5} /> Crear Expediente
+                                        <Plus size={12} strokeWidth={2.5} /> Crear Expediente
                                     </button>
                                     <a
                                         href="/admin/commercial/billing/print-credit/blank"
                                         target="_blank"
                                         rel="noreferrer"
-                                        style={{ backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#334155', padding: '0.34rem 0.7rem', borderRadius: '7px', fontWeight: '700', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                        style={{ backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#334155', padding: '0.32rem 0.65rem', borderRadius: '6px', fontWeight: '700', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                                     >
-                                        <Printer size={12} /> Imprimir Vacío
+                                        <Printer size={11} /> Imprimir Vacío
                                     </a>
-                                    <button
-                                        onClick={fetchData}
-                                        title="Refrescar expedientes"
-                                        style={{
-                                            background: 'white',
-                                            border: '1px solid #CBD5E1',
-                                            color: '#475569',
-                                            padding: '0.3rem 0.65rem',
-                                            borderRadius: '6px',
-                                            fontSize: '0.72rem',
-                                            fontWeight: '700',
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px'
-                                        }}
-                                    >
-                                        <RefreshCw size={11} /> Refrescar
-                                    </button>
                                 </>
                             )}
                         </div>
@@ -4064,9 +4246,9 @@ export default function BillingDashboard() {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div style={{ overflow: 'visible' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
-                                            <thead style={{ position: 'sticky', top: '169px', zIndex: 30 }}>
+                                    <div style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                                    <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                                            <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
                                                     <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}># Corte</th>
                                                     <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Fecha y Franja</th>
@@ -4362,9 +4544,9 @@ export default function BillingDashboard() {
                                 {/* Tabla de Pedidos Acumulados */}
                                 <div style={{ overflow: 'visible' }}>
                                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
-                                        <thead style={{ position: 'sticky', top: '169px', zIndex: 30 }}>
+                                        <thead>
                                             <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center' }}>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '34px', textAlign: 'center' }}>
                                                     <input
                                                         type="checkbox"
                                                         checked={filteredBatchAccumulatedOrders.length > 0 && filteredBatchAccumulatedOrders.every(o => selectedOrderIds.includes(o.id))}
@@ -4433,7 +4615,7 @@ export default function BillingDashboard() {
                                                                     style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '14px', height: '14px' }}
                                                                 />
                                                             </td>
-                                                            <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                            <td style={{ padding: '0.4rem 0.35rem' }}>
                                                                 <div style={{ fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
                                                                     REM-{order.sequence_id || order.id.slice(0, 8)}
                                                                 </div>
@@ -4441,7 +4623,7 @@ export default function BillingDashboard() {
                                                                     ID: {order.id.slice(0, 8)}
                                                                 </div>
                                                             </td>
-                                                            <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                            <td style={{ padding: '0.4rem 0.25rem' }}>
                                                                 <div style={{ fontWeight: '800', color: '#0D7A57' }}>
                                                                     {clientName}
                                                                 </div>
@@ -4454,7 +4636,7 @@ export default function BillingDashboard() {
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                            <td style={{ padding: '0.4rem 0.35rem' }}>
                                                                 <div style={{ fontWeight: '700', color: '#334155' }}>
                                                                     {order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('es-CO') : 'Sin fecha'}
                                                                 </div>
@@ -4468,7 +4650,7 @@ export default function BillingDashboard() {
                                                             <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
                                                                 {formatMoney(order.total || 0)}
                                                             </td>
-                                                            <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+                                                            <td style={{ padding: '0.4rem 0.25rem', textAlign: 'center' }}>
                                                                 <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.62rem', fontWeight: '800', textTransform: 'uppercase' }}>
                                                                     Lote Acumulado
                                                                 </span>
@@ -4485,349 +4667,10 @@ export default function BillingDashboard() {
 
                         {/* SUBTAB: PEDIDOS POR FACTURAR */}
                         {subTab === 'pending' && (
-                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '14px', border: `1px solid ${THEME.colors.border}`, overflow: 'visible', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
-                                <div style={{ padding: '0.65rem 1rem', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderTopLeftRadius: '14px', borderTopRightRadius: '14px' }}>
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                                            <h3 style={{ margin: 0, fontSize: '0.84rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <ShoppingCart size={15} style={{ color: THEME.colors.primary }} />
-                                                Pedidos Pendientes por Facturar
-                                            </h3>
-                                            
-                                            {/* Quick Status Filter Pills */}
-                                            <div style={{ display: 'inline-flex', gap: '3px', backgroundColor: '#FFFFFF', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setPendingStatusFilter('all')}
-                                                            style={{
-                                                                border: 'none',
-                                                                padding: '2px 6px',
-                                                                borderRadius: '4px',
-                                                                fontSize: '0.65rem',
-                                                                fontWeight: pendingStatusFilter === 'all' ? '800' : '600',
-                                                                backgroundColor: pendingStatusFilter === 'all' ? '#0F172A' : 'transparent',
-                                                                color: pendingStatusFilter === 'all' ? 'white' : '#64748B',
-                                                                cursor: 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px'
-                                                            }}
-                                                        >
-                                                            <span>Todos ({pendingOrders.length})</span>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setPendingStatusFilter('ready')}
-                                                            title="Pedidos entregados cuyo tiempo de gracia expiró sin reclamaciones abiertas"
-                                                            style={{
-                                                                border: 'none',
-                                                                padding: '2px 8px',
-                                                                borderRadius: '4px',
-                                                                fontSize: '0.65rem',
-                                                                fontWeight: pendingStatusFilter === 'ready' ? '800' : '600',
-                                                                backgroundColor: pendingStatusFilter === 'ready' ? '#0D7A57' : 'transparent',
-                                                                color: pendingStatusFilter === 'ready' ? 'white' : '#065F46',
-                                                                cursor: 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px'
-                                                            }}
-                                                        >
-                                                            <Check size={11} />
-                                                            <span>Listos ({readyCount})</span>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setPendingStatusFilter('grace')}
-                                                            title="Pedidos entregados dentro de la ventana de inspección de cocina"
-                                                            style={{
-                                                                border: 'none',
-                                                                padding: '2px 8px',
-                                                                borderRadius: '4px',
-                                                                fontSize: '0.65rem',
-                                                                fontWeight: pendingStatusFilter === 'grace' ? '800' : '600',
-                                                                backgroundColor: pendingStatusFilter === 'grace' ? '#D97706' : 'transparent',
-                                                                color: pendingStatusFilter === 'grace' ? 'white' : '#92400E',
-                                                                cursor: 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px'
-                                                            }}
-                                                        >
-                                                            <Clock size={11} />
-                                                            <span>En Gracia ({graceCount})</span>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setPendingStatusFilter('in_route')}
-                                                            style={{
-                                                                border: 'none',
-                                                                padding: '2px 8px',
-                                                                borderRadius: '4px',
-                                                                fontSize: '0.65rem',
-                                                                fontWeight: pendingStatusFilter === 'in_route' ? '800' : '600',
-                                                                backgroundColor: pendingStatusFilter === 'in_route' ? '#0284C7' : 'transparent',
-                                                                color: pendingStatusFilter === 'in_route' ? 'white' : '#0369A1',
-                                                                cursor: 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px'
-                                                            }}
-                                                        >
-                                                            <Truck size={11} />
-                                                            <span>En Ruta ({inRouteCount})</span>
-                                                        </button>
-                                                        {inProcessCount > 0 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setPendingStatusFilter('in_process')}
-                                                                title="Pedidos en preparación, por aprobar o en tanda operativa"
-                                                                style={{
-                                                                    border: 'none',
-                                                                    padding: '2px 8px',
-                                                                    borderRadius: '4px',
-                                                                    fontSize: '0.65rem',
-                                                                    fontWeight: pendingStatusFilter === 'in_process' ? '800' : '600',
-                                                                    backgroundColor: pendingStatusFilter === 'in_process' ? '#475569' : 'transparent',
-                                                                    color: pendingStatusFilter === 'in_process' ? 'white' : '#475569',
-                                                                    cursor: 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '4px'
-                                                                }}
-                                                            >
-                                                                <Layers size={11} />
-                                                                <span>En Prep. ({inProcessCount})</span>
-                                                            </button>
-                                                        )}
-                                                        {noveltiesCount > 0 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setPendingStatusFilter('novelties')}
-                                                                style={{
-                                                                    border: 'none',
-                                                                    padding: '2px 8px',
-                                                                    borderRadius: '4px',
-                                                                    fontSize: '0.65rem',
-                                                                    fontWeight: pendingStatusFilter === 'novelties' ? '800' : '600',
-                                                                    backgroundColor: pendingStatusFilter === 'novelties' ? '#DC2626' : 'transparent',
-                                                                    color: pendingStatusFilter === 'novelties' ? 'white' : '#991B1B',
-                                                                    cursor: 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '4px'
-                                                                }}
-                                                            >
-                                                                <AlertTriangle size={11} />
-                                                                <span>Novedades ({noveltiesCount})</span>
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                        <p style={{ margin: '1px 0 0 0', fontSize: '0.72rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                            Pedidos programados para entrega ({selectedBillingDate === 'all' ? 'todas las fechas' : selectedBillingDate}) · Margen de recepción y novedades: <b>{graceMinutes >= 60 ? `${Math.round(graceMinutes/60)}h` : `${graceMinutes}m`}</b> post-entrega.
-                                        </p>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                        {/* Quick Selection Helpers */}
-                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#FFFFFF', padding: '2px 4px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                                            <span style={{ fontSize: '0.64rem', fontWeight: '800', color: selectedOrderIds.length > 0 ? '#0D7A57' : '#64748B', padding: '0 4px' }}>
-                                                {selectedOrderIds.length > 0 ? `${selectedOrderIds.length} de ${pendingOrders.length} sel.` : `${pendingOrders.length} pedidos`}
-                                            </span>
-                                            {readyCount > 0 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={selectReadyOrders}
-                                                    title="Seleccionar únicamente los pedidos listos (gracia cumplida sin novedades)"
-                                                    style={{
-                                                        border: '1px solid #A7F3D0',
-                                                        backgroundColor: '#ECFDF5',
-                                                        color: '#065F46',
-                                                        padding: '2px 7px',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.64rem',
-                                                        fontWeight: '800',
-                                                        cursor: 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '3px'
-                                                    }}
-                                                >
-                                                    <Check size={11} strokeWidth={2.5} /> Solo Listos ({readyCount})
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={selectAllVisibleOrders}
-                                                style={{
-                                                    border: '1px solid #CBD5E1',
-                                                    backgroundColor: '#F8FAFC',
-                                                    color: '#334155',
-                                                    padding: '2px 7px',
-                                                    borderRadius: '4px',
-                                                    fontSize: '0.64rem',
-                                                    fontWeight: '700',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Todos ({filteredPendingOrders.length})
-                                            </button>
-                                            {selectedOrderIds.length > 0 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={clearOrderSelection}
-                                                    style={{
-                                                        border: '1px solid #FECACA',
-                                                        backgroundColor: '#FEF2F2',
-                                                        color: '#991B1B',
-                                                        padding: '2px 6px',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.64rem',
-                                                        fontWeight: '700',
-                                                        cursor: 'pointer'
-                                                    }}
-                                                >
-                                                    Limpiar
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        {unpricedOffAgreementCount > 0 && (
-                                            <div 
-                                                onClick={() => handleOpenAssignPriceModal()}
-                                                title="Las tarifas de remisiones fuera de acuerdo deben ser asignadas exclusivamente por el Área Comercial en el módulo de Pedidos o Acuerdos. Haz clic para ver el detalle informativo (SoD)."
-                                                style={{
-                                                    backgroundColor: '#FEF2F2',
-                                                    color: '#991B1B',
-                                                    border: '1.2px solid #F87171',
-                                                    padding: '0.35rem 0.75rem',
-                                                    borderRadius: '8px',
-                                                    fontWeight: '800',
-                                                    fontSize: '0.72rem',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    boxShadow: '0 1px 3px rgba(220, 38, 38, 0.15)',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                <AlertTriangle size={13} style={{ color: '#DC2626' }} />
-                                                <span>{unpricedOffAgreementCount} {unpricedOffAgreementCount === 1 ? 'pedido retenido' : 'pedidos retenidos'}: Pendiente Tarifa Comercial</span>
-                                            </div>
-                                        )}
-
-                                        {selectedOrderIds.length > 0 && (
-                                            <>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleAccumulateOrdersForBatch(selectedOrderIds)}
-                                                    style={{
-                                                        backgroundColor: '#F8FAFC',
-                                                        color: '#0F172A',
-                                                        border: '1px solid #CBD5E1',
-                                                        padding: '0.4rem 0.75rem',
-                                                        borderRadius: '8px',
-                                                        fontWeight: '800',
-                                                        fontSize: '0.74rem',
-                                                        cursor: 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '5px'
-                                                    }}
-                                                    title="Enviar pedidos seleccionados a la bandeja de facturación por lote acumulado"
-                                                >
-                                                    <Archive size={13} style={{ color: '#0D7A57' }} />
-                                                    <span>Acumular p/ Lote ({selectedOrderIds.length} sel)</span>
-                                                </button>
-                                                {(() => {
-                                                    const selectedOrdersList = filteredPendingOrders.filter(o => selectedOrderIds.includes(o.id));
-                                                    if (selectedOrdersList.length < 2) return null;
-                                                    const firstClient = selectedOrdersList[0].profiles?.nit || selectedOrdersList[0].profile_id;
-                                                    const isSameClient = selectedOrdersList.every(o => (o.profiles?.nit || o.profile_id) === firstClient);
-                                                    if (!isSameClient) return null;
-                                                    return (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleUnifyOrdersIntoSingleInvoice(selectedOrderIds)}
-                                                            style={{
-                                                                backgroundColor: '#0D7A57',
-                                                                color: 'white',
-                                                                border: 'none',
-                                                                padding: '0.4rem 0.85rem',
-                                                                borderRadius: '8px',
-                                                                fontWeight: '900',
-                                                                fontSize: '0.74rem',
-                                                                cursor: 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '5px',
-                                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
-                                                            }}
-                                                            title="Unificar los pedidos seleccionados del mismo cliente en una sola Factura de Venta"
-                                                        >
-                                                            <CheckCircle2 size={13} />
-                                                            <span>Unificar en 1 Sola Factura ({selectedOrderIds.length} sel)</span>
-                                                        </button>
-                                                    );
-                                                })()}
-                                            </>
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            onClick={handleExportPendingToWorldOffice}
-                                            disabled={pendingOrders.length === 0 || isProcessing}
-                                            style={{
-                                                backgroundColor: '#FFFFFF',
-                                                color: '#0F172A',
-                                                border: '1px solid #CBD5E1',
-                                                padding: '0.4rem 0.8rem',
-                                                borderRadius: '8px',
-                                                fontWeight: '700',
-                                                fontSize: '0.74rem',
-                                                cursor: pendingOrders.length === 0 ? 'not-allowed' : 'pointer',
-                                                opacity: pendingOrders.length === 0 ? 0.6 : 1,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '5px',
-                                                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-                                                transition: 'all 0.15s ease'
-                                            }}
-                                            title="Descargar archivo Excel (.xlsx) con la plantilla oficial de World Office para los pedidos seleccionados o visibles"
-                                        >
-                                            <FileSpreadsheet size={13} style={{ color: '#0D7A57' }} />
-                                            <span>Descargar Excel World Office {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length} sel)` : `(${filteredPendingOrders.length})`}</span>
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => isDateLockedByCut ? undefined : handleOpenCutPreview('AM')}
-                                            disabled={pendingOrdersCount === 0 || isProcessing || isDateLockedByCut}
-                                            title={isDateLockedByCut ? 'Esta fecha ya tiene un corte cerrado. Modo Consulta activo' : 'Generar Corte AM'}
-                                            style={{
-                                                backgroundColor: isDateLockedByCut ? '#E2E8F0' : '#0D7A57',
-                                                color: isDateLockedByCut ? '#64748B' : 'white',
-                                                border: 'none',
-                                                padding: '0.4rem 0.8rem',
-                                                borderRadius: '8px',
-                                                fontWeight: '800',
-                                                fontSize: '0.74rem',
-                                                cursor: (pendingOrdersCount === 0 || isDateLockedByCut) ? 'not-allowed' : 'pointer',
-                                                opacity: (pendingOrdersCount === 0 || isDateLockedByCut) ? 0.6 : 1,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '5px',
-                                                boxShadow: isDateLockedByCut ? 'none' : '0 2px 6px rgba(13, 122, 87, 0.2)'
-                                            }}
-                                        >
-                                            {isDateLockedByCut ? <Lock size={13} /> : <Sun size={13} />} {isDateLockedByCut ? 'Corte Cerrado (Solo Consulta)' : 'Auditar y Generar Corte AM ' + (selectedOrderIds.length > 0 ? '(' + selectedOrderIds.length + ' sel)' : '(' + pendingOrdersCount + ')')}
-                                        </button>
-                                    </div>
-                                </div>
-
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '100%', overflowX: 'auto', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
                                 <div style={{ overflow: 'visible' }}>
                                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
-                                        <thead style={{ position: 'sticky', top: '169px', zIndex: 30 }}>
+                                        <thead>
                                             <tr style={{ backgroundColor: '#F8FAFC' }}>
                                                 {/* 0. Checkbox Maestro */}
                                                 <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center' }}>
@@ -4852,10 +4695,10 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('sequence_id')}
                                                     title="Ordenar por número de pedido o fecha de creación"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '120px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'sequence_id' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'sequence_id' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                        <span># Pedido / Fechas</span>
+                                                        <span># Pedido</span>
                                                         {sortConfig.key === 'sequence_id' ? (sortConfig.direction === 'asc' ? <ArrowUp size={11} strokeWidth={2.5} /> : <ArrowDown size={11} strokeWidth={2.5} />) : <ArrowUpDown size={10} style={{ opacity: 0.35 }} />}
                                                     </div>
                                                 </th>
@@ -4864,10 +4707,10 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('fiscal_consecutive')}
                                                     title="Ordenar por número fiscal de factura electrónica"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '110px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'fiscal_consecutive' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '85px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'fiscal_consecutive' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                        <span>Consecutivo Fiscal</span>
+                                                        <span>Consecutivo</span>
                                                         {sortConfig.key === 'fiscal_consecutive' ? (sortConfig.direction === 'asc' ? <ArrowUp size={11} strokeWidth={2.5} /> : <ArrowDown size={11} strokeWidth={2.5} />) : <ArrowUpDown size={10} style={{ opacity: 0.35 }} />}
                                                     </div>
                                                 </th>
@@ -4876,10 +4719,10 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('client')}
                                                     title="Ordenar alfabéticamente por cliente o razón social"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '175px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'client' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '140px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'client' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                        <span>Cliente / Razón Social</span>
+                                                        <span>Cliente</span>
                                                         {sortConfig.key === 'client' ? (sortConfig.direction === 'asc' ? <ArrowUp size={11} strokeWidth={2.5} /> : <ArrowDown size={11} strokeWidth={2.5} />) : <ArrowUpDown size={10} style={{ opacity: 0.35 }} />}
                                                     </div>
                                                 </th>
@@ -4888,7 +4731,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('items')}
                                                     title="Ordenar por cantidad de productos"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '75px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'items' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '60px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'items' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Ítems</span>
@@ -4900,10 +4743,10 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('novelties')}
                                                     title="Ordenar por novedades o incidencias de entrega"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '145px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'novelties' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '125px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'novelties' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                        <span>Novedades (QA)</span>
+                                                        <span>Novedades</span>
                                                         {sortConfig.key === 'novelties' ? (sortConfig.direction === 'asc' ? <ArrowUp size={11} strokeWidth={2.5} /> : <ArrowDown size={11} strokeWidth={2.5} />) : <ArrowUpDown size={10} style={{ opacity: 0.35 }} />}
                                                     </div>
                                                 </th>
@@ -4912,10 +4755,10 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('document')}
                                                     title="Ordenar por tipo de documento fiscal o plazo de crédito"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '115px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'document' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.30rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'document' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                        <span>Documento & Plazo</span>
+                                                        <span>Documento</span>
                                                         {sortConfig.key === 'document' ? (sortConfig.direction === 'asc' ? <ArrowUp size={11} strokeWidth={2.5} /> : <ArrowDown size={11} strokeWidth={2.5} />) : <ArrowUpDown size={10} style={{ opacity: 0.35 }} />}
                                                     </div>
                                                 </th>
@@ -4924,10 +4767,10 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('grace_status')}
                                                     title="Ordenar por estado de entrega y cuenta regresiva de gracia post-entrega"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '120px', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'grace_status' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'grace_status' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                        <span>Estado & Gracia</span>
+                                                        <span>Estado</span>
                                                         {sortConfig.key === 'grace_status' ? (sortConfig.direction === 'asc' ? <ArrowUp size={11} strokeWidth={2.5} /> : <ArrowDown size={11} strokeWidth={2.5} />) : <ArrowUpDown size={10} style={{ opacity: 0.35 }} />}
                                                     </div>
                                                 </th>
@@ -4936,16 +4779,16 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('total')}
                                                     title="Ordenar por valor total del pedido"
-                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '95px', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: sortConfig.key === 'total' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '85px', textAlign: 'right', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'total' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end' }}>
-                                                        <span>Total Pedido</span>
+                                                        <span>Total</span>
                                                         {sortConfig.key === 'total' ? (sortConfig.direction === 'asc' ? <ArrowUp size={11} strokeWidth={2.5} /> : <ArrowDown size={11} strokeWidth={2.5} />) : <ArrowUpDown size={10} style={{ opacity: 0.35 }} />}
                                                     </div>
                                                 </th>
 
                                                 {/* 9. Acciones */}
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.55rem', width: '90px', textAlign: 'center', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '80px', textAlign: 'center', fontSize: '0.60rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -4996,7 +4839,7 @@ export default function BillingDashboard() {
                                                         onMouseLeave={e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent'; }}
                                                     >
                                                         {/* 0. Checkbox de Fila */}
-                                                        <td style={{ padding: '0.45rem 0.5rem', textAlign: 'center', width: '38px' }} onClick={(e) => e.stopPropagation()}>
+                                                        <td style={{ padding: '0.4rem 0.25rem', textAlign: 'center', width: '34px' }} onClick={(e) => e.stopPropagation()}>
                                                             {(() => {
                                                                 const rep = getOrderReplacementInfo(order);
                                                                 if (rep.isReplacement) {
@@ -5023,19 +4866,19 @@ export default function BillingDashboard() {
                                                         </td>
 
                                                         {/* 1. # Pedido & Fechas / Trazabilidad */}
-                                                        <td style={{ padding: '0.45rem 0.75rem' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
-                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem', letterSpacing: '-0.01em' }}>
+                                                        <td style={{ padding: '0.4rem 0.35rem' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', alignItems: 'flex-start', maxWidth: '100px' }}>
+                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem', letterSpacing: '-0.01em' }}>
                                                                     #{friendlyId}
                                                                 </span>
                                                                 {order.purchase_order_number && (
-                                                                    <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '1px 4px', borderRadius: '3px', border: '1px solid #BFDBFE', fontWeight: '700', fontSize: '0.58rem', whiteSpace: 'nowrap' }}>
+                                                                    <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '1px 4px', borderRadius: '3px', border: '1px solid #BFDBFE', fontWeight: '700', fontSize: '0.55rem', maxWidth: '95px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`OC: ${order.purchase_order_number}`}>
                                                                         OC: {order.purchase_order_number}
                                                                     </span>
                                                                 )}
                                                             </div>
                                                             <div style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', lineHeight: '1.2' }}>
-                                                                Ped: {formatCreatedAtCompact(order.created_at)}
+                                                                Ped: {formatCreatedAtCompact(order.created_at).split('·')[0].trim()}
                                                             </div>
                                                             {(() => {
                                                                 const rawRestrictions = order.profiles?.delivery_restrictions;
@@ -5049,14 +4892,14 @@ export default function BillingDashboard() {
                                                                         title={restrictionStr ? `Fecha programada: ${order.delivery_date || 'N/A'}\nVentana / Restricción de recepción: ${restrictionStr}` : `Fecha de entrega: ${order.delivery_date || 'N/A'} (${windowLabel})`}
                                                                         style={{ fontSize: '0.64rem', color: '#334155', fontWeight: '700', marginTop: '1px', whiteSpace: 'nowrap', lineHeight: '1.2', cursor: restrictionStr ? 'help' : 'default' }}
                                                                     >
-                                                                        Ent: {formatDeliveryDate(order.delivery_date, windowLabel)}
+                                                                        Ent: {formatDeliveryDate(order.delivery_date, windowLabel).split('·')[0].trim()}
                                                                     </div>
                                                                 );
                                                             })()}
                                                         </td>
 
                                                         {/* 2. Consecutivo Fiscal Autoasignado */}
-                                                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                        <td style={{ padding: '0.4rem 0.30rem' }}>
                                                             {(() => {
                                                                 const rep = getOrderReplacementInfo(order);
                                                                 if (rep.isReplacement) {
@@ -5111,7 +4954,7 @@ export default function BillingDashboard() {
 
                                                         {/* 3. Cliente & NIT */}
                                                         <td style={{ padding: '0.5rem 0.75rem' }}>
-                                                            <div title={clientName} style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem', lineHeight: '1.2', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            <div title={clientName} style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.74rem', lineHeight: '1.2', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                 {clientName}
                                                             </div>
                                                             <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '600', marginTop: '1px' }}>
@@ -5170,7 +5013,7 @@ export default function BillingDashboard() {
                                                                             <span style={{ backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', padding: '0.15rem 0.4rem', borderRadius: '5px', fontSize: '0.66rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                                 <AlertTriangle size={10} /> {totalOpen} {totalOpen === 1 ? (activePqrs.length > 0 ? 'PQRS Abierta' : 'En Auditoría') : 'Incidencias Abiertas'}
                                                                             </span>
-                                                                            <div style={{ fontSize: '0.64rem', color: '#DC2626', fontWeight: '600', marginTop: '1px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={issueLabel}>
+                                                                            <div style={{ fontSize: '0.60rem', color: '#DC2626', fontWeight: '600', marginTop: '1px', maxWidth: '105px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={issueLabel}>
                                                                                 {issueLabel}
                                                                             </div>
                                                                         </div>
@@ -5374,9 +5217,9 @@ export default function BillingDashboard() {
                                                                     return (
                                                                         <div>
                                                                             <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '0.15rem 0.4rem', borderRadius: '5px', fontSize: '0.66rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                                <CheckCircle2 size={10} color="#2563EB" /> {approvedReturns.length} {approvedReturns.length === 1 ? 'Novedad Resuelta' : 'Novedades Resueltas'}
+                                                                                <CheckCircle2 size={10} color="#2563EB" /> {approvedReturns.length} {approvedReturns.length === 1 ? 'Resuelta' : 'Resueltas'}
                                                                             </span>
-                                                                            <div style={{ fontSize: '0.64rem', color: '#2563EB', fontWeight: '600', marginTop: '1px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={issueLabel}>
+                                                                            <div style={{ fontSize: '0.60rem', color: '#2563EB', fontWeight: '600', marginTop: '1px', maxWidth: '105px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={issueLabel}>
                                                                                 {issueLabel}
                                                                             </div>
                                                                         </div>
@@ -5384,11 +5227,11 @@ export default function BillingDashboard() {
                                                                 }
 
                                                                 return (
-                                                                    <div>
-                                                                        <span style={{ backgroundColor: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', padding: '0.15rem 0.4rem', borderRadius: '5px', fontSize: '0.66rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                            <CheckCircle2 size={10} /> Conforme
+                                                                    <div style={{ maxWidth: '115px' }}>
+                                                                        <span style={{ backgroundColor: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', padding: '0.12rem 0.35rem', borderRadius: '5px', fontSize: '0.60rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                            <CheckCircle2 size={9} /> Conforme
                                                                         </span>
-                                                                        <div style={{ fontSize: '0.64rem', color: '#94A3B8', marginTop: '1px' }}>
+                                                                        <div style={{ fontSize: '0.60rem', color: '#94A3B8', marginTop: '1px' }}>
                                                                             Sin mermas
                                                                         </div>
                                                                     </div>
@@ -5412,18 +5255,11 @@ export default function BillingDashboard() {
                                                                                 backgroundColor: docInfo.bg,
                                                                                 color: docInfo.color,
                                                                                 border: `1px solid ${docInfo.border}`,
-                                                                                padding: '0.14rem 0.42rem',
-                                                                                borderRadius: '5px',
-                                                                                fontSize: '0.64rem',
-                                                                                fontWeight: '800',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                whiteSpace: 'nowrap'
+                                                                                padding: '0.10rem 0.30rem', borderRadius: '5px', fontSize: '0.58rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap'
                                                                             }}
                                                                         >
                                                                             <DocIcon size={10} style={{ color: docInfo.color, flexShrink: 0 }} />
-                                                                            <span>{docInfo.label}</span>
+                                                                            <span>{docInfo.label.replace('Remisión', 'Rem.').replace('Electrónica', 'Elect.')}</span>
                                                                         </span>
 
                                                                         {/* Badge 2: Descuento Comercial de Acuerdo (Escenario 253 - Si no hay descuento, no se muestra nada) */}
@@ -5458,7 +5294,7 @@ export default function BillingDashboard() {
                                                         </td>
 
                                                         {/* 7. Estado Operativo & Cuenta Regresiva de Gracia / Corte */}
-                                                        <td style={{ padding: '0.45rem 0.6rem', width: '120px' }}>
+                                                        <td style={{ padding: '0.4rem 0.35rem' }}>
                                                             {(() => {
                                                                 const grace: any = getOrderGraceInfo(order, graceMinutes, cutCloseTime);
                                                                 return (
@@ -5505,8 +5341,7 @@ export default function BillingDashboard() {
                                                                             }
                                                                             style={{
                                                                                 width: '100%',
-                                                                                maxWidth: '115px',
-                                                                                height: '5px',
+                                                                                maxWidth: '80px', height: '4px',
                                                                                 borderRadius: '9999px',
                                                                                 backgroundColor: grace.statusType === 'in_process' 
                                                                                     ? 'rgba(241, 245, 249, 0.95)' 
@@ -5576,7 +5411,7 @@ export default function BillingDashboard() {
                                                         </td>
 
                                                         {/* 8. Total Pedido */}
-                                                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
+                                                        <td style={{ padding: '0.4rem 0.35rem', textAlign: 'right' }}>
                                                             {(() => {
                                                                 const rep = getOrderReplacementInfo(order);
                                                                 if (rep.isReplacement) {
@@ -5678,13 +5513,7 @@ export default function BillingDashboard() {
                                                                         backgroundColor: '#F1F5F9',
                                                                         color: '#0F172A',
                                                                         border: '1px solid #CBD5E1',
-                                                                        padding: '0.25rem 0.45rem',
-                                                                        borderRadius: '5px',
-                                                                        cursor: 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: '3px',
-                                                                        fontSize: '0.70rem',
+                                                                        padding: '0.2rem 0.35rem', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '0.64rem',
                                                                         fontWeight: '700'
                                                                     }}
                                                                 >
@@ -5698,14 +5527,8 @@ export default function BillingDashboard() {
                                                                         backgroundColor: 'white',
                                                                         color: '#475569',
                                                                         border: '1px solid #CBD5E1',
-                                                                        padding: '0.25rem 0.45rem',
-                                                                        borderRadius: '5px',
-                                                                        cursor: 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center'
-                                                                    }}
-                                                                >
-                                                                    <Printer size={11} />
+                                                                        padding: '0.2rem 0.35rem', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+                                                                    <Printer size={10} />
                                                                 </button>
                                                             </div>
                                                         </td>
@@ -5722,7 +5545,7 @@ export default function BillingDashboard() {
                         {subTab === 'returns' && (
                             <div style={{ backgroundColor: 'white', borderRadius: '14px', border: '1px solid #E2E8F0', position: 'relative', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.03)', overflow: 'visible' }}>
                                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
-                                    <thead style={{ position: 'sticky', top: '169px', zIndex: 30 }}>
+                                    <thead>
                                         <tr style={{ backgroundColor: '#F8FAFC' }}>
                                             <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopLeftRadius: '14px', position: 'sticky', top: '169px', zIndex: 30 }}># Pedido</th>
                                             <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Producto / Ítem</th>
@@ -6061,7 +5884,7 @@ export default function BillingDashboard() {
                                     {/* 3. Tabla Chromium con Thead Sticky en 169px */}
                                     <div style={{ overflow: 'visible' }}>
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
-                                            <thead style={{ position: 'sticky', top: '169px', zIndex: 30 }}>
+                                            <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
                                                     <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Prefijo & # Factura</th>
                                                     <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cliente / Razón Social</th>
@@ -6275,7 +6098,7 @@ export default function BillingDashboard() {
 
                                 <div style={{ overflow: 'visible' }}>
                                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
-                                        <thead style={{ position: 'sticky', top: '169px', zIndex: 30 }}>
+                                        <thead>
                                             <tr style={{ backgroundColor: '#F8FAFC' }}>
                                                 <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cliente / Razón Social</th>
                                                 <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>NIT</th>

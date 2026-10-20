@@ -39,6 +39,7 @@ export interface PQR {
         origin_source?: string;
         admin_notes?: string;
         shipping_address?: string;
+        delivery_date?: string;
     } | null;
     sequence_number?: number;
 }

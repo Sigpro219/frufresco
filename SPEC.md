@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.228 (Exoneración Salarial por Reingreso a Inventario en Auditoría QC, Alerta ERP Notas de Crédito World Office en Facturación, Bandeja CoQ Proveedores en Tesorería — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.229 (Arquitectura 2 Niveles, Command Dock Unificado y Poda SpaceX en Facturación B2B, Exoneración Salarial QC, Alerta ERP World Office — 76/76 Pantallas Certificadas)
 > **Fecha:** 20 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 258 Escenarios BDD Ininterrumpidos (1..258)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 259 Escenarios BDD Ininterrumpidos (1..259)
 
 ---
 
@@ -24,11 +24,11 @@
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257 (§39.1 - §39.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **258 Escenarios Canónicos (1..258)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **259 Escenarios Canónicos (1..259)** | **🟢 100%** |
 
 ---
 
@@ -11168,3 +11168,20 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Al persistir `deductionAmount: 0`, la función `fetchPayrollSales` filtra el caso de forma nativa (`amount > 0`), impidiendo que se traslade descuento alguno a la prenómina quincenal del trabajador.
   4. **Paridad en Ajustes Financieros y Acta RNC (PDF):**
      - En `FinancialAdjustmentModal.tsx` se respeta la exoneración individual liquidando la deducción en `$0 COP`, y en el informe oficial RNC se asienta la causal: *Exonerado por Reingreso a Inventario (Sin Pérdida Patrimonial)*.
+
+
+---
+
+### Escenario 259: Arquitectura de 2 Niveles, Command Dock Unificado y Poda Radical SpaceX en Facturación B2B (`/admin/commercial/billing`) (SDD v1.9.229)
+- **Given** el módulo neurálgico de Facturación y Cartera B2B (`src/app/admin/commercial/billing/page.tsx`),
+- **When** se audita la interfaz bajo el estándar SpaceX ("The best part is no part" / Raptor 1 a Raptor 3) y diseño industrial suizo (Swiss Precision Slate), erradicando títulos redundantes de 45px, 4 de los 5 badges de conteo duplicados y toolbars secundarias repetitivas,
+- **Then** el sistema implementa una arquitectura compacta y monolítica de 2 niveles:
+  1. **Línea 1 Sticky (Navegación y Telemetría — top: 85px, zIndex: 45):**
+     - Flanco Izquierdo: Pestañas maestras de módulo (`Facturación`, `Cartera`, `Configuración`) unificadas en la misma fila y separadas por un divisor vertical sutil de 16px de las subpestañas operativas (`Pedidos por Facturar (N)`, `Acumulados por Lote (N)`, `Historial (N)`, `Devoluciones (N)` en Facturación, y `Facturas (N)`, `Fichas B2B (N)` en Cartera).
+     - Flanco Derecho: Toggle `Tanda operativa` (`includeAllStatuses`) y telemetría en tiempo real `● EN VIVO` con refresco manual reactivo.
+  2. **Línea 2 Sticky: Frosted Command Dock Unificado (top: 122px, zIndex: 40):**
+     - Flanco Izquierdo: Omnibox de búsqueda universal (`GalleryOmnibox` ~230px) + Píldoras de filtrado ultrarrápido (`Todos`, `Listos`, `En Gracia`, `En Prep.`, `Novedades`).
+     - Centro: Selector compacto de Tanda (`Ayer`, `Hoy`, `Mañana`, `Todas` y datepicker personalizado con botón de reset `X`).
+     - Flanco Derecho: Acciones contextuales agrupadas (Alerta de precios retenidos `$0` SoD, Botones de lote `Acumular Lote` y `Unificar` con validación de mismo NIT, `Limpiar Selección`, botón de exportación `Excel WO` oficial y botón de corte `Corte AM` / `Corte Cerrado` junto con micro-icono de ayuda `HelpCircle`).
+  3. **Alineación de Flujo y Erradicación de Bloqueo Sticky (`overflowX: 'clip'`):**
+     - El contenedor maestro 1600px y el elemento `<main>` adoptan `overflowX: 'clip', overflowY: 'visible'` para impedir que el navegador cree un contexto de scroll anidado (`overflow-y: auto`), garantizando que la tabla fluya de forma natural en la posición vertical consecutiva (`top > 186px` natural) y que al desplazarse hacia abajo, las cabeceras `<thead> <th>` se congelen magnéticamente a `top: 169px` sin solapamiento alguno.
