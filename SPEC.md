@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.229 (Arquitectura 2 Niveles, Command Dock Unificado y Poda SpaceX en Facturación B2B, Exoneración Salarial QC, Alerta ERP World Office — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.229 (Arquitectura 2 Niveles, Command Dock Unificado, Poda SpaceX y Thead Sticky Magnético a 169px en Facturación B2B — 76/76 Pantallas Certificadas)
 > **Fecha:** 20 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -11172,10 +11172,10 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 
 ---
 
-### Escenario 259: Arquitectura de 2 Niveles, Command Dock Unificado y Poda Radical SpaceX en Facturación B2B (`/admin/commercial/billing`) (SDD v1.9.229)
-- **Given** el módulo neurálgico de Facturación y Cartera B2B (`src/app/admin/commercial/billing/page.tsx`),
+### Escenario 259: Arquitectura de 2 Niveles, Command Dock Unificado, Poda Radical SpaceX y Thead Sticky Magnético a 169px en Facturación B2B (`/admin/commercial/billing`) (SDD v1.9.229)
+- **Given** el módulo neurálgico de Facturación y Cartera B2B (`src/app/admin/commercial/billing/page.tsx`) y la especificación canónica de galerías (`estandar-galerias-frufresco` Perfil B),
 - **When** se audita la interfaz bajo el estándar SpaceX ("The best part is no part" / Raptor 1 a Raptor 3) y diseño industrial suizo (Swiss Precision Slate), erradicando títulos redundantes de 45px, 4 de los 5 badges de conteo duplicados y toolbars secundarias repetitivas,
-- **Then** el sistema implementa una arquitectura compacta y monolítica de 2 niveles:
+- **Then** el sistema implementa una arquitectura compacta y monolítica de 2 niveles con anclaje magnético de 3 capas:
   1. **Línea 1 Sticky (Navegación y Telemetría — top: 85px, zIndex: 45):**
      - Flanco Izquierdo: Pestañas maestras de módulo (`Facturación`, `Cartera`, `Configuración`) unificadas en la misma fila y separadas por un divisor vertical sutil de 16px de las subpestañas operativas (`Pedidos por Facturar (N)`, `Acumulados por Lote (N)`, `Historial (N)`, `Devoluciones (N)` en Facturación, y `Facturas (N)`, `Fichas B2B (N)` en Cartera).
      - Flanco Derecho: Toggle `Tanda operativa` (`includeAllStatuses`) y telemetría en tiempo real `● EN VIVO` con refresco manual reactivo.
@@ -11184,4 +11184,12 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Centro: Selector compacto de Tanda (`Ayer`, `Hoy`, `Mañana`, `Todas` y datepicker personalizado con botón de reset `X`).
      - Flanco Derecho: Acciones contextuales agrupadas (Alerta de precios retenidos `$0` SoD, Botones de lote `Acumular Lote` y `Unificar` con validación de mismo NIT, `Limpiar Selección`, botón de exportación `Excel WO` oficial y botón de corte `Corte AM` / `Corte Cerrado` junto con micro-icono de ayuda `HelpCircle`).
   3. **Alineación de Flujo y Erradicación de Bloqueo Sticky (`overflowX: 'clip'`):**
-     - El contenedor maestro 1600px y el elemento `<main>` adoptan `overflowX: 'clip', overflowY: 'visible'` para impedir que el navegador cree un contexto de scroll anidado (`overflow-y: auto`), garantizando que la tabla fluya de forma natural en la posición vertical consecutiva (`top > 186px` natural) y que al desplazarse hacia abajo, las cabeceras `<thead> <th>` se congelen magnéticamente a `top: 169px` sin solapamiento alguno.
+     - El contenedor maestro 1600px y el elemento `<main>` adoptan `overflowX: 'clip', overflowY: 'visible'` para impedir que el navegador cree un contexto de scroll anidado (`overflow-y: auto`), garantizando que la tabla fluya de forma natural en la posición vertical consecutiva (`top > 186px` natural).
+  4. **Protocolo Anti-Secuestro de Scroll en Tarjetas de Tabla (`overflow: 'visible'` & Thead Sticky a 169px):**
+     - Se prohíbe de forma terminante `overflowX: 'auto'` o `overflow: 'hidden'` en los contenedores directos que envuelven las tablas (`subTab === 'pending'` y `subTab === 'cuts'`), ya que en motores Chromium dicho estilo desincroniza el eje Y de la ventana y condena al encabezado a flotar erráticamente a mitad de tabla.
+     - Se impone `overflow: 'visible'` en la tarjeta contenedora y redondeo directo de esquinas en las celdas extremas (`borderTopLeftRadius: '12px'` en el checkbox maestro y `borderTopRightRadius: '12px'` en la columna de acciones).
+     - Se consolida la fórmula de apilamiento vertical continuo (Perfil B) con holgura cero ($gap \approx 2\text{px}$):
+       * Línea 0 (Navbar): `top: 0px`, `height: 86px`.
+       * Línea 1 (Subtabs Bar): `top: 85px`, `height: 34px` $\rightarrow$ base `119px` (`zIndex: 45`).
+       * Línea 2 (Frosted Command Dock): `top: 122px`, `height: 45px` $\rightarrow$ base `167px` (`zIndex: 40`).
+       * Línea 3 (Thead Celdas TH): `top: 169px`, `height: 37px`, fondo sólido `#F8FAFC`, `zIndex: 30`, acoplado magnéticamente sin espacios vacíos.
