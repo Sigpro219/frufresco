@@ -925,30 +925,41 @@ export default function RncPrintPage() {
                         textAlign: 'center'
                     }}>
                         {/* 1. Quality Assurance / FruFresco */}
-                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '4px', padding: '6px 8px', backgroundColor: '#FAFAFA' }}>
-                            <div style={{ height: '50px', borderBottom: '1px solid #475569', marginBottom: '5px' }}></div>
-                            <div style={{ fontWeight: '900', fontSize: '6.8pt', color: '#0F172A' }}>
-                                Control de Calidad FruFresco
+                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '4px', padding: '6px 8px', backgroundColor: '#FAFAFA', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                            <div>
+                                <div style={{ height: '36px', borderBottom: '1px solid #475569', marginBottom: '5px' }}></div>
+                                <div style={{ fontWeight: '900', fontSize: '6.8pt', color: '#0F172A' }}>
+                                    Control de Calidad FruFresco
+                                </div>
+                                <div style={{ fontSize: '6pt', color: '#0D7A57', fontWeight: '800', marginTop: '2px' }}>
+                                    {rca.auditedBy ? `Auditor: ${rca.auditedBy}` : companyLegalName}
+                                </div>
                             </div>
-                            <div style={{ fontSize: '6pt', color: '#0D7A57', fontWeight: '800' }}>
-                                {rca.auditedBy ? `Auditor: ${rca.auditedBy}` : companyLegalName}
-                            </div>
-                            <div style={{ fontSize: '5.4pt', color: '#64748B' }}>
+                            <div style={{ fontSize: '5.4pt', color: '#64748B', marginTop: '8px' }}>
                                 {companyLegalName} • Operaciones
                             </div>
                         </div>
 
-                        {/* 2. Client Representative */}
-                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '4px', padding: '6px 8px', backgroundColor: '#FAFAFA' }}>
-                            <div style={{ height: '50px', borderBottom: '1px solid #475569', marginBottom: '5px' }}></div>
-                            <div style={{ fontWeight: '900', fontSize: '6.8pt', color: '#0F172A' }}>
-                                Recibido Conforme Cliente
+                        {/* 2. Jefe de Área FruFresco */}
+                        <div style={{ border: '1px solid #CBD5E1', borderRadius: '4px', padding: '6px 8px', backgroundColor: '#FAFAFA', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                            <div>
+                                <div style={{ height: '36px', borderBottom: '1px solid #475569', marginBottom: '5px' }}></div>
+                                <div style={{ fontWeight: '900', fontSize: '6.8pt', color: '#0F172A' }}>
+                                    Jefe de Área FruFresco
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '4px', textAlign: 'left', padding: '0 6px', fontSize: '5.8pt', color: '#334155' }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
+                                        <span style={{ fontWeight: '800', minWidth: '38px', color: '#475569' }}>Nombre:</span>
+                                        <span style={{ flex: 1, borderBottom: '1px dotted #64748B', height: '10px' }}></span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
+                                        <span style={{ fontWeight: '800', minWidth: '38px', color: '#475569' }}>Cargo:</span>
+                                        <span style={{ flex: 1, borderBottom: '1px dotted #64748B', height: '10px' }}></span>
+                                    </div>
+                                </div>
                             </div>
-                            <div style={{ fontSize: '6pt', color: '#1E293B', fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {clientName}
-                            </div>
-                            <div style={{ fontSize: '5.4pt', color: '#64748B' }}>
-                                Firma / Sello / C.C.
+                            <div style={{ fontSize: '5.4pt', color: '#64748B', marginTop: '6px' }}>
+                                {companyLegalName} • Aprobación de Jefatura
                             </div>
                         </div>
                     </div>
