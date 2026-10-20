@@ -69,7 +69,9 @@ import {
     Phone,
     Zap,
     Archive,
-    Copy
+    Copy,
+    Tag,
+    Scale
 } from 'lucide-react';
 import { downloadWorldOfficeExcel } from '@/lib/worldOfficeExport';
 
@@ -2356,14 +2358,14 @@ export default function BillingDashboard() {
             const { data: cutOrders, error: cutOrdersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total,
+                    id, sequence_id, created_at, delivery_date, type, total, logistics_data,
                     profiles (
-                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role
+                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
                         id, quantity, unit_price, nickname, unit,
                         products (
-                            sku, name, unit_of_measure, iva_rate
+                            accounting_id, sku, name, unit_of_measure, iva_rate
                         )
                     )
                 `)
@@ -2396,14 +2398,26 @@ export default function BillingDashboard() {
                 const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
                 const invNum = invoiceMap.get(order.id) || `REM-${order.sequence_id}`;
 
+                // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
+                const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb');
+                // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
+                const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+                const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
+
                 (order.order_items || []).forEach((item: any) => {
-                    const qty = Number(item.quantity) || 0;
-                    const unitPrice = Number(item.unit_price) || 0;
+                    const rawQty = Number(item.quantity) || 0;
+                    const rawUnitPrice = Number(item.unit_price) || 0;
+                    const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
+
+                    const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
+                    const unitPrice = (isClientInLb && isKg && rawUnitPrice > 0) ? rawUnitPrice / 2 : rawUnitPrice;
+                    const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
+
                     const lineTotal = qty * unitPrice;
                     const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
                     const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
-                    const prodCode = item.products?.sku || `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
-                    const uom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const prodCode = item.products?.accounting_id ?? item.products?.sku ?? `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
 
                     exportRows.push({
                         tipoDocumento: 'FV',
@@ -2428,7 +2442,7 @@ export default function BillingDashboard() {
                         tarifaIva: isIva ? 19 : 0,
                         valorIva: lineIva,
                         totalLinea: lineTotal,
-                        descuento: 0,
+                        descuento: discountDecimal,
                         notaEncabezado: clientName,
                         observaciones: `Pedido #${order.sequence_id} | Corte ${targetCut?.cut_slot || 'AM'} #${targetCut?.cut_number || 1}`
                     });
@@ -2482,14 +2496,14 @@ export default function BillingDashboard() {
             const { data: fullOrders, error: ordersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total,
+                    id, sequence_id, created_at, delivery_date, type, total, logistics_data,
                     profiles (
-                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role
+                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
                         id, quantity, unit_price, nickname, unit,
                         products (
-                            sku, name, unit_of_measure, iva_rate
+                            accounting_id, sku, name, unit_of_measure, iva_rate
                         )
                     )
                 `)
@@ -2510,14 +2524,26 @@ export default function BillingDashboard() {
                 const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
                 const invNum = `REM-${order.sequence_id}`;
 
+                // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
+                const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb');
+                // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
+                const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+                const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
+
                 (order.order_items || []).forEach((item: any) => {
-                    const qty = Number(item.quantity) || 0;
-                    const unitPrice = Number(item.unit_price) || 0;
+                    const rawQty = Number(item.quantity) || 0;
+                    const rawUnitPrice = Number(item.unit_price) || 0;
+                    const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
+
+                    const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
+                    const unitPrice = (isClientInLb && isKg && rawUnitPrice > 0) ? rawUnitPrice / 2 : rawUnitPrice;
+                    const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
+
                     const lineTotal = qty * unitPrice;
                     const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
                     const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
-                    const prodCode = item.products?.sku || `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
-                    const uom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const prodCode = item.products?.accounting_id ?? item.products?.sku ?? `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
 
                     exportRows.push({
                         tipoDocumento: 'FV',
@@ -2542,7 +2568,7 @@ export default function BillingDashboard() {
                         tarifaIva: isIva ? 19 : 0,
                         valorIva: lineIva,
                         totalLinea: lineTotal,
-                        descuento: 0,
+                        descuento: discountDecimal,
                         notaEncabezado: clientName,
                         observaciones: `Pedido #${order.sequence_id} (Pre-Corte)`
                     });
@@ -2582,14 +2608,14 @@ export default function BillingDashboard() {
             const { data: fullOrders, error: ordersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total,
+                    id, sequence_id, created_at, delivery_date, type, total, logistics_data,
                     profiles (
-                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role
+                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
                         id, quantity, unit_price, nickname, unit,
                         products (
-                            sku, name, unit_of_measure, iva_rate
+                            accounting_id, sku, name, unit_of_measure, iva_rate
                         )
                     )
                 `)
@@ -2619,14 +2645,26 @@ export default function BillingDashboard() {
                 const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
                 const invNum = previewMap.get(order.id) || `REM-${order.sequence_id}`;
 
+                // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
+                const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb');
+                // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
+                const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+                const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
+
                 (order.order_items || []).forEach((item: any) => {
-                    const qty = Number(item.quantity) || 0;
-                    const unitPrice = Number(item.unit_price) || 0;
+                    const rawQty = Number(item.quantity) || 0;
+                    const rawUnitPrice = Number(item.unit_price) || 0;
+                    const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
+
+                    const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
+                    const unitPrice = (isClientInLb && isKg && rawUnitPrice > 0) ? rawUnitPrice / 2 : rawUnitPrice;
+                    const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
+
                     const lineTotal = qty * unitPrice;
                     const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
                     const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
-                    const prodCode = item.products?.sku || `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
-                    const uom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const prodCode = item.products?.accounting_id ?? item.products?.sku ?? `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
 
                     exportRows.push({
                         tipoDocumento: isNcSlot ? 'NC' : 'FV',
@@ -2651,7 +2689,7 @@ export default function BillingDashboard() {
                         tarifaIva: isIva ? 19 : 0,
                         valorIva: lineIva,
                         totalLinea: lineTotal,
-                        descuento: 0,
+                        descuento: discountDecimal,
                         notaEncabezado: clientName,
                         observaciones: `Pedido #${order.sequence_id} | Pre-Corte ${previewSlot}`
                     });
@@ -5081,26 +5119,32 @@ export default function BillingDashboard() {
                                                                             <span>{docInfo.label}</span>
                                                                         </span>
 
-                                                                        {/* Badge 2: Condición y Plazo de Pago */}
-                                                                        <span
-                                                                            title={`Condición de Pago: ${paymentInfo.label} (${paymentInfo.sublabel})`}
-                                                                            style={{
-                                                                                backgroundColor: paymentInfo.bg,
-                                                                                color: paymentInfo.color,
-                                                                                border: `1px solid ${paymentInfo.border}`,
-                                                                                padding: '0.10rem 0.38rem',
-                                                                                borderRadius: '4px',
-                                                                                fontSize: '0.61rem',
-                                                                                fontWeight: '700',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                whiteSpace: 'nowrap'
-                                                                            }}
-                                                                        >
-                                                                            <PayIcon size={9} style={{ color: paymentInfo.color, flexShrink: 0 }} />
-                                                                            <span>{paymentInfo.label}</span>
-                                                                        </span>
+                                                                        {/* Badge 2: Descuento Comercial de Acuerdo (Escenario 253 - Si no hay descuento, no se muestra nada) */}
+                                                                        {(() => {
+                                                                            const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+                                                                            if (discountPct <= 0) return null;
+                                                                            return (
+                                                                                <span
+                                                                                    title={`Descuento Comercial de Acuerdo: ${discountPct}% aplicado durante la vigencia`}
+                                                                                    style={{
+                                                                                        backgroundColor: '#ECFDF5',
+                                                                                        color: '#065F46',
+                                                                                        border: '1px solid #A7F3D0',
+                                                                                        padding: '0.10rem 0.38rem',
+                                                                                        borderRadius: '4px',
+                                                                                        fontSize: '0.61rem',
+                                                                                        fontWeight: '800',
+                                                                                        display: 'inline-flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '3px',
+                                                                                        whiteSpace: 'nowrap'
+                                                                                    }}
+                                                                                >
+                                                                                    <Tag size={9} style={{ color: '#059669', flexShrink: 0 }} />
+                                                                                    <span>Dto. Acuerdo -{discountPct}%</span>
+                                                                                </span>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 );
                                                             })()}
