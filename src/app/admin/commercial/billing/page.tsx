@@ -74,6 +74,7 @@ import {
     Scale
 } from 'lucide-react';
 import { downloadWorldOfficeExcel } from '@/lib/worldOfficeExport';
+import { cleanHumanResolutionNotes, parseRcaFromRecord } from '@/lib/rcaTaxonomy';
 
 interface BillingCut {
     id: string;
@@ -927,6 +928,12 @@ export default function BillingDashboard() {
             return m ? m[1].trim() : (matchedReturn?.notes || 'Verificado por SAC');
         })();
 
+        // QC Auditor Justification / Detalle Técnico del Auditor
+        const rcaData = matchedPqr ? parseRcaFromRecord(matchedPqr) : null;
+        const rawPqrNotes = matchedPqr?.resolution_notes || '';
+        const qcJustification = cleanHumanResolutionNotes(rawPqrNotes) || matchedReturn?.notes || '';
+        const auditedBy = rcaData?.auditedBy || (matchedPqr as any)?.assigned_to || null;
+
         return {
             productName: item.products?.name || item.nickname || 'Producto',
             qtyClaimed,
@@ -944,6 +951,8 @@ export default function BillingDashboard() {
             photoUrl,
             sanitaryDisposition,
             qualityConcept,
+            qcJustification,
+            auditedBy,
             pqr: matchedPqr,
             ret: matchedReturn
         };
@@ -7020,6 +7029,38 @@ export default function BillingDashboard() {
                                                             <div style={{ color: '#64748B', fontSize: '0.64rem', marginBottom: '1px' }}>Concepto Técnico:</div>
                                                             <div style={{ fontWeight: '800', color: '#0F172A', backgroundColor: 'white', border: '1px solid #E2E8F0', padding: '4px 6px', borderRadius: '4px' }}>
                                                                 {selectedNoveltyDetail.qualityConcept}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.74rem', marginTop: '2px' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                                                <span style={{ color: '#64748B', fontSize: '0.64rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                                                    Justificación / Dictamen del Auditor QC:
+                                                                </span>
+                                                                {selectedNoveltyDetail.auditedBy && (
+                                                                    <span style={{ fontSize: '0.60rem', color: '#0D7A57', fontWeight: '800', backgroundColor: '#ECFDF5', padding: '1px 5px', borderRadius: '4px', border: '1px solid #A7F3D0' }}>
+                                                                        Auditor: {selectedNoveltyDetail.auditedBy}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{
+                                                                fontSize: '0.72rem',
+                                                                color: '#1E293B',
+                                                                backgroundColor: 'white',
+                                                                border: '1px solid #E2E8F0',
+                                                                borderLeft: '3px solid #0D7A57',
+                                                                padding: '6px 8px',
+                                                                borderRadius: '6px',
+                                                                lineHeight: '1.35',
+                                                                maxHeight: '100px',
+                                                                overflowY: 'auto'
+                                                            }}>
+                                                                {selectedNoveltyDetail.qcJustification ? (
+                                                                    <span>{selectedNoveltyDetail.qcJustification}</span>
+                                                                ) : (
+                                                                    <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>
+                                                                        Sin observaciones adicionales registradas por el auditor.
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <div style={{ fontSize: '0.74rem', marginTop: '2px' }}>
