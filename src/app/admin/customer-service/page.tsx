@@ -920,10 +920,10 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                     <th style={{ width: '19%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Imputabilidad & Cobro
                                     </th>
-                                    <th style={{ width: '10%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                    <th style={{ width: '13%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
                                         Estado
                                     </th>
-                                    <th style={{ width: '12%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
+                                    <th style={{ width: '9%', position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '10px 8px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
                                         Acciones
                                     </th>
                                 </tr>
@@ -1342,7 +1342,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                     </div>
                                                 </td>
 
-                                                {/* 8. Acciones (Botones Compactos 12%) */}
+                                                {/* 8. Acciones (Icon-Buttons de Precisión 26px) */}
                                                 <td style={{ padding: '8px 8px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', flexWrap: 'nowrap' }} onClick={e => e.stopPropagation()}>
                                                         {author.phoneParsed.isValid ? (
@@ -1367,7 +1367,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 title={`Enviar respuesta al cliente por WhatsApp (${author.phoneParsed.display})`}
                                                                 aria-label={`WhatsApp ${author.phoneParsed.display}`}
                                                             >
-                                                                <MessageCircle size={13} style={{ color: '#059669' }} />
+                                                                <MessageCircle size={14} style={{ color: '#059669' }} />
                                                             </a>
                                                         ) : (
                                                             <button
@@ -1389,7 +1389,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 title="Sin teléfono registrado (clic para ver aviso)"
                                                                 aria-label="WhatsApp no disponible"
                                                             >
-                                                                <MessageCircle size={13} />
+                                                                <MessageCircle size={14} />
                                                             </button>
                                                         )}
 
@@ -1401,34 +1401,30 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                         type="button"
                                                                         onClick={() => handleOpenAuditModal(pqr)}
                                                                         style={{
+                                                                            width: '26px',
                                                                             height: '26px',
-                                                                            padding: '0 7px',
                                                                             backgroundColor: isRowClosed ? '#F8FAFC' : '#0D7A57',
                                                                             color: isRowClosed ? '#0F172A' : 'white',
-                                                                            fontWeight: '700',
-                                                                            fontSize: '0.68rem',
                                                                             borderRadius: '6px',
                                                                             border: isRowClosed ? '1px solid #CBD5E1' : 'none',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center',
-                                                                            gap: '3px',
                                                                             cursor: 'pointer',
                                                                             boxShadow: isRowClosed ? 'none' : '0 1px 2px rgba(13, 122, 87, 0.2)',
                                                                             flexShrink: 0
                                                                         }}
                                                                         title={isRowClosed ? "Ver Auditoría Completa" : "Auditar y Resolver Caso"}
                                                                     >
-                                                                        <Eye size={12} />
-                                                                        <span>{isRowClosed ? 'Ver' : 'Auditar'}</span>
+                                                                        <Eye size={13} style={{ color: isRowClosed ? '#0F172A' : 'white' }} />
                                                                     </button>
 
                                                                     <Link
                                                                         href={`/admin/customer-service/rnc/${pqr.id}/print`}
                                                                         target="_blank"
                                                                         style={{
+                                                                            width: '26px',
                                                                             height: '26px',
-                                                                            padding: '0 6px',
                                                                             color: isRowClosed ? '#0D7A57' : '#475569',
                                                                             backgroundColor: isRowClosed ? '#F0FDF4' : 'white',
                                                                             border: isRowClosed ? '1px solid #86EFAC' : '1px solid #CBD5E1',
@@ -1436,16 +1432,12 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center',
-                                                                            gap: '2px',
-                                                                            fontSize: '0.67rem',
-                                                                            fontWeight: '700',
                                                                             textDecoration: 'none',
                                                                             flexShrink: 0
                                                                         }}
                                                                         title="Ver / Descargar Informe de Auditoría RNC (PDF)"
                                                                     >
-                                                                        <FileText size={12} />
-                                                                        <span>PDF</span>
+                                                                        <FileText size={13} />
                                                                     </Link>
                                                                 </>
                                                             );
