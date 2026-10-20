@@ -4246,7 +4246,7 @@ export default function BillingDashboard() {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                                    <div style={{ width: '100%', maxWidth: '100%', overflow: 'visible' }}>
                                     <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
@@ -4667,13 +4667,13 @@ export default function BillingDashboard() {
 
                         {/* SUBTAB: PEDIDOS POR FACTURAR */}
                         {subTab === 'pending' && (
-                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '100%', overflowX: 'auto', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '100%', overflow: 'visible', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
                                 <div style={{ overflow: 'visible' }}>
                                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
                                         <thead>
                                             <tr style={{ backgroundColor: '#F8FAFC' }}>
                                                 {/* 0. Checkbox Maestro */}
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center' }}>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center', borderTopLeftRadius: '12px' }}>
                                                     <input
                                                         type="checkbox"
                                                         checked={filteredPendingOrders.length > 0 && filteredPendingOrders.every(o => selectedOrderIds.includes(o.id))}
@@ -4788,7 +4788,7 @@ export default function BillingDashboard() {
                                                 </th>
 
                                                 {/* 9. Acciones */}
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '80px', textAlign: 'center', fontSize: '0.60rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
+                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '80px', textAlign: 'center', fontSize: '0.60rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', borderTopRightRadius: '12px' }}>Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
