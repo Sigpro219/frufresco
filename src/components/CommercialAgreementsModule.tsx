@@ -490,6 +490,11 @@ export default function CommercialAgreementsModule() {
     const [quickProductCategory, setQuickProductCategory] = useState('FR');
     const [quickProductCostBasis, setQuickProductCostBasis] = useState('');
     const [quickProductIvaRate, setQuickProductIvaRate] = useState(0);
+    const [quickProductNextAccId, setQuickProductNextAccId] = useState<number | null>(null);
+    const [quickProductInventoryGroup, setQuickProductInventoryGroup] = useState('INVENTARIO DE VERDURAS');
+    const [quickProductBuyingTeam, setQuickProductBuyingTeam] = useState('ALISTAMIENTO VERDURAS');
+    const [quickProductProcurementMethod, setQuickProductProcurementMethod] = useState('COMPRAS MENORES');
+    const [isLoadingNextAccId, setIsLoadingNextAccId] = useState(false);
     const [isCreatingQuickProduct, setIsCreatingQuickProduct] = useState(false);
 
     // Edit Modal State
@@ -2488,7 +2493,7 @@ export default function CommercialAgreementsModule() {
         showToast('Fila descartada de la lista', 'info');
     };
 
-    const handleOpenQuickProductModal = (rowIdx: number) => {
+    const handleOpenQuickProductModal = async (rowIdx: number) => {
         if (!excelPreviewData) return;
         const item = excelPreviewData.items[rowIdx];
         setQuickProductRowIdx(rowIdx);
@@ -2497,20 +2502,58 @@ export default function CommercialAgreementsModule() {
         setQuickProductCostBasis(item.cost_basis ? String(item.cost_basis) : '');
         setQuickProductIvaRate(0);
 
-        const n = (item.client_product_name || '').toLowerCase();
+        const n = (item.client_product_name || item.product_name || '').toLowerCase();
+        let cat = 'FR';
+        let invGroup = 'INVENTARIO DE FRUTAS Y OTROS';
+        let buyTeam = 'ALISTAMIENTO FRUTAS DE ALTA DEMANDA';
+        let procMethod = 'COMPRAS MENORES';
+
         if (/papa|cebolla|tomate|lechuga|zanahoria|brocoli|apio|espinaca|cilantro|perejil|pimenton|pepino|aguacate/i.test(n)) {
-            setQuickProductCategory('VE');
+            cat = 'VE';
+            invGroup = 'INVENTARIO DE VERDURAS';
+            buyTeam = 'ALISTAMIENTO VERDURAS';
+            procMethod = 'COMPRAS MENORES';
         } else if (/queso|leche|crema|mantequilla|yogurt|cuajada/i.test(n)) {
-            setQuickProductCategory('LA');
+            cat = 'LA';
+            invGroup = 'INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS';
+            buyTeam = 'ALISTAMIENTO LACTEOS Y REFRIGERADOS';
+            procMethod = 'COMPRAS GENERALES';
         } else if (/arroz|aceite|azucar|harina|sal|frijol|lenteja|garbanzo/i.test(n)) {
-            setQuickProductCategory('AB');
+            cat = 'AB';
+            invGroup = 'INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS';
+            buyTeam = 'ALISTAMIENTO ABARROTES Y FRUTOS SECOS';
+            procMethod = 'COMPRAS GENERALES';
         } else if (/pollo|carne|res|cerdo|pescado|lomo|pechuga/i.test(n)) {
-            setQuickProductCategory('CA');
-        } else {
-            setQuickProductCategory('FR');
+            cat = 'CA';
+            invGroup = 'INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS';
+            buyTeam = 'ALISTAMIENTO PROCESADOS';
+            procMethod = 'COMPRAS GENERALES';
         }
 
+        setQuickProductCategory(cat);
+        setQuickProductInventoryGroup(invGroup);
+        setQuickProductBuyingTeam(buyTeam);
+        setQuickProductProcurementMethod(procMethod);
+
+        setIsLoadingNextAccId(true);
         setIsQuickProductModalOpen(true);
+
+        try {
+            const { data: maxIdData } = await supabase
+                .from('products')
+                .select('accounting_id')
+                .not('accounting_id', 'is', null)
+                .order('accounting_id', { ascending: false })
+                .limit(1);
+
+            const nextAccId = maxIdData && maxIdData[0]?.accounting_id ? Number(maxIdData[0].accounting_id) + 1 : 1701;
+            setQuickProductNextAccId(nextAccId);
+        } catch (e) {
+            console.warn('Error fetching next accounting_id:', e);
+            setQuickProductNextAccId(1701);
+        } finally {
+            setIsLoadingNextAccId(false);
+        }
     };
 
     const handleSaveQuickProduct = async () => {
@@ -2525,11 +2568,12 @@ export default function CommercialAgreementsModule() {
             const { data: maxIdData } = await supabase
                 .from('products')
                 .select('accounting_id')
+                .not('accounting_id', 'is', null)
                 .order('accounting_id', { ascending: false })
                 .limit(1);
 
-            const nextAccId = maxIdData && maxIdData[0]?.accounting_id ? Number(maxIdData[0].accounting_id) + 1 : 9000;
-            const cleanSku = `${quickProductCategory}-${String(nextAccId).padStart(5, '0')}`;
+            const nextAccId = maxIdData && maxIdData[0]?.accounting_id ? Number(maxIdData[0].accounting_id) + 1 : (quickProductNextAccId || 1701);
+            const cleanSku = quickProductCategory + '-' + String(nextAccId).padStart(5, '0');
 
             const { data: newProd, error: createErr } = await supabase
                 .from('products')
@@ -2543,7 +2587,10 @@ export default function CommercialAgreementsModule() {
                     iva_rate: quickProductIvaRate,
                     is_active: true,
                     show_on_web: true,
-                    weight_kg: quickProductUnit.toLowerCase() === 'kg' ? 1 : 0.5
+                    weight_kg: quickProductUnit.toLowerCase() === 'kg' ? 1 : 0.5,
+                    inventory_group: quickProductInventoryGroup || 'INVENTARIO DE VERDURAS',
+                    buying_team: quickProductBuyingTeam || 'ALISTAMIENTO VERDURAS',
+                    procurement_method: quickProductProcurementMethod || 'COMPRAS MENORES'
                 })
                 .select()
                 .single();
@@ -2566,7 +2613,7 @@ export default function CommercialAgreementsModule() {
             }
 
             setIsQuickProductModalOpen(false);
-            showToast(`Producto "${newProd.name}" creado y vinculado exitosamente`, 'success');
+            showToast('Producto "' + newProd.name + '" (ID #' + newProd.accounting_id + ') creado y vinculado exitosamente', 'success');
         } catch (err: any) {
             console.error('Error creating quick product:', err);
             showToast('Error al crear producto: ' + err.message, 'error');
@@ -7758,7 +7805,8 @@ export default function CommercialAgreementsModule() {
                                                     </thead>
                                                     <tbody>
                                                         {excelPreviewData.items
-                                                            .filter(item => {
+                                                            .map((item, originalIndex) => ({ item, originalIndex }))
+                                                            .filter(({ item }) => {
                                                                 if (excelPreviewFilter === 'matched' && !item.matched_product) return false;
                                                                 if (excelPreviewFilter === 'unmatched' && item.matched_product) return false;
                                                                 if (excelPreviewFilter === 'inactive' && (!item.matched_product || !item.is_inactive)) return false;
@@ -7776,9 +7824,9 @@ export default function CommercialAgreementsModule() {
                                                                     excelPreviewSearch
                                                                 );
                                                             })
-                                                            .map((item, rowIdx) => {
+                                                            .map(({ item, originalIndex }, displayIdx) => {
                                                                 const isMatched = Boolean(item.matched_product);
-                                                                const isSearchingInCell = activeCellSearchRowIdx === rowIdx;
+                                                                const isSearchingInCell = activeCellSearchRowIdx === originalIndex;
                                                                 const currentQuery = isSearchingInCell ? activeCellSearchQuery : (item.client_product_name || item.product_name);
                                                                 const searchCandidates = catalogProducts
                                                                     .filter(p => {
@@ -7798,17 +7846,17 @@ export default function CommercialAgreementsModule() {
 
                                                                 return (
                                                                     <tr 
-                                                                        key={rowIdx} 
+                                                                        key={originalIndex} 
                                                                         style={{ 
                                                                             borderBottom: '1px solid #F1F5F9', 
-                                                                            backgroundColor: isSearchingInCell ? '#FFFFFF' : (!isMatched ? '#FEF3C7' : item.is_inactive ? '#FFFBEB' : rowIdx % 2 === 0 ? 'white' : '#FAFAFA'),
+                                                                            backgroundColor: isSearchingInCell ? '#FFFFFF' : (!isMatched ? '#FEF3C7' : item.is_inactive ? '#FFFBEB' : displayIdx % 2 === 0 ? 'white' : '#FAFAFA'),
                                                                             borderLeft: !isMatched ? '4px solid #F59E0B' : '4px solid transparent',
                                                                             transition: 'all 0.15s ease'
                                                                         }}
                                                                     >
                                                                         {/* Row index & accounting ID */}
                                                                         <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: '#64748B', fontSize: '0.74rem' }}>
-                                                                            {rowIdx + 1}
+                                                                            {originalIndex + 1}
                                                                         </td>
 
                                                                         {/* Client product name in document */}
@@ -7853,7 +7901,7 @@ export default function CommercialAgreementsModule() {
                                                                                     <button
                                                                                         type="button"
                                                                                         onClick={() => {
-                                                                                            setActiveCellSearchRowIdx(rowIdx);
+                                                                                            setActiveCellSearchRowIdx(originalIndex);
                                                                                             setActiveCellSearchQuery('');
                                                                                             setFocusedCellOptionIdx(0);
                                                                                         }}
@@ -7881,7 +7929,7 @@ export default function CommercialAgreementsModule() {
                                                                                             </span>
                                                                                             <button
                                                                                                 type="button"
-                                                                                                onClick={() => handleOpenQuickProductModal(rowIdx)}
+                                                                                                onClick={() => handleOpenQuickProductModal(originalIndex)}
                                                                                                 style={{
                                                                                                     padding: '2px 7px',
                                                                                                     backgroundColor: '#0D7A57',
@@ -7909,12 +7957,12 @@ export default function CommercialAgreementsModule() {
                                                                                             placeholder="Escribe nombre o #ID para buscar..."
                                                                                             value={isSearchingInCell ? activeCellSearchQuery : ''}
                                                                                             onFocus={() => {
-                                                                                                setActiveCellSearchRowIdx(rowIdx);
+                                                                                                setActiveCellSearchRowIdx(originalIndex);
                                                                                                 setActiveCellSearchQuery('');
                                                                                                 setFocusedCellOptionIdx(0);
                                                                                             }}
                                                                                             onChange={(e) => {
-                                                                                                setActiveCellSearchRowIdx(rowIdx);
+                                                                                                setActiveCellSearchRowIdx(originalIndex);
                                                                                                 setActiveCellSearchQuery(e.target.value);
                                                                                                 setFocusedCellOptionIdx(0);
                                                                                             }}
@@ -7928,7 +7976,7 @@ export default function CommercialAgreementsModule() {
                                                                                                 } else if (e.key === 'Enter') {
                                                                                                     e.preventDefault();
                                                                                                     if (searchCandidates[focusedCellOptionIdx]) {
-                                                                                                        handleAssignProductToRow(rowIdx, searchCandidates[focusedCellOptionIdx]);
+                                                                                                        handleAssignProductToRow(originalIndex, searchCandidates[focusedCellOptionIdx]);
                                                                                                     }
                                                                                                 } else if (e.key === 'Escape') {
                                                                                                     setActiveCellSearchRowIdx(null);
@@ -7970,7 +8018,7 @@ export default function CommercialAgreementsModule() {
                                                                                                             key={cand.id}
                                                                                                             onMouseDown={(e) => {
                                                                                                                 e.preventDefault();
-                                                                                                                handleAssignProductToRow(rowIdx, cand);
+                                                                                                                handleAssignProductToRow(originalIndex, cand);
                                                                                                             }}
                                                                                                             onMouseMove={() => {
                                                                                                                 if (focusedCellOptionIdx !== candIdx) {
@@ -8041,7 +8089,7 @@ export default function CommercialAgreementsModule() {
                                                                         <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                                                                             <button
                                                                                 type="button"
-                                                                                onClick={() => handleDiscardRow(rowIdx)}
+                                                                                onClick={() => handleDiscardRow(originalIndex)}
                                                                                 title="Descartar fila (no comercial)"
                                                                                 style={{
                                                                                     backgroundColor: 'transparent',
@@ -10288,6 +10336,32 @@ export default function CommercialAgreementsModule() {
                         </div>
 
                         <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Consecutivo Contable ERP Badge */}
+                            <div style={{ 
+                                padding: '10px 14px', 
+                                borderRadius: '10px', 
+                                backgroundColor: '#ECFDF5', 
+                                border: '1.5px solid #A7F3D0', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'space-between' 
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: '0.78rem', color: '#065F46', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>ID Contable Consecutivo:</span>
+                                        <span style={{ fontSize: '0.92rem', color: '#047857', fontFamily: 'monospace', fontWeight: '900' }}>
+                                            {isLoadingNextAccId ? '...' : ('#' + (quickProductNextAccId || 1701))}
+                                        </span>
+                                    </div>
+                                    <div style={{ fontSize: '0.68rem', color: '#047857', marginTop: '1px' }}>
+                                        Consecutivo oficial sin saltos para World Office & Facturación Electrónica
+                                    </div>
+                                </div>
+                                <span style={{ fontSize: '0.72rem', backgroundColor: '#D1FAE5', color: '#065F46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>
+                                    SKU: {quickProductCategory}-{String(quickProductNextAccId || 1701).padStart(5, '0')}
+                                </span>
+                            </div>
+
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
                                     Nombre Oficial del Producto *
@@ -10343,7 +10417,26 @@ export default function CommercialAgreementsModule() {
                                     </label>
                                     <select
                                         value={quickProductCategory}
-                                        onChange={(e) => setQuickProductCategory(e.target.value)}
+                                        onChange={(e) => {
+                                            const c = e.target.value;
+                                            setQuickProductCategory(c);
+                                            if (c === 'VE') {
+                                                setQuickProductInventoryGroup('INVENTARIO DE VERDURAS');
+                                                setQuickProductBuyingTeam('ALISTAMIENTO VERDURAS');
+                                            } else if (c === 'FR') {
+                                                setQuickProductInventoryGroup('INVENTARIO DE FRUTAS Y OTROS');
+                                                setQuickProductBuyingTeam('ALISTAMIENTO FRUTAS DE ALTA DEMANDA');
+                                            } else if (c === 'LA') {
+                                                setQuickProductInventoryGroup('INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS');
+                                                setQuickProductBuyingTeam('ALISTAMIENTO LACTEOS Y REFRIGERADOS');
+                                            } else if (c === 'AB') {
+                                                setQuickProductInventoryGroup('INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS');
+                                                setQuickProductBuyingTeam('ALISTAMIENTO ABARROTES Y FRUTOS SECOS');
+                                            } else {
+                                                setQuickProductInventoryGroup('INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS');
+                                                setQuickProductBuyingTeam('ALISTAMIENTO PROCESADOS');
+                                            }
+                                        }}
                                         style={{
                                             width: '100%',
                                             padding: '8px 10px',
@@ -10354,8 +10447,8 @@ export default function CommercialAgreementsModule() {
                                             outline: 'none'
                                         }}
                                     >
-                                        <option value="FR">Frutas (FR)</option>
                                         <option value="VE">Verduras (VE)</option>
+                                        <option value="FR">Frutas (FR)</option>
                                         <option value="LA">Lácteos (LA)</option>
                                         <option value="AB">Abarrotes (AB)</option>
                                         <option value="CA">Carnes (CA)</option>
@@ -10405,6 +10498,66 @@ export default function CommercialAgreementsModule() {
                                         <option value={0}>0% (Exento / Agropecuario)</option>
                                         <option value={5}>5% (Bienes Especiales)</option>
                                         <option value={19}>19% (Tarifa General)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Campos Operativos de Bodega & WMS (Nace 100% Completo) */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                                        Grupo de Inventario (WMS / Bodega) *
+                                    </label>
+                                    <select
+                                        value={quickProductInventoryGroup}
+                                        onChange={(e) => setQuickProductInventoryGroup(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #CBD5E1',
+                                            fontSize: '0.80rem',
+                                            backgroundColor: 'white',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <option value="INVENTARIO DE VERDURAS">INVENTARIO DE VERDURAS</option>
+                                        <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
+                                        <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, LACTEOS Y OTROS</option>
+                                        <option value="INVENTARIO DE FRESAS Y MORAS">INVENTARIO DE FRESAS Y MORAS</option>
+                                        <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO Y TUBERCULOS</option>
+                                        <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                                        Célula de Alistamiento / Picking *
+                                    </label>
+                                    <select
+                                        value={quickProductBuyingTeam}
+                                        onChange={(e) => setQuickProductBuyingTeam(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #CBD5E1',
+                                            fontSize: '0.80rem',
+                                            backgroundColor: 'white',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <option value="ALISTAMIENTO VERDURAS">ALISTAMIENTO VERDURAS</option>
+                                        <option value="ALISTAMIENTO FRUTAS DE ALTA DEMANDA">ALISTAMIENTO FRUTAS ALTA DEMANDA</option>
+                                        <option value="ALISTAMIENTO FRUTAS DE BAJA DEMANDA">ALISTAMIENTO FRUTAS BAJA DEMANDA</option>
+                                        <option value="ALISTAMIENTO FRESAS Y MORAS">ALISTAMIENTO FRESAS Y MORAS</option>
+                                        <option value="ALISTAMIENTO AGUACATES">ALISTAMIENTO AGUACATES</option>
+                                        <option value="ALISTAMIENTO HORTALIZAS">ALISTAMIENTO HORTALIZAS</option>
+                                        <option value="ALISTAMIENTO PAPAS Y TUBERCULOS">ALISTAMIENTO PAPAS Y TUBERCULOS</option>
+                                        <option value="ALISTAMIENTO PLATANOS">ALISTAMIENTO PLATANOS</option>
+                                        <option value="ALISTAMIENTO ABARROTES Y FRUTOS SECOS">ALISTAMIENTO ABARROTES</option>
+                                        <option value="ALISTAMIENTO LACTEOS Y REFRIGERADOS">ALISTAMIENTO LACTEOS Y REFRIGERADOS</option>
+                                        <option value="ALISTAMIENTO PROCESADOS">ALISTAMIENTO PROCESADOS</option>
                                     </select>
                                 </div>
                             </div>

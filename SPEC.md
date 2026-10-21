@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.231 (Protocolo Omnicanal de Ingesta de Pedidos por Correo con Blindaje Poka-Yoke Anti-Duplicación de Firmas Institucionales — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.232 (Conciliación Invariante en Mesa de Acuerdos Comerciales, Consecutivo Contable accounting_id + 1 y Creación Maestra de SKU In Situ — 76/76 Pantallas Certificadas)
 > **Fecha:** 21 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 260 Escenarios BDD Ininterrumpidos (1..260)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 261 Escenarios BDD Ininterrumpidos (1..261)
 
 ---
 
@@ -23,12 +23,12 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254 (§7.1 - §7.18), 261 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **259 Escenarios Canónicos (1..259)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **261 Escenarios Canónicos (1..261)** | **🟢 100%** |
 
 ---
 
@@ -11216,3 +11216,35 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
        * Si las capturas contienen productos diferentes (ej. Parte 1: frutas, Parte 2: verduras), el sistema mantiene el comportamiento de concatenación apilada (`flatMap`), garantizando que pedidos extensos se consoliden íntegros en una sola orden.
   4. **Soporte Pleno de Pedidos Híbridos (Adjunto Base + Adiciones en Texto):**
      - Si el cliente adjunta un pedido formal (PDF, Excel o foto de orden) y añade notas textuales en el cuerpo del correo (ej. *"Adicionar 5 kg de limón y 2 kg de zanahoria"*), el sistema fusiona las adiciones del texto sin clonar la base del documento.
+
+---
+
+### Escenario 261: Conciliación Invariante en Mesa de Acuerdos Comerciales (Índice Absoluto `originalIndex`), Consecutivo Contable `accounting_id + 1` y Creación Maestra de SKU In Situ con Atributos Operacionales (SDD v1.9.232)
+- **Given** el módulo de Acuerdos Comerciales Institucionales (`src/components/CommercialAgreementsModule.tsx`), el configurador secuencial de acuerdos (`isCreateModalOpen`), y la Mesa de Reconciliación & Pre-Validación del Paso 3 (`excelPreviewData`) donde se concilian $N$ productos cargados mediante archivo Excel/ODS,
+- **When** el usuario interactúa con la tabla de pre-validación bajo cualquier filtro activo (pestañas `Sin Coincidencia`, `Reconocidos`, `Inactivos en Catálogo` o búsqueda libre por texto en la omnibox), ejecutando cualquiera de las siguientes operaciones sobre una fila:
+  1. *Descartar / Eliminar fila del acuerdo:* Clic en el botón de papelera (`handleDiscardRow`).
+  2. *Búsqueda predictiva en celda:* Clic en `[Cambiar]` o escritura de texto para asociar un ítem del catálogo maestro (`handleAssignProductToRow`).
+  3. *Creación de nuevo SKU in situ:* Clic en `[+ Crear en Catálogo]` (`handleOpenQuickProductModal`) y posterior confirmación en el formulario maestro (`handleSaveQuickProduct`).
+- **Then** el sistema garantiza rigurosamente cuatro (4) reglas de invarianza operativa y consistencia de datos:
+  1. **Invarianza de Índice Absoluto (`originalIndex`):**
+     - La tabla proyecta los datos vinculando previamente cada fila a su índice absoluto dentro del arreglo maestro:
+       `excelPreviewData.items.map((item, originalIndex) => ({ item, originalIndex }))`
+     - Los filtros de visualización (`.filter(...)`) operan exclusivamente como proyección óptica. Todas las mutaciones de estado (`handleDiscardRow`, `handleAssignProductToRow`, `handleOpenQuickProductModal`, `setActiveCellSearchRowIdx`) reciben y operan sobre `originalIndex`.
+     - *Poka-Yoke Anti-Desfase:* Descartar una fila visible bajo el filtro `Sin Coincidencia (1)` elimina quirúrgicamente esa fila específica en `excelPreviewData.items`, reduciendo el contador de ítems no emparejados a cero (`unmatchedCount = 0`) y desbloqueando de inmediato el botón de activación del acuerdo sin afectar productos previos del listado.
+  2. **Consecutivo Contable Estricto (`accounting_id + 1`):**
+     - Al abrir el modal de creación in situ, el sistema consulta el consecutivo contable maestro en Supabase:
+       `supabase.from('products').select('accounting_id').not('accounting_id', 'is', null).order('accounting_id', { ascending: false }).limit(1)`
+     - Asigna de forma determinista el valor estrictamente consecutivo (`Number(maxId) + 1`, ej. $1700 + 1 = 1701$), proyectándolo en la cabecera del modal como un badge de alta visibilidad:
+       `ID Contable Consecutivo: #1701 (Asignado automáticamente para World Office y Facturación)`
+     - El identificador `accounting_id` se preserva como campo protegido inmutable, asegurando la concordancia fiscal absoluta con el ERP contable de la compañía.
+  3. **Ficha Maestra Completa desde el Día 1 (Atributos de Bodega y Compras):**
+     - Para evitar productos incompletos o huérfanos en la operación física de planta, el modal in situ no se limita a campos comerciales básicos, sino que captura y estructura la totalidad de los atributos requeridos por Operaciones y WMS:
+       * *Grupo de Inventario (`inventory_group`):* Preseleccionado inteligentemente por categoría (`INVENTARIO DE VERDURAS`, `INVENTARIO DE FRUTAS Y OTROS`, `INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS`, etc.).
+       * *Equipo de Alistamiento (`buying_team`):* Preseleccionado según célula de picking (`ALISTAMIENTO VERDURAS`, `ALISTAMIENTO FRUTAS DE ALTA DEMANDA`, etc.).
+       * *Método de Abastecimiento (`procurement_method`):* Parametrizado como `COMPRAS MENORES` o `COMPRAS GENERALES`.
+       * *Costo Base Estimado (`cost_basis`):* Persistido en la tabla `products` y upserted en `commercial_cost_matrix` para retroalimentar el cálculo de márgenes y costeo de inventarios.
+       * *Tarifa IVA (`iva_rate`):* Parametrizada como 0% (Agropecuario/Exento), 5% o 19%.
+       * *Unidad de Medida y Factor de Masa (`unit_of_measure`, `weight_kg`):* Asignado con factor estándar (1.0 kg para Kg, 0.5 kg para Lb/Paquete).
+  4. **Vinculación Inmediata In Situ sin Pérdida de Contexto:**
+     - Al presionar `[Crear y Asignar a Fila]`, el nuevo producto se inserta atómicamente en la base de datos, se incorpora al estado reactivo local de productos del catálogo (`catalogProducts`), y se asocia de forma instantánea a la fila `originalIndex` del acuerdo en curso.
+     - La fila pasa de inmediato a estado verde (`Match`), el promedio de margen se recalcula en tiempo real, el botón de activación se torna verde esmeralda y el usuario finaliza la carga del acuerdo en menos de 2 minutos sin recargas de página, sin navegación forzada a otras pantallas y sin riesgo de perder el archivo analizado en memoria.
