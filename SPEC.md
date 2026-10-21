@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.229 (Arquitectura 2 Niveles, Command Dock Unificado, Poda SpaceX y Thead Sticky Magnético a 169px en Facturación B2B — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.230 (Resolución Dinámica de Ítem y Monto Real en Radicación ERP World Office de Notas Crédito — 76/76 Pantallas Certificadas)
 > **Fecha:** 20 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -9084,7 +9084,7 @@ Si el sistema utiliza un badge pasivo o genérico, el facturador ignora la tarea
    - Fondo gradiente reflectivo púrpura (`#FAF5FF` a `#F3E8FF`), borde de 2px púrpura vibrante (`#8B5CF6`) y resplandor neón pulsante (`@keyframes woPulse`).
    - Radar Pulse neón parpadeante (`animate-ping`) en la esquina del badge.
    - Tag imperativo: `⚡ WORLD OFFICE: EMITIR NC`.
-   - Subtexto con el monto exacto en pesos a deducir en rojo (`-$47.250 COP`) y los kilogramos afectados.
+   - Subtexto con el monto dinámico real en pesos a deducir en rojo (`-$XX.XXX COP`) y los kilogramos afectados.
 2. **Botón Táctico de 1 Clic (`📋 Ficha WO`):**
    - Copia al portapapeles en 1 clic la estructura estandarizada requerida por World Office:
      * NIT del Cliente
@@ -11138,17 +11138,18 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 
 ---
 
-### Escenario 257: Alerta de Acción Contable ERP para Notas de Crédito de World Office (Camino 3) en Facturación (/admin/commercial/billing) (SDD v1.9.227)
+### Escenario 257: Alerta de Acción Contable ERP para Notas de Crédito de World Office (Camino 3) en Facturación (/admin/commercial/billing) (SDD v1.9.230)
 - **Given** la consola de Facturación Masiva (/admin/commercial/billing), los pedidos institucionales con reclamaciones de calidad resueltas por Servicio al Cliente (SAC) mediante el Camino 3 (Opción 3: Nota de Crédito Comercial / Saldo a Favor) y la integración contable contra el ERP World Office,
 - **When** el analista de facturación o auxiliar contable inspecciona la tabla de pedidos listos para corte diario (5:00 PM),
 - **Then** el sistema aplica el protocolo visual y operativo de blindaje contable de tres niveles:
   1. **Badge Neón Eléctrico de Alta Visibilidad Contable (World Office Trigger):**
      - Si la Nota de Crédito autorizada por SAC aún no ha sido radicada formalmente en el ERP World Office, la columna de 'Novedades (QA)' prohíbe el badge azul pasivo tradicional y proyecta un badge púrpura neón eléctrico brillante ('⚡ WORLD OFFICE: EMITIR NC') con efecto de pulso y radar neón ('animate-ping').
-     - Proyecta en la misma celda el valor monetario a deducir en rojo ('-$XX.XXX COP') y el pesaje físico afectado en kilogramos.
+     - Proyecta en la misma celda el valor monetario dinámico real a deducir en rojo ('-$XX.XXX COP') y el pesaje físico afectado en kilogramos.
   2. **Botón Táctico de 1 Clic (Copiar Ficha Contable para World Office):**
-     - Provee un botón '📋 Ficha WO' que copia al portapapeles en un solo clic la ficha técnica estructurada lista para pegar en el formulario de Notas Crédito de World Office (NIT, Razón Social, Pedido, Factura Ref, Consecutivo Sugerido, Monto en pesos y Folio de soporte SAC/RNC).
+     - Provee un botón '📋 Ficha WO' que copia al portapapeles en un solo clic la ficha técnica estructurada lista para pegar en el formulario de Notas Crédito de World Office (NIT, Razón Social, Pedido, Factura Ref, Consecutivo Sugerido, Monto exacto calculado en pesos, Ítem afectado resuelto dinámicamente y Folio de soporte SAC/RNC).
   3. **Poka-Yoke de Asentamiento y Cierre de Ciclo en ERP:**
-     - Provee el botón '⚡ Radicar' que despliega un modal centrado con resumen del cliente, monto e imputación.
+     - Provee el botón '⚡ Radicar' que despliega un modal centrado con resumen del cliente, monto dinámico e imputación.
+     - **Resolución Dinámica de Ítem y Monto Real (Zero-Hardcoding):** Erradica textos genéricos (e.g. 'Producto') o valores monetarios fijos. El ítem se resuelve mediante join relacional a 'billing_returns.product_id -> products (id, name, sku)' con fallback heurístico regex sobre motivos y notas PQR (e.g. '2 Kg de Uchuvas desgranadas'); el valor de la nota crédito se calcula dinámicamente desde 'customer_service_pqrs.resolution_notes' o metadata RCA sin valores fijos residuales.
      - Permite digitar o confirmar el número de comprobante/folio oficial asignado por World Office (ej. 'NC-WO-88492') y las observaciones contables.
      - Al confirmar, asienta de forma atómica el tag '[WO_SYNCED: {"folio":"...","settledAt":"...","settledBy":"...","notes":"..."}]' en 'billing_returns' y 'customer_service_pqrs', y transforma de inmediato el badge en la tabla a verde esmeralda calmo ('✓ NC Radicada WO' con su folio y monto), apagando la alerta y certificando la sincronización contable.
 

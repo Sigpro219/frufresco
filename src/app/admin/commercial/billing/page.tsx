@@ -604,6 +604,42 @@ export function getOrderGraceInfo(order: any, graceMinutes: number = 120, cutClo
     };
 }
 
+export function resolveReturnProductAndAmount(ret: any, pqr: any) {
+    let prodName = ret?.products?.name;
+    if (!prodName && ret?.reason) {
+        const match = ret.reason.match(/Reclamo en\s+([^–\-\•\n\r]+)/i);
+        if (match) prodName = match[1].trim();
+    }
+    if (!prodName && pqr?.subject) {
+        const match = pqr.subject.match(/Reclamo en\s+([^–\-\•\n\r]+)/i);
+        if (match) prodName = match[1].trim();
+    }
+    if (!prodName && pqr?.description) {
+        const match = pqr.description.match(/•\s*Producto:\s*([^\n\r]+)/i);
+        if (match) prodName = match[1].trim();
+    }
+    if (!prodName) {
+        prodName = 'Producto agrícola';
+    }
+
+    let ncAmount = 0;
+    if (pqr?.resolution_notes) {
+        const valMatch = pqr.resolution_notes.match(/Valor Acreditado a Favor del Cliente:\s*\$([\d.]+)/i) ||
+                         pqr.resolution_notes.match(/Nuevo Total Final:.*\(-\$([\d.]+)\)/i) ||
+                         pqr.resolution_notes.match(/Total Final:.*\(-\$([\d.]+)\)/i);
+        if (valMatch) ncAmount = parseInt(valMatch[1].replace(/\./g, ''), 10);
+    }
+    if (!ncAmount) {
+        const rcaMeta = parseRcaFromRecord(pqr || {});
+        if ((rcaMeta as any).deductionAmount) ncAmount = Number((rcaMeta as any).deductionAmount);
+    }
+    if (!ncAmount && (ret as any)?.calculated_amount) {
+        ncAmount = Number((ret as any).calculated_amount);
+    }
+
+    return { prodName, ncAmount };
+}
+
 export default function BillingDashboard() {
     const [cuts, setCuts] = useState<BillingCut[]>([]);
     const [returns, setReturns] = useState<BillingReturn[]>([]);
@@ -1325,7 +1361,8 @@ export default function BillingDashboard() {
                         count
                     ),
                     billing_returns (
-                        id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number
+                        id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number, product_id,
+                        products:product_id ( id, name, sku )
                     ),
                     customer_service_pqrs (
                         id, type, category, status, priority, subject, description, created_at, resolved_at, resolution_notes
@@ -1385,10 +1422,11 @@ export default function BillingDashboard() {
                             count
                         ),
                         billing_returns (
-                            id, quantity_returned, status, reason
+                            id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number, product_id,
+                            products:product_id ( id, name, sku )
                         ),
                         customer_service_pqrs (
-                            id, type, category, status, priority, subject, description, created_at, resolved_at
+                            id, type, category, status, priority, subject, description, created_at, resolved_at, resolution_notes
                         )
                     `)
                     .is('billing_cut_id', null)
@@ -2292,20 +2330,7 @@ export default function BillingDashboard() {
         const invoiceRef = order.invoice_number || ret?.reference_invoice_number || `FV-${order.sequence_id}`;
         const suggestedNc = ret?.credit_note_number || `NC-${order.sequence_id}-2010`;
         
-        let ncAmount = 0;
-        if (pqr?.resolution_notes) {
-            const valMatch = pqr.resolution_notes.match(/Valor Acreditado a Favor del Cliente:\s*\$([\d.]+)/i);
-            if (valMatch) ncAmount = parseInt(valMatch[1].replace(/\./g, ''), 10);
-        }
-        if (!ncAmount) {
-            const rcaMeta = parseRcaFromRecord(pqr || {});
-            if ((rcaMeta as any).deductionAmount) ncAmount = Number((rcaMeta as any).deductionAmount);
-        }
-        if (!ncAmount && ret?.quantity_returned) {
-            ncAmount = 47250;
-        }
-
-        const prodName = ret?.products?.name || 'Producto agrícola';
+        const { prodName, ncAmount } = resolveReturnProductAndAmount(ret, pqr);
         const qty = ret?.quantity_returned || 0;
         const pqrFolio = pqr?.id ? `PQR #${pqr.id.substring(0, 8).toUpperCase()}` : 'RNC Calidad';
 
@@ -2315,8 +2340,8 @@ export default function BillingDashboard() {
             `• Pedido FruFresco: ${orderSeq}\n` +
             `• Factura Ref: ${invoiceRef}\n` +
             `• Consecutivo Sugerido: ${suggestedNc}\n` +
-            `• Monto Nota Crédito: $${formatNumber(ncAmount)} COP\n` +
-            `• Ítem Afectado: ${qty} Kg de ${prodName}\n` +
+            `• Monto Nota Crédito: ${formatNumber(ncAmount)} COP\n` +
+            `• Ítem Afectado: ${qty ? `${qty} Kg de ` : ''}${prodName}\n` +
             `• Soporte SAC: ${pqrFolio}\n` +
             `================================================`;
 
@@ -5054,19 +5079,7 @@ export default function BillingDashboard() {
                                                                             if (!woSettledFolio) woSettledFolio = firstReturn?.credit_note_number || 'NC';
                                                                         }
 
-                                                                        let ncAmount = 0;
-                                                                        if (associatedPqr?.resolution_notes) {
-                                                                            const valMatch = associatedPqr.resolution_notes.match(/Valor Acreditado a Favor del Cliente:\s*\$([\d.]+)/i);
-                                                                            if (valMatch) ncAmount = parseInt(valMatch[1].replace(/\./g, ''), 10);
-                                                                        }
-                                                                        if (!ncAmount) {
-                                                                            const rcaMeta = parseRcaFromRecord(associatedPqr || {});
-                                                                            if ((rcaMeta as any).deductionAmount) ncAmount = Number((rcaMeta as any).deductionAmount);
-                                                                        }
-                                                                        if (!ncAmount && firstReturn?.quantity_returned) {
-                                                                            ncAmount = 47250;
-                                                                        }
-
+                                                                        const { prodName: cardProdName, ncAmount } = resolveReturnProductAndAmount(firstReturn, associatedPqr);
                                                                         const qtyText = firstReturn?.quantity_returned ? `${firstReturn.quantity_returned} Kg` : '';
 
                                                                         if (isWoSettled) {
@@ -5087,7 +5100,7 @@ export default function BillingDashboard() {
                                                                                         <CheckCircle2 size={11} color="#16A34A" /> NC Radicada WO
                                                                                     </span>
                                                                                     <div style={{ fontSize: '0.62rem', color: '#166534', fontWeight: '700' }}>
-                                                                                        {woSettledFolio} • -${formatNumber(ncAmount)}
+                                                                                        {woSettledFolio} • {ncAmount > 0 ? `-${formatNumber(ncAmount)}` : 'Sincronizada'}
                                                                                     </div>
                                                                                 </div>
                                                                             );
@@ -5136,7 +5149,7 @@ export default function BillingDashboard() {
                                                                                 {/* Subtexto Informativo de Monto y Peso en 1 Línea */}
                                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.61rem', whiteSpace: 'nowrap' }}>
                                                                                     <span style={{ color: '#DC2626', fontWeight: '800' }}>
-                                                                                        -{ncAmount > 0 ? `${formatNumber(ncAmount)}` : 'Saldo a Favor'}
+                                                                                        {ncAmount > 0 ? `-${formatNumber(ncAmount)}` : 'Saldo a Favor'}
                                                                                     </span>
                                                                                     {qtyText && (
                                                                                         <span style={{ color: '#6B21A8', fontWeight: '600' }}>
@@ -7573,14 +7586,19 @@ export default function BillingDashboard() {
                                 </span>
                             </div>
 
-                            <div style={{ borderTop: '1px dashed #D8B4FE', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ fontSize: '0.74rem', color: '#6B21A8' }}>
-                                    <b>Ítem Afectado:</b> {woTargetReturn?.quantity_returned || ''} Kg de {woTargetReturn?.products?.name || 'Producto'}
-                                </div>
-                                <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#DC2626' }}>
-                                    -$47.250 COP
-                                </div>
-                            </div>
+                            {(() => {
+                                const { prodName: targetProdName, ncAmount: targetNcAmount } = resolveReturnProductAndAmount(woTargetReturn, woTargetPqr);
+                                return (
+                                    <div style={{ borderTop: '1px dashed #D8B4FE', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ fontSize: '0.74rem', color: '#6B21A8' }}>
+                                            <b>Ítem Afectado:</b> {woTargetReturn?.quantity_returned ? `${woTargetReturn.quantity_returned} Kg de ` : ''}{targetProdName}
+                                        </div>
+                                        <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#DC2626' }}>
+                                            {targetNcAmount > 0 ? `-${formatNumber(targetNcAmount)} COP` : 'Saldo a Favor'}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         {/* Form Inputs */}
