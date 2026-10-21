@@ -44,7 +44,7 @@ export async function POST(req: Request) {
 
     const attachmentUrl = reqAttUrl || metadata.attachments?.[0]?.url || metadata.attachmentUrl || draft.document_url || null;
     const attachmentName = reqAttName || metadata.attachments?.[0]?.name || metadata.attachmentName || 'documento.xlsx';
-    const emailBodyText = draft.email_body || metadata.emailHtml || metadata.rawText || '';
+    const emailBodyText = draft.email_body || metadata.emailHtml || metadata.rawText || metadata.debug_payload?.plain || metadata.debug_payload?.html || '';
     const emailSubject = draft.email_subject || '';
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;

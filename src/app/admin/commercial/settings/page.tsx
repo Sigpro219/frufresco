@@ -33,7 +33,8 @@ import {
     BarChart2,
     ArrowLeftCircle,
     Clock,
-    Crown
+    Crown,
+    Loader2
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 
@@ -90,6 +91,8 @@ export default function PricingSettingsPage({
     const [newModelDesc, setNewModelDesc] = useState('');
     const [isSyncing, setIsSyncing] = useState(false);
     const [cloneFromModelId, setCloneFromModelId] = useState<string>(''); // Nuevo: ID del modelo a clonar
+    const [createModelError, setCreateModelError] = useState<string | null>(null);
+    const [isSubmittingModel, setIsSubmittingModel] = useState(false);
 
     // Editing State
     const [isEditingModel, setIsEditingModel] = useState(false);
@@ -632,28 +635,46 @@ export default function PricingSettingsPage({
 
     // --- MODEL ACTIONS ---
     const createModel = async () => {
-        if (!newModelName) return alert('Nombre requerido');
-        
-        // 1. Verificar duplicados localmente
-        if (models.some(m => m.name.toLowerCase() === newModelName.toLowerCase())) {
-            return alert('Ya existe un modelo con ese nombre.');
+        const trimmedName = newModelName.trim();
+        if (!trimmedName) {
+            setCreateModelError('El nombre del modelo es requerido.');
+            return;
         }
 
-        setLoadingModels(true);
-        
+        // Anti double-click guard
+        if (isSubmittingModel) return;
+
+        // 1. Verificar duplicados localmente (insensible a mayúsculas y espacios)
+        const isDuplicate = models.some(m => m.name && m.name.trim().toLowerCase() === trimmedName.toLowerCase());
+        if (isDuplicate) {
+            setCreateModelError(`Ya existe un modelo con el nombre "${trimmedName}". Elige un nombre diferente.`);
+            return;
+        }
+
+        setIsSubmittingModel(true);
+        setCreateModelError(null);
+
         try {
             // 2. Insertar el nuevo modelo
             const { data: newModel, error } = await supabase
                 .from('pricing_models')
                 .insert({
-                    name: newModelName,
+                    name: trimmedName,
                     base_margin_percent: newModelMargin,
-                    description: newModelDesc
+                    description: newModelDesc?.trim() || ''
                 })
                 .select()
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                // Capturar colisión UNIQUE de PostgreSQL (código 23505 o pricing_models_name_key)
+                if (error.code === '23505' || error.message?.includes('pricing_models_name_key') || error.message?.toLowerCase().includes('duplicate key')) {
+                    await fetchModels();
+                    setCreateModelError(`El modelo "${trimmedName}" ya existe en el sistema. Hemos sincronizado la lista de modelos.`);
+                    return;
+                }
+                throw error;
+            }
 
             // 3. Si se seleccionó un modelo para clonar, copiar sus reglas
             if (cloneFromModelId && newModel) {
@@ -673,28 +694,42 @@ export default function PricingSettingsPage({
                     const { error: cloneError } = await supabase
                         .from('pricing_rules')
                         .insert(rulesToInsert);
-                    
+
                     if (cloneError) console.error('Error clonando reglas:', cloneError);
                 }
             }
 
-            setModels([...models, newModel]);
+            await fetchModels();
             setSelectedModel(newModel);
             setIsCreating(false);
             setNewModelName('');
             setNewModelDesc('');
             setNewModelMargin(20);
             setCloneFromModelId('');
-            
+            setCreateModelError(null);
+
         } catch (err: any) {
-            alert('Error creando modelo: ' + err.message);
+            console.error('Error creando modelo:', err);
+            setCreateModelError(err.message || 'Error al crear el modelo.');
         } finally {
-            setLoadingModels(false);
+            setIsSubmittingModel(false);
         }
     };
 
     const saveModelChanges = async () => {
         if (!selectedModel) return;
+
+        const trimmedName = editModelData.name.trim();
+        if (!trimmedName) {
+            alert('El nombre del modelo no puede estar vacío.');
+            return;
+        }
+
+        const isDuplicate = models.some(m => m.id !== selectedModel.id && m.name?.trim().toLowerCase() === trimmedName.toLowerCase());
+        if (isDuplicate) {
+            alert(`Ya existe otro modelo con el nombre "${trimmedName}". Elige un nombre diferente.`);
+            return;
+        }
 
         // If a color tag is selected, clear it from any other model first
         if (editModelData.color_tag) {
@@ -707,26 +742,30 @@ export default function PricingSettingsPage({
         const { error } = await supabase
             .from('pricing_models')
             .update({
-                name: editModelData.name,
-                description: editModelData.description,
+                name: trimmedName,
+                description: editModelData.description?.trim() || '',
                 base_margin_percent: editModelData.margin,
                 color_tag: editModelData.color_tag
             })
             .eq('id', selectedModel.id);
 
         if (error) {
-            alert('Error actualizando: ' + error.message);
+            if (error.code === '23505' || error.message?.includes('pricing_models_name_key')) {
+                alert(`Ya existe un modelo con el nombre "${trimmedName}".`);
+            } else {
+                alert('Error actualizando: ' + error.message);
+            }
         } else {
             // Update local state
             const updated = { 
                 ...selectedModel, 
-                name: editModelData.name, 
-                description: editModelData.description, 
+                name: trimmedName, 
+                description: editModelData.description?.trim() || '', 
                 base_margin_percent: editModelData.margin,
                 color_tag: editModelData.color_tag
             };
             setSelectedModel(updated);
-            
+
             // Update list clearing the tag from the previous model owner if reassigned
             const updatedList = models.map(m => {
                 if (m.id === updated.id) return updated;
@@ -1254,7 +1293,7 @@ export default function PricingSettingsPage({
                         <div style={{ padding: '0.85rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h2 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Modelos de Precios</h2>
                             <button 
-                                onClick={() => setIsCreating(true)} 
+                                onClick={() => { setIsCreating(true); setCreateModelError(null); setNewModelName(''); setNewModelDesc(''); }} 
                                 style={{ 
                                     padding: '0.35rem 0.55rem', 
                                     borderRadius: '6px', 
@@ -1277,20 +1316,60 @@ export default function PricingSettingsPage({
                         {/* CREATE FORM */}
                         {isCreating && (
                             <div style={{ padding: '1.25rem', backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                <input placeholder="Nombre (ej: B2B Premium)" value={newModelName} onChange={e => setNewModelName(e.target.value)} style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} />
-                                <input placeholder="Uso (ej: Clientes B2B con 30 días de plazo)" value={newModelDesc} onChange={e => setNewModelDesc(e.target.value)} style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} />
+                                {createModelError && (
+                                    <div style={{
+                                        padding: '0.65rem 0.75rem',
+                                        marginBottom: '0.75rem',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#FEF2F2',
+                                        border: '1px solid #FCA5A5',
+                                        color: '#991B1B',
+                                        fontSize: '0.8rem',
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '0.5rem',
+                                        lineHeight: '1.3'
+                                    }}>
+                                        <AlertCircle size={16} color="#DC2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                        <span>{createModelError}</span>
+                                    </div>
+                                )}
+                                <input 
+                                    placeholder="Nombre (ej: B2B Premium)" 
+                                    value={newModelName} 
+                                    onChange={e => {
+                                        setNewModelName(e.target.value);
+                                        if (createModelError) setCreateModelError(null);
+                                    }} 
+                                    disabled={isSubmittingModel}
+                                    style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
+                                />
+                                <input 
+                                    placeholder="Uso (ej: Clientes B2B con 30 días de plazo)" 
+                                    value={newModelDesc} 
+                                    onChange={e => setNewModelDesc(e.target.value)} 
+                                    disabled={isSubmittingModel}
+                                    style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
+                                />
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.8rem' }}>
                                     <label style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain }}>Margen Base %:</label>
-                                    <input type="number" value={newModelMargin || ''} onChange={e => {
-                                        const val = parseFloat(e.target.value);
-                                        setNewModelMargin(isNaN(val) ? 0 : val);
-                                    }} style={{ width: '80px', padding: '0.4rem', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, fontWeight: 'bold' }} />
+                                    <input 
+                                        type="number" 
+                                        value={newModelMargin || ''} 
+                                        disabled={isSubmittingModel}
+                                        onChange={e => {
+                                            const val = parseFloat(e.target.value);
+                                            setNewModelMargin(isNaN(val) ? 0 : val);
+                                        }} 
+                                        style={{ width: '80px', padding: '0.4rem', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, fontWeight: 'bold' }} 
+                                    />
                                 </div>
 
                                 <div style={{ marginBottom: '1rem' }}>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', marginBottom: '0.3rem', color: THEME.colors.textSecondary }}>🆕 CLONAR REGLAS DESDE (Opcional):</label>
                                     <select 
                                         value={cloneFromModelId} 
+                                        disabled={isSubmittingModel}
                                         onChange={e => setCloneFromModelId(e.target.value)} 
                                         style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', fontSize: '0.85rem' }}
                                     >
@@ -1301,8 +1380,55 @@ export default function PricingSettingsPage({
                                     </select>
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <button onClick={createModel} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Guardar</button>
-                                    <button onClick={() => setIsCreating(false)} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', backgroundColor: '#D1D5DB', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', color: '#374151' }}>Cancelar</button>
+                                    <button 
+                                        onClick={createModel} 
+                                        disabled={isSubmittingModel || !newModelName.trim()} 
+                                        style={{ 
+                                            flex: 1, 
+                                            padding: '0.5rem', 
+                                            borderRadius: '6px', 
+                                            backgroundColor: (isSubmittingModel || !newModelName.trim()) ? '#9CA3AF' : THEME.colors.primary, 
+                                            color: 'white', 
+                                            border: 'none', 
+                                            cursor: (isSubmittingModel || !newModelName.trim()) ? 'not-allowed' : 'pointer', 
+                                            fontWeight: 'bold', 
+                                            fontSize: '0.85rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '0.35rem',
+                                            transition: 'background-color 0.2s'
+                                        }}
+                                    >
+                                        {isSubmittingModel ? (
+                                            <>
+                                                <Loader2 size={14} className="animate-spin" />
+                                                <span>Guardando...</span>
+                                            </>
+                                        ) : (
+                                            'Guardar'
+                                        )}
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            setIsCreating(false);
+                                            setCreateModelError(null);
+                                        }} 
+                                        disabled={isSubmittingModel} 
+                                        style={{ 
+                                            flex: 1, 
+                                            padding: '0.5rem', 
+                                            borderRadius: '6px', 
+                                            backgroundColor: '#D1D5DB', 
+                                            border: 'none', 
+                                            cursor: isSubmittingModel ? 'not-allowed' : 'pointer', 
+                                            fontWeight: 'bold', 
+                                            fontSize: '0.85rem', 
+                                            color: '#374151' 
+                                        }}
+                                    >
+                                        Cancelar
+                                    </button>
                                 </div>
                             </div>
                         )}

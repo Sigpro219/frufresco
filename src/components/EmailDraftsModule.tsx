@@ -4090,7 +4090,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     if (isEditing) {
       setSaving(true);
       try {
-        const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+        const rawMetaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+      const metaItem = { ...rawMetaItem };
+      delete (metaItem as any).debug_payload;
         const selectedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
         const updatedMetaItem = {
           ...metaItem,
@@ -6228,6 +6230,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const finalOrderNumber = getFriendlyOrderId(order);
 
       const finalExtractedItems = updatedExtractedItems.map((itm: any) => {
+        if (itm.isMetadata) {
+          delete (itm as any).debug_payload;
+        }
         if (itm.isMetadata) {
           return {
             ...itm,
