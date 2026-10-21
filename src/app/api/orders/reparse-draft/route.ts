@@ -324,7 +324,7 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
       }
     }
 
-    const cleanItems = (extractedData.items || []).filter(it => it.quantity > 0).map(it => {
+    let cleanItems = (extractedData.items || []).filter(it => it.quantity > 0).map(it => {
       const itName = it.name.trim();
       const matchResult = findBestProductMatchDetails(itName, productCatalog, learnedMemory);
       const matchedProd = matchResult.product;
@@ -371,6 +371,32 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
         attachment_index: (it as any).attachment_index
       };
     });
+
+    // Deduplicador Anti-Espejo en reparse-draft:
+    if (attachmentsList.length > 1) {
+      const itemsPerAtt: { [key: number]: any[] } = {};
+      cleanItems.forEach(it => {
+        const idx = (it as any).attachment_index ?? 0;
+        if (!itemsPerAtt[idx]) itemsPerAtt[idx] = [];
+        itemsPerAtt[idx].push(it);
+      });
+      const indices = Object.keys(itemsPerAtt);
+      if (indices.length > 1) {
+        const firstList = itemsPerAtt[Number(indices[0])] || [];
+        const isMirror = firstList.length > 0 && indices.slice(1).every(idx => {
+          const currentList = itemsPerAtt[Number(idx)] || [];
+          if (currentList.length !== firstList.length) return false;
+          return currentList.every((ci, i) => {
+            const fi = firstList[i];
+            return fi && String(fi.name).toLowerCase().trim() === String(ci.name).toLowerCase().trim() && Number(fi.quantity) === Number(ci.quantity);
+          });
+        });
+        if (isMirror) {
+          console.log(`[reparse-draft] Anti-Espejo activado: ${indices.length} adjuntos generaron la misma lista de ${firstList.length} productos. Se preserva una sola copia.`);
+          cleanItems = firstList;
+        }
+      }
+    }
 
     // Update metadata
     metadata.isMetadata = true;

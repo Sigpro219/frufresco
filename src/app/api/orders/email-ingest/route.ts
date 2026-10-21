@@ -732,6 +732,10 @@ export async function POST(req: Request) {
         
         TAREA:
         1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF) para extraer la lista de productos solicitados.
+           - REGLA CRÍTICA DE EXTRACCIÓN DE PRODUCTOS EN ADJUNTOS:
+             * Extrae productos ÚNICAMENTE si están visualmente escritos, tabulados, fotografiados o impresos DENTRO del documento o imagen adjunta.
+             * Si la imagen o archivo adjunto es un logotipo, firma, banner, publicidad, membrete o gráfico institucional SIN una tabla o lista física de alimentos/productos, el arreglo "items" para este archivo DEBE ser estrictamente un arreglo VACÍO ([]).
+             * NUNCA copies o extraigas productos del texto del correo dentro de este adjunto si dicho adjunto no los contiene visualmente. El texto del cuerpo del correo solo debe usarse en este adjunto como contexto para extraer metadatos del cliente (Razón Social, Sede, Dirección, Teléfono, NIT, Horario de Entrega y Orden de Compra).
         2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del documento adjunto y del cuerpo del correo electrónico anterior.
            - GUÍA DE FIRMA/PIE DE PÁGINA: La firma o pie de página del correo suele contener el NOMBRE DE LA EMPRESA, la DIRECCIÓN y el NÚMERO DE TELÉFONO de contacto. Busca en esa zona específica (generalmente al final del correo, después de expresiones como "Atentamente" o "Cordialmente") para identificar y extraer estos datos con precisión.
            - NOMBRE DEL CLIENTE: Identifica el nombre comercial de la empresa, marca o contacto en la firma/pie de página. NUNCA uses nombres de ciudades/países (como "Bogotá-Colombia", "Bogotá", "Colombia") como el nombre del cliente; busca el nombre real del negocio o contacto.
@@ -1607,9 +1611,33 @@ export async function POST(req: Request) {
       const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
       const finalSubject = `[${shortCode}] ${subject}`.trim().replace(/\s+/g, ' ');
       
-      const sourceItems = validAttachments.length > 0
+      // Helper anti-espejo: Si múltiples capturas generaron exactamente la misma lista idéntica de ítems (espejo redundante), deduplica
+      const deduplicateMirrorItems = (items: any[]) => {
+        if (!items || items.length === 0) return [];
+        if (validAttachments.length > 1) {
+          const firstAttItems = validAttachments[0]?.items || [];
+          const allOtherAttachmentsAreMirror = validAttachments.slice(1).every((att: any) => {
+            const currentItems = att.items || [];
+            if (currentItems.length !== firstAttItems.length || currentItems.length === 0) return false;
+            return currentItems.every((ci: any, idx: number) => {
+              const fi = firstAttItems[idx];
+              return fi && String(fi.originalName || fi.name).toLowerCase().trim() === String(ci.originalName || ci.name).toLowerCase().trim() && Number(fi.quantity) === Number(ci.quantity);
+            });
+          });
+
+          if (allOtherAttachmentsAreMirror && firstAttItems.length > 0) {
+            console.log(`[Email Inbound] Deduplicador Anti-Espejo activado: ${validAttachments.length} adjuntos generaron la misma lista idéntica de ${firstAttItems.length} productos. Se preserva una sola copia.`);
+            return processItemsArray(firstAttItems, 0, validAttachments[0]?.name || 'Captura_1');
+          }
+        }
+        return items;
+      };
+
+      const rawMergedItems = validAttachments.length > 0
         ? validAttachments.flatMap((att, idx) => processItemsArray(att.items || [], idx, att.name || `Captura_${idx + 1}`))
         : processItemsArray(Array.isArray(extractedData.items) ? extractedData.items : [], 0, null);
+
+      const sourceItems = deduplicateMirrorItems(rawMergedItems);
 
       const clientDetected = (primarySource.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim();
       const hasValid = sourceItems.length > 0;

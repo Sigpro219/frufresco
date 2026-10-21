@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.230 (Resolución Dinámica de Ítem y Monto Real en Radicación ERP World Office de Notas Crédito — 76/76 Pantallas Certificadas)
-> **Fecha:** 20 de Octubre, 2026  
+> **Versión:** 1.9.231 (Protocolo Omnicanal de Ingesta de Pedidos por Correo con Blindaje Poka-Yoke Anti-Duplicación de Firmas Institucionales — 76/76 Pantallas Certificadas)
+> **Fecha:** 21 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 259 Escenarios BDD Ininterrumpidos (1..259)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 260 Escenarios BDD Ininterrumpidos (1..260)
 
 ---
 
@@ -19,7 +19,7 @@
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243, 252, 254 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248, 250, 252, 253, 254 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248, 250, 252, 253, 254 , 260 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
@@ -11194,3 +11194,25 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
        * Línea 1 (Subtabs Bar): `top: 85px`, `height: 34px` $\rightarrow$ base `119px` (`zIndex: 45`).
        * Línea 2 (Frosted Command Dock): `top: 122px`, `height: 45px` $\rightarrow$ base `167px` (`zIndex: 40`).
        * Línea 3 (Thead Celdas TH): `top: 169px`, `height: 37px`, fondo sólido `#F8FAFC`, `zIndex: 30`, acoplado magnéticamente sin espacios vacíos.
+
+---
+
+### Escenario 260: Protocolo de Ingesta Omnicanal de Pedidos por Correo (Texto, Adjuntos, Capturas Spliced & Híbridos) con Poka-Yoke Anti-Duplicación de Firmas Institucionales (`/api/orders/email-ingest` — SDD v1.9.231)
+- **Given** el motor de ingesta de pedidos por correo electrónico inbound (`src/app/api/orders/email-ingest/route.ts`), la bandeja de revisión y auditoría comercial (`src/components/EmailDraftsModule.tsx`), y la diversidad omnicanal de pedidos de clientes B2B/B2C (pedidos escritos en el cuerpo de texto, adjuntos formales en PDF/Excel/ODS, fotografías de comandas físicas o capturas de pantalla de WhatsApp divididas en múltiples partes),
+- **When** un cliente corporativo (ej. Beer Station Titán / IRCC S.A.S.) envía un pedido con productos especificados en el texto del mensaje y cuyo cliente de correo (Outlook/Gmail) adjunta automáticamente imágenes inline o firmas institucionales con logotipos corporativos (ej. banner de grupo empresarial o logo institucional con nombres genéricos tipo `image.png`),
+- **Then** el sistema preserva la flexibilidad omnicanal completa sin amputar ninguna modalidad de pedido y aplica un blindaje de 4 capas deterministas que erradica la duplicación de ítems:
+  1. **Delimitación Estricta de Fuente en el Prompt Multimodal (Separación de Canales):**
+     - Al invocar a Gemini con una imagen adjunta (`base64Data`) acompañada del cuerpo del correo (`cleanedBodyText`), el prompt instruye de forma tajante:
+       * *Los productos solicitados (`items`) deben ser extraídos ÚNICAMENTE si están visualmente escritos, tabulados o fotografiados dentro del documento/imagen adjunta.*
+       * *Si la imagen adjunta es un logotipo, firma, icono o encabezado gráfico sin lista física de alimentos, el arreglo `items` para dicha imagen debe retornar estrictamente vacío (`[]`). Queda TERMINANTEMENTE PROHIBIDO copiar los productos del cuerpo del correo dentro de una imagen que no los contiene.*
+       * *El texto del cuerpo del correo se utiliza como contexto exclusivo para extraer metadatos del cliente (Razón Social, Sede, Dirección, Teléfono, NIT, Horario de Entrega y Orden de Compra).*
+  2. **Activación Automática del Fallback a Cuerpo de Texto (Procesamiento Unificado):**
+     - Si los adjuntos de imagen no contienen productos físicos (`items: []` por ser firmas o banners), el sistema activa el fallback canónico:
+       `if (attachments.length === 0 || !hasValidAttachmentItems)`
+     - Procesa el cuerpo del correo de forma directa y atómica, extrayendo la totalidad de los productos solicitados **una sola vez**, sin dispersión ni multiplicidad de borradores.
+  3. **Poka-Yoke Anti-Duplicación en Ensamble de Capturas Continuas (`flatMap` Anti-Espejo):**
+     - En flujos donde el cliente envía múltiples imágenes continuas (capturas de pantalla de WhatsApp en varias partes):
+       * Si dos o más capturas extraen listas con productos y cantidades idénticas (efecto espejo redundante por lectura duplicada de contexto), el sistema detecta la redundancia exacta y deduplica la lista, preservando una única ocurrencia de cada producto.
+       * Si las capturas contienen productos diferentes (ej. Parte 1: frutas, Parte 2: verduras), el sistema mantiene el comportamiento de concatenación apilada (`flatMap`), garantizando que pedidos extensos se consoliden íntegros en una sola orden.
+  4. **Soporte Pleno de Pedidos Híbridos (Adjunto Base + Adiciones en Texto):**
+     - Si el cliente adjunta un pedido formal (PDF, Excel o foto de orden) y añade notas textuales en el cuerpo del correo (ej. *"Adicionar 5 kg de limón y 2 kg de zanahoria"*), el sistema fusiona las adiciones del texto sin clonar la base del documento.
