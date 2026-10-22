@@ -155,7 +155,7 @@ export function areOrdersDuplicate(orderA: any, orderB: any): boolean {
     // Si los ítems están presentes, comparar la firma de los productos
     if (Array.isArray(orderA.order_items) && Array.isArray(orderB.order_items) && orderA.order_items.length > 0 && orderB.order_items.length > 0) {
         const getItemsSig = (items: any[]) => items
-            .map((i: any) => (i.product_id || i.nickname || '') + '_' + (parseFloat(i.quantity) || 0))
+            .map((i: any) => (i.product_id || i.products?.id || i.nickname || '') + '_' + (parseFloat(i.quantity) || 0))
             .sort()
             .join(';');
         const sigA = getItemsSig(orderA.order_items);
@@ -240,7 +240,7 @@ export function detectDuplicateOrders(orders: any[]): Map<string, DuplicateColli
             let hasExactSameItems = false;
             if (order.order_items && trueDuplicateSiblings.every(s => Array.isArray(s.order_items))) {
                 const getItemsSig = (items: any[]) => items
-                    .map(i => (i.product_id || i.nickname || '') + '_' + (parseFloat(i.quantity) || 0))
+                    .map(i => (i.product_id || i.products?.id || i.nickname || '') + '_' + (parseFloat(i.quantity) || 0))
                     .sort()
                     .join(';');
                 const mySig = getItemsSig(order.order_items);

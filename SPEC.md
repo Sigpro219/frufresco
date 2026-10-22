@@ -11248,3 +11248,43 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   4. **Vinculación Inmediata In Situ sin Pérdida de Contexto:**
      - Al presionar `[Crear y Asignar a Fila]`, el nuevo producto se inserta atómicamente en la base de datos, se incorpora al estado reactivo local de productos del catálogo (`catalogProducts`), y se asocia de forma instantánea a la fila `originalIndex` del acuerdo en curso.
      - La fila pasa de inmediato a estado verde (`Match`), el promedio de margen se recalcula en tiempo real, el botón de activación se torna verde esmeralda y el usuario finaliza la carga del acuerdo en menos de 2 minutos sin recargas de página, sin navegación forzada a otras pantallas y sin riesgo de perder el archivo analizado en memoria.
+
+---
+
+### Escenario 262: Blindaje de Deduplicación Omnicanal por Catálogo Maestro (product_id || products.id) y Detección Invariante de Colisiones Multicanal en Torre de Control de Pedidos (SDD v1.9.233)
+- **Given** el motor de detección de colisiones de pedidos duplicados (src/lib/orderDuplicates.ts), la vista de cargue operativo de pedidos (src/app/admin/orders/loading/page.tsx), y la concurrencia multicanal de pedidos de un mismo cliente (ej. pedidos concurrentes por Correo Inbound y WhatsApp/Teléfono para la misma sede y fecha de entrega),
+- **When** se evalúa la igualdad estricta de dos pedidos (reOrdersDuplicate) que no cuentan con documento formal PDF adjunto (o cuyos adjuntos son imágenes/firmas de texto),
+- **Then** el sistema garantiza una comparación semántica invariante basada en el catálogo maestro y la proyección visual de novedades:
+  1. **Resolución Jerárquica del UUID de Catálogo Maestro:**
+     - La firma comparativa de ítems (getItemsSig) resuelve de forma determinista la clave del producto con prioridad absoluta al catálogo maestro:
+       i.product_id || i.products?.id || i.nickname || ''
+     - *Poka-Yoke Anti-Falsos Negativos:* Erradica la vulnerabilidad donde textos de entrada divergentes (ej.  lechuga en correo vs SUELTA en WhatsApp, o tomate vs Pintón) impedían la deduplicación al resolver ambos al mismo UUID de producto (products.id).
+  2. **Inclusión Explícita de product_id en Queries Supabase:**
+     - La consulta de pedidos en loading/page.tsx incluye explícitamente order_items(id, product_id, quantity, unit, nickname, products(...)), garantizando que el identificador relacional esté disponible tanto en la raíz del ítem como en el objeto expandido de producto.
+  3. **Priorización Visual de Máxima Gravedad (Score += 20):**
+     - Toda colisión confirmada catapulta automáticamente ambas órdenes a la cima de la tabla con borde rojo de 8px, fondo #FEF2F2, badge de colisión DUPLICADO #{friendlyId} y activa el cintillo superior de alerta [N NOVEDADES DUPLICADAS], garantizando que ningún despacho doble pase desapercibido por el coordinador de operaciones.
+
+
+---
+
+### Escenario 263: Protocolo Canónico de Reclasificación In Situ a Pedido de Reposición ($0 COP) con Vinculación Retrospectiva de Pedido Original en Torre de Control de Pedidos (SDD v1.9.234)
+- **Given** la Torre de Control de Pedidos (`src/app/admin/orders/loading/page.tsx`), la Doctrina de Calidad y Garantías (§7.5.8), y la contingencia operativa donde una colaboradora de Mesa de Control o SAC (ej. Rivas Angidailed) recibe un requerimiento urgente de reposición telefónica o sin PQR previa en sistema para un cliente (ej. CESNE / Pedido `#2210_1189`),
+- **When** el operador crea el pedido inicialmente como entrada manual ordinaria (con ítems cotizados a tarifa comercial), abre el pedido en el drawer de detalle y activa el modo de edición (`Modificar`),
+- **Then** el sistema proporciona el flujo estandarizado de reclasificación in situ a Reposición en Garantía:
+  1. **Acceso In Situ en Barra de Modificación:**
+     - En el encabezado del drawer de edición (`editMode === true`), junto al botón de Reasignar Cliente / Sucursal, se despliega el botón de acción: `[ Marcar como Reposición ($0 COP) ]` con icono `RotateCcw`.
+     - Si el pedido ya cuenta con la condición de reposición activa, el botón conmuta a: `[ Modificar Vínculo Reposición ($0 COP) ]`.
+  2. **Modal Interactivo de Vinculación Retrospectiva:**
+     - Al presionar el botón, se abre el modal interactivo `isReplacementModalOpen` que consulta automáticamente en Supabase los últimos 5 pedidos no cancelados del cliente (`neq('id', currentOrderId)`).
+     - Cada pedido candidato muestra su consecutivo (`#2210_XXXX`), fecha de despacho, estado y monto facturado, expandiendo la lista de productos despachados en dicha orden.
+     - **Match Inteligente de Ítems:** El sistema contrasta automáticamente los productos del pedido previo con los ítems cargados en el pedido actual. Los ítems coincidentes se resaltan visualmente con píldora verde y badge `[✓ Coincide con un ítem a reponer]`.
+  3. **Vía de Excepción Controlada sin Historial Previo:**
+     - En caso de que el reclamo corresponda a una venta histórica previa no registrada en la plataforma digital o un acuerdo directo con gerencia, se habilita la casilla de excepción: `[ Excepción: No existe pedido previo en sistema ]`.
+     - Esta opción exige un campo de texto obligatorio con la justificación del caso (mínimo 5 caracteres), bloqueando el botón de confirmación si no se provee argumento válido.
+  4. **Doctrina de Costo Cero ($0 COP) y Remisión Oficial:**
+     - Al pulsar `[ Confirmar Reposición ($0 COP) ]`, el sistema ejecuta vía `/api/orders/update`:
+       a) Reajuste estricto de la cabecera del pedido: `total = 0`, `subtotal = 0`, `tax = 0`.
+       b) Reajuste estricto de todos los ítems (`order_items`): `unit_price = 0`, `subtotal = 0`, `total = 0`.
+       c) Estampado de metadatos logísticos en `logistics_data`: `is_replacement = true`, `parent_order_id`, `parent_order_sequence`, `replacement_reason`, `replacement_by` y `replacement_at`.
+       d) Auditoría inmutable en `admin_notes` y `order_audit_logs`.
+     - Como resultado, el documento de despacho en contingencia (`/admin/orders/contingency-print`) estampa de forma automática la **Remisión Oficial de Garantía** con la marca institucional *"NO COBRAR AL CLIENTE"*, blindando al operador logístico y al conductor contra cobros indebidos.

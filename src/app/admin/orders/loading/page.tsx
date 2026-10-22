@@ -831,6 +831,15 @@ function OrderLoadingContent() {
     const [isReassigning, setIsReassigning] = useState(false);
     const [reassignClientTypeTab, setReassignClientTypeTab] = useState<'all' | 'b2b' | 'b2c'>('all');
 
+    // Replacement modal states (Doctrina de Garantía $0 COP §7.5.8)
+    const [isReplacementModalOpen, setIsReplacementModalOpen] = useState(false);
+    const [loadingPastOrders, setLoadingPastOrders] = useState(false);
+    const [pastOrdersList, setPastOrdersList] = useState<any[]>([]);
+    const [selectedParentOrder, setSelectedParentOrder] = useState<any | null>(null);
+    const [noPriorOrderException, setNoPriorOrderException] = useState(false);
+    const [replacementReason, setReplacementReason] = useState('');
+    const [isSavingReplacement, setIsSavingReplacement] = useState(false);
+
     const handleOpenReassignModal = async () => {
         setIsReassignModalOpen(true);
         setReassignStep('search');
@@ -1141,7 +1150,164 @@ function OrderLoadingContent() {
         }
     };
 
-    useEffect(() => {
+        const handleOpenReplacementModal = async () => {
+        if (!selectedOrder) return;
+        setIsReplacementModalOpen(true);
+        setLoadingPastOrders(true);
+        setSelectedParentOrder(null);
+        setNoPriorOrderException(false);
+        setReplacementReason('');
+
+        try {
+            const profileId = selectedOrder.profile_id || selectedOrder.profiles?.id;
+            let query = supabase
+                .from('orders')
+                .select(`
+                    id, sequence_id, consecutive_id, created_at, delivery_date, total, status, customer_name,
+                    order_items (id, product_id, quantity, unit, nickname, unit_price, total, products (id, name, sku, unit_of_measure))
+                `)
+                .neq('id', selectedOrder.id)
+                .neq('status', 'cancelled');
+
+            if (profileId) {
+                query = query.eq('profile_id', profileId);
+            } else if (selectedOrder.customer_nit) {
+                query = query.eq('customer_nit', selectedOrder.customer_nit);
+            } else {
+                query = query.eq('customer_name', selectedOrder.customer_name);
+            }
+
+            const { data, error } = await query
+                .order('created_at', { ascending: false })
+                .limit(5);
+
+            if (!error && data) {
+                setPastOrdersList(data);
+            } else {
+                console.error('Error fetching past orders for replacement:', error);
+                setPastOrdersList([]);
+            }
+        } catch (err) {
+            console.error('Error fetching past orders:', err);
+            setPastOrdersList([]);
+        } finally {
+            setLoadingPastOrders(false);
+        }
+    };
+
+    const handleConfirmReplacement = async () => {
+        if (!selectedOrder) return;
+        if (!selectedParentOrder && !noPriorOrderException) {
+            alert('Debes seleccionar un pedido previo de referencia o marcar la excepción sin historial con justificación.');
+            return;
+        }
+        if (noPriorOrderException && (!replacementReason || replacementReason.trim().length < 5)) {
+            alert('Por favor ingresa una justificación válida para la reposición sin pedido previo en sistema (mínimo 5 caracteres).');
+            return;
+        }
+
+        setIsSavingReplacement(true);
+        try {
+            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const nowDateStr = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const operatorName = profile?.contact_name || (profile as any)?.email || currentUser?.email || 'Mesa de Control';
+
+            const parentSequence = selectedParentOrder 
+                ? (selectedParentOrder.sequence_id || selectedParentOrder.consecutive_id || getFriendlyOrderId(selectedParentOrder)) 
+                : null;
+            const parentId = selectedParentOrder ? selectedParentOrder.id : null;
+
+            const auditTag = parentSequence 
+                ? `[REPOSICIÓN DE GARANTÍA • DE PEDIDO #${parentSequence} el ${nowDateStr} ${nowTimeStr} por ${operatorName}]`
+                : `[REPOSICIÓN DE GARANTÍA • SIN PEDIDO PREVIO: ${replacementReason.trim()} el ${nowDateStr} ${nowTimeStr} por ${operatorName}]`;
+
+            const updatedNotes = `${selectedOrder.admin_notes || ''}\n${auditTag}`.trim();
+            const updatedLogistics = {
+                ...(selectedOrder.logistics_data || {}),
+                is_replacement: true,
+                replacement_at: new Date().toISOString(),
+                replacement_by: operatorName,
+                parent_order_id: parentId,
+                parent_order_sequence: parentSequence,
+                replacement_reason: selectedParentOrder 
+                    ? `Garantía por reposición vinculada al pedido #${parentSequence}` 
+                    : replacementReason.trim()
+            };
+
+            const itemsToUpsert = (orderItems || []).map((item: any) => ({
+                id: item.id,
+                order_id: selectedOrder.id,
+                product_id: item.product_id || item.products?.id,
+                quantity: item.quantity,
+                unit: item.unit || item.products?.unit_of_measure || 'UND',
+                unit_price: 0,
+                subtotal: 0,
+                total: 0,
+                nickname: item.nickname || item.products?.name || ''
+            }));
+
+            const response = await fetch('/api/orders/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: selectedOrder.id,
+                    updates: {
+                        total: 0,
+                        subtotal: 0,
+                        tax: 0,
+                        admin_notes: updatedNotes,
+                        logistics_data: updatedLogistics
+                    },
+                    itemsToUpsert,
+                    auditLog: {
+                        changed_by: operatorName,
+                        change_type: 'replacement_converted',
+                        reason: auditTag,
+                        old_data: { total: selectedOrder.total },
+                        new_data: { total: 0, is_replacement: true, parent_order_sequence: parentSequence }
+                    }
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Error al persistir reposición en servidor');
+            }
+
+            const updatedItems = (orderItems || []).map((item: any) => ({
+                ...item,
+                unit_price: 0,
+                subtotal: 0,
+                total: 0
+            }));
+            setOrderItems(updatedItems);
+
+            const updatedOrder = {
+                ...selectedOrder,
+                total: 0,
+                subtotal: 0,
+                tax: 0,
+                admin_notes: updatedNotes,
+                logistics_data: updatedLogistics
+            };
+            setSelectedOrder(updatedOrder);
+            setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, ...updatedOrder } : o));
+
+            setIsReplacementModalOpen(false);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('¡Pedido reclasificado con éxito a Reposición en Garantía ($0 COP)!', 'success');
+            } else {
+                alert('¡Pedido reclasificado con éxito a Reposición en Garantía ($0 COP)!');
+            }
+        } catch (err: any) {
+            console.error('Error reclasificando a reposición:', err);
+            alert(`Error al formalizar reposición: ${err.message || 'Error desconocido'}`);
+        } finally {
+            setIsSavingReplacement(false);
+        }
+    };
+
+useEffect(() => {
         async function resolveContract() {
             if (!selectedOrder) {
                 setContractPrices({});
@@ -1347,7 +1513,7 @@ function OrderLoadingContent() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions), order_items(id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
+                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions), order_items(id, product_id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
 
 
 
@@ -5173,9 +5339,10 @@ function OrderLoadingContent() {
                                                 )}
                                             </div>
                                             {editMode && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleOpenReassignModal}
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleOpenReassignModal}
                                                     style={{
                                                         backgroundColor: '#EFF6FF',
                                                         color: '#1D4ED8',
@@ -5194,7 +5361,32 @@ function OrderLoadingContent() {
                                                     title="Reasignar este pedido completo a otro cliente o sucursal con trazabilidad inmutable"
                                                 >
                                                     <UserCheck size={12} strokeWidth={2} /> Reasignar Cliente / Sucursal
-                                                </button>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleOpenReplacementModal}
+                                                        style={{
+                                                            backgroundColor: selectedOrder.logistics_data?.is_replacement ? '#EEF2FF' : '#FEF3C7',
+                                                            color: selectedOrder.logistics_data?.is_replacement ? '#4338CA' : '#B45309',
+                                                            border: selectedOrder.logistics_data?.is_replacement ? '1.5px solid #818CF8' : '1.5px solid #FCD34D',
+                                                            borderRadius: '8px',
+                                                            padding: '3px 10px',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            transition: 'all 0.15s',
+                                                            boxShadow: '0 1px 2px rgba(180, 83, 9, 0.08)'
+                                                        }}
+                                                        title="Marcar o modificar condición de Reposición en Garantía ($0 COP) y vincular con pedido original"
+                                                    >
+                                                        <RotateCcw size={12} strokeWidth={2.2} /> 
+                                                        {selectedOrder.logistics_data?.is_replacement ? 'Modificar Vínculo Reposición ($0 COP)' : 'Marcar como Reposición ($0 COP)'}
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                         <div style={{ color: '#64748B', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -7797,6 +7989,304 @@ function OrderLoadingContent() {
                                 >
                                     {isSavingFormalizeOc ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                                     {isSavingFormalizeOc ? 'Guardando...' : 'Confirmar y Formalizar OC'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL GESTIÓN DE REPOSICIÓN EN GARANTÍA ($0 COP) - SDD Escenario 263 */}
+                {isReplacementModalOpen && selectedOrder && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 9999,
+                        padding: '1.5rem'
+                    }} onClick={() => !isSavingReplacement && setIsReplacementModalOpen(false)}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: '16px',
+                            width: '100%',
+                            maxWidth: '750px',
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            overflow: 'hidden'
+                        }} onClick={e => e.stopPropagation()}>
+                            {/* Modal Header */}
+                            <div style={{
+                                padding: '1.25rem 1.5rem',
+                                borderBottom: '1px solid #E2E8F0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: 'linear-gradient(to right, #EEF2FF, #FFFFFF)'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '10px',
+                                        backgroundColor: '#E0E7FF',
+                                        color: '#4338CA',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <RotateCcw size={20} strokeWidth={2.5} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#1E1B4B' }}>
+                                            Marcar Pedido como Reposición en Garantía
+                                        </h3>
+                                        <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: '500' }}>
+                                            Cliente: <strong style={{ color: '#0F172A' }}>{selectedOrder.customer_name}</strong> • Pedido Actual: <strong>#{getFriendlyOrderId(selectedOrder)}</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => !isSavingReplacement && setIsReplacementModalOpen(false)}
+                                    disabled={isSavingReplacement}
+                                    style={{
+                                        background: '#F1F5F9',
+                                        border: 'none',
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        cursor: isSavingReplacement ? 'not-allowed' : 'pointer',
+                                        color: '#64748B',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <X size={16} strokeWidth={2.2} />
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{
+                                    padding: '12px 14px',
+                                    borderRadius: '10px',
+                                    backgroundColor: '#FEF3C7',
+                                    border: '1.5px solid #FCD34D',
+                                    color: '#92400E',
+                                    fontSize: '0.8rem',
+                                    lineHeight: '1.4',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '10px'
+                                }}>
+                                    <AlertTriangle size={18} strokeWidth={2.5} style={{ flexShrink: 0, marginTop: '2px', color: '#B45309' }} />
+                                    <div>
+                                        <strong>Doctrina de Garantía $0 COP (§7.5.8):</strong>
+                                        Al confirmar, todos los ítems de este pedido pasarán a <strong>costo $0 COP</strong>. El pedido se despachará bajo Remisión Oficial de Garantía estampada con la leyenda <em>"NO COBRAR AL CLIENTE"</em>.
+                                    </div>
+                                </div>
+
+                                {/* Paso 1: Seleccionar pedido previo */}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#334155', marginBottom: '8px' }}>
+                                        1. Vincular Pedido Original Afectado (Últimos pedidos del cliente):
+                                    </label>
+
+                                    {loadingPastOrders ? (
+                                        <div style={{ padding: '2rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                            <Loader2 size={18} className="animate-spin" /> Consultando historial del cliente...
+                                        </div>
+                                    ) : pastOrdersList.length === 0 ? (
+                                        <div style={{ padding: '1.25rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px dashed #CBD5E1', textAlign: 'center', color: '#64748B', fontSize: '0.82rem' }}>
+                                            No se encontraron pedidos previos registrados para este cliente. Utilice la opción de excepción más abajo.
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {pastOrdersList.map(po => {
+                                                const isSelected = selectedParentOrder?.id === po.id;
+                                                const poSeq = po.sequence_id || po.consecutive_id || getFriendlyOrderId(po);
+                                                const poDate = po.delivery_date || po.created_at?.split('T')[0];
+                                                const poItems = po.order_items || [];
+                                                
+                                                const currentProductIds = new Set((orderItems || []).map(i => i.product_id || i.products?.id));
+                                                const matchingItems = poItems.filter(i => currentProductIds.has(i.product_id || i.products?.id));
+
+                                                return (
+                                                    <div 
+                                                        key={po.id}
+                                                        onClick={() => {
+                                                            if (noPriorOrderException) setNoPriorOrderException(false);
+                                                            setSelectedParentOrder(isSelected ? null : po);
+                                                        }}
+                                                        style={{
+                                                            padding: '10px 14px',
+                                                            borderRadius: '10px',
+                                                            border: isSelected ? '2px solid #4F46E5' : '1px solid #E2E8F0',
+                                                            backgroundColor: isSelected ? '#EEF2FF' : 'white',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <input 
+                                                                    type="radio" 
+                                                                    checked={isSelected} 
+                                                                    onChange={() => {}} 
+                                                                    style={{ accentColor: '#4F46E5', cursor: 'pointer' }}
+                                                                />
+                                                                <span style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.88rem' }}>
+                                                                    Pedido #{poSeq}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                                                                    • {poDate}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.72rem', backgroundColor: '#F1F5F9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                    {po.status}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.85rem' }}>
+                                                                ${Number(po.total || 0).toLocaleString('es-CO')}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Productos del pedido previo */}
+                                                        <div style={{ marginLeft: '22px', fontSize: '0.75rem', color: '#475569', display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                                                            {poItems.map(pi => {
+                                                                const isMatch = currentProductIds.has(pi.product_id || pi.products?.id);
+                                                                const pName = pi.nickname || pi.products?.name || 'Ítem';
+                                                                return (
+                                                                    <span 
+                                                                        key={pi.id} 
+                                                                        style={{
+                                                                            padding: '2px 6px',
+                                                                            borderRadius: '4px',
+                                                                            backgroundColor: isMatch ? '#DCFCE7' : '#F8FAFC',
+                                                                            color: isMatch ? '#166534' : '#64748B',
+                                                                            border: isMatch ? '1px solid #86EFAC' : '1px solid #E2E8F0',
+                                                                            fontWeight: isMatch ? '800' : '500',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '3px'
+                                                                        }}
+                                                                        title={isMatch ? '¡Coincide con un ítem a reponer!' : ''}
+                                                                    >
+                                                                        {isMatch && <CheckCircle2 size={10} />}
+                                                                        {pName} ({pi.quantity} {pi.unit || pi.products?.unit_of_measure})
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Paso 2: Excepción sin pedido previo */}
+                                <div style={{
+                                    padding: '12px 14px',
+                                    borderRadius: '10px',
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '8px'
+                                }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: '800', color: '#334155' }}>
+                                        <input 
+                                            type="checkbox"
+                                            checked={noPriorOrderException}
+                                            onChange={(e) => {
+                                                setNoPriorOrderException(e.target.checked);
+                                                if (e.target.checked) setSelectedParentOrder(null);
+                                            }}
+                                            style={{ accentColor: '#D97706', width: '16px', height: '16px', cursor: 'pointer' }}
+                                        />
+                                        <span>Excepción: No existe pedido previo en sistema (Venta telefónica histórica o acuerdo directo)</span>
+                                    </label>
+
+                                    {noPriorOrderException && (
+                                        <div>
+                                            <textarea
+                                                value={replacementReason}
+                                                onChange={(e) => setReplacementReason(e.target.value)}
+                                                placeholder="Indique la justificación obligatoria (ej: Reclamo telefónico por calidad del lote de ayer sin registro en sistema)..."
+                                                rows={2}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '8px 10px',
+                                                    borderRadius: '8px',
+                                                    border: '1.5px solid #F59E0B',
+                                                    fontSize: '0.82rem',
+                                                    outline: 'none',
+                                                    boxSizing: 'border-box',
+                                                    color: '#0F172A',
+                                                    backgroundColor: 'white'
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div style={{
+                                padding: '1rem 1.5rem',
+                                borderTop: '1px solid #E2E8F0',
+                                backgroundColor: '#F8FAFC',
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                gap: '10px'
+                            }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsReplacementModalOpen(false)}
+                                    disabled={isSavingReplacement}
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        backgroundColor: 'white',
+                                        fontWeight: '700',
+                                        color: '#64748B',
+                                        cursor: 'pointer',
+                                        fontSize: '0.82rem'
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmReplacement}
+                                    disabled={isSavingReplacement || (!selectedParentOrder && (!noPriorOrderException || replacementReason.trim().length < 5))}
+                                    style={{
+                                        padding: '8px 20px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        backgroundColor: (selectedParentOrder || (noPriorOrderException && replacementReason.trim().length >= 5)) ? '#4F46E5' : '#94A3B8',
+                                        color: 'white',
+                                        fontWeight: '800',
+                                        cursor: (selectedParentOrder || (noPriorOrderException && replacementReason.trim().length >= 5)) && !isSavingReplacement ? 'pointer' : 'not-allowed',
+                                        fontSize: '0.82rem',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: (selectedParentOrder || (noPriorOrderException && replacementReason.trim().length >= 5)) ? '0 2px 6px rgba(79, 70, 229, 0.3)' : 'none'
+                                    }}
+                                >
+                                    {isSavingReplacement ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+                                    {isSavingReplacement ? 'Formalizando...' : 'Confirmar Reposición ($0 COP)'}
                                 </button>
                             </div>
                         </div>
