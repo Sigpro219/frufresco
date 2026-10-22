@@ -11453,3 +11453,21 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Inputs de utilidad con micro-borde `1px solid #CBD5E1` y formato numérico decimal limpio.
      - Celdas monetarias alineadas a la derecha con `tabular-nums`.
      - Se elimina el botón flotante inferior derecho que se superponía sobre las celdas de la tabla, reubicando sus acciones en la barra de herramientas principal.
+
+---
+
+### Escenario 272: Calibración Forense de Migración World Office Desktop: Desacople de Sucursal Limpia (Columna AD) y Gobernanza Estricta de Notas y Órdenes de Compra (Columna H) (SDD v1.9.245)
+- **Given** el módulo de facturación masiva y generación de planos contables para World Office Desktop (`/admin/commercial/billing`, `worldOfficeExport.ts` y `src/app/admin/commercial/billing/page.tsx`),
+- **When** el área contable y de facturación genera y descarga el archivo plano oficial de 57 columnas (`downloadWorldOfficeExcel`) para migrar facturas de venta (FV) hacia el software contable World Office Desktop,
+- **Then** el exportador garantiza la compatibilidad estricta con el validador contable sin rechazos por inconsistencias de catálogo:
+  1. **Columna AD (`Encab: Sucursal`) - Desglose de Sucursal Limpia:**
+     - World Office Desktop asocia el NIT a la Casa Matriz pero exige que la columna de sucursal contenga **únicamente el nombre de la sucursal/sede**, nunca la razón social corporativa completa.
+     - Si el cliente posee `parent_id`, `branch_id` o el patrón `[EMPRESA] - [SUCURSAL]`, la función canónica `resolveWorldOfficeBranch` extrae quirúrgicamente el nombre de la sede (ej: de `CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - EL CUBO` extrae exactamente `EL CUBO`; de `CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - CATERING` extrae `CATERING`; de `MILSEN SAS - YANUBA -150 CEDRITOS` extrae `YANUBA -150 CEDRITOS`).
+     - Si el cliente no posee sucursales (cuenta única o matriz individual), asigna `'Principal'`.
+  2. **Columna H (`Encab: Nota`) - Tratamiento Diferenciado Colsubsidio vs Demás Clientes:**
+     - **Regla Colsubsidio (NIT `860007336` o clientes con razón social Colsubsidio):** La función canónica `resolveWorldOfficeNote` extrae **estrictamente el número numérico de la Orden de Compra (OC `4506...`) o Solped (`790...`)** sin prefijos, sin la palabra "FV", sin guiones y sin el nombre de la sucursal, cumpliendo la exigencia del validador de World Office.
+     - **Regla Demás Clientes:** La nota se formatea como:
+       * Con OC: `FV segun orden de compra {OC} - {Sucursal}` (ej: `FV segun orden de compra 562626 - EL CORRAL GOURMET SAN RAFAEL`).
+       * Sin OC: `FV - {Sucursal}`.
+  3. **Persistencia y Cobertura E2E:**
+     - Se integra `purchase_order_number` en todos los endpoints y consultas de exportación (`exportToWorldOffice`, `handleExportPendingToWorldOffice`, `handleExportPreviewToWorldOffice`), garantizando total paridad en cortes programados, exportaciones manuales y previsualizaciones.

@@ -73,7 +73,7 @@ import {
     Tag,
     Scale
 } from 'lucide-react';
-import { downloadWorldOfficeExcel, downloadCreditNotesExcel, CreditNoteReportItem } from '@/lib/worldOfficeExport';
+import { downloadWorldOfficeExcel, downloadCreditNotesExcel, CreditNoteReportItem, resolveWorldOfficeBranch, resolveWorldOfficeNote } from '@/lib/worldOfficeExport';
 import { cleanHumanResolutionNotes, parseRcaFromRecord } from '@/lib/rcaTaxonomy';
 
 interface BillingCut {
@@ -2731,6 +2731,8 @@ export default function BillingDashboard() {
                 // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
                 const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
                 const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
+                const branchName = resolveWorldOfficeBranch(order.profiles);
+                const noteStr = resolveWorldOfficeNote(order, order.profiles, branchName);
 
                 (order.order_items || []).forEach((item: any) => {
                     const baseItemQty = Number(item.quantity) || 0;
@@ -2763,7 +2765,7 @@ export default function BillingDashboard() {
                         identificacionTercero: nit,
                         nitCliente: nit,
                         razonSocial: clientName,
-                        sucursal: clientName,
+                        sucursal: branchName,
                         formaPago: isB2B ? 'Credito' : 'Contado',
                         fechaEntrega: order.delivery_date || targetCut?.scheduled_date || getBogotaDate(0),
                         diasCredito: paymentDays,
@@ -2779,7 +2781,7 @@ export default function BillingDashboard() {
                         valorIva: lineIva,
                         totalLinea: lineTotal,
                         descuento: discountDecimal,
-                        notaEncabezado: clientName,
+                        notaEncabezado: noteStr,
                         observaciones: `Pedido #${order.sequence_id} | Corte ${targetCut?.cut_slot || 'AM'} #${targetCut?.cut_number || 1}`
                     });
                 });
@@ -2867,6 +2869,8 @@ export default function BillingDashboard() {
                 // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
                 const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
                 const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
+                const branchName = resolveWorldOfficeBranch(order.profiles);
+                const noteStr = resolveWorldOfficeNote(order, order.profiles, branchName);
 
                 (order.order_items || []).forEach((item: any) => {
                     const rawQty = Number(item.quantity) || 0;
@@ -2893,7 +2897,7 @@ export default function BillingDashboard() {
                         identificacionTercero: nit,
                         nitCliente: nit,
                         razonSocial: clientName,
-                        sucursal: clientName,
+                        sucursal: branchName,
                         formaPago: isB2B ? 'Credito' : 'Contado',
                         fechaEntrega: order.delivery_date || getBogotaDate(0),
                         diasCredito: paymentDays,
@@ -2909,7 +2913,7 @@ export default function BillingDashboard() {
                         valorIva: lineIva,
                         totalLinea: lineTotal,
                         descuento: discountDecimal,
-                        notaEncabezado: clientName,
+                        notaEncabezado: noteStr,
                         observaciones: `Pedido #${order.sequence_id} (Pre-Corte)`
                     });
                 });
@@ -2990,6 +2994,8 @@ export default function BillingDashboard() {
                 // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
                 const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
                 const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
+                const branchName = resolveWorldOfficeBranch(order.profiles);
+                const noteStr = resolveWorldOfficeNote(order, order.profiles, branchName);
 
                 (order.order_items || []).forEach((item: any) => {
                     const rawQty = Number(item.quantity) || 0;
@@ -3014,7 +3020,7 @@ export default function BillingDashboard() {
                         identificacionTercero: nit,
                         nitCliente: nit,
                         razonSocial: clientName,
-                        sucursal: clientName,
+                        sucursal: branchName,
                         formaPago: isB2B ? 'Credito' : 'Contado',
                         fechaEntrega: order.delivery_date || getBogotaDate(0),
                         diasCredito: paymentDays,
@@ -3030,7 +3036,7 @@ export default function BillingDashboard() {
                         valorIva: lineIva,
                         totalLinea: lineTotal,
                         descuento: discountDecimal,
-                        notaEncabezado: clientName,
+                        notaEncabezado: noteStr,
                         observaciones: `Pedido #${order.sequence_id} | Pre-Corte ${previewSlot}`
                     });
                 });
