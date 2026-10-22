@@ -21,6 +21,7 @@ import {
     DISPOSICION_SANITARIA_TEMPLATES,
     DefectCategoryL1,
     ImputedEntity,
+    ItemImputation,
     cleanHumanResolutionNotes
 } from '@/lib/rcaTaxonomy';
 import { useAuth } from '@/lib/authContext';
@@ -191,6 +192,15 @@ export default function PqrAuditModal({
     const [imputedEntities, setImputedEntities] = useState<ImputedEntity[]>([]);
     const [selectedImputedToAdd, setSelectedImputedToAdd] = useState('');
     const [assignedRouteDriver, setAssignedRouteDriver] = useState<{ id?: string; name: string; plate?: string } | null>(null);
+    const [imputationMode, setImputationMode] = useState<'global' | 'by_item'>('global');
+    const [itemImputations, setItemImputations] = useState<Record<string, {
+        responsible: 'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente';
+        entityId: string;
+        entityName: string;
+        entityRole?: string;
+        entityType?: any;
+        waiveDeduction?: boolean;
+    }>>({});
 
     // Photos State
     const [activePhotoIdx, setActivePhotoIdx] = useState(0);
@@ -420,6 +430,27 @@ export default function PqrAuditModal({
         setRcaResponsible(currentResp);
         setRcaEvidenceNotes(rca.notes || '');
         setImputedTargetType(rca.imputedTargetType || (currentResp === 'proveedor' ? 'provider' : currentResp === 'transporte' ? 'driver' : 'employee'));
+
+        if (rca.imputationMode === 'by_item' && Array.isArray(rca.itemImputations) && rca.itemImputations.length > 0) {
+            setImputationMode('by_item');
+            const loadedMap: Record<string, any> = {};
+            rca.itemImputations.forEach(it => {
+                if (it.returnId) {
+                    loadedMap[it.returnId] = {
+                        responsible: it.responsible || 'picking',
+                        entityId: it.imputedEntity?.id || '',
+                        entityName: it.imputedEntity?.name || '',
+                        entityRole: it.imputedEntity?.role || '',
+                        entityType: it.imputedEntity?.entityType || 'employee',
+                        waiveDeduction: Boolean(it.imputedEntity?.waiveDeduction)
+                    };
+                }
+            });
+            setItemImputations(loadedMap);
+        } else {
+            setImputationMode('global');
+            setItemImputations({});
+        }
 
         if (rca.imputedEntities && rca.imputedEntities.length > 0) {
             setImputedEntities(rca.imputedEntities);
@@ -1105,6 +1136,110 @@ export default function PqrAuditModal({
         showToast('Reparto equitativo aplicado: cada responsable asume exactamente el mismo valor en COP.', 'success');
     };
 
+    // Recalculate consolidated imputedEntities from granular item assignments
+    const recalculateImputedEntitiesFromItems = (map: Record<string, any>) => {
+        const entityMap = new Map<string, ImputedEntity>();
+
+        caseReturns.forEach((ret: any) => {
+            const imp = map[ret.id];
+            if (!imp || !imp.entityId) return;
+
+            const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+            const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+            const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+            const pName = ret.products?.name || oi?.products?.name || 'Producto';
+
+            const existing = entityMap.get(imp.entityId);
+            if (existing) {
+                existing.deductionAmount = (existing.deductionAmount || 0) + (imp.waiveDeduction ? 0 : itemAmount);
+                if (!existing.assignedItemNames) existing.assignedItemNames = [];
+                if (!existing.assignedItemNames.includes(pName)) existing.assignedItemNames.push(pName);
+            } else {
+                entityMap.set(imp.entityId, {
+                    id: imp.entityId,
+                    name: imp.entityName || 'Responsable',
+                    role: imp.entityRole || imp.responsible,
+                    entityType: imp.entityType || 'employee',
+                    sharePercent: 0,
+                    deductionAmount: imp.waiveDeduction ? 0 : itemAmount,
+                    waiveDeduction: imp.waiveDeduction,
+                    assignedItemNames: [pName]
+                });
+            }
+        });
+
+        const list = Array.from(entityMap.values());
+        const totalBaseCoQ = nominalNoveltiesCoQ > 0 ? nominalNoveltiesCoQ : 1;
+        const consolidated = list.map(e => ({
+            ...e,
+            sharePercent: Number((((e.deductionAmount || 0) / totalBaseCoQ) * 100).toFixed(1))
+        }));
+
+        setImputedEntities(consolidated);
+    };
+
+    const handleItemImputationChange = (
+        returnId: string,
+        field: 'responsible' | 'entityId' | 'waiveDeduction',
+        value: any
+    ) => {
+        setItemImputations(prev => {
+            const current = prev[returnId] || {
+                responsible: 'picking',
+                entityId: '',
+                entityName: '',
+                entityRole: '',
+                entityType: 'employee',
+                waiveDeduction: false
+            };
+
+            let updated = { ...current };
+            if (field === 'responsible') {
+                updated.responsible = value;
+                if (value === 'proveedor') {
+                    updated.entityId = 'proveedor-origen';
+                    updated.entityName = 'Asignado al Proveedor (Campo / Origen)';
+                    updated.entityRole = 'Proveedor';
+                    updated.entityType = 'provider';
+                } else if (value === 'cliente') {
+                    updated.entityId = pqr?.client_id || 'cliente';
+                    updated.entityName = pqr?.profiles?.company_name || pqr?.profiles?.contact_name || 'Cliente';
+                    updated.entityRole = 'Cliente';
+                    updated.entityType = 'client';
+                } else if (value === 'transporte' && assignedRouteDriver) {
+                    updated.entityId = assignedRouteDriver.id || 'driver-route';
+                    updated.entityName = `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`;
+                    updated.entityRole = 'Conductor de Ruta';
+                    updated.entityType = 'driver';
+                } else {
+                    updated.entityId = '';
+                    updated.entityName = '';
+                    updated.entityRole = '';
+                    updated.entityType = 'employee';
+                }
+            } else if (field === 'entityId') {
+                updated.entityId = value;
+                const foundColab = collaboratorsList.find(c => c.id === value);
+                if (foundColab) {
+                    updated.entityName = foundColab.contact_name;
+                    updated.entityRole = foundColab.role || 'Operativo';
+                    updated.entityType = 'employee';
+                } else if (assignedRouteDriver && (value === assignedRouteDriver.id || value === 'driver-route')) {
+                    updated.entityName = `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`;
+                    updated.entityRole = 'Conductor de Ruta';
+                    updated.entityType = 'driver';
+                }
+            } else if (field === 'waiveDeduction') {
+                updated.waiveDeduction = Boolean(value);
+            }
+
+            const nextMap = { ...prev, [returnId]: updated };
+            recalculateImputedEntitiesFromItems(nextMap);
+            return nextMap;
+        });
+    };
+
     const handleUpdateEntityPercent = (entityId: string, newPercent: number) => {
         const baseAmountToSplit = nominalNoveltiesCoQ;
         if (imputedEntities.length <= 1) {
@@ -1684,6 +1819,37 @@ export default function PqrAuditModal({
                         deductionAmount: e.waiveDeduction ? 0 : (e.deductionAmount !== undefined ? e.deductionAmount : Math.round((nominalNoveltiesCoQ * (e.sharePercent || 0)) / 100))
                     }));
 
+            const itemImputationsList: ItemImputation[] | undefined = imputationMode === 'by_item'
+                ? caseReturns.map((ret: any) => {
+                    const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                               ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                    const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                    const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+                    const pName = ret.products?.name || oi?.products?.name || 'Producto';
+                    const imp = itemImputations[ret.id];
+                    return {
+                        returnId: ret.id,
+                        productId: ret.product_id,
+                        productName: pName,
+                        quantity: Number(ret.quantity_returned) || 0,
+                        unitOfMeasure: ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg',
+                        unitPrice: unitPrice,
+                        amount: itemAmount,
+                        responsible: imp?.responsible || rcaResponsible || 'picking',
+                        imputedEntity: imp && imp.entityId ? {
+                            id: imp.entityId,
+                            name: imp.entityName,
+                            role: imp.entityRole,
+                            entityType: imp.entityType,
+                            sharePercent: nominalNoveltiesCoQ > 0 ? Number(((itemAmount / nominalNoveltiesCoQ) * 100).toFixed(1)) : 100,
+                            deductionAmount: isZeroDeductionCase ? 0 : (imp.waiveDeduction ? 0 : itemAmount),
+                            waiveDeduction: imp.waiveDeduction,
+                            assignedItemNames: [pName]
+                        } : undefined
+                    };
+                })
+                : undefined;
+
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
                 subtypeL2: rcaSubtypeL2,
@@ -1692,7 +1858,9 @@ export default function PqrAuditModal({
                 isReplacementRejection: isReplacementRejection,
                 imputedTargetType: imputedTargetType,
                 imputedEntities: finalizedImputedEntities,
-                auditedBy: auditorDisplayName
+                auditedBy: auditorDisplayName,
+                imputationMode: imputationMode,
+                itemImputations: itemImputationsList
             });
             const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
             const finalNotes = `${baseCleanNotes}${conceptBlock ? `\n\n${conceptBlock}` : ''}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
@@ -1784,6 +1952,37 @@ export default function PqrAuditModal({
                         deductionAmount: e.waiveDeduction ? 0 : (e.deductionAmount !== undefined ? e.deductionAmount : Math.round((nominalNoveltiesCoQ * (e.sharePercent || 0)) / 100))
                     }));
 
+            const itemImputationsList: ItemImputation[] | undefined = imputationMode === 'by_item'
+                ? caseReturns.map((ret: any) => {
+                    const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                               ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                    const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                    const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+                    const pName = ret.products?.name || oi?.products?.name || 'Producto';
+                    const imp = itemImputations[ret.id];
+                    return {
+                        returnId: ret.id,
+                        productId: ret.product_id,
+                        productName: pName,
+                        quantity: Number(ret.quantity_returned) || 0,
+                        unitOfMeasure: ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg',
+                        unitPrice: unitPrice,
+                        amount: itemAmount,
+                        responsible: imp?.responsible || rcaResponsible || 'picking',
+                        imputedEntity: imp && imp.entityId ? {
+                            id: imp.entityId,
+                            name: imp.entityName,
+                            role: imp.entityRole,
+                            entityType: imp.entityType,
+                            sharePercent: nominalNoveltiesCoQ > 0 ? Number(((itemAmount / nominalNoveltiesCoQ) * 100).toFixed(1)) : 100,
+                            deductionAmount: isZeroDeductionCase ? 0 : (imp.waiveDeduction ? 0 : itemAmount),
+                            waiveDeduction: imp.waiveDeduction,
+                            assignedItemNames: [pName]
+                        } : undefined
+                    };
+                })
+                : undefined;
+
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
                 subtypeL2: rcaSubtypeL2,
@@ -1792,7 +1991,9 @@ export default function PqrAuditModal({
                 isReplacementRejection: isReplacementRejection,
                 imputedTargetType: imputedTargetType,
                 imputedEntities: finalizedImputedEntities,
-                auditedBy: auditorDisplayName
+                auditedBy: auditorDisplayName,
+                imputationMode: imputationMode,
+                itemImputations: itemImputationsList
             });
             const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
             const finalNotes = `${cleanNotes}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
@@ -4109,11 +4310,62 @@ export default function PqrAuditModal({
                             <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                     <div>
-                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
-                                            3. Matriz de Imputabilidad Nominal & Descuento
-                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
+                                                3. Matriz de Imputabilidad Nominal & Descuento
+                                            </span>
+                                            {caseReturns.length >= 2 && (
+                                                <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', padding: '2px', borderRadius: '6px' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setImputationMode('global');
+                                                        }}
+                                                        style={{
+                                                            padding: '3px 8px',
+                                                            borderRadius: '4px',
+                                                            fontSize: '0.65rem',
+                                                            fontWeight: '700',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            backgroundColor: imputationMode === 'global' ? '#FFFFFF' : 'transparent',
+                                                            color: imputationMode === 'global' ? '#0F172A' : '#64748B',
+                                                            boxShadow: imputationMode === 'global' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
+                                                        }}
+                                                    >
+                                                        Global (Prorrateo)
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setImputationMode('by_item');
+                                                            recalculateImputedEntitiesFromItems(itemImputations);
+                                                        }}
+                                                        style={{
+                                                            padding: '3px 8px',
+                                                            borderRadius: '4px',
+                                                            fontSize: '0.65rem',
+                                                            fontWeight: '700',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            backgroundColor: imputationMode === 'by_item' ? '#0D7A57' : 'transparent',
+                                                            color: imputationMode === 'by_item' ? '#FFFFFF' : '#64748B',
+                                                            boxShadow: imputationMode === 'by_item' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}
+                                                    >
+                                                        <Sparkles size={11} />
+                                                        <span>Por Producto Devuelto ({caseReturns.length})</span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                         <p style={{ fontSize: '0.68rem', color: '#64748B', margin: '2px 0 0 0' }}>
-                                            Política de Responsabilidad: Asigna a los funcionarios, proveedores o cliente para trazabilidad y deducción en nómina / fletes / nota débito.
+                                            {imputationMode === 'by_item' 
+                                                ? 'Imputación Quirúrgica por Producto: Asigna a cada ítem averiado su área y funcionario causante exacto sin cálculos mentales.'
+                                                : 'Política de Responsabilidad: Asigna a los funcionarios, proveedores o cliente para trazabilidad y deducción en nómina / fletes / nota débito.'}
                                         </p>
                                     </div>
 
@@ -4169,7 +4421,220 @@ export default function PqrAuditModal({
                                     </div>
                                 </div>
 
-                                {rcaResponsible === 'proveedor' ? (
+                                {imputationMode === 'by_item' ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '6px 10px', borderRadius: '6px' }}>
+                                            ✨ <strong>Imputación Granular Activa:</strong> Cada producto averiado o faltante se asigna a su propio causante nominal. La deducción se liquida por el valor exacto de la referencia dañada.
+                                        </div>
+
+                                        {caseReturns.map((ret: any) => {
+                                            const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                                                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                                            const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                                            const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+                                            const pName = ret.products?.name || oi?.products?.name || 'Producto';
+                                            const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+                                            const isFaltante = (ret.reason || '').toLowerCase().includes('faltante');
+                                            const imp = itemImputations[ret.id] || {
+                                                responsible: 'picking',
+                                                entityId: '',
+                                                entityName: '',
+                                                entityRole: '',
+                                                waiveDeduction: false
+                                            };
+                                            const itemResponsible = imp.responsible || 'picking';
+
+                                            return (
+                                                <div
+                                                    key={ret.id}
+                                                    style={{
+                                                        backgroundColor: '#FFFFFF',
+                                                        border: '1px solid #CBD5E1',
+                                                        borderRadius: '8px',
+                                                        padding: '10px 12px',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '8px'
+                                                    }}
+                                                >
+                                                    {/* Item Header */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '6px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <div style={{
+                                                                width: '24px',
+                                                                height: '24px',
+                                                                borderRadius: '50%',
+                                                                backgroundColor: isFaltante ? '#ECFDF5' : '#FFFBEB',
+                                                                color: isFaltante ? '#065F46' : '#B45309',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                flexShrink: 0
+                                                            }}>
+                                                                {isFaltante ? <PackageX size={13} /> : <AlertTriangle size={13} />}
+                                                            </div>
+                                                            <div>
+                                                                <strong style={{ fontSize: '0.78rem', color: '#0F172A' }}>{pName}</strong>
+                                                                <span style={{ fontSize: '0.66rem', color: '#64748B', marginLeft: '6px' }}>
+                                                                    ({ret.quantity_returned} {uom} @ {formatMoney(unitPrice)})
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ textAlign: 'right' }}>
+                                                            <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Costo Novedad</span>
+                                                            <strong style={{ fontSize: '0.82rem', color: '#0F172A', fontFamily: 'monospace' }}>
+                                                                {formatMoney(itemAmount)}
+                                                            </strong>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Item Imputation Selectors */}
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 180px) 1fr auto auto', gap: '8px', alignItems: 'center' }}>
+                                                        {/* 1. Area Selector */}
+                                                        <div>
+                                                            <label style={{ fontSize: '0.62rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '2px' }}>
+                                                                Área Causal
+                                                            </label>
+                                                            <select
+                                                                value={itemResponsible}
+                                                                onChange={e => handleItemImputationChange(ret.id, 'responsible', e.target.value)}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    padding: '5px 8px',
+                                                                    fontSize: '0.70rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    backgroundColor: '#F8FAFC',
+                                                                    color: '#1E293B'
+                                                                }}
+                                                            >
+                                                                <option value="picking">Picking (Alistamiento)</option>
+                                                                <option value="transporte">Transporte (Ruta / Flota)</option>
+                                                                <option value="bodega">Bodega (Almacén)</option>
+                                                                <option value="proveedor">Proveedor (Campo / Origen)</option>
+                                                                <option value="comercial">Comercial (Montaje)</option>
+                                                                <option value="cliente">Cliente (Autogestión)</option>
+                                                            </select>
+                                                        </div>
+
+                                                        {/* 2. Nominal Responsible Selector */}
+                                                        <div>
+                                                            <label style={{ fontSize: '0.62rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '2px' }}>
+                                                                Responsable Asignado
+                                                            </label>
+                                                            {itemResponsible === 'proveedor' ? (
+                                                                <div style={{ padding: '6px 8px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '6px', fontSize: '0.70rem', color: '#B45309', fontWeight: '700' }}>
+                                                                    🏢 Asignado al Proveedor (Campo / Origen)
+                                                                </div>
+                                                            ) : itemResponsible === 'cliente' ? (
+                                                                <div style={{ padding: '6px 8px', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.70rem', color: '#475569', fontWeight: '700' }}>
+                                                                    👤 Cliente ({pqr?.profiles?.company_name || 'Autogestión'})
+                                                                </div>
+                                                            ) : (
+                                                                <SearchableSelect
+                                                                    value={imp.entityId}
+                                                                    onChange={val => handleItemImputationChange(ret.id, 'entityId', val)}
+                                                                    placeholder="-- Seleccionar Funcionario Responsable --"
+                                                                    searchPlaceholder="Buscar por nombre o cargo..."
+                                                                    options={[
+                                                                        ...(itemResponsible === 'transporte' && assignedRouteDriver && !collaboratorsList.some(c => c.id === assignedRouteDriver.id)
+                                                                            ? [{
+                                                                                value: assignedRouteDriver.id || 'driver-route',
+                                                                                label: `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`,
+                                                                                badge: 'Conductor de Ruta'
+                                                                            }]
+                                                                            : []),
+                                                                        ...collaboratorsList.map(c => ({
+                                                                            value: c.id,
+                                                                            label: c.contact_name,
+                                                                            sublabel: c.phone || undefined,
+                                                                            badge: c.role || 'Operativo'
+                                                                        }))
+                                                                    ]}
+                                                                    clearable
+                                                                />
+                                                            )}
+                                                        </div>
+
+                                                        {/* 3. Waive Deduction Toggle */}
+                                                        {resolutionOption !== 'opt1' && itemResponsible !== 'proveedor' && (
+                                                            <div style={{ textAlign: 'center' }}>
+                                                                <label style={{ fontSize: '0.62rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '2px' }}>
+                                                                    Cobro Nómina
+                                                                </label>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleItemImputationChange(ret.id, 'waiveDeduction', !imp.waiveDeduction)}
+                                                                    style={{
+                                                                        padding: '4px 8px',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '0.66rem',
+                                                                        fontWeight: '700',
+                                                                        cursor: 'pointer',
+                                                                        border: imp.waiveDeduction ? '1px solid #A7F3D0' : '1px solid #FECDD3',
+                                                                        backgroundColor: imp.waiveDeduction ? '#ECFDF5' : '#FFF1F2',
+                                                                        color: imp.waiveDeduction ? '#059669' : '#BE123C',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '4px'
+                                                                    }}
+                                                                >
+                                                                    {imp.waiveDeduction ? <ShieldCheck size={12} /> : <DollarSign size={12} />}
+                                                                    <span>{imp.waiveDeduction ? 'Exonerado ($0)' : 'A Cobrar'}</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 4. Deduction Amount Badge */}
+                                                        <div style={{ textAlign: 'right', minWidth: '90px' }}>
+                                                            <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Cuota Ítem</span>
+                                                            <strong style={{ fontSize: '0.78rem', color: (resolutionOption === 'opt1' || imp.waiveDeduction || itemResponsible === 'proveedor') ? '#059669' : '#BE123C' }}>
+                                                                {resolutionOption === 'opt1' || imp.waiveDeduction ? (
+                                                                    '$0 COP'
+                                                                ) : itemResponsible === 'proveedor' ? (
+                                                                    'Nota Débito'
+                                                                ) : (
+                                                                    formatMoney(itemAmount)
+                                                                )}
+                                                            </strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* Consolidated summary of responsible entities */}
+                                        {imputedEntities.length > 0 && (
+                                            <div style={{ marginTop: '4px', padding: '8px 12px', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px' }}>
+                                                <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                                                    Resumen Consolidado de Deducciones por Funcionario
+                                                </span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    {imputedEntities.map(e => (
+                                                        <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.70rem', padding: '4px 6px', backgroundColor: '#F8FAFC', borderRadius: '4px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <strong style={{ color: '#0F172A' }}>{e.name}</strong>
+                                                                <span style={{ fontSize: '0.62rem', color: '#64748B' }}>({e.role})</span>
+                                                                {e.assignedItemNames && (
+                                                                    <span style={{ fontSize: '0.62rem', color: '#0D7A57', fontWeight: '600' }}>
+                                                                        • [{e.assignedItemNames.join(', ')}]
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <strong style={{ color: e.waiveDeduction ? '#059669' : '#BE123C', fontFamily: 'monospace' }}>
+                                                                {e.waiveDeduction ? '$0 COP (Exonerado)' : formatMoney(e.deductionAmount || 0)}
+                                                            </strong>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <>
+                                        {rcaResponsible === 'proveedor' ? (
                                     <div style={{
                                         padding: '10px 14px',
                                         backgroundColor: '#FEF3C7',
@@ -4490,6 +4955,8 @@ export default function PqrAuditModal({
                                                 No hay funcionarios imputados nominalmente. Agrega al menos uno usando el selector superior.
                                             </div>
                                         )}
+                                    </>
+                                )}
                                     </>
                                 )}
                             </div>

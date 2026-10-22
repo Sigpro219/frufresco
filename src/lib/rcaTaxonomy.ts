@@ -181,6 +181,22 @@ export interface ImputedEntity {
     deductionAmount?: number; // Valor en COP
     notes?: string;
     waiveDeduction?: boolean;
+    assignedItemNames?: string[];
+}
+
+export interface ItemImputation {
+    returnId: string;
+    productId?: string;
+    productName: string;
+    quantity: number;
+    unitOfMeasure?: string;
+    unitPrice?: number;
+    amount: number;
+    categoryL1?: string;
+    subtypeL2?: string;
+    responsible: 'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente';
+    imputedEntity?: ImputedEntity;
+    notes?: string;
 }
 
 export interface ParsedRcaResult {
@@ -196,6 +212,8 @@ export interface ParsedRcaResult {
     imputedEntityName?: string;
     imputedEvidenceNotes?: string;
     auditedBy?: string;
+    imputationMode?: 'global' | 'by_item';
+    itemImputations?: ItemImputation[];
 }
 
 // Helpers to encode & decode RCA metadata from resolution notes/descriptions
@@ -416,7 +434,9 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             imputedEntityId: entities[0]?.id || parsed.imputedEntityId || record.imputed_entity_id,
             imputedEntityName: entities.map(e => e.name).join(', ') || parsed.imputedEntityName || record.imputed_entity_name,
             imputedEvidenceNotes: parsed.imputedEvidenceNotes || parsed.notes || record.imputation_evidence_notes || '',
-            auditedBy: parsed.auditedBy || undefined
+            auditedBy: parsed.auditedBy || undefined,
+            imputationMode: parsed.imputationMode || (Array.isArray(parsed.itemImputations) && parsed.itemImputations.length > 0 ? 'by_item' : 'global'),
+            itemImputations: Array.isArray(parsed.itemImputations) ? parsed.itemImputations : undefined
         };
     }
 
@@ -561,6 +581,8 @@ export function buildRcaMetadataTag(data: {
     imputedEvidenceNotes?: string;
     deductionAmount?: number;
     auditedBy?: string;
+    imputationMode?: 'global' | 'by_item';
+    itemImputations?: ItemImputation[];
 }): string {
     const cleanNotes = (data.notes || '')
         .replace(/\[RCA_METADATA:[\s\S]*$/gi, '')
@@ -581,7 +603,9 @@ export function buildRcaMetadataTag(data: {
         imputedEntityName: data.imputedEntityName || '',
         imputedEvidenceNotes: data.imputedEvidenceNotes || '',
         deductionAmount: data.deductionAmount || 0,
-        auditedBy: data.auditedBy || undefined
+        auditedBy: data.auditedBy || undefined,
+        imputationMode: data.imputationMode || 'global',
+        itemImputations: data.itemImputations || undefined
     });
     return `[RCA_METADATA: ${json}]`;
 }

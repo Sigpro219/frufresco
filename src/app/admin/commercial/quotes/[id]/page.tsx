@@ -186,6 +186,8 @@ export default function QuoteDetailPage() {
 
             if (qErr) throw qErr;
             setQuote(qData);
+            const { data: ptS } = await supabase.from('app_settings').select('value').eq('key', `quote_payment_days:${params.id}`).maybeSingle();
+            if (ptS?.value && !isNaN(Number(ptS.value))) setQuote({ ...qData, payment_terms_days: Number(ptS.value) });
 
             // 2. Cargar Lead si existe
             if (qData.lead_id) {
@@ -587,13 +589,14 @@ export default function QuoteDetailPage() {
                     client_name: finalClientName,
                     valid_until: new Date(validUntilDate).toISOString(),
                     start_date: new Date().toISOString().split('T')[0],
-                    payment_terms_days: formalForm.payment_days,
+                    // payment_terms_days stored in profiles & app_settings
                     model_snapshot_name: canonicalSnapshotName,
-                    notes: (quote.notes || '') + '\n[CONVERTIDO Y FORMALIZADO A ACUERDO COMERCIAL]'
+                    // notes tracked in audit_logs
                 })
                 .eq('id', quote.id);
 
             if (quoteErr) throw quoteErr;
+            try { await supabase.from('app_settings').upsert({ key: `quote_payment_days:${quote.id}`, value: String(formalForm.payment_days ?? 30), description: `Plazo de pago acuerdo ${quote.quote_number || quote.id}` }); } catch (ptErr) { console.warn(ptErr); }
 
             // 3. Registrar auditoría inmutable
             try {

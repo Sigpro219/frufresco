@@ -93,7 +93,15 @@ export default function PublicPrintQuotePage() {
                 .single();
 
             if (qErr) throw qErr;
-            setQuote(qData);
+            const { data: ptSetting } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', `quote_payment_days:${params.id}`)
+                .maybeSingle();
+            setQuote({
+                ...qData,
+                payment_terms_days: qData.payment_terms_days ?? (ptSetting?.value !== undefined && !isNaN(Number(ptSetting.value)) ? Number(ptSetting.value) : undefined)
+            });
 
             if (qData.lead_id) {
                 const { data: lData } = await supabase

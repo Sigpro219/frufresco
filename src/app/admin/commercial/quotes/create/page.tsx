@@ -140,7 +140,7 @@ function CreateQuotePageContent() {
 
                 // Pre-populate model and settings
                 if (qData.model_id) setSelectedModelId(qData.model_id);
-                if (qData.payment_terms_days) setPaymentTermsDays(qData.payment_terms_days);
+                if (qData.payment_terms_days) { setPaymentTermsDays(qData.payment_terms_days); } else { const { data: ptS } = await supabase.from('app_settings').select('value').eq('key', `quote_payment_days:${quoteId}`).maybeSingle(); if (ptS?.value && !isNaN(Number(ptS.value))) setPaymentTermsDays(Number(ptS.value)); }
                 if (qData.intro_title) setIntroTitle(qData.intro_title);
                 if (qData.intro_desc) setIntroDesc(qData.intro_desc);
 
@@ -730,12 +730,13 @@ function CreateQuotePageContent() {
                     valid_until: null,
                     parent_quote_id: parentQuoteId,
                     version: parentQuoteId ? originalQuoteVersion + 1 : 1,
-                    payment_terms_days: paymentTermsDays || 30
+                    // payment_terms_days stored in app_settings & profiles.payment_days
                 })
                 .select()
                 .single();
 
             if (qError) throw qError;
+            try { await supabase.from('app_settings').upsert({ key: `quote_payment_days:${quote.id}`, value: String(paymentTermsDays ?? 30), description: `Plazo de pago cotización ${quote.quote_number || quote.id}` }); } catch (ptErr) { console.warn(ptErr); }
 
             // Sincronizar días de crédito acordados hacia el perfil del cliente
             if (selectedClientId && paymentTermsDays) {

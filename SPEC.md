@@ -11344,3 +11344,18 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   2. **Micro-Badges a 2 Filas en Columna CADENA (Blindaje Anti-Overflow Horizontal):**
      - En `SpecialAgreementsModule.tsx`, se elimina la restricción de línea única (`whiteSpace: 'nowrap'`) en la columna `CADENA` que expandía referencias con múltiples marcas corporativas (*Beer Station • Corral Gourmet • El Corral • Leños & Carbón*) a más de 400px de ancho.
      - El componente fragmenta automáticamente las cadenas concatenadas y las proyecta en una cuadrícula compacta a 2 filas de micro-píldoras con ancho contenido (`width: '165px'`, `maxWidth: '175px'`), liberando más de 210px de ancho en la tabla y garantizando que la columna crítica de `VARIACIÓN / GANANCIA` se mantenga siempre dentro del viewport sin provocar scroll horizontal forzado.
+
+---
+
+### Escenario 267: Matriz de Imputabilidad Granular por Ítem de Novedad (Multi-Responsable y Multi-Área en PQRS - SDD v1.9.238)
+- **Given** un caso de auditoría técnica de Servicio al Cliente y Calidad (customer_service_pqrs) en el Wizard Modal Poka-Yoke (PqrAuditModal.tsx) con 2 o más novedades declaradas en el pedido,
+- **When** el auditor de calidad ingresa al Paso 3 (*Causa Raíz & Imputación*),
+- **Then** el sistema permite alternar de forma nativa entre dos modalidades de imputabilidad patrimonial y operativa:
+  1. **Modalidad 1 — Imputación Global de PQR (Prorrateo / Cuadrilla Tradicional):**
+     - Distribuye el 100% de la bolsa económica total de la PQR entre una o varias personas mediante porcentajes ponderados (sharePercent), manteniendo el comportamiento clásico para siniestros homogéneos (e.g. volcado integral del furgón o cuadrilla compartida de mesa).
+  2. **Modalidad 2 — Imputación Granular por Ítem / Devolución (Multi-Responsable y Multi-Área):**
+     - Desglosa visualmente en tarjetas independientes cada producto reclamado en illing_returns (e.g. *Tomate Chonto 5 Kg* y *Papaya Maradol 4 Kg*).
+     - Permite asignar a cada producto devuelto su propia Causa Raíz L1/L2, su Área causante (Proveedor, Bodega, Picking, Transporte, Comercial o Cliente) y su Funcionario/Proveedor responsable nominal de forma completamente independiente.
+     - **Cálculo Financiero Automático al Centavo:** La deducción imputada a cada responsable se liquida por la suma aritmética exacta de los productos asignados a su cargo (e.g. Juan Pérez asume los $25.000 COP de los tomates en Picking; Pedro Gómez asume los $20.000 COP de las papayas en Transporte), erradicando el cálculo manual de porcentajes cruzados.
+     - **Retrocompatibilidad Total en RCA_METADATA:** Se persiste el tag canónico con imputationMode: 'by_item', desglosando el array itemImputations y consolidando en imputedEntities las deducciones totales agregadas por persona para que los módulos aguas abajo (Nómina, RNC PDF e Historial SAC) operen con total transparencia contractual.
+     - **Trazabilidad en RNC Oficial:** El acta legal imprimible de No Conformidad (/admin/customer-service/rnc/[id]/print) detalla con precisión quirúrgica el producto devuelto junto a su causante nominal asignado.

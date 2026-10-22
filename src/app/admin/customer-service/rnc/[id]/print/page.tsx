@@ -604,7 +604,12 @@ export default function RncPrintPage() {
                                         {rca.imputedEntities.map((ent, eIdx) => (
                                             <tr key={ent.id || eIdx} style={{ borderBottom: '1px solid #F1F5F9' }}>
                                                 <td style={{ padding: '2px 5px', fontWeight: '800', color: '#0F172A' }}>
-                                                    {ent.name} {ent.documentId ? `(Doc: ${ent.documentId})` : ''}
+                                                    <div>{ent.name} {ent.documentId ? `(Doc: ${ent.documentId})` : ''}</div>
+                                                    {ent.assignedItemNames && ent.assignedItemNames.length > 0 && (
+                                                        <div style={{ color: '#0D7A57', fontSize: '5.8pt', fontWeight: '700' }}>
+                                                            Causante de: {ent.assignedItemNames.join(', ')}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td style={{ padding: '2px 5px', color: '#475569' }}>{ent.role || rca.responsible}</td>
                                                 <td style={{ padding: '2px 5px', textAlign: 'center', fontWeight: '800', color: '#0D7A57' }}>{ent.sharePercent}%</td>
@@ -683,7 +688,18 @@ export default function RncPrintPage() {
                                 {novelties.map((item, idx) => (
                                     <tr key={item.id || idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
                                         <td style={{ padding: '2.5px 6px', fontWeight: '800', color: '#0F172A' }}>
-                                            {item.products?.name || 'Producto'}
+                                            <div>{item.products?.name || 'Producto'}</div>
+                                            {(() => {
+                                                const assignedImp = rca.itemImputations?.find((it: any) => it.returnId === item.id || it.productId === item.product_id);
+                                                if (assignedImp?.imputedEntity?.name) {
+                                                    return (
+                                                        <div style={{ fontSize: '5.6pt', color: '#0D7A57', fontWeight: '700' }}>
+                                                            Imputado: {assignedImp.imputedEntity.name} ({assignedImp.responsible})
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </td>
                                         <td style={{ padding: '2.5px 6px', textAlign: 'center', fontWeight: '900', color: '#DC2626' }}>
                                             {item.quantity_returned} {item.products?.unit_of_measure || 'Kg'}
