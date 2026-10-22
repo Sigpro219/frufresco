@@ -199,6 +199,69 @@ export function calculateDueDate(baseDateInput: string | Date | null | undefined
  * Generates and triggers download of Excel file formatted for World Office Desktop (57-column matrix)
  * Matches the official layout audited from the Gemba ('Detalle migración' sheet)
  */
+/**
+ * Resolves the clean World Office branch name (Columna AD: 'Encab: Sucursal').
+ * In World Office Desktop, clients with branches are registered under the parent NIT,
+ * but the branch column MUST match the exact sub-branch name (e.g. 'EL CUBO', 'CATERING'),
+ * NOT the corporate parent legal name.
+ */
+export function resolveWorldOfficeBranch(profile: any): string {
+    if (!profile) return 'Principal';
+
+    const fullName = (profile.company_name || profile.razon_social || '').trim();
+    if (!fullName) return 'Principal';
+
+    const isBranch = Boolean(profile.parent_id) || Boolean(profile.branch_id) || profile.is_corporate_parent === false;
+
+    // Pattern: 'EMPRESA - SUCURSAL' (e.g. 'CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - EL CUBO')
+    if (fullName.includes(' - ')) {
+        const parts = fullName.split(' - ');
+        // Take everything after the first ' - '
+        const candidate = parts.slice(1).join(' - ').trim();
+        if (candidate) return candidate;
+    }
+
+    // If it is explicitly marked as branch without hyphen separator (e.g. 'ESCUELA URBANA EL PROGRESO')
+    if (isBranch && profile.parent_id) {
+        return fullName;
+    }
+
+    return 'Principal';
+}
+
+/**
+ * Resolves the World Office header note (Columna H: 'Encab: Nota').
+ * Rules (GEMBA-WO):
+ * 1. Colsubsidio (NIT 860007336): Strictly the clean Purchase Order / Solped number (e.g. '4506447348' or '7900424083').
+ * 2. Other clients: Format 'FV segun orden de compra {OC} - {Sucursal}' if OC exists, otherwise 'FV - {Sucursal}'.
+ */
+export function resolveWorldOfficeNote(order: any, profile: any, branchName?: string): string {
+    const rawNit = String(profile?.nit || '').replace(/\D/g, '');
+    const isColsubsidio = rawNit === '860007336' || 
+        /colsubsidio/i.test(profile?.company_name || '') || 
+        /colsubsidio/i.test(profile?.razon_social || '');
+
+    const rawOc = (order?.purchase_order_number || '').trim();
+    const cleanOc = rawOc.replace(/^oc\s*[:#-]?\s*/i, '').trim();
+
+    if (isColsubsidio) {
+        // Colsubsidio strictly requires the numeric OC (4506...) or Solped (790...) without prefixes or branch name
+        return cleanOc;
+    }
+
+    // Other clients:
+    const resolvedBranch = branchName || resolveWorldOfficeBranch(profile);
+    const branchLabel = resolvedBranch && resolvedBranch !== 'Principal' 
+        ? resolvedBranch 
+        : (profile?.company_name || profile?.razon_social || 'Sede Principal');
+
+    if (cleanOc) {
+        return `FV segun orden de compra ${cleanOc} - ${branchLabel}`;
+    }
+
+    return `FV - ${branchLabel}`;
+}
+
 export async function downloadWorldOfficeExcel(
     items: WorldOfficeExportItem[],
     fileNamePrefix: string = 'WorldOffice_Corte'
@@ -242,7 +305,7 @@ export async function downloadWorldOfficeExcel(
             'Encab: Fecha': docDateStr,
             'Encab: Tercero Interno': item.terceroInterno || '456282',
             'Encab: Tercero Externo': cleanNit,
-            'Encab: Nota': item.notaEncabezado || item.razonSocial || '',
+            'Encab: Nota': typeof item.notaEncabezado === 'string' ? item.notaEncabezado : (item.razonSocial || ''),
             'Encab: FormaPago': paymentMethod,
             'Encab: Fecha Entrega': deliveryDateStr,
             'Encab: Prefijo Documento Externo': '',
@@ -264,7 +327,7 @@ export async function downloadWorldOfficeExcel(
             'Encab: Personalizado 13': '',
             'Encab: Personalizado 14': '',
             'Encab: Personalizado 15': '',
-            'Encab: Sucursal': item.sucursal || item.razonSocial || 'Principal',
+            'Encab: Sucursal': item.sucursal || 'Principal',
             'Encab: Clasificación': '',
             'Detalle: Producto': item.codigoProducto,
             'Detalle: Bodega': item.bodega || 'Principal',
