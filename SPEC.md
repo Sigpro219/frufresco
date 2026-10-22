@@ -11288,3 +11288,59 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
        c) Estampado de metadatos logísticos en `logistics_data`: `is_replacement = true`, `parent_order_id`, `parent_order_sequence`, `replacement_reason`, `replacement_by` y `replacement_at`.
        d) Auditoría inmutable en `admin_notes` y `order_audit_logs`.
      - Como resultado, el documento de despacho en contingencia (`/admin/orders/contingency-print`) estampa de forma automática la **Remisión Oficial de Garantía** con la marca institucional *"NO COBRAR AL CLIENTE"*, blindando al operador logístico y al conductor contra cobros indebidos.
+
+
+---
+
+### Escenario 264: Telemetría Dual de Ventas (Facturado vs. Sin Facturar) y Trazabilidad de Cartera en Cockpit Comercial BI (`/admin/commercial`) (SDD v1.9.235)
+- **Given** el módulo neurálgico de Business Intelligence Comercial (`src/components/CommercialUnifiedDashboard.tsx`), las tablas transaccionales de pedidos (`orders`), facturas (`billing_invoices`) y cortes contables (`billing_cuts`), y la necesidad de la Dirección Comercial y Financiera de auditar en tiempo real la brecha entre la venta global comprometida y la facturación formal radicada,
+- **When** el usuario consulta el Cockpit Comercial en cualquiera de sus ventanas temporales (`Hoy`, `7 Días`, `15 Días`, `30 Días`, `90 Días`, `Histórico`),
+- **Then** el sistema calcula y proyecta la telemetría dual canónica en la Tarjeta Ejecutiva Hero #1:
+  1. **Determinación Fiscal Invariante de Facturado vs. Sin Facturar:**
+     - *Facturado Oficial (`billedSales`):* Sumatoria estricta de `orders.total` de pedidos que cuentan con corte contable formal o factura asignada (`orders.billing_cut_id IS NOT NULL || orders.invoice_id IS NOT NULL`). Proyectado con insignia esmeralda `[✓ Facturado: $X COP]`.
+     - *Sin Facturar / En Cartera Pendiente (`unbilledSales`):* Sumatoria estricta de `orders.total` de pedidos activos no cancelados (`status != 'cancelled'`) que no han sido asentados en corte (`orders.billing_cut_id IS NULL && orders.invoice_id IS NULL`). Proyectado con insignia ámbar interactiva `[⏳ Sin Facturar: $X COP]` con enlace directo hacia el módulo de Facturación B2B (`/admin/commercial/billing`).
+  2. **Detección Quirúrgica de Riesgo en Muelle (`unbilledDeliveredSales`):**
+     - El sistema filtra y cuantifica de forma reactiva las ventas de pedidos físicamente entregados al cliente (`status IN ('delivered', 'completed')`) que aún carecen de corte contable.
+     - Se proyecta como sub-indicador de alta prioridad: `Entregado p/ facturar: $X COP`, exponiendo con fidelidad la cartera viva en riesgo de cobranza inmediata.
+  3. **Preservación de Desglose Multicanal y Hero Metrics:**
+     - La cifra principal exhibe el total consolidado del periodo (`formatHeroSales(kpis.totalSales)`) con su delta porcentual versus periodo anterior (`salesGrowthPct`).
+     - El zócalo conserva intacta la segmentación institucional versus hogar (`B2B: $X • Hogar: $Y`), unificando en una sola tarjeta de 148px la dimensión comercial, operativa y fiscal sin sobrecargar el lienzo visual del Cockpit.
+
+
+---
+
+### Escenario 265: Telemetría de Demanda Real por Modelo, Columna de Volumen Ciclo e Impacto de Utilidad Total en Acuerdos Especiales (`/admin/commercial?tab=operations&subtab=agreements`) (SDD v1.9.236)
+- **Given** la consola de negociación de Acuerdos Especiales (`src/components/SpecialAgreementsModule.tsx`), los cuatro modelos canónicos (`Grupo Nutresa`, `Colsubsidio`, `Lista General Quincenal`, `Lista General Mensual`), los registros del padrón de clientes (`special_agreement_model_clients`) y el historial transaccional de despachos (`orders` y `order_items`),
+- **When** el negociador comercial o director de abastecimiento consulta o ajusta las tarifas de los productos en cualquiera de los modelos,
+- **Then** el sistema extrae, correlaciona y proyecta la demanda histórica del último ciclo de verificación sin redundancias de identificación:
+  1. **Aislamiento Estricto de Identificadores (Cero Duplicación de Código Contable):**
+     - El identificador contable (`accounting_id` / SKU / pliego) se confina de forma exclusiva a la primera columna (`CÓD`), garantizando que la columna de `PRODUCTO EN LISTA` preserve limpieza visual absoluta con únicamente el nombre de la presentación y la unidad oficial de entrega (`unit`), erradicando duplicidades en la misma fila.
+  2. **Columna Canónica de Demanda de Ciclo (`VOLUMEN CICLO`):**
+     - Ubicada estratégicamente entre el producto y la estructura de costos.
+     - *Grupo Nutresa:* Agrega el volumen físico y facturación demandados por las 44 sedes de sus marcas corporativas (*El Corral, Beer Station, Leños & Carbón*).
+     - *Colsubsidio:* Agrega el volumen físico demandado por sus 32 sedes activas (*Restaurantes, Piscilago, Clubes*).
+     - *Listas Generales (Quincenal / Mensual):* Agrega la sumatoria transparente del volumen consumido por todos los clientes suscritos al padrón del modelo respectivo.
+     - *Estructura a Dos Líneas:* Línea 1 destaca la masa física total (`X Kg` o `X Ton` / `Und`); Línea 2 expone el conteo de pedidos despachados y el monto facturado (`N ped. • $X.XM COP`). Si el SKU no tuvo rotación en el ciclo, proyecta `0 Kg` con la insignia sutil `Sin salida ciclo`.
+     - *Ordenamiento Reactivo:* La cabecera es interactiva y permite ordenar el portafolio de mayor a menor volumen demandado (`handleSort('consumption')`), priorizando de inmediato los SKUs de alto impacto en volumen físico para la negociación de compras.
+  3. **Tercera Línea de Impacto en Utilidad Total Monetaria en `VARIACIÓN / GANANCIA`:**
+     - En la columna final, junto a la variación de precio y la ganancia unitaria por kilo (`unitProfitCop`), el sistema incorpora una tercera línea de síntesis financiera cuando el SKU registra demanda activa:
+       `Total: formatCompactMoney(unitProfitCop * demand_volume)` en una pastilla esmeralda/azul índigo.
+     - Permite al decisor comercial evaluar el retorno en dinero real que aporta el SKU a la compañía bajo la contrapropuesta formulada, balanceando volumen contra margen con precisión algorítmica.
+
+
+---
+
+### Escenario 266: Top 20 de Menor Margen/Utilidad en Cockpit BI y Geometría Antidesbordamiento a 2 Filas para Marcas Corporativas en Acuerdos Especiales (SDD v1.9.237)
+- **Given** la vista ejecutiva del Cockpit Comercial BI (`CommercialUnifiedDashboard.tsx`) y la galería de negociación de Acuerdos Especiales (`SpecialAgreementsModule.tsx`),
+- **When** el usuario audita el rendimiento de rotación y rentabilidad de productos o configura acuerdos multimarca corporativos (e.g. Grupo Nutresa),
+- **Then** el sistema aplica las siguientes doctrinas de inteligencia operativa y control de desbordamiento:
+  1. **Top 20 de Baja Utilidad / Margen Crítico (Erradicación del Falso Positivo Slow Movers):**
+     - En reemplazo del listado pasivo de referencias sin ventas del catálogo general, el panel secundario de inteligencia de producto analiza las ventas efectivas del periodo (`quantity > 0`), ordenando de forma ascendente por margen porcentual (`marginPct`) y utilidad bruta monetaria (`profit = revenue - cost`).
+     - *Identificación Visual Tripartita:*
+       * 🔴 **A Pérdida (`marginPct < 0%`):** Badge rojo intenso que delata productos vendidos por debajo del costo matriz o última compra.
+       * 🟠 **Bajo Margen (`0% <= marginPct < 15%`):** Badge ámbar de advertencia comercial.
+       * 🟢 **Margen Saludable (`marginPct >= 15%`):** Badge esmeralda.
+     - *Nivelación Biométrica del Eje Y (680px):* Se erradica el tope artificial de `maxHeight: 420px`. El contenedor adopta `flex: 1`, `maxHeight: '680px'` y `overflowY: 'auto'`, eliminando el espacio en blanco residual y sincronizando su altura bottom-to-bottom con el panel contiguo de *Top 10 Más Consumidos*.
+  2. **Micro-Badges a 2 Filas en Columna CADENA (Blindaje Anti-Overflow Horizontal):**
+     - En `SpecialAgreementsModule.tsx`, se elimina la restricción de línea única (`whiteSpace: 'nowrap'`) en la columna `CADENA` que expandía referencias con múltiples marcas corporativas (*Beer Station • Corral Gourmet • El Corral • Leños & Carbón*) a más de 400px de ancho.
+     - El componente fragmenta automáticamente las cadenas concatenadas y las proyecta en una cuadrícula compacta a 2 filas de micro-píldoras con ancho contenido (`width: '165px'`, `maxWidth: '175px'`), liberando más de 210px de ancho en la tabla y garantizando que la columna crítica de `VARIACIÓN / GANANCIA` se mantenga siempre dentro del viewport sin provocar scroll horizontal forzado.

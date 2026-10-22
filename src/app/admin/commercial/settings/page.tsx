@@ -401,21 +401,16 @@ export default function PricingSettingsPage({
         setLoadingTemplates(true);
         const { data, error } = await supabase
             .from('quote_templates')
-            .select('*')
+            .select('*, quote_template_items(count)')
             .order('name', { ascending: true });
         if (data) {
             setTemplates(data);
             
-            // Fetch counts
-            const { data: countRows } = await supabase
-                .from('quote_template_items')
-                .select('template_id');
+            // Map counts directly from joined aggregate (bypasses Supabase 1000-row limit)
             const counts: Record<string, number> = {};
-            if (countRows) {
-                countRows.forEach((row: any) => {
-                    counts[row.template_id] = (counts[row.template_id] || 0) + 1;
-                });
-            }
+            data.forEach((row: any) => {
+                counts[row.id] = row.quote_template_items?.[0]?.count || 0;
+            });
             setTemplateCounts(counts);
 
             if (data.length > 0) {

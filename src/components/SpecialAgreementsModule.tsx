@@ -4,6 +4,24 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+
+const formatCompactMoney = (num: number): string => {
+    if (Math.abs(num) >= 1_000_000) {
+        return `${(num / 1_000_000).toFixed(1)}M`;
+    }
+    if (Math.abs(num) >= 1_000) {
+        return `${(num / 1_000).toFixed(0)}K`;
+    }
+    return `${Math.round(num)}`;
+};
+
+const formatDemandVolume = (val: number, unit: string): string => {
+    if (!val || val <= 0) return `0 ${unit || 'Kg'}`;
+    if (String(unit || '').toLowerCase().includes('kg') && val >= 1000) {
+        return `${(val / 1000).toFixed(2)} Ton`;
+    }
+    return `${formatNumber(val, 1)} ${unit || 'Kg'}`;
+};
 import { 
     Building, 
     Building2,
@@ -59,6 +77,9 @@ export interface AgreementItem {
     chain_name?: string; // Para Nutresa: Cadena asociada
     unit: string;
     monthly_consumption_kg: number;
+    demand_volume?: number;
+    demand_orders_count?: number;
+    demand_revenue?: number;
     baseline_price: number; // Precio Lista Institucional Dinámica hoy
     corabastos_cost: number; // Costo estabilizado Matriz de Costos
     inst_rule_margin_pct?: number; // % Regla de Utilidad en General Institucional Dinámico (pricing_rules)
@@ -480,6 +501,56 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 dbQuoteItems = (qItems || []) as DbQuoteItemRow[];
             }
 
+            // 2.1 Consultar demanda real de los clientes suscritos al modelo desde la última verificación (ciclo)
+            let clientIds = modelClientsMap[modelId] || [];
+            if (clientIds.length === 0) {
+                const { data: directRoster } = await supabase
+                    .from('special_agreement_model_clients')
+                    .select('client_id')
+                    .eq('model_id', modelId);
+                clientIds = (directRoster || []).map(r => r.client_id);
+            }
+
+            const cycleDays = modelsMeta[modelId]?.default_duration_days || (modelId === 'general_mensual' ? 30 : 15);
+            const evaluationWindowDays = Math.max(cycleDays * 2, 45);
+            const cycleStartIso = new Date(Date.now() - evaluationWindowDays * 86400000).toISOString();
+
+            const demandMap = new Map<string, { volume: number; ordersCount: number; revenue: number }>();
+            if (clientIds.length > 0) {
+                const { data: modelOrders } = await supabase
+                    .from('orders')
+                    .select('id')
+                    .in('profile_id', clientIds)
+                    .gte('created_at', cycleStartIso)
+                    .neq('status', 'cancelled');
+
+                const modelOrderIds = (modelOrders || []).map(o => o.id);
+                if (modelOrderIds.length > 0) {
+                    for (let i = 0; i < modelOrderIds.length; i += 80) {
+                        const slice = modelOrderIds.slice(i, i + 80);
+                        const { data: bItems } = await supabase
+                            .from('order_items')
+                            .select('product_id, quantity, unit_price')
+                            .in('order_id', slice);
+
+                        if (bItems) {
+                            bItems.forEach(it => {
+                                if (!it.product_id) return;
+                                if (!demandMap.has(it.product_id)) {
+                                    demandMap.set(it.product_id, { volume: 0, ordersCount: 0, revenue: 0 });
+                                }
+                                const rec = demandMap.get(it.product_id)!;
+                                const qty = Number(it.quantity || 0);
+                                const price = Number(it.unit_price || 0);
+                                rec.volume += qty;
+                                rec.ordersCount += 1;
+                                rec.revenue += qty * price;
+                            });
+                        }
+                    }
+                }
+            }
+
             const mappedFromDb: AgreementItem[] = dbQuoteItems.map((qi, idx) => {
                 const prod = prodById.get(qi.product_id) || prodByNormName.get(normalizeSearchStr(qi.product_name));
                 const currentPrice = Number(qi.unit_price) || 0;
@@ -513,6 +584,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
                 const statusChange: 'SUBIÓ' | 'BAJÓ' | 'IGUAL' = suggested > currentPrice ? 'SUBIÓ' : (suggested < currentPrice ? 'BAJÓ' : 'IGUAL');
                 const resolvedProductId = qi.product_id || prod?.id || '';
+                const demandRec = demandMap.get(resolvedProductId) || { volume: 0, ordersCount: 0, revenue: 0 };
+                const demandVol = Math.round(demandRec.volume * 10) / 10;
 
                 return {
                     id: qi.id || `${modelId}-${idx}`,
@@ -526,7 +599,10 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         ? (qi.chain_name || nutresaChainMap[resolvedProductId] || 'El Corral')
                         : undefined,
                     unit: prod?.unit_of_measure || 'KG',
-                    monthly_consumption_kg: Number(qi.quantity) || 1,
+                    monthly_consumption_kg: demandVol > 0 ? demandVol : (Number(qi.quantity) || 0),
+                    demand_volume: demandVol,
+                    demand_orders_count: demandRec.ordersCount,
+                    demand_revenue: Math.round(demandRec.revenue),
                     baseline_price: instDynamicPrice,
                     corabastos_cost: realCost,
                     inst_rule_margin_pct: instRuleMargin,
@@ -1017,7 +1093,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 } else if (sortField === 'chain') {
                     res = (a.chain_name || '').localeCompare(b.chain_name || '', 'es');
                 } else if (sortField === 'consumption') {
-                    res = a.monthly_consumption_kg - b.monthly_consumption_kg;
+                    res = (a.demand_volume ?? a.monthly_consumption_kg ?? 0) - (b.demand_volume ?? b.monthly_consumption_kg ?? 0);
                 } else if (sortField === 'cost') {
                     res = a.corabastos_cost - b.corabastos_cost;
                 } else if (sortField === 'sipsa') {
@@ -1814,6 +1890,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         onMouseLeave={() => setActiveHeaderTooltip(null)}
                                         style={{ 
                                             padding: '0.55rem 0.5rem', 
+                                            width: '165px',
+                                            maxWidth: '175px',
                                             fontWeight: 800, 
                                             color: sortField === 'chain' ? THEME.colors.primary : THEME.colors.textSecondary,
                                             cursor: 'pointer',
@@ -1861,7 +1939,63 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                     </th>
                                 )}
 
-                                {/* 4. COSTO / LISTA INST. */}
+                                {/* 4. DEMANDA / VOLUMEN CICLO */}
+                                <th 
+                                    onClick={() => handleSort('consumption')}
+                                    onMouseEnter={() => setActiveHeaderTooltip('consumption')}
+                                    onMouseLeave={() => setActiveHeaderTooltip(null)}
+                                    style={{ 
+                                        padding: '0.55rem 0.5rem', 
+                                        fontWeight: 800, 
+                                        color: sortField === 'consumption' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                        cursor: 'pointer',
+                                        position: 'sticky',
+                                        top: embedded ? '190px' : '133px',
+                                        zIndex: activeHeaderTooltip === 'consumption' ? 140 : 65,
+                                        backgroundColor: activeHeaderTooltip === 'consumption' ? '#F1F5F9' : '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                        whiteSpace: 'nowrap',
+                                        textAlign: 'right',
+                                        width: '120px',
+                                        maxWidth: '135px'
+                                    }}
+                                >
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                        <span>VOLUMEN CICLO</span>
+                                        <HelpCircle size={12} color={activeHeaderTooltip === 'consumption' ? THEME.colors.primary : '#94A3B8'} />
+                                        {sortField === 'consumption' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color='#94A3B8' />}
+                                    </div>
+                                    {activeHeaderTooltip === 'consumption' && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            right: 0,
+                                            width: '290px',
+                                            backgroundColor: '#0F172A',
+                                            color: '#F8FAFC',
+                                            padding: '0.7rem 0.85rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
+                                            fontWeight: 500,
+                                            lineHeight: 1.45,
+                                            pointerEvents: 'none',
+                                            zIndex: 9999
+                                        }}>
+                                            <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                VOLUMEN DEMANDADO DEL MODELO
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                Demanda física real (Kg / Und) y facturación solicitada por los clientes suscritos a este modelo desde la última verificación.
+                                            </div>
+                                        </div>
+                                    )}
+                                </th>
+
+                                {/* 5. COSTO / LISTA INST. */}
                                 <th 
                                     onClick={() => handleSort('cost')}
                                     onMouseEnter={() => setActiveHeaderTooltip('cost')}
@@ -2202,13 +2336,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={selectedClient === 'nutresa' ? 8 : 7} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 600 }}>
+                                    <td colSpan={selectedClient === 'nutresa' ? 10 : 9} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 600 }}>
                                         Sincronizando catálogo y precios reales con Supabase...
                                     </td>
                                 </tr>
                             ) : filteredItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={selectedClient === 'nutresa' ? 8 : 7} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                    <td colSpan={selectedClient === 'nutresa' ? 10 : 9} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
                                         No se encontraron productos con el criterio de búsqueda actual.
                                     </td>
                                 </tr>
@@ -2256,19 +2390,55 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             </div>
                                         </td>
                                         {selectedClient === 'nutresa' && (
-                                            <td style={{ padding: '0.5rem 0.5rem', whiteSpace: 'nowrap' }}>
-                                                <span style={{
-                                                    fontSize: '0.68rem',
-                                                    fontWeight: 700,
-                                                    backgroundColor: '#F1F5F9',
-                                                    color: '#334155',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '4px'
+                                            <td style={{ padding: '0.45rem 0.5rem', width: '165px', maxWidth: '175px' }}>
+                                                <div style={{
+                                                    display: 'flex',
+                                                    flexWrap: 'wrap',
+                                                    gap: '3px',
+                                                    alignItems: 'center',
+                                                    maxWidth: '165px'
                                                 }}>
-                                                    {item.chain_name || 'General'}
-                                                </span>
+                                                    {(item.chain_name || 'General')
+                                                        .split(/[\u2022\u2023\u25E6\u2043\u2219•|,]+/).map(s => s.trim()).filter(Boolean)
+                                                        .map((brand, bIdx) => (
+                                                            <span
+                                                                key={bIdx}
+                                                                style={{
+                                                                    fontSize: '0.64rem',
+                                                                    fontWeight: 700,
+                                                                    backgroundColor: '#F1F5F9',
+                                                                    color: '#334155',
+                                                                    padding: '1.5px 5px',
+                                                                    borderRadius: '4px',
+                                                                    whiteSpace: 'nowrap',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    lineHeight: 1.2
+                                                                }}
+                                                            >
+                                                                {brand}
+                                                            </span>
+                                                        ))}
+                                                </div>
                                             </td>
                                         )}
+                                        {/* COLUMNA DEMANDA / VOLUMEN CICLO */}
+                                        <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', width: '120px', maxWidth: '135px' }}>
+                                            <div style={{ fontWeight: 800, color: (item.demand_volume || 0) > 0 ? '#0F172A' : '#94A3B8', fontSize: '0.82rem' }}>
+                                                {formatDemandVolume(item.demand_volume || 0, item.unit)}
+                                            </div>
+                                            <div style={{ fontSize: '0.64rem', marginTop: '2px' }}>
+                                                {(item.demand_orders_count || 0) > 0 ? (
+                                                    <span style={{ color: '#0369A1', fontWeight: 700 }}>
+                                                        {item.demand_orders_count} ped. &bull; {formatCompactMoney(item.demand_revenue || 0)}
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: '#94A3B8' }}>
+                                                        Sin salida ciclo
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+
                                         {/* COLUMNA COSTO MATRIZ + LISTA INSTITUCIONAL DINÁMICA */}
                                         <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             <div style={{ color: '#0F172A', fontWeight: 800, fontSize: '0.8rem' }}>
@@ -2487,6 +2657,25 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             }}>
                                                 Ganancia: {unitProfitCop >= 0 ? '+' : ''}{formatMoney(unitProfitCop)}/{item.unit}
                                             </div>
+                                            {/* LINEA 3: IMPACTO EN UTILIDAD TOTAL EN PESOS SEGÚN DEMANDA */}
+                                            {(item.demand_volume || 0) > 0 ? (
+                                                <div style={{
+                                                    marginTop: '3px',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    fontSize: '0.64rem',
+                                                    fontWeight: 800,
+                                                    color: (unitProfitCop * (item.demand_volume || 0)) >= 0 ? '#1E40AF' : '#DC2626',
+                                                    backgroundColor: (unitProfitCop * (item.demand_volume || 0)) >= 0 ? '#EFF6FF' : '#FEF2F2',
+                                                    border: `1px solid ${(unitProfitCop * (item.demand_volume || 0)) >= 0 ? '#BFDBFE' : '#FECACA'}`,
+                                                    padding: '1px 5px',
+                                                    borderRadius: '4px',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    Total: {(unitProfitCop * (item.demand_volume || 0)) >= 0 ? '+' : ''}{formatCompactMoney(unitProfitCop * (item.demand_volume || 0))}
+                                                </div>
+                                            ) : null}
                                         </td>
                                     </tr>
                                 );

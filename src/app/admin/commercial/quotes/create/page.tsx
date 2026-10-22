@@ -262,9 +262,17 @@ function CreateQuotePageContent() {
         }
     }, [selectedModelId]);
 
+    const [baseGiRules, setBaseGiRules] = useState<any[]>([]);
+
     const fetchRules = async (modelId: string) => {
         const { data } = await supabase.from('pricing_rules').select('*').eq('model_id', modelId);
         if (data) setRules(data || []);
+        if (modelId !== GENERAL_INSTITUCIONAL_ID) {
+            const { data: giData } = await supabase.from('pricing_rules').select('*').eq('model_id', GENERAL_INSTITUCIONAL_ID);
+            if (giData) setBaseGiRules(giData || []);
+        } else {
+            setBaseGiRules([]);
+        }
     };
 
     const handleClientChange = async (clientId: string) => {
@@ -441,6 +449,11 @@ function CreateQuotePageContent() {
         const rule = loadedRules.find((r: any) => r.product_id === productId);
         if (rule) {
             margin += rule.margin_adjustment;
+        } else if (modelId !== GENERAL_INSTITUCIONAL_ID) {
+            const giRule = baseGiRules.find((r: any) => r.product_id === productId);
+            if (giRule) {
+                margin += giRule.margin_adjustment;
+            }
         }
         return margin;
     };
@@ -733,6 +746,18 @@ function CreateQuotePageContent() {
                         .eq('id', selectedClientId);
                 } catch (profErr) {
                     console.warn('Notice: Could not sync payment_days to profile:', profErr);
+                }
+            }
+
+            // Pipeline CRM: si la cotización es para un Lead, mover su status automáticamente a contacted
+            if (selectedLeadId) {
+                try {
+                    await supabase
+                        .from('leads')
+                        .update({ status: 'contacted', last_contact_date: new Date().toISOString() })
+                        .eq('id', selectedLeadId);
+                } catch (leadErr) {
+                    console.warn('Notice: Could not update lead status to contacted:', leadErr);
                 }
             }
 

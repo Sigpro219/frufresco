@@ -358,6 +358,7 @@ interface ProductRotItem {
     cost: number;
     marginPct: number;
     sharePct: number;
+    profit?: number;
 }
 
 interface CostTrendItem {
@@ -446,6 +447,11 @@ export default function CommercialUnifiedDashboard({
         totalSales: 0,
         b2bSales: 0,
         b2cSales: 0,
+        billedSales: 0,
+        unbilledSales: 0,
+        unbilledDeliveredSales: 0,
+        billedOrdersCount: 0,
+        unbilledOrdersCount: 0,
         prevTotalSales: 0,
         salesGrowthPct: 0,
         weightedMargin: 0,
@@ -460,7 +466,7 @@ export default function CommercialUnifiedDashboard({
 
     const [clientsData, setClientsData] = useState<ClientConsumptionItem[]>([]);
     const [topProducts, setTopProducts] = useState<ProductRotItem[]>([]);
-    const [slowProducts, setSlowProducts] = useState<ProductRotItem[]>([]);
+    const [lowMarginProducts, setLowMarginProducts] = useState<ProductRotItem[]>([]);
     const [costIncreases, setCostIncreases] = useState<CostTrendItem[]>([]);
     const [costDecreases, setCostDecreases] = useState<CostTrendItem[]>([]);
 
@@ -667,11 +673,11 @@ export default function CommercialUnifiedDashboard({
             const [currentOrdersRes, prevOrdersRes] = await Promise.all([
                 supabase
                     .from('orders')
-                    .select('id, profile_id, total, status, delivery_date, created_at, latitude, longitude')
+                    .select('id, profile_id, total, status, delivery_date, created_at, latitude, longitude, billing_cut_id, invoice_id')
                     .gte('created_at', startIso),
                 supabase
                     .from('orders')
-                    .select('id, profile_id, total, status, delivery_date, created_at, latitude, longitude')
+                    .select('id, profile_id, total, status, delivery_date, created_at, latitude, longitude, billing_cut_id, invoice_id')
                     .gte('created_at', prevStartIso)
                     .lte('created_at', prevEndIso)
             ]);
@@ -724,6 +730,11 @@ export default function CommercialUnifiedDashboard({
             let totalSales = 0;
             let b2bSales = 0;
             let b2cSales = 0;
+            let billedSales = 0;
+            let unbilledSales = 0;
+            let unbilledDeliveredSales = 0;
+            let billedOrdersCount = 0;
+            let unbilledOrdersCount = 0;
             const activeClientSet = new Set<string>();
 
             // Client aggregation map
@@ -741,6 +752,18 @@ export default function CommercialUnifiedDashboard({
                 totalSales += amt;
                 if (isB2B) b2bSales += amt;
                 else b2cSales += amt;
+
+                const isBilled = Boolean((o as any).billing_cut_id || (o as any).invoice_id);
+                if (isBilled) {
+                    billedSales += amt;
+                    billedOrdersCount++;
+                } else {
+                    unbilledSales += amt;
+                    unbilledOrdersCount++;
+                    if (o.status === 'delivered' || o.status === 'completed') {
+                        unbilledDeliveredSales += amt;
+                    }
+                }
 
                 if (o.profile_id) {
                     activeClientSet.add(o.profile_id);
@@ -824,6 +847,11 @@ export default function CommercialUnifiedDashboard({
                 totalSales,
                 b2bSales,
                 b2cSales,
+                billedSales,
+                unbilledSales,
+                unbilledDeliveredSales,
+                billedOrdersCount,
+                unbilledOrdersCount,
                 prevTotalSales,
                 salesGrowthPct,
                 weightedMargin,
@@ -925,7 +953,8 @@ export default function CommercialUnifiedDashboard({
                     revenue: Math.round(val.revenue),
                     cost: Math.round(val.cost),
                     marginPct,
-                    sharePct: 0
+                    sharePct: 0,
+                    profit: Math.round(val.revenue - val.cost)
                 });
             });
 
@@ -938,29 +967,16 @@ export default function CommercialUnifiedDashboard({
 
             setTopProducts(rankedProducts.slice(0, 10));
 
-            // Slow movers: Active products with zero or minimal sales in this period
-            const slowList: ProductRotItem[] = [];
-            productsRes.data?.forEach(prod => {
-                const agg = productAgg.get(prod.id);
-                const qty = agg ? agg.quantity : 0;
-                if (qty <= 5) {
-                    slowList.push({
-                        id: prod.id,
-                        name: prod.name,
-                        sku: prod.sku,
-                        accountingId: prod.accounting_id ?? prod.sku ?? 'N/A',
-                        category: formatCategoryName(prod.category),
-                        unit: prod.unit_of_measure || 'Kg',
-                        quantity: qty,
-                        revenue: agg ? agg.revenue : 0,
-                        cost: 0,
-                        marginPct: 0,
-                        sharePct: 0
-                    });
-                }
-            });
-            slowList.sort((a, b) => a.quantity - b.quantity);
-            setSlowProducts(slowList.slice(0, 10));
+                        // Top 20 Low Margin / Profit Products (Productos de Menor Utilidad / Margen Crítico)
+            const lowMarginList = [...rankedProducts]
+                .filter(p => p.quantity > 0)
+                .sort((a, b) => {
+                    if (a.marginPct !== b.marginPct) {
+                        return a.marginPct - b.marginPct;
+                    }
+                    return (a.profit ?? 0) - (b.profit ?? 0);
+                });
+            setLowMarginProducts(lowMarginList.slice(0, 20));
 
             // --- COST TRENDS (ALZAS / BAJAS VS MATRIZ) ---
             const upsList: CostTrendItem[] = [];
@@ -1774,13 +1790,13 @@ export default function CommercialUnifiedDashboard({
             {/* 2. HERO KPI CARDS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
                 
-                {/* CARD 1: VENTAS TOTALES */}
+                {/* CARD 1: VENTAS TOTALES & DUALIDAD FACTURADO / SIN FACTURAR */}
                 <div style={{ backgroundColor: 'white', padding: '1.15rem 1.25rem', minHeight: '148px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Ventas Facturadas
+                                    Ventas del Periodo
                                 </span>
                                 <span title={`${kpis.salesGrowthPct}% vs periodo anterior`} style={{ fontWeight: '800', color: kpis.salesGrowthPct >= 0 ? '#15803D' : '#DC2626', backgroundColor: kpis.salesGrowthPct >= 0 ? '#DCFCE7' : '#FEE2E2', padding: '1px 6px', borderRadius: '8px', fontSize: '0.67rem', display: 'inline-flex', alignItems: 'center', gap: '2px', whiteSpace: 'nowrap' }}>
                                     {kpis.salesGrowthPct >= 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
@@ -1811,17 +1827,32 @@ export default function CommercialUnifiedDashboard({
                         </div>
                     </div>
                     
-                    {/* FOOTER: DEDICADO 100% A INSTITUCIONAL Y HOGAR DE EXTREMO A EXTREMO */}
-                    <div style={{ marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
-                        <span title={`Institucional Total: ${formatMoney(kpis.b2bSales)}`} style={{ color: '#0369A1', fontWeight: '700', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Building2 size={12} /> Institucional: <strong>{formatCompactMoney(kpis.b2bSales)}</strong>
-                        </span>
-                        <span title={`Hogar Total: ${formatMoney(kpis.b2cSales)}`} style={{ color: '#475569', fontWeight: '600', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Home size={12} /> Hogar: <strong>{formatCompactMoney(kpis.b2cSales)}</strong>
-                        </span>
+                    {/* FOOTER DUAL: FACTURADO VS SIN FACTURAR & CANALES B2B / HOGAR */}
+                    <div style={{ marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
+                            <span title={`Facturado con corte contable o factura: ${formatMoney(kpis.billedSales)}`} style={{ color: '#059669', fontWeight: '700', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <CheckCircle2 size={12} /> Facturado: <strong>{formatCompactMoney(kpis.billedSales)}</strong>
+                            </span>
+                            <Link 
+                                href="/admin/commercial/billing" 
+                                style={{ color: '#D97706', fontWeight: '800', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none', backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '4px' }}
+                                title="Ver pedidos pendientes de corte contable en Facturación B2B"
+                            >
+                                <Clock size={11} /> Sin Facturar: <strong>{formatCompactMoney(kpis.unbilledSales)}</strong>
+                            </Link>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem', color: THEME.colors.textSecondary }}>
+                            <span title={`Institucional: ${formatMoney(kpis.b2bSales)} • Hogar: ${formatMoney(kpis.b2cSales)}`}>
+                                B2B: <strong>{formatCompactMoney(kpis.b2bSales)}</strong> &bull; Hogar: <strong>{formatCompactMoney(kpis.b2cSales)}</strong>
+                            </span>
+                            {kpis.unbilledDeliveredSales > 0 && (
+                                <span style={{ color: '#B45309', fontWeight: '700' }} title="Entregado físicamente al cliente, pendiente de corte contable">
+                                    Entregado: <strong>{formatCompactMoney(kpis.unbilledDeliveredSales)}</strong>
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
-
                 {/* CARD 2: MARGEN BRUTO PONDERADO */}
                 <div style={{ backgroundColor: 'white', padding: '1.15rem 1.25rem', minHeight: '148px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -2927,50 +2958,70 @@ export default function CommercialUnifiedDashboard({
                     </div>
                 </div>
 
-                {/* PANEL B: PRODUCTOS DE BAJA ROTACION (SLOW MOVERS / HUESOS) */}
+                {/* PANEL B: TOP 20 PRODUCTOS DE MENOR UTILIDAD / MARGEN CRÍTICO */}
                 <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                         <div>
                             <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Clock size={18} color="#EF4444" /> Productos de Baja Rotación (Slow Movers)
+                                <AlertTriangle size={18} color="#EF4444" /> Top 20 Productos de Menor Utilidad
                             </h3>
                             <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary }}>
-                                Productos activos con salida nula o mínima (&lt;5 Kg). Alerta preventiva para compras.
+                                Ranking por menor margen bruto (%) y rentabilidad vendida. Alerta preventiva para compras y precios.
                             </p>
                         </div>
                         <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '3px 8px', borderRadius: '12px' }}>
-                            Riesgo de Merma
+                            Margen Crítico
                         </span>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, maxHeight: '420px', overflowY: 'auto' }}>
-                        {slowProducts.length === 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, maxHeight: '680px', overflowY: 'auto', paddingRight: '4px' }}>
+                        {lowMarginProducts.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
-                                Todos los productos activos registraron una rotación adecuada.
+                                No se registran ventas con margen crítico en este periodo.
                             </div>
                         ) : (
-                            slowProducts.map((p, index) => (
-                                <div key={p.id || index} style={{ padding: '0.65rem 0.85rem', borderRadius: '8px', backgroundColor: '#FFF5F5', border: '1px solid #FED7D7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <div style={{ fontWeight: '800', color: '#9B1C1C', fontSize: '0.85rem' }}>
-                                            {p.name}
+                            lowMarginProducts.map((p, index) => {
+                                const isNegative = p.marginPct < 0;
+                                const isCritical = p.marginPct < 15;
+                                const profit = p.profit ?? (p.revenue - p.cost);
+                                return (
+                                    <div key={p.id || index} style={{ padding: '0.65rem 0.85rem', borderRadius: '8px', backgroundColor: isNegative ? '#FEF2F2' : '#FFFBEB', border: `1px solid ${isNegative ? '#FECACA' : '#FDE68A'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{ minWidth: 0, flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ width: '22px', height: '22px', borderRadius: '50%', backgroundColor: isNegative ? '#FEE2E2' : '#FEF3C7', color: isNegative ? '#DC2626' : '#B45309', fontSize: '0.7rem', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    {index + 1}
+                                                </span>
+                                                <span style={{ fontWeight: '800', color: isNegative ? '#991B1B' : '#92400E', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {p.name}
+                                                </span>
+                                                <span style={{ fontSize: '0.68rem', color: '#64748B', backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: '6px', flexShrink: 0 }}>
+                                                    {p.category}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.7rem', color: isNegative ? '#991B1B' : '#78350F', display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <span>ID Contable: <strong>{p.accountingId ?? p.sku ?? 'N/A'}</strong></span>
+                                                <span>&bull;</span>
+                                                <span>Salida: <strong>{p.unit?.toLowerCase().includes('kg') ? formatVolumeTon(p.quantity) : `${formatNumber(p.quantity, 1)} ${p.unit}`}</strong></span>
+                                                <span>&bull;</span>
+                                                <span>Facturado: <strong>{formatCompactMoney(p.revenue)}</strong></span>
+                                            </div>
                                         </div>
-                                        <div style={{ fontSize: '0.7rem', color: '#742A2A', display: 'flex', gap: '8px', marginTop: '2px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                            <span>ID Contable: <strong>{p.accountingId ?? p.sku ?? 'N/A'}</strong></span>
-                                            <span>&bull;</span>
-                                            <span>Categoría: <strong>{p.category}</strong></span>
+                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                                                <span style={{ fontSize: '0.88rem', fontWeight: '900', color: isNegative ? '#DC2626' : isCritical ? '#D97706' : '#15803D' }}>
+                                                    {p.marginPct}%
+                                                </span>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: '800', padding: '2px 6px', borderRadius: '6px', backgroundColor: isNegative ? '#FEE2E2' : '#FEF3C7', color: isNegative ? '#DC2626' : '#B45309' }}>
+                                                    {isNegative ? 'A Pérdida' : 'Bajo Margen'}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: profit < 0 ? '#DC2626' : '#64748B', fontWeight: '700', marginTop: '2px' }}>
+                                                Utilidad: {formatCompactMoney(profit)}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <span style={{ fontSize: '0.8rem', fontWeight: '900', color: p.quantity === 0 ? '#DC2626' : '#D97706' }}>
-                                            {p.quantity === 0 ? '0 Salidas' : `${p.quantity} ${p.unit}`}
-                                        </span>
-                                        <div style={{ fontSize: '0.68rem', color: '#9B1C1C', fontWeight: '700' }}>
-                                            Revisar compras
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>
