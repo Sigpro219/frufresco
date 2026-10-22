@@ -259,27 +259,6 @@ export default function CommercialPage() {
                     </button>
 
                     <button 
-                        onClick={() => handleSelectMainTab('inbox')}
-                        style={{
-                            padding: '1rem 0',
-                            border: 'none',
-                            background: 'transparent',
-                            color: activeMainTab === 'inbox' ? THEME.colors.textMain : THEME.colors.textSecondary,
-                            fontWeight: activeMainTab === 'inbox' ? '700' : '500',
-                            fontSize: '0.95rem',
-                            cursor: 'pointer',
-                            borderBottom: activeMainTab === 'inbox' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            transition: 'all 0.2s',
-                            fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif'
-                        }}
-                    >
-                        <Mail size={18} strokeWidth={1.5} style={{ color: activeMainTab === 'inbox' ? THEME.colors.primary : THEME.colors.textSecondary }} /> Buzón Comercial (CRM)
-                    </button>
-
-                    <button 
                         onClick={() => handleSelectMainTab('daily-monitor')}
                         style={{
                             padding: '1rem 0',
@@ -375,69 +354,49 @@ export default function CommercialPage() {
                         {activeOpSubtab === 'settings' ? (
                             <div style={{
                                 display: 'inline-flex',
-                                backgroundColor: '#F1F5F9',
+                                backgroundColor: '#E2E8F0',
                                 padding: '3px',
-                                borderRadius: THEME.radius.md,
-                                gap: '3px',
-                                border: `1px solid ${THEME.colors.border}`
+                                borderRadius: '8px',
+                                gap: '3px'
                             }}>
                                 <button
                                     type="button"
                                     onClick={() => setPricingSettingsTab('models')}
                                     style={{
                                         padding: '0.35rem 0.85rem',
-                                        border: 'none',
                                         borderRadius: '6px',
+                                        border: 'none',
                                         backgroundColor: pricingSettingsTab === 'models' ? 'white' : 'transparent',
                                         color: pricingSettingsTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                        fontSize: '0.82rem',
                                         fontWeight: pricingSettingsTab === 'models' ? '800' : '600',
-                                        fontSize: '0.8rem',
                                         cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        boxShadow: pricingSettingsTab === 'models' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
-                                        transition: 'all 0.15s ease'
+                                        boxShadow: pricingSettingsTab === 'models' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        transition: 'all 0.15s'
                                     }}
                                 >
-                                    <TrendingUp size={14} /> Modelos de Precios
+                                    Modelos de Precios
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setPricingSettingsTab('templates')}
                                     style={{
                                         padding: '0.35rem 0.85rem',
-                                        border: 'none',
                                         borderRadius: '6px',
+                                        border: 'none',
                                         backgroundColor: pricingSettingsTab === 'templates' ? 'white' : 'transparent',
                                         color: pricingSettingsTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                        fontSize: '0.82rem',
                                         fontWeight: pricingSettingsTab === 'templates' ? '800' : '600',
-                                        fontSize: '0.8rem',
                                         cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        boxShadow: pricingSettingsTab === 'templates' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
-                                        transition: 'all 0.15s ease'
+                                        boxShadow: pricingSettingsTab === 'templates' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        transition: 'all 0.15s'
                                     }}
                                 >
-                                    <ClipboardList size={14} /> Listas de Cotización
+                                    Listas de Cotización
                                 </button>
                             </div>
-                        ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: THEME.colors.textSecondary }}>
-                                <span>Módulo activo:</span>
-                                <span style={{ 
-                                    backgroundColor: THEME.colors.primaryLight, 
-                                    color: THEME.colors.primary, 
-                                    padding: '2px 8px', 
-                                    borderRadius: '6px', 
-                                    fontWeight: '700' 
-                                }}>
-                                    {operationsSubtabs.find(s => s.id === activeOpSubtab)?.label}
-                                </span>
-                            </div>
-                        )}
+                        ) : null}
                     </div>
                 </div>
             )}
@@ -483,12 +442,6 @@ export default function CommercialPage() {
             {activeMainTab === 'clients' && (
                 <div style={{ minHeight: 'calc(100vh - 140px)' }}>
                     <ClientsModule initialTab={activeClientTab} />
-                </div>
-            )}
-
-            {activeMainTab === 'inbox' && (
-                <div style={{ height: 'calc(100vh - 140px)' }}>
-                    <CommercialInboxModule />
                 </div>
             )}
 

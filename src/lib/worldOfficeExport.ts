@@ -332,3 +332,92 @@ export async function downloadWorldOfficeExcel(
         XLSX.writeFile(workbook, fullFileName);
     }
 }
+
+
+/**
+ * Reporte Operativo Diario de Novedades para Radicación de Notas Crédito en World Office
+ * Solicitud de Gemba: Cliente, Sucursal, Producto, Cantidad, Valor + Trazabilidad
+ */
+export interface CreditNoteReportItem {
+    date: string;
+    clientMatriz: string;
+    sucursal: string;
+    productName: string;
+    quantity: number;
+    unitOfMeasure: string;
+    amount: number;
+    invoiceRef: string;
+    creditNoteFolio: string;
+    pqrFolio?: string;
+    reason: string;
+    orderSequence?: number | string;
+    status?: string;
+}
+
+export async function downloadCreditNotesExcel(
+    items: CreditNoteReportItem[],
+    selectedDate?: string
+): Promise<void> {
+    const XLSX = await import('xlsx');
+
+    const formattedRows = items.map(item => ({
+        'FECHA': item.date || '',
+        'PEDIDO #': item.orderSequence ? `#${item.orderSequence}` : '',
+        'CLIENTE (MATRIZ)': item.clientMatriz || 'Consumidor Final',
+        'SUCURSAL (SEDE)': item.sucursal || 'Principal',
+        'PRODUCTO': item.productName || 'Producto Agrícola',
+        'CANTIDAD': item.quantity || 0,
+        'UNIDAD': item.unitOfMeasure || 'Kg',
+        'VALOR NOTA CRÉDITO ($ COP)': Math.round(item.amount || 0),
+        'FACTURA AFECTADA': item.invoiceRef || '',
+        'CONSECUTIVO NC WO': item.creditNoteFolio || '',
+        'ESTADO': item.status === 'approved' ? 'Aprobada' : 'Pendiente',
+        'FOLIO PQR': item.pqrFolio || '',
+        'MOTIVO / JUSTIFICACIÓN': item.reason || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+
+    // Auto-fit column widths
+    worksheet['!cols'] = [
+        { wch: 12 }, // FECHA
+        { wch: 11 }, // PEDIDO #
+        { wch: 32 }, // CLIENTE (MATRIZ)
+        { wch: 35 }, // SUCURSAL (SEDE)
+        { wch: 28 }, // PRODUCTO
+        { wch: 10 }, // CANTIDAD
+        { wch: 10 }, // UNIDAD
+        { wch: 20 }, // VALOR NOTA CRÉDITO ($ COP)
+        { wch: 18 }, // FACTURA AFECTADA
+        { wch: 18 }, // CONSECUTIVO NC WO
+        { wch: 12 }, // ESTADO
+        { wch: 15 }, // FOLIO PQR
+        { wch: 45 }  // MOTIVO / JUSTIFICACIÓN
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Novedades NC WO');
+
+    const dateStr = selectedDate && selectedDate !== 'all'
+        ? selectedDate
+        : new Date().toISOString().split('T')[0];
+    const fullFileName = `Novedades_Notas_Credito_WorldOffice_${dateStr}.xlsx`;
+
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fullFileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(url), 1500);
+    } else {
+        XLSX.writeFile(workbook, fullFileName);
+    }
+}

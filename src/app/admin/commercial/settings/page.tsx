@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import Link from 'next/link';
@@ -17,6 +17,7 @@ import {
     Tag, 
     ChevronRight,
     ChevronLeft,
+    ChevronDown,
     RefreshCw,
     X,
     TrendingUp,
@@ -77,6 +78,27 @@ export default function PricingSettingsPage({
     const [templateSearchFilter, setTemplateSearchFilter] = useState('');
     const [uploadingTemplateExcel, setUploadingTemplateExcel] = useState(false);
     const [showTemplateExcelModal, setShowTemplateExcelModal] = useState(false);
+
+    // Searchable Picker States (Buscadores de cabecera)
+    const modelPickerRef = useRef<HTMLDivElement>(null);
+    const templatePickerRef = useRef<HTMLDivElement>(null);
+    const [modelSearchQuery, setModelSearchQuery] = useState('');
+    const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+    const [templateSearchQuery, setTemplateSearchQuery] = useState('');
+    const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (modelPickerRef.current && !modelPickerRef.current.contains(event.target as Node)) {
+                setIsModelPickerOpen(false);
+            }
+            if (templatePickerRef.current && !templatePickerRef.current.contains(event.target as Node)) {
+                setIsTemplatePickerOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
     const [templateProductsFound, setTemplateProductsFound] = useState<any[]>([]);
 
     // UI
@@ -1221,133 +1243,477 @@ export default function PricingSettingsPage({
 
     return (
         <main style={{ minHeight: embedded ? 'auto' : '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilyMain }}>
-            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '0.75rem 2rem 2.5rem 2rem' : '1.25rem 2rem 2rem 2rem' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '0.5rem 2rem 2.5rem 2rem' : '1.25rem 2rem 2rem 2rem' }}>
                 {!embedded && (
-                    <div style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem' }}>
-                        <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
-                            <ArrowLeft size={16} /> Volver a Comercial
-                        </Link>
-
-                        {/* Tab Navigation */}
-                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        {!embedded && (
+                            <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.88rem' }}>
+                                <ArrowLeft size={16} /> Volver a Comercial
+                            </Link>
+                        )}
+                        <div style={{ display: 'inline-flex', gap: '4px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '8px', border: `1px solid ${THEME.colors.border}` }}>
                             <button
                                 onClick={() => setActiveTab('models')}
                                 style={{
-                                    padding: '0.35rem 0.8rem',
+                                    padding: '0.35rem 0.9rem',
+                                    borderRadius: '6px',
                                     border: 'none',
-                                    background: 'none',
-                                    fontSize: '0.88rem',
-                                    fontWeight: '800',
-                                    cursor: 'pointer',
+                                    backgroundColor: activeTab === 'models' ? 'white' : 'transparent',
                                     color: activeTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
-                                    borderBottom: activeTab === 'models' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                    transition: 'all 0.15s',
+                                    fontSize: '0.82rem',
+                                    fontWeight: activeTab === 'models' ? '800' : '600',
+                                    cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '0.4rem'
+                                    gap: '0.35rem',
+                                    boxShadow: activeTab === 'models' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s'
                                 }}
                             >
-                                <TrendingUp size={15} /> Modelos de Precios
+                                Modelos de Precios
                             </button>
                             <button
                                 onClick={() => setActiveTab('templates')}
                                 style={{
-                                    padding: '0.35rem 0.8rem',
+                                    padding: '0.35rem 0.9rem',
+                                    borderRadius: '6px',
                                     border: 'none',
-                                    background: 'none',
-                                    fontSize: '0.88rem',
-                                    fontWeight: '800',
-                                    cursor: 'pointer',
+                                    backgroundColor: activeTab === 'templates' ? 'white' : 'transparent',
                                     color: activeTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
-                                    borderBottom: activeTab === 'templates' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                    transition: 'all 0.15s',
+                                    fontSize: '0.82rem',
+                                    fontWeight: activeTab === 'templates' ? '800' : '600',
+                                    cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '0.4rem'
+                                    gap: '0.35rem',
+                                    boxShadow: activeTab === 'templates' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s'
                                 }}
                             >
-                                <ClipboardList size={15} /> Listas de Cotización
+                                Listas de Cotización
                             </button>
                         </div>
                     </div>
+                </div>
                 )}
 
                 {activeTab === 'models' ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2.5fr', gap: '2rem', alignItems: 'start' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
 
-                    {/* --- LEFT: MODELS LIST --- */}
-                    <div style={{ 
-                        backgroundColor: 'white', 
-                        borderRadius: THEME.radius.lg, 
-                        boxShadow: THEME.shadow.md, 
+                    {/* --- MASTER MODEL SELECTOR & ACTION BAR (Full-Width Swiss Precision) --- */}
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: THEME.radius.lg,
+                        boxShadow: THEME.shadow.sm,
                         border: `1px solid ${THEME.colors.border}`,
-                        position: 'sticky',
-                        top: embedded ? '142px' : '95px',
-                        alignSelf: 'start'
+                        padding: '0.85rem 1.25rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem'
                     }}>
-                        <div style={{ padding: '0.85rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Modelos de Precios</h2>
-                            <button 
-                                onClick={() => { setIsCreating(true); setCreateModelError(null); setNewModelName(''); setNewModelDesc(''); }} 
-                                style={{ 
-                                    padding: '0.35rem 0.55rem', 
-                                    borderRadius: '6px', 
-                                    border: 'none', 
-                                    backgroundColor: THEME.colors.primary, 
-                                    color: 'white', 
-                                    cursor: 'pointer', 
-                                    fontWeight: 'bold',
-                                    fontSize: '0.9rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 2px 4px rgba(13, 122, 87, 0.15)'
-                                }}
-                            >
-                                <Plus size={15} />
-                            </button>
-                        </div>
+                        {/* ROW 1: MASTER SELECTOR + NEW BUTTON + ACTIONS */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', flex: 1, minWidth: '320px' }}>
+                                <span style={{ fontSize: '0.68rem', fontWeight: '800', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#64748B', whiteSpace: 'nowrap' }}>
+                                    Modelo de Precios:
+                                </span>
 
-                        {/* CREATE FORM */}
-                        {isCreating && (
-                            <div style={{ padding: '1.25rem', backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                {createModelError && (
-                                    <div style={{
-                                        padding: '0.65rem 0.75rem',
-                                        marginBottom: '0.75rem',
+                                <div ref={modelPickerRef} style={{ position: 'relative', minWidth: '340px', maxWidth: '520px', flex: 1 }}>
+                                    <input
+                                        type="text"
+                                        value={isModelPickerOpen ? modelSearchQuery : (selectedModel ? `${selectedModel.name} — Margen Base: ${selectedModel.base_margin_percent}%` : '')}
+                                        placeholder="Buscar modelo de precios..."
+                                        onFocus={() => {
+                                            setIsModelPickerOpen(true);
+                                            setModelSearchQuery('');
+                                        }}
+                                        onChange={e => {
+                                            setModelSearchQuery(e.target.value);
+                                            if (!isModelPickerOpen) setIsModelPickerOpen(true);
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.5rem 0.85rem',
+                                            borderRadius: '8px',
+                                            border: isModelPickerOpen ? `1.5px solid ${THEME.colors.primary}` : `1.5px solid ${THEME.colors.border}`,
+                                            backgroundColor: isModelPickerOpen ? '#FFFFFF' : '#F8FAFC',
+                                            fontWeight: '700',
+                                            fontSize: '0.88rem',
+                                            color: THEME.colors.textMain,
+                                            cursor: 'text',
+                                            outline: 'none',
+                                            boxShadow: isModelPickerOpen ? '0 0 0 2px rgba(13, 122, 87, 0.15)' : 'none',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    />
+                                    {isModelPickerOpen && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 4px)',
+                                            left: 0,
+                                            right: 0,
+                                            backgroundColor: 'white',
+                                            border: `1px solid ${THEME.colors.border}`,
+                                            borderRadius: '8px',
+                                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                            zIndex: 100,
+                                            maxHeight: '280px',
+                                            overflowY: 'auto'
+                                        }}>
+                                            {models
+                                                .filter(m => {
+                                                    if (!modelSearchQuery.trim()) return true;
+                                                    const q = modelSearchQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                                    const name = (m.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                                    return name.includes(q);
+                                                })
+                                                .map(m => {
+                                                    const isSelected = selectedModel?.id === m.id;
+                                                    const avg = modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0);
+                                                    return (
+                                                        <div
+                                                            key={m.id}
+                                                            onClick={() => {
+                                                                setSelectedModel(m);
+                                                                setIsModelPickerOpen(false);
+                                                                setModelSearchQuery('');
+                                                                setIsEditingModel(false);
+                                                            }}
+                                                            style={{
+                                                                padding: '0.65rem 0.9rem',
+                                                                cursor: 'pointer',
+                                                                borderBottom: '1px solid #F1F5F9',
+                                                                backgroundColor: isSelected ? '#F0FDF4' : 'white',
+                                                                display: 'flex',
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center',
+                                                                gap: '0.5rem',
+                                                                transition: 'background-color 0.1s'
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                if (!isSelected) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                if (!isSelected) e.currentTarget.style.backgroundColor = 'white';
+                                                            }}
+                                                        >
+                                                            <span style={{
+                                                                fontWeight: isSelected ? '800' : '600',
+                                                                color: isSelected ? THEME.colors.primary : THEME.colors.textMain,
+                                                                fontSize: '0.86rem'
+                                                            }}>
+                                                                {m.name}
+                                                            </span>
+                                                            <span style={{
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '700',
+                                                                color: isSelected ? '#065F46' : '#64748B',
+                                                                backgroundColor: isSelected ? '#DCFCE7' : '#F1F5F9',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                Margen: {m.base_margin_percent}% (Prom: {formatNumber(avg, 1)}%)
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button
+                                    onClick={() => { setIsCreating(true); setCreateModelError(null); setNewModelName(''); setNewModelDesc(''); }}
+                                    style={{
+                                        padding: '0.45rem 0.85rem',
                                         borderRadius: '6px',
-                                        backgroundColor: '#FEF2F2',
-                                        border: '1px solid #FCA5A5',
-                                        color: '#991B1B',
+                                        border: 'none',
+                                        backgroundColor: THEME.colors.primary,
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontWeight: '700',
                                         fontSize: '0.8rem',
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: '0.5rem',
-                                        lineHeight: '1.3'
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        boxShadow: '0 1px 3px rgba(13, 122, 87, 0.2)'
+                                    }}
+                                >
+                                    Nuevo Modelo
+                                </button>
+
+                                {selectedModel && (
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        backgroundColor: '#ECFDF5',
+                                        border: '1px solid #A7F3D0',
+                                        padding: '0.3rem 0.65rem',
+                                        borderRadius: '6px'
                                     }}>
-                                        <AlertCircle size={16} color="#DC2626" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                        <span>{createModelError}</span>
+                                        <span style={{ fontSize: '0.62rem', fontWeight: '800', textTransform: 'uppercase', color: '#065F46' }}>Promedio Real:</span>
+                                        <span style={{ fontSize: '0.88rem', fontWeight: '900', color: '#0D7A57' }}>
+                                            {formatNumber(modelAverages[selectedModel.id] !== undefined ? modelAverages[selectedModel.id] : (selectedModel.base_margin_percent || 0), 1)}%
+                                        </span>
                                     </div>
                                 )}
-                                <input 
-                                    placeholder="Nombre (ej: B2B Premium)" 
-                                    value={newModelName} 
-                                    onChange={e => {
-                                        setNewModelName(e.target.value);
-                                        if (createModelError) setCreateModelError(null);
-                                    }} 
-                                    disabled={isSubmittingModel}
-                                    style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
-                                />
-                                <input 
-                                    placeholder="Uso (ej: Clientes B2B con 30 días de plazo)" 
-                                    value={newModelDesc} 
-                                    onChange={e => setNewModelDesc(e.target.value)} 
-                                    disabled={isSubmittingModel}
-                                    style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
-                                />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.8rem' }}>
-                                    <label style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain }}>Margen Base %:</label>
+                            </div>
+
+                            {/* Right: Actions */}
+                            {selectedModel && (
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    {selectedModel.name === 'Clientes B2C' && (
+                                        <button
+                                            onClick={syncPricesToCatalog}
+                                            disabled={isSyncing}
+                                            style={{
+                                                backgroundColor: THEME.colors.primary,
+                                                color: 'white',
+                                                border: 'none',
+                                                padding: '0.45rem 0.85rem',
+                                                borderRadius: '6px',
+                                                fontWeight: '700',
+                                                cursor: isSyncing ? 'not-allowed' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.35rem',
+                                                fontSize: '0.78rem'
+                                            }}
+                                        >
+                                            
+                                            {isSyncing ? 'Fijando...' : 'Fijar Precios'}
+                                        </button>
+                                    )}
+
+                                    <button
+                                        onClick={() => setShowExcelModal(true)}
+                                        style={{
+                                            backgroundColor: '#F0FDF4',
+                                            color: '#0D7A57',
+                                            border: '1px solid #BBF7D0',
+                                            padding: '0.45rem 0.85rem',
+                                            borderRadius: '6px',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            fontSize: '0.78rem'
+                                        }}
+                                    >
+                                        Excel
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            setEditModelData({
+                                                name: selectedModel.name,
+                                                description: selectedModel.description,
+                                                margin: selectedModel.base_margin_percent,
+                                                color_tag: selectedModel.color_tag || null
+                                            });
+                                            setIsEditingModel(true);
+                                        }}
+                                        style={{
+                                            color: '#475569',
+                                            backgroundColor: '#F8FAFC',
+                                            border: '1px solid #E2E8F0',
+                                            padding: '0.45rem 0.85rem',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            fontWeight: '700',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            fontSize: '0.78rem'
+                                        }}
+                                    >
+                                        Editar
+                                    </button>
+
+                                    <button
+                                        onClick={() => deleteModel(selectedModel.id, selectedModel.name)}
+                                        style={{
+                                            color: '#9CA3AF',
+                                            background: '#F8FAFC',
+                                            border: '1px solid #E2E8F0',
+                                            padding: '0.45rem',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                        title="Eliminar Modelo"
+                                    >
+                                        Eliminar
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ROW 2: SUB-CINTA ESBELTA (Margen Base + Descripción + Recálculo Nocturno) */}
+                        {selectedModel && !isEditingModel && (
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '0.75rem',
+                                paddingTop: '0.5rem',
+                                borderTop: `1px solid ${THEME.colors.border || '#F1F5F9'}`
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#EAFDF4', color: '#0D7A57', padding: '0.2rem 0.55rem', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        Margen Base: {selectedModel.base_margin_percent}%
+                                    </span>
+
+                                    {selectedModel.color_tag && (
+                                        <span style={{
+                                            fontSize: '0.7rem',
+                                            fontWeight: '700',
+                                            padding: '0.15rem 0.5rem',
+                                            borderRadius: '10px',
+                                            backgroundColor: selectedModel.color_tag === 'verde' ? '#DCFCE7' : selectedModel.color_tag === 'amarillo' ? '#FEF3C7' : '#FEE2E2',
+                                            color: selectedModel.color_tag === 'verde' ? '#15803D' : selectedModel.color_tag === 'amarillo' ? '#B45309' : '#B91C1C'
+                                        }}>
+                                            {selectedModel.color_tag === 'verde' ? 'Segmento Verde (Grande)' : selectedModel.color_tag === 'amarillo' ? 'Segmento Amarillo (Mediano)' : 'Segmento Rojo (Pequeño)'}
+                                        </span>
+                                    )}
+
+                                    {selectedModel.description && (
+                                        <span style={{ color: THEME.colors.textSecondary, fontSize: '0.78rem', maxWidth: '600px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {selectedModel.description}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Recálculo Nocturno */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        Recálculo medianoche:
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '0.2rem' }}>
+                                        {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((dayName, idx) => {
+                                            const isSelected = (selectedModel.autosync_days || [0, 1, 2, 3, 4, 5, 6]).includes(idx);
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => toggleAutosyncDay(idx)}
+                                                    title={`Recalcular día ${dayName}`}
+                                                    style={{
+                                                        width: '20px',
+                                                        height: '20px',
+                                                        borderRadius: '50%',
+                                                        border: 'none',
+                                                        backgroundColor: isSelected ? THEME.colors.primary : '#E2E8F0',
+                                                        color: isSelected ? 'white' : '#64748B',
+                                                        fontWeight: 'bold',
+                                                        fontSize: '0.62rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                >
+                                                    {dayName}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', borderLeft: `1px solid ${THEME.colors.border}`, paddingLeft: '0.6rem' }}>
+                                        <button
+                                            onClick={toggleAutosyncEnabled}
+                                            title={selectedModel.b2c_autosync_enabled ? 'Desactivar recálculo automático' : 'Activar recálculo automático'}
+                                            style={{
+                                                width: '28px',
+                                                height: '16px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                backgroundColor: selectedModel.b2c_autosync_enabled ? THEME.colors.primary : '#CBD5E1',
+                                                position: 'relative',
+                                                cursor: 'pointer',
+                                                padding: 0
+                                            }}
+                                        >
+                                            <span style={{
+                                                width: '12px',
+                                                height: '12px',
+                                                borderRadius: '50%',
+                                                backgroundColor: 'white',
+                                                position: 'absolute',
+                                                top: '2px',
+                                                left: selectedModel.b2c_autosync_enabled ? '14px' : '2px',
+                                                transition: 'left 0.2s'
+                                            }} />
+                                        </button>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 'bold', color: selectedModel.b2c_autosync_enabled ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                            {selectedModel.b2c_autosync_enabled ? 'Activo' : 'Inactivo'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* INLINE BANNER: CREATE NEW MODEL */}
+                    {isCreating && (
+                        <div style={{
+                            backgroundColor: '#F8FAFC',
+                            padding: '1.25rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1.5px solid ${THEME.colors.primary}`,
+                            boxShadow: THEME.shadow.sm
+                        }}>
+                            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.primary, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                Crear Nuevo Modelo de Precios
+                            </h4>
+                            {createModelError && (
+                                <div style={{
+                                    padding: '0.6rem 0.75rem',
+                                    marginBottom: '0.75rem',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#FEF2F2',
+                                    border: '1px solid #FCA5A5',
+                                    color: '#991B1B',
+                                    fontSize: '0.8rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem'
+                                }}>
+                                    <AlertCircle size={15} color="#DC2626" />
+                                    <span>{createModelError}</span>
+                                </div>
+                            )}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Nombre del Modelo *</label>
+                                    <input 
+                                        placeholder="Ej: B2B Premium o 30 días" 
+                                        value={newModelName} 
+                                        onChange={e => {
+                                            setNewModelName(e.target.value);
+                                            if (createModelError) setCreateModelError(null);
+                                        }} 
+                                        disabled={isSubmittingModel}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Uso / Segmento</label>
+                                    <input 
+                                        placeholder="Ej: Clientes B2B con 30 días de plazo" 
+                                        value={newModelDesc} 
+                                        onChange={e => setNewModelDesc(e.target.value)} 
+                                        disabled={isSubmittingModel}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Margen Base %</label>
                                     <input 
                                         type="number" 
                                         value={newModelMargin || ''} 
@@ -1356,12 +1722,11 @@ export default function PricingSettingsPage({
                                             const val = parseFloat(e.target.value);
                                             setNewModelMargin(isNaN(val) ? 0 : val);
                                         }} 
-                                        style={{ width: '80px', padding: '0.4rem', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, fontWeight: 'bold' }} 
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontWeight: 'bold' }} 
                                     />
                                 </div>
-
-                                <div style={{ marginBottom: '1rem' }}>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', marginBottom: '0.3rem', color: THEME.colors.textSecondary }}>🆕 CLONAR REGLAS DESDE (Opcional):</label>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Clonar Reglas Desde (Opcional)</label>
                                     <select 
                                         value={cloneFromModelId} 
                                         disabled={isSubmittingModel}
@@ -1374,561 +1739,162 @@ export default function PricingSettingsPage({
                                         ))}
                                     </select>
                                 </div>
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <button 
-                                        onClick={createModel} 
-                                        disabled={isSubmittingModel || !newModelName.trim()} 
-                                        style={{ 
-                                            flex: 1, 
-                                            padding: '0.5rem', 
-                                            borderRadius: '6px', 
-                                            backgroundColor: (isSubmittingModel || !newModelName.trim()) ? '#9CA3AF' : THEME.colors.primary, 
-                                            color: 'white', 
-                                            border: 'none', 
-                                            cursor: (isSubmittingModel || !newModelName.trim()) ? 'not-allowed' : 'pointer', 
-                                            fontWeight: 'bold', 
-                                            fontSize: '0.85rem',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '0.35rem',
-                                            transition: 'background-color 0.2s'
-                                        }}
-                                    >
-                                        {isSubmittingModel ? (
-                                            <>
-                                                <Loader2 size={14} className="animate-spin" />
-                                                <span>Guardando...</span>
-                                            </>
-                                        ) : (
-                                            'Guardar'
-                                        )}
-                                    </button>
-                                    <button 
-                                        onClick={() => {
-                                            setIsCreating(false);
-                                            setCreateModelError(null);
-                                        }} 
-                                        disabled={isSubmittingModel} 
-                                        style={{ 
-                                            flex: 1, 
-                                            padding: '0.5rem', 
-                                            borderRadius: '6px', 
-                                            backgroundColor: '#D1D5DB', 
-                                            border: 'none', 
-                                            cursor: isSubmittingModel ? 'not-allowed' : 'pointer', 
-                                            fontWeight: 'bold', 
-                                            fontSize: '0.85rem', 
-                                            color: '#374151' 
-                                        }}
-                                    >
-                                        Cancelar
-                                    </button>
-                                </div>
                             </div>
-                        )}
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                <button 
+                                    onClick={() => { setIsCreating(false); setCreateModelError(null); }} 
+                                    disabled={isSubmittingModel} 
+                                    style={{ padding: '0.45rem 1rem', borderRadius: '6px', backgroundColor: '#E2E8F0', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem', color: '#475569' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={createModel} 
+                                    disabled={isSubmittingModel || !newModelName.trim()} 
+                                    style={{ 
+                                        padding: '0.45rem 1.25rem', 
+                                        borderRadius: '6px', 
+                                        backgroundColor: (isSubmittingModel || !newModelName.trim()) ? '#9CA3AF' : THEME.colors.primary, 
+                                        color: 'white', 
+                                        border: 'none', 
+                                        cursor: (isSubmittingModel || !newModelName.trim()) ? 'not-allowed' : 'pointer', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.82rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem'
+                                    }}
+                                >
+                                    
+                                    {isSubmittingModel ? 'Guardando...' : 'Crear Modelo'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
-                        {/* PINNED BASE MODEL OR LIST */}
-                        {(() => {
-                            const isBaseModel = (m: any) => m.id === GENERAL_INSTITUCIONAL_ID || m.name === 'General institucional dinámico' || m.name === 'General Institucional';
-                            const baseModel = models.find(isBaseModel);
-                            const otherModels = models.filter(m => !isBaseModel(m));
-
-                            return (
+                    {/* INLINE BANNER: EDIT MODEL */}
+                    {isEditingModel && selectedModel && (
+                        <div style={{
+                            backgroundColor: '#F8FAFC',
+                            padding: '1.25rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1.5px solid ${THEME.colors.primary}`,
+                            boxShadow: THEME.shadow.sm
+                        }}>
+                            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                Editar Modelo: {selectedModel.name}
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                 <div>
-                                    {/* DOCKED TOP CARD: General institucional dinámico */}
-                                    {baseModel && (
-                                        <div style={{ borderBottom: `2px solid ${THEME.colors.border}`, backgroundColor: '#FAFAFA' }}>
-                                            <div style={{ padding: '0.4rem 1.15rem 0.2rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                <span style={{ fontSize: '0.62rem', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', color: '#0D7A57', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Crown size={12} color="#0D7A57" /> Modelo Base Maestro
-                                                </span>
-                                            </div>
-                                            <div
-                                                onClick={() => setSelectedModel(baseModel)}
-                                                style={{
-                                                    padding: '0.75rem 1.15rem 0.9rem',
-                                                    cursor: 'pointer',
-                                                    backgroundColor: selectedModel?.id === baseModel.id ? '#ECFDF5' : '#FAFAFA',
-                                                    borderLeft: selectedModel?.id === baseModel.id ? `4px solid ${THEME.colors.primary}` : '4px solid #10B981',
-                                                    transition: 'all 0.2s',
-                                                    borderTop: '1px solid #F1F5F9'
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <div style={{ flex: 1, paddingRight: '0.75rem' }}>
-                                                        <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain, marginBottom: '0.15rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            {baseModel.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#10B981" /></span>}
-                                                            {baseModel.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#F59E0B" /></span>}
-                                                            {baseModel.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#EF4444" /></span>}
-                                                            <div style={{ color: '#0F172A' }}>
-                                                                {baseModel.name}
-                                                            </div>
-                                                        </div>
-                                                        {baseModel.description && (
-                                                            <div style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
-                                                                {baseModel.description}
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div style={{
-                                                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                                        backgroundColor: selectedModel?.id === baseModel.id ? '#D1FAE5' : '#E2E8F0',
-                                                        padding: '0.35rem 0.6rem', borderRadius: '8px', minWidth: '65px'
-                                                    }}>
-                                                        <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.03em', color: selectedModel?.id === baseModel.id ? '#065F46' : '#64748B' }}>PROMEDIO</span>
-                                                        <span style={{ fontWeight: '900', fontSize: '1.1rem', color: selectedModel?.id === baseModel.id ? '#0D7A57' : '#1E293B' }}>
-                                                            {formatNumber(modelAverages[baseModel.id] !== undefined ? modelAverages[baseModel.id] : (baseModel.base_margin_percent || 0), 1)}%
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* SCROLLABLE DERIVED MODELS LIST */}
-                                    <div style={{ maxHeight: baseModel ? 'calc(100vh - 310px)' : 'calc(100vh - 220px)', overflowY: 'auto' }}>
-                                        {loadingModels ? (
-                                            <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando modelos...</div>
-                                        ) : otherModels.map(m => (
-                                            <div
-                                                key={m.id}
-                                                onClick={() => setSelectedModel(m)}
-                                                style={{
-                                                    padding: '0.85rem 1.15rem',
-                                                    borderBottom: `1px solid ${THEME.colors.border}`,
-                                                    cursor: 'pointer',
-                                                    backgroundColor: selectedModel?.id === m.id ? '#F0FDF4' : 'white',
-                                                    borderLeft: selectedModel?.id === m.id ? `4px solid ${THEME.colors.primary}` : '4px solid transparent',
-                                                    transition: 'background 0.2s'
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <div style={{ flex: 1, paddingRight: '0.75rem' }}>
-                                                        <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain, marginBottom: '0.15rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            {m.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#10B981" /></span>}
-                                                            {m.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#F59E0B" /></span>}
-                                                            {m.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#EF4444" /></span>}
-                                                            <div>
-                                                                {(() => {
-                                                                    const parts = m.name.split(/(\d+\s*días)/i);
-                                                                    return parts.map((part: string, i: number) => (
-                                                                        <span key={i} style={{ 
-                                                                            color: /(\d+\s*días)/i.test(part) ? '#0D7A57' : 'inherit',
-                                                                            fontSize: /(\d+\s*días)/i.test(part) ? '0.95em' : 'inherit'
-                                                                        }}>
-                                                                            {part}
-                                                                        </span>
-                                                                    ));
-                                                                })()}
-                                                            </div>
-                                                        </div>
-                                                        {m.description && (
-                                                            <div style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
-                                                                {m.description}
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div style={{
-                                                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                                        backgroundColor: selectedModel?.id === m.id ? '#D1FAE5' : '#F3F4F6',
-                                                        padding: '0.35rem 0.6rem', borderRadius: '8px', minWidth: '65px'
-                                                    }}>
-                                                        <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.03em', color: selectedModel?.id === m.id ? '#065F46' : '#64748B' }}>PROMEDIO</span>
-                                                        <span style={{ fontWeight: '900', fontSize: '1.1rem', color: selectedModel?.id === m.id ? '#0D7A57' : '#1E293B' }}>
-                                                            {formatNumber(modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0), 1)}%
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Nombre del Modelo</label>
+                                    <input
+                                        value={editModelData.name}
+                                        onChange={e => setEditModelData({ ...editModelData, name: e.target.value })}
+                                        style={{ width: '100%', padding: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px' }}
+                                    />
                                 </div>
-                            );
-                        })()}
-                    </div>
-
-                    {/* --- RIGHT: PRICING MATRIX VIEW --- */}
-                    {selectedModel ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            
-                            {/* REDESIGNED MODEL DETAILS HEADER */}
-                            {isEditingModel ? (
-                                <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}` }}>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Nombre del Modelo</label>
-                                        <input
-                                            value={editModelData.name}
-                                            onChange={e => setEditModelData({ ...editModelData, name: e.target.value })}
-                                            style={{ width: '100%', padding: '0.55rem', fontSize: '1.1rem', fontWeight: 'bold', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', marginTop: '0.2rem' }}
-                                        />
-                                    </div>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Uso / Descripción</label>
-                                        <input
-                                            value={editModelData.description}
-                                            onChange={e => setEditModelData({ ...editModelData, description: e.target.value })}
-                                            style={{ width: '100%', padding: '0.55rem', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', marginTop: '0.2rem' }}
-                                        />
-                                    </div>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Margen Base (%)</label>
-                                        <input
-                                            type="number"
-                                            value={editModelData.margin || ''}
-                                            onChange={e => {
-                                                const val = parseFloat(e.target.value);
-                                                setEditModelData({ ...editModelData, margin: isNaN(val) ? 0 : val });
-                                            }}
-                                            style={{ width: '100px', padding: '0.55rem', fontSize: '1.1rem', fontWeight: 'bold', color: THEME.colors.primary, border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', marginTop: '0.2rem' }}
-                                        />
-                                    </div>
-                                    <div style={{ marginBottom: '1.25rem' }}>
-                                         <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'block', marginBottom: '0.4rem' }}>
-                                             Asignar Semáforo (Clasificación B2B)
-                                         </label>
-                                         <div style={{ display: 'flex', gap: '10px' }}>
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'verde' ? null : 'verde' })}
-                                                 style={{
-                                                     padding: '0.4rem 0.8rem',
-                                                     borderRadius: '6px',
-                                                     border: editModelData.color_tag === 'verde' ? '2px solid #10B981' : '1px solid #E2E8F0',
-                                                     backgroundColor: editModelData.color_tag === 'verde' ? '#DCFCE7' : 'white',
-                                                     color: editModelData.color_tag === 'verde' ? '#15803D' : '#475569',
-                                                     fontWeight: '800',
-                                                     fontSize: '0.85rem',
-                                                     cursor: 'pointer',
-                                                     display: 'flex',
-                                                     alignItems: 'center',
-                                                     gap: '4px',
-                                                     transition: 'all 0.15s'
-                                                 }}
-                                             >
-                                                 <CircleDot size={14} color="#10B981" /> Verde (Grande)
-                                             </button>
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'amarillo' ? null : 'amarillo' })}
-                                                 style={{
-                                                     padding: '0.4rem 0.8rem',
-                                                     borderRadius: '6px',
-                                                     border: editModelData.color_tag === 'amarillo' ? '2px solid #F59E0B' : '1px solid #E2E8F0',
-                                                     backgroundColor: editModelData.color_tag === 'amarillo' ? '#FEF3C7' : 'white',
-                                                     color: editModelData.color_tag === 'amarillo' ? '#B45309' : '#475569',
-                                                     fontWeight: '800',
-                                                     fontSize: '0.85rem',
-                                                     cursor: 'pointer',
-                                                     display: 'flex',
-                                                     alignItems: 'center',
-                                                     gap: '6px',
-                                                     transition: 'all 0.15s'
-                                                 }}
-                                             >
-                                                 <CircleDot size={14} color="#F59E0B" /> Amarillo (Mediano)
-                                             </button>
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'rojo' ? null : 'rojo' })}
-                                                 style={{
-                                                     padding: '0.4rem 0.8rem',
-                                                     borderRadius: '6px',
-                                                     border: editModelData.color_tag === 'rojo' ? '2px solid #EF4444' : '1px solid #E2E8F0',
-                                                     backgroundColor: editModelData.color_tag === 'rojo' ? '#FEE2E2' : 'white',
-                                                     color: editModelData.color_tag === 'rojo' ? '#B91C1C' : '#475569',
-                                                     fontWeight: '800',
-                                                     fontSize: '0.85rem',
-                                                     cursor: 'pointer',
-                                                     display: 'flex',
-                                                     alignItems: 'center',
-                                                  }} >
-                                                 <CircleDot size={14} color="#EF4444" /> Rojo (Pequeño)
-                                             </button>
-                                         </div>
-                                     </div>
-                                    <div style={{ display: 'flex', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Uso / Descripción</label>
+                                    <input
+                                        value={editModelData.description}
+                                        onChange={e => setEditModelData({ ...editModelData, description: e.target.value })}
+                                        style={{ width: '100%', padding: '0.5rem', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', fontSize: '0.85rem' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Margen Base (%)</label>
+                                    <input
+                                        type="number"
+                                        value={editModelData.margin || ''}
+                                        onChange={e => {
+                                            const val = parseFloat(e.target.value);
+                                            setEditModelData({ ...editModelData, margin: isNaN(val) ? 0 : val });
+                                        }}
+                                        style={{ width: '100%', padding: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: THEME.colors.primary, border: `1px solid ${THEME.colors.border}`, borderRadius: '6px' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Clasificación Semáforo B2B</label>
+                                    <div style={{ display: 'flex', gap: '6px' }}>
                                         <button 
-                                            onClick={saveModelChanges} 
-                                            style={{ 
-                                                padding: '0.55rem 1.25rem', 
-                                                backgroundColor: THEME.colors.primary, 
-                                                color: 'white', 
-                                                border: 'none', 
-                                                borderRadius: '8px', 
-                                                fontWeight: '800', 
+                                            type="button"
+                                            onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'verde' ? null : 'verde' })}
+                                            style={{
+                                                padding: '0.35rem 0.6rem',
+                                                borderRadius: '6px',
+                                                border: editModelData.color_tag === 'verde' ? '2px solid #10B981' : '1px solid #E2E8F0',
+                                                backgroundColor: editModelData.color_tag === 'verde' ? '#DCFCE7' : 'white',
+                                                color: editModelData.color_tag === 'verde' ? '#15803D' : '#475569',
+                                                fontWeight: '700',
+                                                fontSize: '0.75rem',
                                                 cursor: 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '0.4rem',
-                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)',
-                                                fontSize: '0.85rem'
+                                                gap: '3px'
                                             }}
                                         >
-                                            <Save size={16} /> Guardar Cambios
+                                            <CircleDot size={12} color="#10B981" /> Verde
                                         </button>
                                         <button 
-                                            onClick={() => setIsEditingModel(false)} 
-                                            style={{ 
-                                                padding: '0.55rem 1.25rem', 
-                                                backgroundColor: 'white', 
-                                                color: THEME.colors.textSecondary, 
-                                                border: `1px solid ${THEME.colors.border}`, 
-                                                borderRadius: '8px', 
+                                            type="button"
+                                            onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'amarillo' ? null : 'amarillo' })}
+                                            style={{
+                                                padding: '0.35rem 0.6rem',
+                                                borderRadius: '6px',
+                                                border: editModelData.color_tag === 'amarillo' ? '2px solid #F59E0B' : '1px solid #E2E8F0',
+                                                backgroundColor: editModelData.color_tag === 'amarillo' ? '#FEF3C7' : 'white',
+                                                color: editModelData.color_tag === 'amarillo' ? '#B45309' : '#475569',
+                                                fontWeight: '700',
+                                                fontSize: '0.75rem',
                                                 cursor: 'pointer',
-                                                fontWeight: '600',
-                                                fontSize: '0.85rem'
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
                                             }}
                                         >
-                                            Cancelar
+                                            <CircleDot size={12} color="#F59E0B" /> Amarillo
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'rojo' ? null : 'rojo' })}
+                                            style={{
+                                                padding: '0.35rem 0.6rem',
+                                                borderRadius: '6px',
+                                                border: editModelData.color_tag === 'rojo' ? '2px solid #EF4444' : '1px solid #E2E8F0',
+                                                backgroundColor: editModelData.color_tag === 'rojo' ? '#FEE2E2' : 'white',
+                                                color: editModelData.color_tag === 'rojo' ? '#B91C1C' : '#475569',
+                                                fontWeight: '700',
+                                                fontSize: '0.75rem',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}
+                                        >
+                                            <CircleDot size={12} color="#EF4444" /> Rojo
                                         </button>
                                     </div>
                                 </div>
-                            ) : (
-                                <div style={{ 
-                                    backgroundColor: 'white', 
-                                    padding: '0.85rem 1.25rem', 
-                                    borderRadius: THEME.radius.lg, 
-                                    boxShadow: THEME.shadow.sm, 
-                                    border: `1px solid ${THEME.colors.border}`,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '0.65rem'
-                                }}>
-                                    {/* Top Row: Title, Base Margin Badge & Actions */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                                        {/* Left: Title & Inline Margen Base */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                            <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                {(() => {
-                                                    const parts = selectedModel.name.split(/(\d+\s*días)/i);
-                                                    return parts.map((part, i) => (
-                                                        <span key={i} style={{ color: /(\d+\s*días)/i.test(part) ? THEME.colors.primary : 'inherit' }}>
-                                                            {part}
-                                                        </span>
-                                                    ));
-                                                })()}
-                                            </h1>
-                                            <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#EAFDF4', color: '#0D7A57', padding: '0.25rem 0.6rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                                                <TrendingUp size={12} /> Margen Base: {selectedModel.base_margin_percent}%
-                                            </span>
-                                            {selectedModel.name === 'Clientes B2C' && (
-                                                <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '0.25rem 0.6rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                                                    <Globe size={12} /> Web B2C
-                                                </span>
-                                            )}
-                                        </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                <button 
+                                    onClick={() => setIsEditingModel(false)} 
+                                    style={{ padding: '0.45rem 1rem', borderRadius: '6px', backgroundColor: '#E2E8F0', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem', color: '#475569' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={saveModelChanges} 
+                                    style={{ padding: '0.45rem 1.25rem', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '6px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem' }}
+                                >
+                                    Guardar Cambios
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
-                                        {/* Right: Actions */}
-                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                            {selectedModel.name === 'Clientes B2C' && (
-                                                <button
-                                                    onClick={syncPricesToCatalog}
-                                                    disabled={isSyncing}
-                                                    style={{ 
-                                                        backgroundColor: THEME.colors.primary, 
-                                                        color: 'white', 
-                                                        border: 'none', 
-                                                        padding: '0.45rem 0.9rem', 
-                                                        borderRadius: '6px', 
-                                                        fontWeight: '800', 
-                                                        cursor: isSyncing ? 'not-allowed' : 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.35rem',
-                                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.15)',
-                                                        opacity: isSyncing ? 0.7 : 1,
-                                                        fontSize: '0.78rem'
-                                                    }}
-                                                >
-                                                    {isSyncing ? <RefreshCw size={13} className="animate-spin" style={{ color: 'white' }} /> : <Rocket size={13} />} 
-                                                    {isSyncing ? 'Fijando...' : 'Fijar Precios'}
-                                                </button>
-                                            )}
-
-                                            <button
-                                                onClick={() => setShowExcelModal(true)}
-                                                style={{ 
-                                                    backgroundColor: '#F0FDF4', 
-                                                    color: '#0D7A57', 
-                                                    border: '1px solid #BBF7D0', 
-                                                    padding: '0.45rem 0.9rem', 
-                                                    borderRadius: '6px', 
-                                                    fontWeight: '700', 
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.35rem',
-                                                    fontSize: '0.78rem'
-                                                }}
-                                            >
-                                                <FileDown size={13} /> Cargar / Descargar
-                                            </button>
-
-                                            <button
-                                                onClick={() => {
-                                                    setEditModelData({
-                                                        name: selectedModel.name,
-                                                        description: selectedModel.description,
-                                                        margin: selectedModel.base_margin_percent,
-                                                        color_tag: selectedModel.color_tag || null
-                                                    });
-                                                    setIsEditingModel(true);
-                                                }}
-                                                style={{ 
-                                                    color: '#475569', 
-                                                    backgroundColor: '#F8FAFC', 
-                                                    border: '1px solid #E2E8F0', 
-                                                    padding: '0.45rem 0.9rem', 
-                                                    borderRadius: '6px', 
-                                                    cursor: 'pointer', 
-                                                    fontWeight: '700', 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    gap: '0.35rem',
-                                                    fontSize: '0.78rem',
-                                                    transition: 'all 0.15s'
-                                                }}
-                                                onMouseOver={(e) => {
-                                                    e.currentTarget.style.backgroundColor = '#F1F5F9';
-                                                    e.currentTarget.style.borderColor = '#CBD5E1';
-                                                }}
-                                                onMouseOut={(e) => {
-                                                    e.currentTarget.style.backgroundColor = '#F8FAFC';
-                                                    e.currentTarget.style.borderColor = '#E2E8F0';
-                                                }}
-                                            >
-                                                <Edit3 size={13} /> Editar
-                                            </button>
-
-                                            <button 
-                                                onClick={() => deleteModel(selectedModel.id, selectedModel.name)} 
-                                                style={{ 
-                                                    color: '#9CA3AF', 
-                                                    background: '#F8FAFC', 
-                                                    border: '1px solid #E2E8F0', 
-                                                    padding: '0.45rem', 
-                                                    borderRadius: '6px', 
-                                                    cursor: 'pointer', 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    justifyContent: 'center',
-                                                    transition: 'all 0.15s'
-                                                }}
-                                                onMouseOver={(e) => {
-                                                    e.currentTarget.style.color = '#EF4444';
-                                                    e.currentTarget.style.borderColor = '#FEE2E2';
-                                                    e.currentTarget.style.backgroundColor = '#FEF2F2';
-                                                }}
-                                                onMouseOut={(e) => {
-                                                    e.currentTarget.style.color = '#9CA3AF';
-                                                    e.currentTarget.style.borderColor = '#E2E8F0';
-                                                    e.currentTarget.style.backgroundColor = '#F8FAFC';
-                                                }}
-                                                title="Eliminar Modelo"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Bottom Row: Description & Inline Scheduler */}
-                                    <div style={{ 
-                                        display: 'flex', 
-                                        justifyContent: 'space-between', 
-                                        alignItems: 'center', 
-                                        flexWrap: 'wrap', 
-                                        gap: '0.75rem',
-                                        paddingTop: '0.5rem',
-                                        borderTop: `1px solid ${THEME.colors.border || '#F1F5F9'}`
-                                    }}>
-                                        {/* Description */}
-                                        <p style={{ color: THEME.colors.textSecondary, margin: 0, fontWeight: '500', fontSize: '0.82rem', maxWidth: '650px', lineHeight: 1.3 }}>
-                                            {selectedModel.description}
-                                        </p>
-
-                                        {/* Inline Autosync scheduler */}
-                                        <div 
-                                            title={`Días activos para recálculo automático a la medianoche: ${getAutosyncDaysSummary(selectedModel.autosync_days)}`}
-                                            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}
-                                        >
-                                            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <Clock size={12} color="#64748B" /> Recálculo medianoche:
-                                            </span>
-
-                                            {/* Days circles */}
-                                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                                {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((dayName, idx) => {
-                                                    const isSelected = (selectedModel.autosync_days || [0, 1, 2, 3, 4, 5, 6]).includes(idx);
-                                                    return (
-                                                        <button
-                                                            key={idx}
-                                                            onClick={() => toggleAutosyncDay(idx)}
-                                                            title={`Recalcular día ${dayName}`}
-                                                            style={{
-                                                                width: '22px',
-                                                                height: '22px',
-                                                                borderRadius: '50%',
-                                                                border: 'none',
-                                                                backgroundColor: isSelected ? THEME.colors.primary : '#E2E8F0',
-                                                                color: isSelected ? 'white' : '#64748B',
-                                                                fontWeight: 'bold',
-                                                                fontSize: '0.65rem',
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                transition: 'all 0.15s',
-                                                                boxShadow: isSelected ? '0 1px 3px rgba(13, 122, 87, 0.25)' : 'none'
-                                                            }}
-                                                        >
-                                                            {dayName}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-
-                                            {/* Switch toggle */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderLeft: `1px solid ${THEME.colors.border}`, paddingLeft: '0.75rem' }}>
-                                                <button
-                                                    onClick={toggleAutosyncEnabled}
-                                                    title={selectedModel.b2c_autosync_enabled ? 'Desactivar recálculo automático' : 'Activar recálculo automático'}
-                                                    style={{
-                                                        width: '32px',
-                                                        height: '18px',
-                                                        borderRadius: '9px',
-                                                        border: 'none',
-                                                        backgroundColor: selectedModel.b2c_autosync_enabled ? THEME.colors.primary : '#CBD5E1',
-                                                        position: 'relative',
-                                                        cursor: 'pointer',
-                                                        transition: 'background-color 0.2s',
-                                                        padding: 0
-                                                    }}
-                                                >
-                                                    <span style={{
-                                                        width: '14px',
-                                                        height: '14px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: 'white',
-                                                        position: 'absolute',
-                                                        top: '2px',
-                                                        left: selectedModel.b2c_autosync_enabled ? '16px' : '2px',
-                                                        transition: 'left 0.2s',
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.15)'
-                                                    }} />
-                                                </button>
-                                                <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: selectedModel.b2c_autosync_enabled ? THEME.colors.primary : THEME.colors.textSecondary }}>
-                                                    {selectedModel.b2c_autosync_enabled ? 'Activo' : 'Inactivo'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* MAIN PRICING MATRIX TABLE CARD */}
+                    {/* PRICING MATRIX VIEW */}
+                    {selectedModel ? (
                             <div style={{ 
                                 backgroundColor: 'white', 
                                 borderRadius: THEME.radius.lg, 
@@ -2248,412 +2214,581 @@ export default function PricingSettingsPage({
                                     </div>
                                 )}
                             </div>
-                        </div>
                     ) : (
                         <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary, border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, backgroundColor: 'white' }}>
                             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}><ArrowLeftCircle size={44} color="#94A3B8" /></div>
                             <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona un modelo</h3>
-                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige un modelo de precios de la lista de la izquierda para ver y gestionar su matriz.</p>
+                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige un modelo de precios del selector superior para ver y gestionar su matriz.</p>
                         </div>
                     )}
                 </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2.5fr', gap: '2rem', alignItems: 'start' }}>
-                        {/* --- LEFT: TEMPLATES LIST --- */}
-                        <div style={{ 
-                            backgroundColor: 'white', 
-                            borderRadius: THEME.radius.lg, 
-                            boxShadow: THEME.shadow.md, 
-                            border: `1px solid ${THEME.colors.border}`,
-                            position: 'sticky',
-                            top: embedded ? '142px' : '95px',
-                            alignSelf: 'start'
-                        }}>
-                            <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h2 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Listas de Cotización</h2>
-                                <button 
-                                    onClick={() => setIsCreatingTemplate(true)} 
-                                    style={{ 
-                                        padding: '0.4rem 0.6rem', 
-                                        borderRadius: '6px', 
-                                        border: 'none', 
-                                        backgroundColor: THEME.colors.primary, 
-                                        color: 'white', 
-                                        cursor: 'pointer', 
-                                        fontWeight: 'bold',
-                                        fontSize: '1rem',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.15)'
-                                    }}
-                                >
-                                    <Plus size={16} />
-                                </button>
-                            </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
 
-                            {/* CREATE TEMPLATE FORM */}
-                            {isCreatingTemplate && (
-                                <div style={{ padding: '1.25rem', backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                    <input 
-                                        placeholder="Nombre (ej: Lista Larga)" 
-                                        value={newTemplateName} 
-                                        onChange={e => setNewTemplateName(e.target.value)} 
-                                        style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
-                                    />
-                                    <input 
-                                        placeholder="Descripción (ej: Lista con catálogo de productos sugeridos)" 
-                                        value={newTemplateDesc} 
-                                        onChange={e => setNewTemplateDesc(e.target.value)} 
-                                        style={{ width: '100%', padding: '0.55rem', marginBottom: '0.8rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
-                                    />
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <button onClick={createTemplate} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Guardar</button>
-                                        <button onClick={() => setIsCreatingTemplate(false)} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', backgroundColor: '#D1D5DB', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', color: '#374151' }}>Cancelar</button>
-                                    </div>
-                                </div>
-                            )}
+                    {/* --- MASTER TEMPLATE SELECTOR & ACTION BAR (Full-Width Swiss Precision) --- */}
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: THEME.radius.lg,
+                        boxShadow: THEME.shadow.sm,
+                        border: `1px solid ${THEME.colors.border}`,
+                        padding: '0.85rem 1.25rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem'
+                    }}>
+                        {/* ROW 1: MASTER SELECTOR + NEW BUTTON + ACTIONS */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', flex: 1, minWidth: '320px' }}>
+                                <span style={{ fontSize: '0.68rem', fontWeight: '800', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#64748B', whiteSpace: 'nowrap' }}>
+                                    Lista de Cotización:
+                                </span>
 
-                            {/* TEMPLATES LIST */}
-                            <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
-                                {loadingTemplates ? (
-                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando listas...</div>
-                                ) : templates.length === 0 ? (
-                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay listas creadas.</div>
-                                ) : (
-                                    templates.map(t => (
-                                        <div
-                                            key={t.id}
-                                            onClick={() => {
-                                                setSelectedTemplate(t);
-                                                setIsEditingTemplate(false);
-                                            }}
-                                            style={{
-                                                padding: '1.25rem',
-                                                borderBottom: `1px solid ${THEME.colors.border}`,
-                                                cursor: 'pointer',
-                                                backgroundColor: selectedTemplate?.id === t.id ? '#F0FDF4' : 'white',
-                                                borderLeft: selectedTemplate?.id === t.id ? `4px solid ${THEME.colors.primary}` : '4px solid transparent',
-                                                transition: 'background 0.2s'
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div style={{ flex: 1, paddingRight: '0.5rem' }}>
-                                                    <div style={{ fontWeight: '800', fontSize: '1.05rem', color: THEME.colors.textMain, marginBottom: '0.2rem' }}>
-                                                        {t.name}
-                                                    </div>
-                                                    {t.description && (
-                                                        <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>
-                                                            {t.description}
+                                <div ref={templatePickerRef} style={{ position: 'relative', minWidth: '340px', maxWidth: '520px', flex: 1 }}>
+                                    <input
+                                        type="text"
+                                        value={isTemplatePickerOpen ? templateSearchQuery : (selectedTemplate ? `${selectedTemplate.name} (${templateCounts[selectedTemplate.id] || 0} prod.)` : '')}
+                                        placeholder="Buscar lista de cotización..."
+                                        onFocus={() => {
+                                            setIsTemplatePickerOpen(true);
+                                            setTemplateSearchQuery('');
+                                        }}
+                                        onChange={e => {
+                                            setTemplateSearchQuery(e.target.value);
+                                            if (!isTemplatePickerOpen) setIsTemplatePickerOpen(true);
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.5rem 0.85rem',
+                                            borderRadius: '8px',
+                                            border: isTemplatePickerOpen ? `1.5px solid ${THEME.colors.primary}` : `1.5px solid ${THEME.colors.border}`,
+                                            backgroundColor: isTemplatePickerOpen ? '#FFFFFF' : '#F8FAFC',
+                                            fontWeight: '700',
+                                            fontSize: '0.88rem',
+                                            color: THEME.colors.textMain,
+                                            cursor: 'text',
+                                            outline: 'none',
+                                            boxShadow: isTemplatePickerOpen ? '0 0 0 2px rgba(13, 122, 87, 0.15)' : 'none',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    />
+                                    {isTemplatePickerOpen && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 4px)',
+                                            left: 0,
+                                            right: 0,
+                                            backgroundColor: 'white',
+                                            border: `1px solid ${THEME.colors.border}`,
+                                            borderRadius: '8px',
+                                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                            zIndex: 100,
+                                            maxHeight: '280px',
+                                            overflowY: 'auto'
+                                        }}>
+                                            {templates
+                                                .filter(t => {
+                                                    if (!templateSearchQuery.trim()) return true;
+                                                    const q = templateSearchQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                                    const name = (t.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                                    const desc = (t.description || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                                    return name.includes(q) || desc.includes(q);
+                                                })
+                                                .map(t => {
+                                                    const isSelected = selectedTemplate?.id === t.id;
+                                                    return (
+                                                        <div
+                                                            key={t.id}
+                                                            onClick={() => {
+                                                                setSelectedTemplate(t);
+                                                                setIsTemplatePickerOpen(false);
+                                                                setTemplateSearchQuery('');
+                                                                setIsEditingTemplate(false);
+                                                            }}
+                                                            style={{
+                                                                padding: '0.65rem 0.9rem',
+                                                                cursor: 'pointer',
+                                                                borderBottom: '1px solid #F1F5F9',
+                                                                backgroundColor: isSelected ? '#F0FDF4' : 'white',
+                                                                display: 'flex',
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center',
+                                                                gap: '0.5rem',
+                                                                transition: 'background-color 0.1s'
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                if (!isSelected) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                if (!isSelected) e.currentTarget.style.backgroundColor = 'white';
+                                                            }}
+                                                        >
+                                                            <span style={{
+                                                                fontWeight: isSelected ? '800' : '600',
+                                                                color: isSelected ? THEME.colors.primary : THEME.colors.textMain,
+                                                                fontSize: '0.86rem'
+                                                            }}>
+                                                                {t.name}
+                                                            </span>
+                                                            <span style={{
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '700',
+                                                                color: isSelected ? '#065F46' : '#64748B',
+                                                                backgroundColor: isSelected ? '#DCFCE7' : '#F1F5F9',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                {templateCounts[t.id] || 0} prod.
+                                                            </span>
                                                         </div>
-                                                    )}
+                                                    );
+                                                })}
+                                            {templates.filter(t => {
+                                                if (!templateSearchQuery.trim()) return true;
+                                                const q = templateSearchQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                                const name = (t.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                                return name.includes(q);
+                                            }).length === 0 && (
+                                                <div style={{ padding: '1rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.82rem' }}>
+                                                    No se encontraron listas coincidentes
                                                 </div>
-                                                <div style={{
-                                                    backgroundColor: selectedTemplate?.id === t.id ? '#D1FAE5' : '#F3F4F6',
-                                                    padding: '0.3rem 0.6rem',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '800',
-                                                    color: selectedTemplate?.id === t.id ? '#065F46' : '#475569'
-                                                }}>
-                                                    {templateCounts[t.id] || 0} Prod.
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-
-                        {/* --- RIGHT: TEMPLATE ITEMS VIEW --- */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            {selectedTemplate ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    {/* TEMPLATE DETAILS HEADER */}
-                                    {isEditingTemplate ? (
-                                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}` }}>
-                                            <div style={{ marginBottom: '1rem' }}>
-                                                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Nombre de la Lista</label>
-                                                <input
-                                                    value={editTemplateName}
-                                                    onChange={e => setEditTemplateName(e.target.value)}
-                                                    style={{ width: '100%', padding: '0.55rem', fontSize: '1.1rem', fontWeight: 'bold', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', marginTop: '0.2rem' }}
-                                                />
-                                            </div>
-                                            <div style={{ marginBottom: '1rem' }}>
-                                                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Descripción</label>
-                                                <input
-                                                    value={editTemplateDesc}
-                                                    onChange={e => setEditTemplateDesc(e.target.value)}
-                                                    style={{ width: '100%', padding: '0.55rem', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', marginTop: '0.2rem' }}
-                                                />
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                                <button onClick={saveTemplateChanges} style={{ padding: '0.55rem 1.25rem', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)', fontSize: '0.85rem' }}>
-                                                    <Save size={16} /> Guardar Cambios
-                                                </button>
-                                                <button onClick={() => setIsEditingTemplate(false)} style={{ padding: '0.55rem 1.25rem', backgroundColor: 'white', color: THEME.colors.textSecondary, border: `1px solid ${THEME.colors.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>
-                                                    Cancelar
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div>
-                                                <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', fontFamily: THEME.typography.fontFamilyMain, color: THEME.colors.textMain, margin: 0 }}>{selectedTemplate.name}</h1>
-                                                {selectedTemplate.description && (
-                                                    <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{selectedTemplate.description}</p>
-                                                )}
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                                <button
-                                                    onClick={() => {
-                                                        setEditTemplateName(selectedTemplate.name);
-                                                        setEditTemplateDesc(selectedTemplate.description || '');
-                                                        setIsEditingTemplate(true);
-                                                    }}
-                                                    style={{ color: '#2563EB', backgroundColor: '#F0F7FF', border: '1px solid #DBEAFE', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
-                                                >
-                                                    <Edit3 size={14} /> Editar
-                                                </button>
-                                                <button
-                                                    onClick={() => deleteTemplate(selectedTemplate.id, selectedTemplate.name)}
-                                                    style={{ color: '#DC2626', backgroundColor: '#FEF2F2', border: '1px solid #FEE2E2', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
-                                                >
-                                                    <Trash2 size={14} /> Eliminar
-                                                </button>
-                                            </div>
+                                            )}
                                         </div>
                                     )}
-
-                                    {/* TEMPLATE ITEMS TABLE CARD */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden' }}>
-                                        {/* TABLE ACTIONS / SEARCH / EXCEL - Unified Single Row */}
-                                        <div style={{ padding: '0.85rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                                            
-                                            {/* Left: Filter and Excel Actions Group */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                {/* Local filter inside the list */}
-                                                <div style={{ position: 'relative', width: '240px' }}>
-                                                    <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Buscar en esta lista..."
-                                                        value={templateSearchFilter}
-                                                        onChange={e => setTemplateSearchFilter(e.target.value)}
-                                                        style={{
-                                                            width: '100%',
-                                                            padding: '0.45rem 2rem 0.45rem 2.25rem',
-                                                            borderRadius: '8px',
-                                                            border: `1px solid ${THEME.colors.border}`,
-                                                            fontSize: '0.85rem',
-                                                            outline: 'none'
-                                                        }}
-                                                    />
-                                                    {templateSearchFilter && (
-                                                        <button 
-                                                            onClick={() => setTemplateSearchFilter('')}
-                                                            style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
-                                                        >
-                                                            <X size={14} />
-                                                        </button>
-                                                    )}
-                                                </div>
-
-                                                {/* Excel Actions Group */}
-                                                <div style={{ display: 'flex', gap: '0.35rem' }}>
-                                                    <button
-                                                        onClick={exportTemplateExcel}
-                                                        title="Exportar lista a Excel"
-                                                        style={{
-                                                            padding: '0.45rem',
-                                                            backgroundColor: '#EAFDF4',
-                                                            color: '#0D7A57',
-                                                            border: '1px solid #BBF7D0',
-                                                            borderRadius: '8px',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            transition: 'all 0.15s'
-                                                        }}
-                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D1FAE5'}
-                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EAFDF4'}
-                                                    >
-                                                        <FileDown size={18} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setShowTemplateExcelModal(true)}
-                                                        title="Importar lista desde Excel"
-                                                        style={{
-                                                            padding: '0.45rem',
-                                                            backgroundColor: '#EAFDF4',
-                                                            color: '#0D7A57',
-                                                            border: '1px solid #BBF7D0',
-                                                            borderRadius: '8px',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            transition: 'all 0.15s'
-                                                        }}
-                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D1FAE5'}
-                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EAFDF4'}
-                                                    >
-                                                        <FileUp size={18} />
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Right: Product Search & Addition Selector */}
-                                            <div style={{ position: 'relative', width: '280px' }}>
-                                                <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Buscar y agregar producto..."
-                                                    value={templateProductSearch}
-                                                    onChange={e => {
-                                                        setTemplateProductSearch(e.target.value);
-                                                        searchTemplateProducts(e.target.value);
-                                                    }}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.45rem 2rem 0.45rem 2.25rem',
-                                                        borderRadius: '8px',
-                                                        border: `1px solid #10B981`,
-                                                        fontSize: '0.85rem',
-                                                        outline: 'none',
-                                                        backgroundColor: '#F0FDF4'
-                                                    }}
-                                                />
-                                                {templateProductSearch && (
-                                                    <button 
-                                                        onClick={() => {
-                                                            setTemplateProductSearch('');
-                                                            setTemplateProductsFound([]);
-                                                        }}
-                                                        style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
-                                                    >
-                                                        <X size={14} />
-                                                    </button>
-                                                )}
-                                                {templateProductsFound.length > 0 && (
-                                                    <div style={{
-                                                        position: 'absolute',
-                                                        top: '100%',
-                                                        left: 0,
-                                                        right: 0,
-                                                        backgroundColor: 'white',
-                                                        border: `1px solid ${THEME.colors.border}`,
-                                                        borderRadius: '8px',
-                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                                        zIndex: 20,
-                                                        maxHeight: '250px',
-                                                        overflowY: 'auto',
-                                                        marginTop: '4px'
-                                                    }}>
-                                                        {templateProductsFound.map(p => (
-                                                            <div
-                                                                key={p.id}
-                                                                onClick={() => addProductToTemplate(p.id)}
-                                                                style={{
-                                                                    padding: '0.75rem 1rem',
-                                                                    cursor: 'pointer',
-                                                                    borderBottom: `1px solid ${THEME.colors.border}`,
-                                                                    fontSize: '0.85rem',
-                                                                    transition: 'background 0.15s',
-                                                                    textAlign: 'left'
-                                                                }}
-                                                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                                                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-                                                            >
-                                                                <span style={{ fontWeight: 'bold', color: '#1E293B', marginRight: '6px' }}>[{p.accounting_id || 'SIN ID'}]</span>
-                                                                <span style={{ color: '#475569' }}>{p.name}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* TABLE VIEW */}
-                                        {loadingTemplateItems ? (
-                                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando productos de la lista...</div>
-                                        ) : templateItems.length === 0 ? (
-                                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Esta lista no tiene productos asociados. Usa el buscador de arriba para agregar.</div>
-                                        ) : (
-                                            <div style={{ overflowX: 'auto' }}>
-                                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                                    <thead>
-                                                        <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%' }}>ID ERP</th>
-                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '60%' }}>Producto</th>
-                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%' }}>Categoría</th>
-                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right' }}>Acciones</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {templateItems
-                                                            .filter(item => {
-                                                                const term = templateSearchFilter.toLowerCase().trim();
-                                                                if (!term) return true;
-                                                                return (item.name || '').toLowerCase().includes(term) || 
-                                                                       String(item.accounting_id || '').includes(term);
-                                                            })
-                                                            .map(item => (
-                                                                <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                                    <td style={{ padding: '0.9rem 1.25rem', fontWeight: '800', color: '#475569' }}>
-                                                                        {item.accounting_id || '—'}
-                                                                    </td>
-                                                                    <td style={{ padding: '0.9rem 1.25rem', fontWeight: '800', color: THEME.colors.textMain }}>
-                                                                        {item.name}
-                                                                    </td>
-                                                                    <td style={{ padding: '0.9rem 1.25rem' }}>
-                                                                        <span style={{
-                                                                            backgroundColor: '#F1F5F9',
-                                                                            color: '#475569',
-                                                                            padding: '0.2rem 0.5rem',
-                                                                            borderRadius: '6px',
-                                                                            fontSize: '0.75rem',
-                                                                            fontWeight: '700'
-                                                                        }}>
-                                                                            {CATEGORY_MAP[item.category] || item.category}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td style={{ padding: '0.9rem 1.25rem', textAlign: 'right' }}>
-                                                                        <button
-                                                                            onClick={() => removeProductFromTemplate(item.product_id)}
-                                                                            style={{
-                                                                                background: 'none',
-                                                                                border: 'none',
-                                                                                color: '#DC2626',
-                                                                                cursor: 'pointer',
-                                                                                padding: '0.25rem',
-                                                                                borderRadius: '4px'
-                                                                            }}
-                                                                            title="Remover de la lista"
-                                                                        >
-                                                                            <Trash2 size={16} />
-                                                                        </button>
-                                                                    </td>
-                                                                </tr>
-                                                            ))
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </div>
                                 </div>
-                            ) : (
-                                <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary, border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, backgroundColor: 'white' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}><ArrowLeftCircle size={44} color="#94A3B8" /></div>
-                                    <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona una lista</h3>
-                                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige una lista de cotización de la izquierda para editar su catálogo de productos.</p>
+
+                                <button
+                                    onClick={() => { setIsCreatingTemplate(true); setNewTemplateName(''); setNewTemplateDesc(''); }}
+                                    style={{
+                                        padding: '0.45rem 0.85rem',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: THEME.colors.primary,
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontWeight: '700',
+                                        fontSize: '0.8rem',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        boxShadow: '0 1px 3px rgba(13, 122, 87, 0.2)'
+                                    }}
+                                >
+                                    Nueva Lista
+                                </button>
+
+                                {selectedTemplate && (
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        backgroundColor: '#EFF6FF',
+                                        border: '1px solid #BFDBFE',
+                                        padding: '0.3rem 0.65rem',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <span style={{ fontSize: '0.62rem', fontWeight: '800', textTransform: 'uppercase', color: '#1D4ED8' }}>Catálogo:</span>
+                                        <span style={{ fontSize: '0.88rem', fontWeight: '900', color: '#1E40AF' }}>
+                                            {templateCounts[selectedTemplate.id] || 0} Productos
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right: Actions */}
+                            {selectedTemplate && (
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <button
+                                        onClick={exportTemplateExcel}
+                                        style={{
+                                            backgroundColor: '#F0FDF4',
+                                            color: '#0D7A57',
+                                            border: '1px solid #BBF7D0',
+                                            padding: '0.45rem 0.85rem',
+                                            borderRadius: '6px',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            fontSize: '0.78rem'
+                                        }}
+                                        title="Exportar lista a Excel"
+                                    >
+                                        Exportar Excel
+                                    </button>
+
+                                    <button
+                                        onClick={() => setShowTemplateExcelModal(true)}
+                                        style={{
+                                            backgroundColor: '#F0FDF4',
+                                            color: '#0D7A57',
+                                            border: '1px solid #BBF7D0',
+                                            padding: '0.45rem 0.85rem',
+                                            borderRadius: '6px',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            fontSize: '0.78rem'
+                                        }}
+                                        title="Importar lista desde Excel"
+                                    >
+                                        Importar Excel
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            setEditTemplateName(selectedTemplate.name);
+                                            setEditTemplateDesc(selectedTemplate.description || '');
+                                            setIsEditingTemplate(true);
+                                        }}
+                                        style={{
+                                            color: '#475569',
+                                            backgroundColor: '#F8FAFC',
+                                            border: '1px solid #E2E8F0',
+                                            padding: '0.45rem 0.85rem',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            fontWeight: '700',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            fontSize: '0.78rem'
+                                        }}
+                                    >
+                                        Editar
+                                    </button>
+
+                                    <button
+                                        onClick={() => deleteTemplate(selectedTemplate.id, selectedTemplate.name)}
+                                        style={{
+                                            color: '#DC2626',
+                                            backgroundColor: '#FEF2F2',
+                                            border: '1px solid #FEE2E2',
+                                            padding: '0.45rem 0.85rem',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            fontWeight: '700',
+                                            fontSize: '0.78rem'
+                                        }}
+                                        title="Eliminar Lista"
+                                    >
+                                        Eliminar
+                                    </button>
                                 </div>
                             )}
                         </div>
+
+                        {/* ROW 2: SUB-CINTA ESBELTA (Descripción) */}
+                        {selectedTemplate && selectedTemplate.description && !isEditingTemplate && (
+                            <div style={{
+                                paddingTop: '0.5rem',
+                                borderTop: `1px solid ${THEME.colors.border || '#F1F5F9'}`
+                            }}>
+                                <span style={{ color: THEME.colors.textSecondary, fontSize: '0.8rem', lineHeight: 1.3 }}>
+                                    {selectedTemplate.description}
+                                </span>
+                            </div>
+                        )}
                     </div>
+
+                    {/* INLINE BANNER: CREATE NEW TEMPLATE */}
+                    {isCreatingTemplate && (
+                        <div style={{
+                            backgroundColor: '#F8FAFC',
+                            padding: '1.25rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1.5px solid ${THEME.colors.primary}`,
+                            boxShadow: THEME.shadow.sm
+                        }}>
+                            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.primary, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                Crear Nueva Lista de Cotización
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Nombre de la Lista *</label>
+                                    <input 
+                                        placeholder="Ej: Lista Larga o Canasta Escolar" 
+                                        value={newTemplateName} 
+                                        onChange={e => setNewTemplateName(e.target.value)} 
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Descripción / Segmento</label>
+                                    <input 
+                                        placeholder="Ej: Catálogo sugerido para clientes institucionales" 
+                                        value={newTemplateDesc} 
+                                        onChange={e => setNewTemplateDesc(e.target.value)} 
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
+                                    />
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                <button onClick={() => setIsCreatingTemplate(false)} style={{ padding: '0.45rem 1rem', borderRadius: '6px', backgroundColor: '#E2E8F0', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem', color: '#475569' }}>Cancelar</button>
+                                <button onClick={createTemplate} style={{ padding: '0.45rem 1.25rem', borderRadius: '6px', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', cursor: 'pointer', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>Guardar</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* INLINE BANNER: EDIT TEMPLATE */}
+                    {isEditingTemplate && selectedTemplate && (
+                        <div style={{
+                            backgroundColor: '#F8FAFC',
+                            padding: '1.25rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1.5px solid ${THEME.colors.primary}`,
+                            boxShadow: THEME.shadow.sm
+                        }}>
+                            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                Editar Lista: {selectedTemplate.name}
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Nombre de la Lista</label>
+                                    <input
+                                        value={editTemplateName}
+                                        onChange={e => setEditTemplateName(e.target.value)}
+                                        style={{ width: '100%', padding: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.25rem' }}>Descripción</label>
+                                    <input
+                                        value={editTemplateDesc}
+                                        onChange={e => setEditTemplateDesc(e.target.value)}
+                                        style={{ width: '100%', padding: '0.5rem', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', fontSize: '0.85rem' }}
+                                    />
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                <button onClick={() => setIsEditingTemplate(false)} style={{ padding: '0.45rem 1rem', borderRadius: '6px', backgroundColor: '#E2E8F0', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem', color: '#475569' }}>Cancelar</button>
+                                <button onClick={saveTemplateChanges} style={{ padding: '0.45rem 1.25rem', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '6px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem' }}><Save size={13} /> Guardar Cambios</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TEMPLATE ITEMS TABLE CARD */}
+                    {selectedTemplate ? (
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: THEME.radius.lg,
+                            boxShadow: THEME.shadow.md,
+                            border: `1px solid ${THEME.colors.border}`,
+                            position: 'relative'
+                        }}>
+                            {/* Toolbar: Search in list & Search and Add Product */}
+                            <div style={{
+                                padding: '0.85rem 1.25rem',
+                                borderBottom: `1px solid ${THEME.colors.border}`,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: '1rem',
+                                flexWrap: 'wrap',
+                                backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                backdropFilter: 'blur(12px)',
+                                borderTopLeftRadius: THEME.radius.lg,
+                                borderTopRightRadius: THEME.radius.lg
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '280px' }}>
+                                    <div style={{ position: 'relative', width: '280px' }}>
+                                        <Search size={15} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar en esta lista..."
+                                            value={templateSearchFilter}
+                                            onChange={e => setTemplateSearchFilter(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.45rem 2rem 0.45rem 2.2rem',
+                                                borderRadius: '8px',
+                                                border: `1px solid ${THEME.colors.border}`,
+                                                fontSize: '0.85rem',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                        {templateSearchFilter && (
+                                            <button 
+                                                onClick={() => setTemplateSearchFilter('')}
+                                                style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: THEME.colors.textSecondary, whiteSpace: 'nowrap' }}>
+                                        {templateItems.filter(item => {
+                                            const term = templateSearchFilter.toLowerCase().trim();
+                                            if (!term) return true;
+                                            return (item.name || '').toLowerCase().includes(term) || String(item.accounting_id || '').includes(term);
+                                        }).length} productos filtrados
+                                    </span>
+                                </div>
+
+                                {/* Right: Add Product Omnibox */}
+                                <div style={{ position: 'relative', width: '320px' }}>
+                                    <Search size={15} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.primary }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar y agregar producto..."
+                                        value={templateProductSearch}
+                                        onChange={e => {
+                                            setTemplateProductSearch(e.target.value);
+                                            searchTemplateProducts(e.target.value);
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.45rem 2rem 0.45rem 2.2rem',
+                                            borderRadius: '8px',
+                                            border: `1.5px solid ${THEME.colors.primary}`,
+                                            fontSize: '0.85rem',
+                                            outline: 'none',
+                                            backgroundColor: '#F0FDF4'
+                                        }}
+                                    />
+                                    {templateProductSearch && (
+                                        <button 
+                                            onClick={() => {
+                                                setTemplateProductSearch('');
+                                                setTemplateProductsFound([]);
+                                            }}
+                                            style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                    {templateProductsFound.length > 0 && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            left: 0,
+                                            right: 0,
+                                            backgroundColor: 'white',
+                                            border: `1px solid ${THEME.colors.border}`,
+                                            borderRadius: '8px',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                            zIndex: 20,
+                                            maxHeight: '250px',
+                                            overflowY: 'auto',
+                                            marginTop: '4px'
+                                        }}>
+                                            {templateProductsFound.map(p => (
+                                                <div
+                                                    key={p.id}
+                                                    onClick={() => addProductToTemplate(p.id)}
+                                                    style={{
+                                                        padding: '0.65rem 0.85rem',
+                                                        cursor: 'pointer',
+                                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.82rem',
+                                                        transition: 'background 0.15s',
+                                                        textAlign: 'left'
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                >
+                                                    <span style={{ fontWeight: 'bold', color: '#1E293B', marginRight: '6px' }}>[{p.accounting_id || 'SIN ID'}]</span>
+                                                    <span style={{ color: '#475569' }}>{p.name}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Table */}
+                            {loadingTemplateItems ? (
+                                <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando productos de la lista...</div>
+                            ) : templateItems.length === 0 ? (
+                                <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Esta lista no tiene productos asociados. Usa el buscador de arriba para agregar.</div>
+                            ) : (
+                                <div style={{ overflowX: 'auto', width: '100%' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                        <thead>
+                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%' }}>ID ERP</th>
+                                                <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '55%' }}>Producto</th>
+                                                <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '23%' }}>Categoría</th>
+                                                <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', textAlign: 'center' }}>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {templateItems
+                                                .filter(item => {
+                                                    const term = templateSearchFilter.toLowerCase().trim();
+                                                    if (!term) return true;
+                                                    return (item.name || '').toLowerCase().includes(term) || 
+                                                           String(item.accounting_id || '').includes(term);
+                                                })
+                                                .map(item => (
+                                                    <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }}>
+                                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '800', fontFamily: 'monospace', color: '#475569', fontSize: '0.85rem' }}>
+                                                            {item.accounting_id || '—'}
+                                                        </td>
+                                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
+                                                            {item.name}
+                                                        </td>
+                                                        <td style={{ padding: '0.65rem 1.25rem' }}>
+                                                            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                                                <span style={{
+                                                                    backgroundColor: '#F1F5F9',
+                                                                    color: '#475569',
+                                                                    padding: '0.15rem 0.45rem',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '0.72rem',
+                                                                    fontWeight: '700'
+                                                                }}>
+                                                                    {CATEGORY_MAP[item.category] || item.category || 'General'}
+                                                                </span>
+                                                                {item.unit_of_measure && (
+                                                                    <span style={{
+                                                                        backgroundColor: '#E2E8F0',
+                                                                        color: '#64748B',
+                                                                        padding: '0.15rem 0.45rem',
+                                                                        borderRadius: '4px',
+                                                                        fontSize: '0.72rem',
+                                                                        fontWeight: '700'
+                                                                    }}>
+                                                                        {item.unit_of_measure}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }}>
+                                                            <button
+                                                                onClick={() => removeProductFromTemplate(item.product_id)}
+                                                                style={{
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    color: '#DC2626',
+                                                                    cursor: 'pointer',
+                                                                    padding: '0.25rem',
+                                                                    borderRadius: '4px'
+                                                                }}
+                                                                title="Remover de la lista"
+                                                            >
+                                                                <Trash2 size={15} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary, border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, backgroundColor: 'white' }}>
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}><ArrowLeftCircle size={44} color="#94A3B8" /></div>
+                            <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona una lista</h3>
+                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige una lista de cotización del selector superior para gestionar sus productos.</p>
+                        </div>
+                    )}
+                </div>
                 )}
 
                 {/* --- MODAL CARGA EXCEL PARA PLANTILLAS --- */}

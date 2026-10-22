@@ -1,5 +1,5 @@
 // Shared Design System Tokens for FruFresco Admin Portal
-// Ref: design_manual.md
+// Ref: DESIGN_SYSTEM_MANUAL.md
 
 export const THEME = {
     colors: {

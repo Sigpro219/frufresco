@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -20,7 +20,8 @@ import {
     ChevronRight, 
     ArrowLeft, 
     Building2, 
-    Check 
+    Check,
+    TrendingUp
 } from 'lucide-react';
 
 function CreateQuotePageContent() {
@@ -46,6 +47,57 @@ function CreateQuotePageContent() {
     const [selectedClientId, setSelectedClientId] = useState('');
     const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
     const [selectedModelId, setSelectedModelId] = useState('');
+    const [clientDemandMap, setClientDemandMap] = useState<Map<string, { volume: number; ordersCount: number }>>(new Map());
+    const [loadingDemand, setLoadingDemand] = useState(false);
+
+    const fetchClientDemand = async (clientId: string) => {
+        if (!clientId) {
+            setClientDemandMap(new Map());
+            return;
+        }
+        setLoadingDemand(true);
+        try {
+            const { data: branches } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('parent_id', clientId);
+            const clientIds = [clientId, ...(branches || []).map(b => b.id)];
+
+            const cycleStartIso = new Date(Date.now() - 30 * 86400000).toISOString();
+            const { data: modelOrders } = await supabase
+                .from('orders')
+                .select('id')
+                .in('profile_id', clientIds)
+                .gte('created_at', cycleStartIso)
+                .neq('status', 'cancelled');
+
+            const orderIds = (modelOrders || []).map(o => o.id);
+            const dMap = new Map<string, { volume: number; ordersCount: number }>();
+            if (orderIds.length > 0) {
+                for (let i = 0; i < orderIds.length; i += 80) {
+                    const slice = orderIds.slice(i, i + 80);
+                    const { data: bItems } = await supabase
+                        .from('order_items')
+                        .select('product_id, quantity')
+                        .in('order_id', slice);
+                    (bItems || []).forEach((it: any) => {
+                        if (!it.product_id) return;
+                        if (!dMap.has(it.product_id)) {
+                            dMap.set(it.product_id, { volume: 0, ordersCount: 0 });
+                        }
+                        const rec = dMap.get(it.product_id)!;
+                        rec.volume += Number(it.quantity || 0);
+                        rec.ordersCount += 1;
+                    });
+                }
+            }
+            setClientDemandMap(dMap);
+        } catch (err) {
+            console.error('Error fetching client demand:', err);
+        } finally {
+            setLoadingDemand(false);
+        }
+    };
     const [items, setItems] = useState<any[]>([]);
     const [paymentTermsDays, setPaymentTermsDays] = useState(30);
     const [introTitle, setIntroTitle] = useState('Suministro de Frutas y Verduras de Alta Calidad');
@@ -127,6 +179,7 @@ function CreateQuotePageContent() {
                 // Pre-populate client info
                 if (qData.client_id) {
                     setSelectedClientId(qData.client_id);
+                    fetchClientDemand(qData.client_id);
                     setClientName(qData.client_name || '');
                     setClientSearch(qData.client_name || '');
                 } else if (qData.lead_id) {
@@ -277,6 +330,7 @@ function CreateQuotePageContent() {
 
     const handleClientChange = async (clientId: string) => {
         setSelectedClientId(clientId);
+        fetchClientDemand(clientId);
         const client = clients.find(c => c.id === clientId);
         if (client) {
             setClientName(client.company_name || client.contact_name || '');
@@ -313,6 +367,7 @@ function CreateQuotePageContent() {
     const handleLeadChange = (leadId: number) => {
         setSelectedLeadId(leadId);
         setSelectedClientId('');
+        setClientDemandMap(new Map());
         const lead = leads.find(l => l.id === leadId);
         if (lead) {
             setClientName(lead.company_name || lead.contact_name || '');
@@ -901,7 +956,8 @@ function CreateQuotePageContent() {
                                                     } else if (item.type === 'manual') {
                                                         setClientName(clientSearch);
                                                         setSelectedClientId('');
-                                                        setSelectedLeadId(null);
+                                            setClientDemandMap(new Map());
+                                            setSelectedLeadId(null);
                                                         setShowClientResults(false);
                                                     } else if (item.type === 'new_client') {
                                                         setNewClient(prev => ({ ...prev, company_name: clientSearch, contact_name: clientSearch }));
@@ -1005,7 +1061,8 @@ function CreateQuotePageContent() {
                                                             onClick={() => {
                                                                 setClientName(clientSearch);
                                                                 setSelectedClientId('');
-                                                                setSelectedLeadId(null);
+                                            setClientDemandMap(new Map());
+                                            setSelectedLeadId(null);
                                                                 setShowClientResults(false);
                                                             }}
                                                             style={{ 
@@ -1143,6 +1200,7 @@ function CreateQuotePageContent() {
                                     <button 
                                         onClick={() => {
                                             setSelectedClientId('');
+                                            setClientDemandMap(new Map());
                                             setSelectedLeadId(null);
                                             setClientName('');
                                             setClientSearch('');
@@ -1483,7 +1541,7 @@ function CreateQuotePageContent() {
                             })}
                             {/* Totals Rows inside tbody so they only print once at the end */}
                             <tr style={{ borderTop: '1.5px solid #CBD5E1', color: '#475569' }}>
-                                <td colSpan={4}></td>
+                                <td colSpan={6}></td>
                                 <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.8rem' }}>Subtotal</td>
                                 <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem', color: '#0F172A' }}>
                                     ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)), 0))}
@@ -1491,7 +1549,7 @@ function CreateQuotePageContent() {
                                 <td></td>
                             </tr>
                             <tr style={{ color: '#64748B' }}>
-                                <td colSpan={4}></td>
+                                <td colSpan={6}></td>
                                 <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', fontWeight: '500', fontSize: '0.75rem' }}>Impuestos (IVA)</td>
                                 <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>
                                     ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)) * ((i.iva_rate || 0)/100), 0))}
@@ -1499,7 +1557,7 @@ function CreateQuotePageContent() {
                                 <td></td>
                             </tr>
                             <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
-                                <td colSpan={4}></td>
+                                <td colSpan={6}></td>
                                 <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '0.85rem' }}>Total</td>
                                 <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.15rem', color: appSettings.primary_color || '#15803D' }}>
                                     ${formatPrice(

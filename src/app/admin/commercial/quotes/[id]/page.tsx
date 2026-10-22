@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -434,9 +434,9 @@ export default function QuoteDetailPage() {
         }
 
         // Preset inicial pactado (ej. 180 días / 6 meses)
-        setValidityDaysPreset(180);
+        setValidityDaysPreset(30);
         const d = new Date();
-        d.setDate(d.getDate() + 180);
+        d.setDate(d.getDate() + 30);
         setValidUntilDate(d.toISOString().split('T')[0]);
 
         setShowFormalizeModal(true);
@@ -1195,7 +1195,23 @@ export default function QuoteDetailPage() {
                         </div>
 
                         <div style={{ padding: '1.75rem' }}>
-                            {/* PESTAÑAS DE SELECCIÓN DE CLIENTE */}
+                            {clientProfile ? (
+                                <div style={{ backgroundColor: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                    <div style={{ backgroundColor: '#DCFCE7', color: '#166534', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <Building2 size={22} strokeWidth={2.2} />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '1rem', fontWeight: 800, color: '#166534' }}>
+                                            {clientProfile.company_name || clientProfile.razon_social || quote.client_name}
+                                        </div>
+                                        <div style={{ fontSize: '0.76rem', color: '#15803D', marginTop: '2px' }}>
+                                            {clientProfile.nit ? 'NIT: ' + clientProfile.nit + ' • ' : ''}Cliente Institucional formalizado con expediente y georreferenciación completa.
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* PESTAÑAS DE SELECCIÓN DE CLIENTE */}
                             <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
                                 <button
                                     onClick={() => setClientSelectionMode('formalize_new')}
@@ -1798,6 +1814,9 @@ export default function QuoteDetailPage() {
                                         </div>
                                     )}
                                 </div>
+                            )}
+
+                            </>
                             )}
 
                             {/* CONFIGURACIÓN DE VIGENCIA DEL ACUERDO INSTITUCIONAL */}

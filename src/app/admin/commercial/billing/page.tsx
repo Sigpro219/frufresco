@@ -73,7 +73,7 @@ import {
     Tag,
     Scale
 } from 'lucide-react';
-import { downloadWorldOfficeExcel } from '@/lib/worldOfficeExport';
+import { downloadWorldOfficeExcel, downloadCreditNotesExcel, CreditNoteReportItem } from '@/lib/worldOfficeExport';
 import { cleanHumanResolutionNotes, parseRcaFromRecord } from '@/lib/rcaTaxonomy';
 
 interface BillingCut {
@@ -95,11 +95,38 @@ interface BillingReturn {
     reason: string;
     photo_url: string;
     status: string;
+    notes?: string;
+    credit_note_number?: string;
+    reference_invoice_number?: string;
     defect_category_l1?: string;
     defect_subtype_l2?: string;
     created_at?: string;
-    products?: { name: string; sku?: string; unit_of_measure?: string };
-    orders?: { sequence_id: number; created_at: string };
+    products?: { id?: string; name: string; sku?: string; unit_of_measure?: string };
+    orders?: {
+        id?: string;
+        sequence_id: number;
+        created_at: string;
+        delivery_date?: string;
+        total?: number;
+        admin_notes?: string;
+        profiles?: {
+            id?: string;
+            company_name?: string;
+            razon_social?: string;
+            nit?: string;
+            parent_id?: string | null;
+        };
+        customer_service_pqrs?: Array<{
+            id?: string;
+            type?: string;
+            category?: string;
+            subject?: string;
+            description?: string;
+            status?: string;
+            resolution_notes?: string;
+            created_at?: string;
+        }>;
+    };
 }
 
 interface Invoice {
@@ -649,6 +676,7 @@ export default function BillingDashboard() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'invoicing' | 'portfolio' | 'configuration'>('invoicing');
     const [subTab, setSubTab] = useState<'pending' | 'batch_accumulated' | 'cuts' | 'returns'>('pending');
+    const [returnsViewMode, setReturnsViewMode] = useState<'credit_notes' | 'pending_review' | 'all'>('credit_notes');
     const [batchAccumulatedOrders, setBatchAccumulatedOrders] = useState<any[]>([]);
     const [batchAccumulatedCount, setBatchAccumulatedCount] = useState<number>(0);
     const [batchClientFilter, setBatchClientFilter] = useState<string>('all');
@@ -1315,15 +1343,40 @@ export default function BillingDashboard() {
             if (cutsError) throw cutsError;
             setCuts(cutsData || []);
 
-            // 2. Fetch returns
+            // 2. Fetch returns (both pending_review and approved for full credit note reconciliation)
             const { data: returnsData, error: returnsError } = await supabase
                 .from('billing_returns')
                 .select(`
                     *,
-                    products (name, sku, unit_of_measure),
-                    orders (sequence_id, created_at)
+                    products (id, name, sku, unit_of_measure),
+                    orders (
+                        id,
+                        sequence_id,
+                        created_at,
+                        delivery_date,
+                        total,
+                        admin_notes,
+                        profiles (
+                            id,
+                            company_name,
+                            razon_social,
+                            nit,
+                            parent_id
+                        ),
+                        customer_service_pqrs (
+                            id,
+                            type,
+                            category,
+                            subject,
+                            description,
+                            status,
+                            resolution_notes,
+                            created_at
+                        )
+                    )
                 `)
-                .eq('status', 'pending_review');
+                .in('status', ['approved', 'pending_review'])
+                .order('created_at', { ascending: false });
             if (returnsError) throw returnsError;
             setReturns(returnsData || []);
 
@@ -1888,8 +1941,12 @@ export default function BillingDashboard() {
 
 
     const filteredReturns = useMemo(() => {
-        if (!billingSearchQuery) return returns;
-        return returns.filter(ret => matchesUniversalSearch(
+        let baseList = returns;
+        if (returnsViewMode === 'pending_review') {
+            baseList = baseList.filter(r => r.status === 'pending_review');
+        }
+        if (!billingSearchQuery) return baseList;
+        return baseList.filter(ret => matchesUniversalSearch(
             ret,
             billingSearchQuery,
             r => [
@@ -1897,11 +1954,109 @@ export default function BillingDashboard() {
                 r.products?.name || '',
                 r.reason || '',
                 r.defect_category_l1 || '',
-                r.status || ''
+                r.status || '',
+                r.orders?.profiles?.company_name || '',
+                r.orders?.profiles?.razon_social || ''
             ],
             r => r.orders?.sequence_id
         ));
-    }, [returns, billingSearchQuery]);
+    }, [returns, billingSearchQuery, returnsViewMode]);
+
+    // Consolidado diario de Novedades para Notas Crédito World Office (Gemba Accounting)
+    const creditNotesItems = useMemo<CreditNoteReportItem[]>(() => {
+        return returns
+            .map(ret => {
+                const o: any = ret.orders || {};
+                const prof = o.profiles || {};
+                const parent = prof.parent_id ? parentProfilesMap.get(prof.parent_id) : null;
+                const clientMatriz = parent?.razon_social || parent?.company_name || prof.razon_social || prof.company_name || 'Cliente';
+                const sucursal = prof.company_name || prof.razon_social || 'Sede Principal';
+                const pqr = (o.customer_service_pqrs || [])[0];
+                const { prodName, ncAmount } = resolveReturnProductAndAmount(ret, pqr);
+                const invoiceRef = ret.reference_invoice_number || (o.sequence_id ? `FV-${o.sequence_id}` : '');
+                const creditNoteFolio = ret.credit_note_number || (o.sequence_id ? `NC-${o.sequence_id}-2010` : '');
+                const date = o.delivery_date || (ret.created_at ? ret.created_at.slice(0, 10) : '');
+                const pqrFolio = pqr?.id ? `PQR #${pqr.id.substring(0, 8).toUpperCase()}` : '';
+
+                return {
+                    date,
+                    clientMatriz,
+                    sucursal,
+                    productName: prodName,
+                    quantity: Number(ret.quantity_returned) || 0,
+                    unitOfMeasure: ret.products?.unit_of_measure || 'Kg',
+                    amount: ncAmount,
+                    invoiceRef,
+                    creditNoteFolio,
+                    pqrFolio,
+                    reason: cleanHumanResolutionNotes(ret.reason || '') || (pqr?.subject || 'Novedad de calidad'),
+                    orderSequence: o.sequence_id,
+                    status: ret.status
+                };
+            })
+            .filter(item => {
+                const reasonLower = (item.reason || '').toLowerCase();
+                return item.amount > 0 || 
+                    reasonLower.includes('nota crédito') || 
+                    reasonLower.includes('nota credito') || 
+                    reasonLower.includes('ajuste factura') || 
+                    Boolean(item.creditNoteFolio);
+            });
+    }, [returns, parentProfilesMap]);
+
+    const filteredCreditNotes = useMemo(() => {
+        let list = creditNotesItems;
+        if (selectedBillingDate && selectedBillingDate !== 'all') {
+            list = list.filter(item => item.date === selectedBillingDate);
+        }
+        if (billingSearchQuery) {
+            list = list.filter(item => 
+                matchesUniversalSearch(
+                    item,
+                    billingSearchQuery,
+                    it => [
+                        it.clientMatriz,
+                        it.sucursal,
+                        it.productName,
+                        it.invoiceRef,
+                        it.creditNoteFolio,
+                        String(it.orderSequence || ''),
+                        it.reason,
+                        it.pqrFolio || ''
+                    ]
+                )
+            );
+        }
+        return list;
+    }, [creditNotesItems, selectedBillingDate, billingSearchQuery]);
+
+    // Exportador Diario de Notas Crédito para World Office (Gemba Accounting)
+    const handleExportCreditNotesExcel = async () => {
+        const targetList = filteredCreditNotes.length > 0 ? filteredCreditNotes : creditNotesItems;
+        if (targetList.length === 0) {
+            showToast({
+                type: 'warning',
+                message: 'No hay novedades de notas crédito disponibles para exportar.'
+            });
+            return;
+        }
+        try {
+            setIsProcessing(true);
+            await downloadCreditNotesExcel(targetList, selectedBillingDate);
+            showToast({
+                type: 'success',
+                message: `Exportadas ${targetList.length} notas crédito a Excel para World Office.`
+            });
+        } catch (err: any) {
+            console.error('Error al exportar notas crédito:', err);
+            showToast({
+                type: 'error',
+                message: `Error al exportar reporte NC: ${err.message}`
+            });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     // Filter Invoices (Portfolio)
     const filteredInvoices = useMemo(() => {
@@ -2505,10 +2660,13 @@ export default function BillingDashboard() {
                         id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
-                        id, quantity, unit_price, nickname, unit,
+                        id, quantity, unit_price, nickname, unit, product_id,
                         products (
-                            accounting_id, sku, name, unit_of_measure, iva_rate
+                            id, accounting_id, sku, name, unit_of_measure, iva_rate
                         )
+                    ),
+                    billing_returns (
+                        id, product_id, quantity_returned, status, reason
                     )
                 `)
                 .eq('billing_cut_id', cutId);
@@ -2547,7 +2705,15 @@ export default function BillingDashboard() {
                 const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
 
                 (order.order_items || []).forEach((item: any) => {
-                    const rawQty = Number(item.quantity) || 0;
+                    const baseItemQty = Number(item.quantity) || 0;
+                    // Descontar novedades autorizadas / PQR cerradas de la Factura de Venta plana
+                    const matchedReturn = (order.billing_returns || []).find((r: any) =>
+                        (r.product_id === item.product_id || (r.products?.name && r.products.name.toLowerCase() === item.products?.name?.toLowerCase())) &&
+                        (r.status === 'approved' || (r.reason && (r.reason.includes('AJUSTE FACTURA') || r.reason.includes('NOTA CRÉDITO'))))
+                    );
+                    const deductionQty = matchedReturn ? Number(matchedReturn.quantity_returned || 0) : 0;
+                    const rawQty = Math.max(0, baseItemQty - deductionQty);
+                    if (rawQty <= 0) return; // Si la cantidad neta es 0, no viaja en la Factura de Venta
                     const rawUnitPrice = Number(item.unit_price) || 0;
                     const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
                     const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
@@ -4113,6 +4279,32 @@ export default function BillingDashboard() {
                                         </>
                                     )}
 
+                                    {/* Exportar Novedades NC World Office (Gemba Accounting) */}
+                                    <button
+                                        type="button"
+                                        onClick={handleExportCreditNotesExcel}
+                                        disabled={creditNotesItems.length === 0 || isProcessing}
+                                        style={{
+                                            backgroundColor: '#FAF5FF',
+                                            color: '#6B21A8',
+                                            border: '1px solid #D8B4FE',
+                                            padding: '0.32rem 0.65rem',
+                                            borderRadius: '6px',
+                                            fontWeight: '800',
+                                            fontSize: '0.72rem',
+                                            cursor: creditNotesItems.length === 0 || isProcessing ? 'not-allowed' : 'pointer',
+                                            opacity: creditNotesItems.length === 0 || isProcessing ? 0.6 : 1,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            boxShadow: '0 1px 3px rgba(107, 33, 168, 0.1)'
+                                        }}
+                                        title="Descargar reporte Excel agrupando todas las notas crédito del día para World Office (Cliente, Sucursal, Producto, Cantidad, Valor)"
+                                    >
+                                        <FileSpreadsheet size={13} color="#7C3AED" />
+                                        <span>Novedades NC ({filteredCreditNotes.length > 0 ? filteredCreditNotes.length : creditNotesItems.length})</span>
+                                    </button>
+
                                     {/* Exportar Excel World Office */}
                                     <button
                                         type="button"
@@ -5556,88 +5748,303 @@ export default function BillingDashboard() {
 
                         {/* SUBTAB: DEVOLUCIONES Y NOVEDADES */}
                         {subTab === 'returns' && (
-                            <div style={{ backgroundColor: 'white', borderRadius: '14px', border: '1px solid #E2E8F0', position: 'relative', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.03)', overflow: 'visible' }}>
-                                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
-                                    <thead>
-                                        <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                            <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopLeftRadius: '14px', position: 'sticky', top: '169px', zIndex: 30 }}># Pedido</th>
-                                            <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Producto / Ítem</th>
-                                            <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Cantidad Devuelta</th>
-                                            <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Motivo / Novedad</th>
-                                            <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Estado</th>
-                                            <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopRightRadius: '14px', position: 'sticky', top: '169px', zIndex: 30 }}>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {returns.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={6} style={{ padding: '2.75rem 1.5rem', textAlign: 'center' }}>
-                                                    <div style={{ maxWidth: '420px', margin: '0 auto' }}>
-                                                        <div style={{ width: '46px', height: '46px', borderRadius: '12px', backgroundColor: '#ECFDF5', color: '#0D7A57', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                                                            <CheckCircle2 size={22} />
-                                                        </div>
-                                                        <h3 style={{ fontWeight: '900', color: '#0F172A', margin: '0 0 0.25rem 0', fontSize: '1.05rem' }}>No hay devoluciones pendientes</h3>
-                                                        <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0 }}>Todas las novedades de transportadores se encuentran al día.</p>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ) : filteredReturns.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={6} style={{ padding: '2.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.84rem' }}>
-                                                    No se encontraron devoluciones que coincidan con &quot;{billingSearchQuery}&quot;
-                                                </td>
-                                            </tr>
-                                        ) : filteredReturns.map((ret) => {
-                                            const orderNum = getFriendlyOrderId({ created_at: ret.orders?.created_at, sequence_id: ret.orders?.sequence_id });
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                {/* Header y Filtros Específicos de Novedades */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                                    {/* Segmented Control Pills */}
+                                    <div style={{ display: 'inline-flex', gap: '3px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '8px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setReturnsViewMode('credit_notes')}
+                                            style={{
+                                                border: 'none',
+                                                padding: '0.3rem 0.75rem',
+                                                borderRadius: '6px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: returnsViewMode === 'credit_notes' ? '800' : '600',
+                                                backgroundColor: returnsViewMode === 'credit_notes' ? '#FFFFFF' : 'transparent',
+                                                color: returnsViewMode === 'credit_notes' ? '#6B21A8' : '#64748B',
+                                                boxShadow: returnsViewMode === 'credit_notes' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px'
+                                            }}
+                                        >
+                                            <Zap size={12} color={returnsViewMode === 'credit_notes' ? '#7C3AED' : '#64748B'} />
+                                            <span>Notas Crédito WO ({creditNotesItems.length})</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setReturnsViewMode('pending_review')}
+                                            style={{
+                                                border: 'none',
+                                                padding: '0.3rem 0.75rem',
+                                                borderRadius: '6px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: returnsViewMode === 'pending_review' ? '800' : '600',
+                                                backgroundColor: returnsViewMode === 'pending_review' ? '#FFFFFF' : 'transparent',
+                                                color: returnsViewMode === 'pending_review' ? '#DC2626' : '#64748B',
+                                                boxShadow: returnsViewMode === 'pending_review' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px'
+                                            }}
+                                        >
+                                            <AlertCircle size={12} color={returnsViewMode === 'pending_review' ? '#DC2626' : '#64748B'} />
+                                            <span>Pendientes de Revisión ({returns.filter(r => r.status === 'pending_review').length})</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setReturnsViewMode('all')}
+                                            style={{
+                                                border: 'none',
+                                                padding: '0.3rem 0.75rem',
+                                                borderRadius: '6px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: returnsViewMode === 'all' ? '800' : '600',
+                                                backgroundColor: returnsViewMode === 'all' ? '#FFFFFF' : 'transparent',
+                                                color: returnsViewMode === 'all' ? '#0F172A' : '#64748B',
+                                                boxShadow: returnsViewMode === 'all' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px'
+                                            }}
+                                        >
+                                            <Layers size={12} color={returnsViewMode === 'all' ? '#0F172A' : '#64748B'} />
+                                            <span>Todas ({returns.length})</span>
+                                        </button>
+                                    </div>
 
-                                            return (
-                                                <tr key={ret.id} style={{ borderBottom: '1px solid #E2E8F0', transition: 'all 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                                    <td style={{ padding: '0.65rem 0.75rem' }}>
-                                                        <span style={{ fontWeight: '800', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>#{orderNum}</span>
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 0.75rem' }}>
-                                                        <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.78rem' }}>{ret.products?.name || 'Producto sin nombre'}</div>
-                                                        {ret.products?.sku && <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary }}>SKU: {ret.products.sku}</span>}
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 0.75rem' }}>
-                                                        <span style={{ fontWeight: '800', color: '#991B1B', backgroundColor: '#FEF2F2', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #FECACA', fontSize: '0.74rem' }}>
-                                                            {ret.quantity_returned} {ret.products?.unit_of_measure || 'Kg'}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 0.75rem' }}>
-                                                        <div style={{ fontSize: '0.76rem', color: THEME.colors.textMain, fontWeight: '600' }}>{ret.reason}</div>
-                                                        {ret.photo_url && (
-                                                            <a href={ret.photo_url} target="_blank" rel="noreferrer" style={{ fontSize: '0.66rem', color: THEME.colors.primary, textDecoration: 'underline', display: 'inline-block', marginTop: '2px' }}>
-                                                                Ver evidencia fotográfica
-                                                            </a>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 0.75rem' }}>
-                                                        <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', padding: '0.15rem 0.45rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                            {ret.status}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>
-                                                        <div style={{ display: 'inline-flex', gap: '5px' }}>
-                                                            <button
-                                                                onClick={() => handleProcessReturn(ret, 'approved')}
-                                                                style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.35rem 0.7rem', borderRadius: '6px', fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer' }}
-                                                            >
-                                                                Aprobar Descuento
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleProcessReturn(ret, 'rejected')}
-                                                                style={{ backgroundColor: '#F1F5F9', color: '#64748B', border: '1px solid #CBD5E1', padding: '0.35rem 0.7rem', borderRadius: '6px', fontWeight: '700', fontSize: '0.72rem', cursor: 'pointer' }}
-                                                            >
-                                                                Rechazar
-                                                            </button>
-                                                        </div>
-                                                    </td>
+                                    {/* Action: Descargar Excel NC del Día */}
+                                    <button
+                                        type="button"
+                                        onClick={handleExportCreditNotesExcel}
+                                        disabled={creditNotesItems.length === 0 || isProcessing}
+                                        style={{
+                                            backgroundColor: '#0D7A57',
+                                            color: '#FFFFFF',
+                                            border: 'none',
+                                            padding: '0.38rem 0.85rem',
+                                            borderRadius: '7px',
+                                            fontWeight: '800',
+                                            fontSize: '0.75rem',
+                                            cursor: creditNotesItems.length === 0 || isProcessing ? 'not-allowed' : 'pointer',
+                                            opacity: creditNotesItems.length === 0 || isProcessing ? 0.6 : 1,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: '0 2px 5px rgba(13, 122, 87, 0.25)'
+                                        }}
+                                        title="Descargar archivo Excel con Cliente, Sucursal, Producto, Cantidad y Valor"
+                                    >
+                                        <FileSpreadsheet size={14} />
+                                        <span>Descargar Novedades NC (Excel)</span>
+                                    </button>
+                                </div>
+
+                                {/* Table Display: Modo Notas Crédito WO vs Modo Devoluciones Tradicional */}
+                                {returnsViewMode === 'credit_notes' ? (
+                                    <div style={{ backgroundColor: 'white', borderRadius: '14px', border: '1px solid #E2E8F0', position: 'relative', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.03)', overflow: 'visible' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#FAF5FF' }}>
+                                                    <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF', borderTopLeftRadius: '14px' }}>Fecha / Pedido</th>
+                                                    <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF' }}>Cliente (Matriz)</th>
+                                                    <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF' }}>Sucursal / Sede</th>
+                                                    <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF' }}>Producto Afectado</th>
+                                                    <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF' }}>Cantidad</th>
+                                                    <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF' }}>Valor Nota Crédito</th>
+                                                    <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF' }}>Factura / Consecutivo WO</th>
+                                                    <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF' }}>Motivo / Justificación</th>
+                                                    <th style={{ padding: '0.55rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: '#6B21A8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #E9D5FF', borderTopRightRadius: '14px' }}>Acción</th>
                                                 </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                            </thead>
+                                            <tbody>
+                                                {filteredCreditNotes.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={9} style={{ padding: '2.75rem 1.5rem', textAlign: 'center' }}>
+                                                            <div style={{ maxWidth: '420px', margin: '0 auto' }}>
+                                                                <div style={{ width: '46px', height: '46px', borderRadius: '12px', backgroundColor: '#FAF5FF', color: '#7C3AED', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                                                                    <CheckCircle2 size={22} />
+                                                                </div>
+                                                                <h3 style={{ fontWeight: '900', color: '#0F172A', margin: '0 0 0.25rem 0', fontSize: '1.05rem' }}>No hay notas crédito para este filtro</h3>
+                                                                <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0 }}>No se encontraron novedades de calidad con dictamen de nota crédito en la fecha seleccionada.</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    filteredCreditNotes.map((nc, idx) => {
+                                                        const matchingReturn = returns.find(r => r.orders?.sequence_id === nc.orderSequence);
+                                                        const matchingOrder = matchingReturn?.orders;
+
+                                                        return (
+                                                            <tr key={`nc-${idx}-${nc.orderSequence}`} style={{ borderBottom: '1px solid #E2E8F0', transition: 'all 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FAF5FF'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                                <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>#{nc.orderSequence || 'N/A'}</div>
+                                                                    <div style={{ fontSize: '0.64rem', color: '#64748B' }}>{nc.date}</div>
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>{nc.clientMatriz}</div>
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                    <div style={{ fontSize: '0.75rem', color: '#334155', fontWeight: '600' }}>{nc.sucursal}</div>
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>{nc.productName}</div>
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                    <span style={{ fontWeight: '800', color: '#991B1B', backgroundColor: '#FEF2F2', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #FECACA', fontSize: '0.74rem' }}>
+                                                                        {nc.quantity} {nc.unitOfMeasure}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                    <span style={{ fontWeight: '900', color: '#DC2626', fontSize: '0.82rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                                        {nc.amount > 0 ? `-${nc.amount.toLocaleString('es-CO')} COP` : 'Saldo a Favor'}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                    <div style={{ fontSize: '0.72rem', color: '#0F172A', fontWeight: '700' }}>{nc.invoiceRef || 'Sin FV'}</div>
+                                                                    <span style={{ fontSize: '0.65rem', color: '#7C3AED', fontWeight: '800' }}>{nc.creditNoteFolio}</span>
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem', maxWidth: '240px' }}>
+                                                                    <div style={{ fontSize: '0.72rem', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={nc.reason}>
+                                                                        {nc.reason}
+                                                                    </div>
+                                                                    {nc.pqrFolio && <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '700' }}>{nc.pqrFolio}</span>}
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>
+                                                                    {matchingOrder ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setWoTargetOrder(matchingOrder);
+                                                                                setWoTargetReturn(matchingReturn);
+                                                                                setWoTargetPqr((matchingOrder.customer_service_pqrs || [])[0]);
+                                                                                setWoFolioInput(nc.creditNoteFolio || `NC-${nc.orderSequence}-2010`);
+                                                                                setWoModalOpen(true);
+                                                                            }}
+                                                                            style={{
+                                                                                backgroundColor: '#7C3AED',
+                                                                                color: 'white',
+                                                                                border: 'none',
+                                                                                padding: '0.28rem 0.55rem',
+                                                                                borderRadius: '5px',
+                                                                                fontWeight: '800',
+                                                                                fontSize: '0.68rem',
+                                                                                cursor: 'pointer',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px'
+                                                                            }}
+                                                                            title="Radicar comprobante contable en World Office"
+                                                                        >
+                                                                            <Zap size={11} /> Radicar WO
+                                                                        </button>
+                                                                    ) : (
+                                                                        <span style={{ fontSize: '0.68rem', color: '#64748B' }}>Aprobada</span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div style={{ backgroundColor: 'white', borderRadius: '14px', border: '1px solid #E2E8F0', position: 'relative', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.03)', overflow: 'visible' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopLeftRadius: '14px', position: 'sticky', top: '169px', zIndex: 30 }}># Pedido</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Producto / Ítem</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Cantidad Devuelta</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Motivo / Novedad</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Estado</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopRightRadius: '14px', position: 'sticky', top: '169px', zIndex: 30 }}>Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {returns.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={6} style={{ padding: '2.75rem 1.5rem', textAlign: 'center' }}>
+                                                            <div style={{ maxWidth: '420px', margin: '0 auto' }}>
+                                                                <div style={{ width: '46px', height: '46px', borderRadius: '12px', backgroundColor: '#ECFDF5', color: '#0D7A57', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                                                                    <CheckCircle2 size={22} />
+                                                                </div>
+                                                                <h3 style={{ fontWeight: '900', color: '#0F172A', margin: '0 0 0.25rem 0', fontSize: '1.05rem' }}>No hay devoluciones pendientes</h3>
+                                                                <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0 }}>Todas las novedades de transportadores se encuentran al día.</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ) : filteredReturns.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={6} style={{ padding: '2.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.84rem' }}>
+                                                            No se encontraron devoluciones que coincidan con &quot;{billingSearchQuery}&quot;
+                                                        </td>
+                                                    </tr>
+                                                ) : filteredReturns.map((ret) => {
+                                                    const orderNum = getFriendlyOrderId({ created_at: ret.orders?.created_at, sequence_id: ret.orders?.sequence_id });
+
+                                                    return (
+                                                        <tr key={ret.id} style={{ borderBottom: '1px solid #E2E8F0', transition: 'all 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                            <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                <span style={{ fontWeight: '800', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>#{orderNum}</span>
+                                                            </td>
+                                                            <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.78rem' }}>{ret.products?.name || 'Producto sin nombre'}</div>
+                                                                {ret.products?.sku && <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary }}>SKU: {ret.products.sku}</span>}
+                                                            </td>
+                                                            <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                <span style={{ fontWeight: '800', color: '#991B1B', backgroundColor: '#FEF2F2', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #FECACA', fontSize: '0.74rem' }}>
+                                                                    {ret.quantity_returned} {ret.products?.unit_of_measure || 'Kg'}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                <div style={{ fontSize: '0.76rem', color: THEME.colors.textMain, fontWeight: '600' }}>{ret.reason}</div>
+                                                                {ret.photo_url && (
+                                                                    <a href={ret.photo_url} target="_blank" rel="noreferrer" style={{ fontSize: '0.66rem', color: THEME.colors.primary, textDecoration: 'underline', display: 'inline-block', marginTop: '2px' }}>
+                                                                        Ver evidencia fotográfica
+                                                                    </a>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ padding: '0.65rem 0.75rem' }}>
+                                                                <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', padding: '0.15rem 0.45rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                                    {ret.status}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>
+                                                                <div style={{ display: 'inline-flex', gap: '5px' }}>
+                                                                    {ret.status === 'pending_review' ? (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={() => handleProcessReturn(ret, 'approved')}
+                                                                                style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.35rem 0.7rem', borderRadius: '6px', fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer' }}
+                                                                            >
+                                                                                Aprobar Descuento
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleProcessReturn(ret, 'rejected')}
+                                                                                style={{ backgroundColor: '#F1F5F9', color: '#64748B', border: '1px solid #CBD5E1', padding: '0.35rem 0.7rem', borderRadius: '6px', fontWeight: '700', fontSize: '0.72rem', cursor: 'pointer' }}
+                                                                            >
+                                                                                Rechazar
+                                                                            </button>
+                                                                        </>
+                                                                    ) : (
+                                                                        <span style={{ fontSize: '0.70rem', color: '#059669', fontWeight: '800' }}>Aprobado</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -6566,8 +6973,58 @@ export default function BillingDashboard() {
                     const clientEmail = selectedOrderDetail.profiles?.email || selectedOrderDetail.profiles?.billing_email || '';
                     const clientPhone = selectedOrderDetail.profiles?.phone || selectedOrderDetail.shipping_phone || '';
 
-                    // Items metrics
+                    // Items metrics & Tripartite PQR Financial Reconciliation
                     const totalCalculatedItemsPrice = orderDetailItems.reduce((acc, it) => acc + (Number(it.quantity || 0) * Number(it.unit_price || 0)), 0);
+
+                    // Extraer desglose financiero de PQR (Factura Inicial, Deducción PQR y Total Facturable)
+                    let pqrDeductionsTotal = 0;
+                    let initialInvoiceTotal = orderTotal;
+
+                    // 1. Extraer bitácora en admin_notes: [AJUSTE FACTURA PQR ...]: Valor ajustado de $PREV a $NEW (-$DED)
+                    if (selectedOrderDetail.admin_notes) {
+                        const matchAdj = selectedOrderDetail.admin_notes.match(/\[AJUSTE FACTURA[^\]]*\]:\s*Valor ajustado de\s*\$?([\d.,]+)\s*a\s*\$?([\d.,]+)\s*\(-?\$?([\d.,]+)\)/i);
+                        if (matchAdj) {
+                            const prevVal = parseFloat(matchAdj[1].replace(/\./g, '').replace(/,/g, '')) || 0;
+                            const dedVal = parseFloat(matchAdj[3].replace(/\./g, '').replace(/,/g, '')) || 0;
+                            if (prevVal > 0 && dedVal > 0) {
+                                initialInvoiceTotal = prevVal;
+                                pqrDeductionsTotal = dedVal;
+                            }
+                        } else {
+                            const matchNc = selectedOrderDetail.admin_notes.match(/\[NOTA_CREDITO_PQR[^\]]*VALOR:\s*-?\$?([\d.,]+)\]/i);
+                            if (matchNc) {
+                                const ncVal = parseFloat(matchNc[1].replace(/\./g, '').replace(/,/g, '')) || 0;
+                                if (ncVal > 0) {
+                                    pqrDeductionsTotal = ncVal;
+                                    initialInvoiceTotal = orderTotal + ncVal;
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Si no está en notas, calcular a partir de las novedades resueltas en ítems / devoluciones
+                    if (pqrDeductionsTotal === 0 && (orderDetailReturns.length > 0 || orderDetailPqrs.length > 0)) {
+                        let sumDeductions = 0;
+                        orderDetailItems.forEach(it => {
+                            const n = resolveItemNoveltyInfo(it, orderDetailReturns, orderDetailPqrs);
+                            if (n && n.scenarioType !== 'sin_costo' && (n as any).qtyClaimed > 0) {
+                                sumDeductions += ((n as any).qtyClaimed * Number(it.unit_price || 0));
+                            }
+                        });
+                        if (sumDeductions === 0 && orderDetailReturns.length > 0) {
+                            orderDetailReturns.forEach(r => {
+                                const pqr = orderDetailPqrs[0];
+                                const { ncAmount } = resolveReturnProductAndAmount(r, pqr);
+                                if (ncAmount > 0) sumDeductions += ncAmount;
+                            });
+                        }
+                        if (sumDeductions > 0) {
+                            pqrDeductionsTotal = sumDeductions;
+                            initialInvoiceTotal = Math.max(orderTotal, totalCalculatedItemsPrice);
+                        }
+                    }
+
+                    const netFacturableTotal = Math.max(0, initialInvoiceTotal - pqrDeductionsTotal);
 
                     const orderNoveltiesSummary = (() => {
                         if (!orderDetailItems || orderDetailItems.length === 0) return null;
@@ -6805,9 +7262,25 @@ export default function BillingDashboard() {
                                                     <div style={{ fontSize: '0.60rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                                         Totalización Facturable
                                                     </div>
-                                                    <div style={{ fontWeight: '900', color: '#065F46', fontSize: '1.15rem', fontVariantNumeric: 'tabular-nums', marginTop: '1px' }}>
-                                                        {formatMoney(orderTotal)}
-                                                    </div>
+                                                    {pqrDeductionsTotal > 0 ? (
+                                                        <div style={{ marginTop: '1px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                                                                <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                                                                    {formatMoney(initialInvoiceTotal)}
+                                                                </span>
+                                                                <span style={{ fontWeight: '900', color: '#065F46', fontSize: '1.15rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                                    {formatMoney(netFacturableTotal)}
+                                                                </span>
+                                                            </div>
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#DC2626', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                Ajuste PQR: -{formatMoney(pqrDeductionsTotal)}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontWeight: '900', color: '#065F46', fontSize: '1.15rem', fontVariantNumeric: 'tabular-nums', marginTop: '1px' }}>
+                                                            {formatMoney(orderTotal)}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: '3px', fontSize: '0.66rem', display: 'flex', flexDirection: 'column', gap: '1px' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
@@ -6952,20 +7425,47 @@ export default function BillingDashboard() {
                                                                     )}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right' }}>
-                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
-                                                                        {presentation.primary}
-                                                                    </div>
-                                                                    {presentation.secondary && (
-                                                                        <div style={{ fontSize: '0.64rem', color: '#0D7A57', fontWeight: '700', marginTop: '1px' }}>
-                                                                            {presentation.secondary}
+                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType !== 'sin_costo' ? (
+                                                                        <div>
+                                                                            <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                {item.quantity} {item.unit || item.products?.unit_of_measure || 'Kg'}
+                                                                            </div>
+                                                                            <div style={{ fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
+                                                                                {Math.max(0, Number(item.quantity) - (itemNovelty as any).qtyClaimed)} {item.unit || item.products?.unit_of_measure || 'Kg'}
+                                                                            </div>
+                                                                            <span style={{ fontSize: '0.58rem', color: '#DC2626', fontWeight: '800' }}>
+                                                                                -{(itemNovelty as any).qtyClaimed} PQR
+                                                                            </span>
                                                                         </div>
+                                                                    ) : (
+                                                                        <>
+                                                                            <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
+                                                                                {presentation.primary}
+                                                                            </div>
+                                                                            {presentation.secondary && (
+                                                                                <div style={{ fontSize: '0.64rem', color: '#0D7A57', fontWeight: '700', marginTop: '1px' }}>
+                                                                                    {presentation.secondary}
+                                                                                </div>
+                                                                            )}
+                                                                        </>
                                                                     )}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right', color: '#475569', fontVariantNumeric: 'tabular-nums', fontSize: '0.76rem' }}>
                                                                     {formatMoney(item.unit_price || 0)}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right', fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
-                                                                    {formatMoney(itemTotal)}
+                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType !== 'sin_costo' ? (
+                                                                        <div>
+                                                                            <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                {formatMoney(itemTotal)}
+                                                                            </div>
+                                                                            <div style={{ fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
+                                                                                {formatMoney(Math.max(0, Number(item.quantity) - (itemNovelty as any).qtyClaimed) * Number(item.unit_price || 0))}
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        formatMoney(itemTotal)
+                                                                    )}
                                                                 </td>
                                                             </tr>
                                                         );
@@ -6988,26 +7488,85 @@ export default function BillingDashboard() {
                                     </div>
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        {/* Total fijado de manera discreta y elegante en la esquina inferior */}
-                                        <div style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            backgroundColor: '#ECFDF5',
-                                            border: '1px solid #A7F3D0',
-                                            padding: '0.30rem 0.75rem',
-                                            borderRadius: '8px',
-                                            boxShadow: '0 1px 3px rgba(6, 95, 70, 0.08)'
-                                        }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.1' }}>
-                                                <span style={{ fontSize: '0.56rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                    {isIvaResponsible ? 'Total Facturable (Inc. IVA)' : 'Total Facturable (Exento)'}
-                                                </span>
-                                                <span style={{ fontSize: '1.02rem', fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums' }}>
-                                                    {formatMoney(orderTotal)}
-                                                </span>
+                                        {/* Liquidación Tripartita: Factura Inicial | Descuento PQR | Total Facturable con PQR */}
+                                        {pqrDeductionsTotal > 0 ? (
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                {/* 1. Factura Inicial */}
+                                                <div style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'flex-end',
+                                                    backgroundColor: '#F8FAFC',
+                                                    border: '1px solid #E2E8F0',
+                                                    padding: '0.24rem 0.60rem',
+                                                    borderRadius: '7px'
+                                                }}>
+                                                    <span style={{ fontSize: '0.54rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                        Factura Inicial
+                                                    </span>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B', fontVariantNumeric: 'tabular-nums', textDecoration: 'line-through' }}>
+                                                        {formatMoney(initialInvoiceTotal)}
+                                                    </span>
+                                                </div>
+
+                                                {/* 2. Descuento PQR */}
+                                                <div style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'flex-end',
+                                                    backgroundColor: '#FEF2F2',
+                                                    border: '1px solid #FECACA',
+                                                    padding: '0.24rem 0.60rem',
+                                                    borderRadius: '7px'
+                                                }}>
+                                                    <span style={{ fontSize: '0.54rem', fontWeight: '800', color: '#991B1B', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <AlertCircle size={9} /> Descuento PQR
+                                                    </span>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
+                                                        -{formatMoney(pqrDeductionsTotal)}
+                                                    </span>
+                                                </div>
+
+                                                {/* 3. Total Facturable con PQR Realizada */}
+                                                <div style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'flex-end',
+                                                    backgroundColor: '#ECFDF5',
+                                                    border: '1.5px solid #10B981',
+                                                    padding: '0.28rem 0.75rem',
+                                                    borderRadius: '8px',
+                                                    boxShadow: '0 1px 4px rgba(16, 185, 129, 0.15)'
+                                                }}>
+                                                    <span style={{ fontSize: '0.56rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <CheckCircle2 size={10} color="#059669" /> {isIvaResponsible ? 'Total con PQR (Inc. IVA)' : 'Total con PQR (Exento)'}
+                                                    </span>
+                                                    <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums' }}>
+                                                        {formatMoney(netFacturableTotal)}
+                                                    </span>
+                                                </div>
                                             </div>
-                                        </div>
+                                        ) : (
+                                            <div style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                backgroundColor: '#ECFDF5',
+                                                border: '1px solid #A7F3D0',
+                                                padding: '0.30rem 0.75rem',
+                                                borderRadius: '8px',
+                                                boxShadow: '0 1px 3px rgba(6, 95, 70, 0.08)'
+                                            }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.1' }}>
+                                                    <span style={{ fontSize: '0.56rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                        {isIvaResponsible ? 'Total Facturable (Inc. IVA)' : 'Total Facturable (Exento)'}
+                                                    </span>
+                                                    <span style={{ fontSize: '1.02rem', fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums' }}>
+                                                        {formatMoney(orderTotal)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <button 
                                             type="button"

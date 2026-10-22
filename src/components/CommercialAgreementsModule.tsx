@@ -1062,12 +1062,186 @@ export default function CommercialAgreementsModule() {
         }
     };
 
+    const [quoteTemplatesList, setQuoteTemplatesList] = useState<any[]>([]);
+    const [selectedQuoteTemplateId, setSelectedQuoteTemplateId] = useState<string>('');
+    const [dynamicMarginDelta, setDynamicMarginDelta] = useState<number>(0);
+    const [loadingDynamicTemplate, setLoadingDynamicTemplate] = useState<boolean>(false);
+
+    const fetchQuoteTemplates = async () => {
+        try {
+            const { data } = await supabase
+                .from('quote_templates')
+                .select('id, name, description, quote_template_items(count)')
+                .order('name', { ascending: true });
+            if (data) setQuoteTemplatesList(data);
+        } catch (err) {
+            console.warn('Error fetching quote_templates:', err);
+        }
+    };
+
     useEffect(() => {
         fetchAgreements();
         fetchB2bClients();
         fetchMasterTemplate();
         fetchCatalogProducts();
+        fetchQuoteTemplates();
     }, []);
+
+    // Auto-preseleccionar Lista de Cotización del cliente cuando se elige cliente
+    useEffect(() => {
+        if (selectedClientId && quoteTemplatesList.length > 0) {
+            const clientObj = b2bClients.find(cl => cl.id === selectedClientId);
+            const cName = (clientObj?.company_name || '').toLowerCase().trim();
+            if (cName) {
+                const matchedTpl = quoteTemplatesList.find(t => {
+                    const tName = (t.name || '').toLowerCase().trim();
+                    return tName === cName || cName.includes(tName) || tName.includes(cName);
+                });
+                if (matchedTpl) setSelectedQuoteTemplateId(matchedTpl.id);
+            }
+        }
+    }, [selectedClientId, quoteTemplatesList, b2bClients]);
+
+    const handleApplyDynamicTemplateToCreateFlow = async () => {
+        if (!selectedQuoteTemplateId) {
+            showToast('Selecciona primero una Lista de Cotización', 'warning');
+            return;
+        }
+        try {
+            setLoadingDynamicTemplate(true);
+            const GENERAL_INST_ID = 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
+            const [tplItemsRes, costMatrixRes, giRulesRes] = await Promise.all([
+                supabase
+                    .from('quote_template_items')
+                    .select('product_id, products(id, name, accounting_id, sku, unit_of_measure, is_active, iva_rate)')
+                    .eq('template_id', selectedQuoteTemplateId),
+                supabase
+                    .from('commercial_cost_matrix')
+                    .select('product_id, manual_cost')
+                    .eq('is_active', true),
+                supabase
+                    .from('pricing_rules')
+                    .select('product_id, margin_adjustment')
+                    .eq('model_id', GENERAL_INST_ID)
+            ]);
+
+            const tplRows = tplItemsRes.data || [];
+            if (tplRows.length === 0) {
+                showToast('La Lista de Cotización seleccionada no tiene productos', 'error');
+                return;
+            }
+
+            const costMap: Record<string, number> = {};
+            (costMatrixRes.data || []).forEach((r: any) => {
+                if (r.manual_cost && Number(r.manual_cost) > 0) {
+                    costMap[r.product_id] = Number(r.manual_cost);
+                }
+            });
+
+            const giMarginMap: Record<string, number> = {};
+            (giRulesRes.data || []).forEach((r: any) => {
+                giMarginMap[r.product_id] = Number(r.margin_adjustment) || 0;
+            });
+
+            let subtotal = 0;
+            let totalMarginSum = 0;
+            const delta = Number(dynamicMarginDelta) || 0;
+
+            const previewItems = tplRows
+                .filter((r: any) => Boolean(r.products))
+                .map((r: any) => {
+                    const p = r.products;
+                    const cost = costMap[p.id] || 0;
+                    const baseGiMargin = giMarginMap[p.id] ?? 30;
+                    const finalMargin = Math.round((baseGiMargin + delta) * 10) / 10;
+                    const rawPrice = cost > 0 ? cost * (1 + finalMargin / 100) : 0;
+                    const finalPrice = cost > 0 ? Math.ceil(rawPrice / 50) * 50 : 0;
+
+                    subtotal += finalPrice;
+                    totalMarginSum += finalMargin;
+
+                    return {
+                        accounting_id: p.accounting_id ? String(p.accounting_id) : (p.sku || 'N/A'),
+                        client_product_name: p.name,
+                        product_name: p.name,
+                        unit: p.unit_of_measure || 'Kg',
+                        unit_price: finalPrice,
+                        matched_product: p,
+                        cost_basis: cost,
+                        margin_percent: finalMargin,
+                        iva_rate: Number(p.iva_rate) || 0,
+                        confidence: 'high' as const,
+                        is_inactive: p.is_active === false
+                    };
+                })
+                .sort((a: any, b: any) => String(a.accounting_id).localeCompare(String(b.accounting_id), 'es', { numeric: true }));
+
+            const mappedUploadedItems = previewItems.map((it: any) => ({
+                accounting_id: it.accounting_id,
+                unit_price: it.unit_price,
+                product_name: it.product_name
+            }));
+
+            const inactiveCount = previewItems.filter((it: any) => it.is_inactive).length;
+            const avgMargin = previewItems.length > 0 ? Math.round((totalMarginSum / previewItems.length) * 10) / 10 : 0;
+
+            setUploadedItems(mappedUploadedItems);
+            setExcelPreviewData({
+                items: previewItems,
+                matchedCount: previewItems.length,
+                unmatchedCount: 0,
+                inactiveCount,
+                avgMargin,
+                totalSubtotal: subtotal
+            });
+
+            const tplObj = quoteTemplatesList.find(t => t.id === selectedQuoteTemplateId);
+            showToast(`Canasta "${tplObj?.name || 'Lista'}" (${previewItems.length} SKUs) calculada con línea base General Institucional`, 'success');
+        } catch (err: any) {
+            console.error('Error loading dynamic template into agreement:', err);
+            showToast('Error al cargar lista dinámica: ' + (err.message || ''), 'error');
+        } finally {
+            setLoadingDynamicTemplate(false);
+        }
+    };
+
+    const handleUpdatePreviewRowMargin = (rowIdx: number, newMarginVal: string) => {
+        if (!excelPreviewData) return;
+        const numMargin = parseFloat(newMarginVal);
+        const validMargin = isNaN(numMargin) ? 0 : numMargin;
+        const newItems = [...excelPreviewData.items];
+        const row = { ...newItems[rowIdx] };
+        row.margin_percent = validMargin;
+        if (row.cost_basis > 0) {
+            row.unit_price = Math.max(0, Math.ceil((row.cost_basis * (1 + validMargin / 100)) / 50) * 50);
+        }
+        newItems[rowIdx] = row;
+        const matched = newItems.filter(it => Boolean(it.matched_product));
+        const avgMargin = matched.length > 0 ? Math.round((matched.reduce((a, b) => a + (Number(b.margin_percent) || 0), 0) / matched.length) * 10) / 10 : 0;
+        const totalSubtotal = newItems.reduce((a, b) => a + (Number(b.unit_price) || 0), 0);
+        setExcelPreviewData({ ...excelPreviewData, items: newItems, avgMargin, totalSubtotal });
+        setUploadedItems(newItems.map(it => ({ accounting_id: it.accounting_id, product_name: it.product_name, unit_price: it.unit_price })));
+    };
+
+    const handleUpdatePreviewRowPrice = (rowIdx: number, newPriceVal: string) => {
+        if (!excelPreviewData) return;
+        const numPrice = parseFloat(newPriceVal);
+        const validPrice = isNaN(numPrice) ? 0 : Math.max(0, numPrice);
+        const newItems = [...excelPreviewData.items];
+        const row = { ...newItems[rowIdx] };
+        row.unit_price = validPrice;
+        if (row.cost_basis > 0 && validPrice > 0) {
+            row.margin_percent = Math.round(((validPrice - row.cost_basis) / row.cost_basis) * 1000) / 10;
+        } else {
+            row.margin_percent = 0;
+        }
+        newItems[rowIdx] = row;
+        const matched = newItems.filter(it => Boolean(it.matched_product));
+        const avgMargin = matched.length > 0 ? Math.round((matched.reduce((a, b) => a + (Number(b.margin_percent) || 0), 0) / matched.length) * 10) / 10 : 0;
+        const totalSubtotal = newItems.reduce((a, b) => a + (Number(b.unit_price) || 0), 0);
+        setExcelPreviewData({ ...excelPreviewData, items: newItems, avgMargin, totalSubtotal });
+        setUploadedItems(newItems.map(it => ({ accounting_id: it.accounting_id, product_name: it.product_name, unit_price: it.unit_price })));
+    };
 
     const computeDefaultAgreementName = (clientObj?: any, isMulti?: boolean, startD?: string) => {
         const dStr = startD || startDate || new Date().toISOString().split('T')[0];
@@ -6290,245 +6464,8 @@ export default function CommercialAgreementsModule() {
                                         </p>
                                     </div>
 
-                                    {/* MODE TOGGLE: INDIVIDUAL VS MASIVO */}
-                                    <div style={{ display: 'flex', gap: '8px', padding: '4px', backgroundColor: '#F1F5F9', borderRadius: '10px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setIsMultiClientMode(false);
-                                                if (!isNameManuallyEdited) {
-                                                    const c = b2bClients.find(cl => cl.id === selectedClientId);
-                                                    setAgreementName(computeDefaultAgreementName(c, false, startDate));
-                                                }
-                                            }}
-                                            style={{
-                                                flex: 1,
-                                                padding: '9px 14px',
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                fontSize: '0.82rem',
-                                                fontWeight: 'bold',
-                                                cursor: 'pointer',
-                                                backgroundColor: !isMultiClientMode ? '#FFFFFF' : 'transparent',
-                                                color: !isMultiClientMode ? THEME.colors.primary : '#64748B',
-                                                boxShadow: !isMultiClientMode ? '0 2px 4px rgba(0,0,0,0.06)' : 'none',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '6px',
-                                                transition: 'all 0.15s'
-                                            }}
-                                        >
-                                            <Building2 size={16} /> Cliente Individual
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setIsMultiClientMode(true);
-                                                if (!isNameManuallyEdited) {
-                                                    setAgreementName(computeDefaultAgreementName(undefined, true, startDate));
-                                                }
-                                            }}
-                                            style={{
-                                                flex: 1,
-                                                padding: '9px 14px',
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                fontSize: '0.82rem',
-                                                fontWeight: 'bold',
-                                                cursor: 'pointer',
-                                                backgroundColor: isMultiClientMode ? '#FFFFFF' : 'transparent',
-                                                color: isMultiClientMode ? THEME.colors.primary : '#64748B',
-                                                boxShadow: isMultiClientMode ? '0 2px 4px rgba(0,0,0,0.06)' : 'none',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '6px',
-                                                transition: 'all 0.15s'
-                                            }}
-                                        >
-                                            <Users size={16} /> Acuerdo Grupal Comodín (Multi-Cliente Ad-Hoc)
-                                        </button>
-                                    </div>
-
-                                    {/* --- MODO MASIVO COMODÍN: CHECKBOXES --- */}
-                                    {isMultiClientMode ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                            <div style={{ 
-                                                backgroundColor: '#F5F3FF', 
-                                                border: '1.5px solid #DDD6FE', 
-                                                borderRadius: '10px', 
-                                                padding: '0.75rem 1rem', 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'space-between',
-                                                gap: '12px',
-                                                flexWrap: 'wrap'
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '240px' }}>
-                                                    <Sparkles size={19} color="#7C3AED" style={{ flexShrink: 0 }} />
-                                                    <div style={{ fontSize: '0.78rem', color: '#4C1D95', lineHeight: '1.4' }}>
-                                                        <strong>¿Vas a actualizar Nutresa, Colsubsidio, Lista Quincenal o Lista Mensual?</strong> Su <strong>Fuente Única de Verdad</strong> y motor de cálculo viven en <strong>Acuerdos Especiales</strong>. Usa este modo <strong>Comodín</strong> solo cuando entre una lista extraordinaria para un grupo nuevo de clientes de manera simultánea.
-                                                    </div>
-                                                </div>
-                                                <a
-                                                    href="/admin/commercial?tab=operations&subtab=agreements"
-                                                    style={{
-                                                        padding: '6px 12px',
-                                                        borderRadius: '8px',
-                                                        backgroundColor: '#7C3AED',
-                                                        color: '#FFFFFF',
-                                                        fontSize: '0.74rem',
-                                                        fontWeight: 800,
-                                                        textDecoration: 'none',
-                                                        whiteSpace: 'nowrap'
-                                                    }}
-                                                >
-                                                    Ir a Acuerdos Especiales ↗
-                                                </a>
-                                            </div>
-
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
-                                                    Casas Matrices y Sucursales Vinculadas a este Acuerdo Grupal Comodín:
-                                                </label>
-                                                <div style={{ display: 'flex', gap: '8px' }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const allIds = filteredB2bClients.map(c => c.id);
-                                                            setSelectedClientIds(allIds);
-                                                        }}
-                                                        style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '3px 8px', fontSize: '0.72rem', fontWeight: 'bold', color: THEME.colors.primary, cursor: 'pointer' }}
-                                                    >
-                                                        Seleccionar Todas ({filteredB2bClients.length})
-                                                    </button>
-                                                    {selectedClientIds.length > 0 && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setSelectedClientIds([])}
-                                                            style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '3px 8px', fontSize: '0.72rem', fontWeight: 'bold', color: '#64748B', cursor: 'pointer' }}
-                                                        >
-                                                            Deseleccionar
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Buscador Rápido */}
-                                            <div style={{ position: 'relative' }}>
-                                                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                                                <input 
-                                                    type="text"
-                                                    placeholder="Filtrar Casas Matrices por nombre o NIT..."
-                                                    value={clientSearchQuery}
-                                                    onChange={(e) => setClientSearchQuery(e.target.value)}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '10px 38px 10px 42px',
-                                                        borderRadius: '10px',
-                                                        border: `1.5px solid #CBD5E1`,
-                                                        fontSize: '0.85rem',
-                                                        fontWeight: '600',
-                                                        outline: 'none'
-                                                    }}
-                                                />
-                                            </div>
-
-                                            {/* Lista de Clientes con Checkbox */}
-                                            <div style={{
-                                                maxHeight: '260px',
-                                                overflowY: 'auto',
-                                                border: '1.5px solid #E2E8F0',
-                                                borderRadius: '10px',
-                                                backgroundColor: '#FFFFFF',
-                                                display: 'flex',
-                                                flexDirection: 'column'
-                                            }}>
-                                                {filteredB2bClients.length === 0 ? (
-                                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
-                                                        No se encontraron Casas Matrices con "{clientSearchQuery}"
-                                                    </div>
-                                                ) : (
-                                                    filteredB2bClients.map(c => {
-                                                        const isChecked = selectedClientIds.includes(c.id);
-                                                        return (
-                                                            <div
-                                                                key={c.id}
-                                                                onClick={() => {
-                                                                    setSelectedClientIds(prev => 
-                                                                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                                                                    );
-                                                                }}
-                                                                style={{
-                                                                    padding: '10px 14px',
-                                                                    borderBottom: '1px solid #F1F5F9',
-                                                                    cursor: 'pointer',
-                                                                    display: 'flex',
-                                                                    justifyContent: 'space-between',
-                                                                    alignItems: 'center',
-                                                                    backgroundColor: isChecked ? '#F0FDF4' : 'transparent',
-                                                                    transition: 'background 0.15s'
-                                                                }}
-                                                            >
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                    {isChecked ? (
-                                                                        <CheckSquare size={18} color="#0D7A57" strokeWidth={2.5} />
-                                                                    ) : (
-                                                                        <Square size={18} color="#94A3B8" />
-                                                                    )}
-                                                                    <div>
-                                                                        <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B' }}>
-                                                                            {c.company_name}
-                                                                        </div>
-                                                                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
-                                                                            {c.nit && <span>NIT: {c.nit} </span>}
-                                                                            {c.branchCount > 0 && <span>• {c.branchCount} {c.branchCount === 1 ? 'sucursal' : 'sucursales'}</span>}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                {isChecked && (
-                                                                    <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: 'bold' }}>
-                                                                        Seleccionada
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })
-                                                )}
-                                            </div>
-
-                                            {/* Badge Resumen de Selección */}
-                                            <div style={{ 
-                                                padding: '8px 14px', 
-                                                borderRadius: '8px', 
-                                                backgroundColor: selectedClientIds.length > 0 ? '#F0FDF4' : '#FFFBEB', 
-                                                border: `1px solid ${selectedClientIds.length > 0 ? '#BBF7D0' : '#FDE68A'}`,
-                                                fontSize: '0.78rem',
-                                                fontWeight: '600',
-                                                color: selectedClientIds.length > 0 ? '#15803D' : '#92400E',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between'
-                                            }}>
-                                                <span>
-                                                    {selectedClientIds.length > 0 
-                                                        ? `${selectedClientIds.length} Casas Matrices seleccionadas para la lista Institucional General` 
-                                                        : 'Selecciona al menos una Casa Matriz para continuar'}
-                                                </span>
-                                                {selectedClientIds.length > 0 && (
-                                                    <span style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: 'bold' }}>
-                                                        Aplica a {selectedClientIds.reduce((sum, id) => {
-                                                            const c = b2bClients.find(cl => cl.id === id);
-                                                            return sum + (c?.branchCount || 0);
-                                                        }, 0)} sucursales derivadas
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        /* --- MODO INDIVIDUAL --- */
-                                        !selectedClientId ? (
+                                    {/* BÚSQUEDA DE CLIENTE INSTITUCIONAL (CASA MATRIZ O SUCURSAL) */}
+                                    {!selectedClientId ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
@@ -6903,7 +6840,7 @@ export default function CommercialAgreementsModule() {
                                                 );
                                             })()
                                         )
-                                    )}
+                                    }
                                 </div>
                             )}
 
@@ -7392,53 +7329,6 @@ export default function CommercialAgreementsModule() {
                                             </button>
                                         </div>
                                     </div>
-
-                                    {/* Cargar Precios del Modelo Institucional General */}
-                                    {masterTemplate && masterTemplate.items && masterTemplate.items.length > 0 && (
-                                        <div style={{
-                                            background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
-                                            border: '1.5px solid #86EFAC',
-                                            borderRadius: '12px',
-                                            padding: '12px 16px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            gap: '16px',
-                                            boxShadow: '0 2px 8px rgba(22, 101, 52, 0.08)'
-                                        }}>
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#166534', fontSize: '0.88rem' }}>
-                                                    <Sparkles size={16} color="#16A34A" />
-                                                    Modelo Institucional General Activo ({masterTemplate.items.length} SKUs)
-                                                </div>
-                                                <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: '#15803D' }}>
-                                                    {masterTemplate.model_snapshot_name || 'Lista Base Institucional'}. Carga estos precios con 1 clic manteniendo las fechas individuales de este cliente.
-                                                </p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={handleApplyMasterToCreateFlow}
-                                                style={{
-                                                    padding: '8px 14px',
-                                                    backgroundColor: '#16A34A',
-                                                    color: 'white',
-                                                    borderRadius: '8px',
-                                                    border: 'none',
-                                                    fontWeight: 'bold',
-                                                    fontSize: '0.78rem',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    whiteSpace: 'nowrap',
-                                                    boxShadow: '0 3px 10px rgba(22, 163, 74, 0.22)'
-                                                }}
-                                            >
-                                                <Sparkles size={13} />
-                                                Cargar Precios Modelo Base
-                                            </button>
-                                        </div>
-                                    )}
 
                                     {/* Cargar Lista Genérica Abierta a Consumo ($0 COP) */}
                                     <div style={{
@@ -8062,24 +7952,49 @@ export default function CommercialAgreementsModule() {
                                                                             {isMatched ? formatMoney(item.cost_basis) : '—'}
                                                                         </td>
 
-                                                                        {/* Negotiated Price */}
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.84rem' }}>
-                                                                            {formatMoney(item.unit_price)}
+                                                                        {/* Negotiated Price (Editable) */}
+                                                                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                                                                            <input
+                                                                                type="number"
+                                                                                step="50"
+                                                                                value={item.unit_price}
+                                                                                onChange={(e) => handleUpdatePreviewRowPrice(originalIndex, e.target.value)}
+                                                                                style={{
+                                                                                    width: '96px',
+                                                                                    padding: '4px 8px',
+                                                                                    borderRadius: '6px',
+                                                                                    border: '1px solid #CBD5E1',
+                                                                                    textAlign: 'right',
+                                                                                    fontWeight: '800',
+                                                                                    color: THEME.colors.primary,
+                                                                                    fontSize: '0.82rem'
+                                                                                }}
+                                                                            />
                                                                         </td>
 
-                                                                        {/* Margin % Badge */}
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                                                        {/* Margin % (Editable over Cost) */}
+                                                                        <td style={{ padding: '6px 10px', textAlign: 'center' }}>
                                                                             {isMatched ? (
-                                                                                <span style={{
-                                                                                    fontSize: '0.74rem',
-                                                                                    padding: '2px 8px',
-                                                                                    borderRadius: '12px',
-                                                                                    fontWeight: '800',
-                                                                                    backgroundColor: item.margin_percent >= 20 ? '#DCFCE7' : item.margin_percent >= 12 ? '#FEF3C7' : '#FEE2E2',
-                                                                                    color: item.margin_percent >= 20 ? '#166534' : item.margin_percent >= 12 ? '#B45309' : '#991B1B'
-                                                                                }}>
-                                                                                    {item.margin_percent}%
-                                                                                </span>
+                                                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        step="0.5"
+                                                                                        value={item.margin_percent}
+                                                                                        onChange={(e) => handleUpdatePreviewRowMargin(originalIndex, e.target.value)}
+                                                                                        style={{
+                                                                                            width: '64px',
+                                                                                            padding: '4px 6px',
+                                                                                            borderRadius: '8px',
+                                                                                            border: '1px solid #CBD5E1',
+                                                                                            textAlign: 'center',
+                                                                                            fontWeight: '800',
+                                                                                            fontSize: '0.76rem',
+                                                                                            backgroundColor: item.margin_percent >= 20 ? '#DCFCE7' : item.margin_percent >= 12 ? '#FEF3C7' : '#FEE2E2',
+                                                                                            color: item.margin_percent >= 20 ? '#166534' : item.margin_percent >= 12 ? '#B45309' : '#991B1B'
+                                                                                        }}
+                                                                                    />
+                                                                                    <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#64748B' }}>%</span>
+                                                                                </div>
                                                                             ) : (
                                                                                 <span style={{ color: '#94A3B8', fontSize: '0.74rem' }}>—</span>
                                                                             )}

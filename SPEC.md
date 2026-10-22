@@ -1148,14 +1148,15 @@ El sistema gobierna la fijación de tarifas institucionales mediante modelos de 
    - En la consola `/admin/commercial/settings` (o pestaña embebida de acuerdos y modelos), la galería lateral izquierda aísla a **General institucional dinámico** fijándolo permanentemente en el tope (`Modelo Base Maestro` con ícono `<Crown />` y borde esmeralda `#10B981`).
    - Los modelos derivados y secundarios se alojan en un contenedor con scroll independiente (`maxHeight: calc(100vh - 310px)`), garantizando que el modelo matriz permanezca siempre a la vista sin importar el desplazamiento vertical del listado.
 
-#### B. Preformas & Plantillas de Cotización Rápida (`quote_templates`, `quote_template_items`)
-Para acelerar la emisión de propuestas a prospectos institucionales:
-1. **Plantillas por Segmento Gastronómico:**
-   - Listas maestras pre-configuradas (ej. *Preforma Restaurante Italiano*, *Preforma Hotel Desayunos*, *Preforma Casino 500 Pax*).
-2. **Estructura de Ítems:**
-   - `template_id`, `product_id`, `default_quantity`, `default_unit`, `presentation_override`.
+#### B. Listas de Cotización & Canastas Específicas por Cliente (`quote_templates`, `quote_template_items`)
+Para gobernar las canastas cerradas de SKUs tanto por categoría como por cliente institucional recurrente:
+1. **Canastas Específicas por Cliente y Segmento:**
+   - Además de las listas por familia (*Frutas*, *Verduras y Hortalizas*, *Despensa y Lácteos*, *Catálogo Completo*), el sistema mantiene una `Lista de Cotización` específica para cada cliente institucional con acuerdo (ej. *Colegio Anglo — 155 SKUs*, *Aldimark — 147 SKUs*, *Suboficiales — 141 SKUs*, *Restaurantes Wok — 34 SKUs*).
+   - **Separación Estricta de Responsabilidades:** `quote_templates` almacena exclusivamente **qué SKUs** conforman la canasta del cliente (`template_id`, `product_id`), mientras que el costo vivo proviene de `commercial_cost_matrix` y la línea base de margen proviene de `General institucional dinámico` (`pricing_models`), evitando crear modelos de precios redundantes por cliente dentro de `pricing_models`.
+2. **Conteo Agregado Inmune al Límite de 1.000 Filas de Supabase:**
+   - En `/admin/commercial/settings`, la consulta de plantillas ejecuta `.select('*, quote_template_items(count)')`, calculando el total exacto de productos por lista a nivel de motor PostgreSQL sin truncamiento cuando el universo de ítems supera los 1.000 registros.
 3. **Importación / Exportación Excel (.xlsx):**
-   - El equipo comercial puede descargar plantillas en Excel, ajustar gramajes o variedades en masa y subirlas en 1 clic.
+   - El equipo comercial puede descargar plantillas en Excel, ajustar SKUs en masa y subirlas en 1 clic.
 
 ---
 
@@ -1531,8 +1532,8 @@ El hub comercial unifica la dirección estratégica y operativa del área comerc
    - Subpestañas integradas: Matriz de Costos (`subtab=cost-matrix`), Cotizaciones (`subtab=quotes`), Modelos de Precios (`subtab=settings`), Campañas Temporales (`subtab=campaigns`).
 3. **Gestión de Clientes CRM (`tab=clients`):**
    - Subpestañas unificadas: Directorio B2B (`clientTab=b2b`), Pipeline CRM (`clientTab=leads`), Acuerdos Comerciales (`clientTab=agreements`), Clientes Hogar (`clientTab=b2c`).
-4. **Bandeja Comercial (`tab=inbox`):**
-   - Conexión con `CommercialInboxModule` para gestión de mensajes y comunicaciones transaccionales.
+4. **Monitor Diario BI (`tab=daily-monitor`):**
+   - Consola de seguimiento operativo diario (`CommercialDailyMonitorView`). *(Nota SDD v1.9.239 — Poda SpaceX: Se erradica de la barra principal la pestaña `Buzón Comercial (tab=inbox)` para eliminar canales paralelos no auditados de activación de acuerdos).*
 
 ---
 
@@ -11359,3 +11360,96 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - **Cálculo Financiero Automático al Centavo:** La deducción imputada a cada responsable se liquida por la suma aritmética exacta de los productos asignados a su cargo (e.g. Juan Pérez asume los $25.000 COP de los tomates en Picking; Pedro Gómez asume los $20.000 COP de las papayas en Transporte), erradicando el cálculo manual de porcentajes cruzados.
      - **Retrocompatibilidad Total en RCA_METADATA:** Se persiste el tag canónico con imputationMode: 'by_item', desglosando el array itemImputations y consolidando en imputedEntities las deducciones totales agregadas por persona para que los módulos aguas abajo (Nómina, RNC PDF e Historial SAC) operen con total transparencia contractual.
      - **Trazabilidad en RNC Oficial:** El acta legal imprimible de No Conformidad (/admin/customer-service/rnc/[id]/print) detalla con precisión quirúrgica el producto devuelto junto a su causante nominal asignado.
+
+
+---
+
+### Escenario 268: Gobernanza de los 3 Canales Oficiales de Fijación de Acuerdos Institucionales, Poda SpaceX de Canales Paralelos y Arquitectura de 3 Rieles (SDD v1.9.239)
+- **Given** la arquitectura comercial de acuerdos de precios congelados (`quotes` con `status = 'agreement'`), las canastas de SKUs en `quote_templates`, la Matriz de Costos (`commercial_cost_matrix`) y la línea base maestra `General institucional dinámico` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`),
+- **When** el equipo comercial estructura, cotiza, renueva o congela tarifas para un periodo de vigencia determinado (`start_date` a `valid_until`),
+- **Then** el sistema impone las siguientes reglas de simplicidad radical (`/spacex`) e integridad contractual:
+  1. **Exclusividad de los 3 Canales Oficiales para Dejar un Acuerdo En Firme:**
+     - **Canal 1 — Acuerdos Especiales Macro en Cascada (`/admin/commercial?tab=operations&subtab=agreements` - `SpecialAgreementsModule.tsx`):** Destinado a las 4 grandes listas corporativas/masivas en cascada (*Grupo Nutresa*, *Colsubsidio*, *Lista General Quincenal*, *Lista General Mensual*). Opera mediante el botón `[🏛️ Consagrar Acuerdo]` con vigencias fijas de ciclo, telemetría de demanda global y herencia 1 a N hacia múltiples sucursales asociadas.
+     - **Canal 2 — Acuerdos Institucionales Dinámicos por Cliente (~30 Cuentas Recurrentes) (`/admin/commercial/quotes/create` y `/admin/commercial/quotes`):** Destinado a gobernar las listas dinámicas de clientes institucionales consolidados (*Colegio Anglo*, *Aldimark*, *Suboficiales*, *Wok*, etc.). En este riel, **la constante es el porcentaje de utilidad o margen negociado, y la variable móvil es el precio final**, el cual se deriva del costo diario de la Matriz de Costos Comercial. El usuario negocia y modula dicha constante utilizando la preforma de cotización asistida por la demanda histórica real del cliente, salva en estado pendiente, y al acordar con el cliente, aprueba la cotización fijando la vigencia para congelar el acuerdo contractual.
+     - **Canal 3 — Ingesta Documental de Listas de Cliente (Excel/PDF) & Acuerdos Directos (`/admin/commercial?tab=clients&clientTab=agreements` - `CommercialAgreementsModule.tsx`):** Destinado a formalizar acuerdos cuando el cliente o licitación entrega una minuta de precios cerrada en formato externo (Excel o PDF). El sistema digiere el archivo con IA Gemini y fuzzy matching, audita los márgenes frente a la Matriz de Costos viva para evitar vender a pérdida, y consagra el acuerdo con su vigencia. También aloja el acceso rápido a Lista Abierta a Consumo ($0 COP).
+  2. **Demolición de Canales Paralelos y Grasa Operativa ("Tiros en el Pie"):**
+     - Se elimina la pestaña `Buzón Comercial (CRM)` (`tab=inbox`) de la navegación principal de `/admin/commercial`.
+     - Se elimina el cargador paralelo de acuerdos Excel dentro del modal de conversión rápida de Leads en `ClientsModule.tsx`, evitando la creación de acuerdos sin expediente logístico/fiscal o con fórmulas de margen inconsistentes.
+     - Se reserva `pricing_models` exclusivamente para los modelos estructurales de segmento (*General Institucional Dinámico*, *Grande*, *Mediano*, *Pequeño*, *Clientes Hogar*, *Costo Puro*), prohibiendo poblar `pricing_models` con registros sueltos por cada cliente individual.
+     - **Poda en Canal 3:** Se elimina el "Motor Dinámico" redundante del Paso 3 (evitando duplicar el motor de Canal 2 sin telemetría de volumen) y se elimina el modo "Acuerdo Grupal Comodín" del Paso 1 (evitando desordenar las listas masivas que pertenecen exclusivamente a Canal 1).
+  3. **Mesa de Acuerdos Vigentes (`CommercialAgreementsModule.tsx`):**
+     - Funciona como el repositorio centralizado de consulta, auditoría, visualización membreteada, prórroga rápida y exportación Excel de todos los acuerdos en firme (`quotes.status = 'agreement'`), así como la vía de contingencia para ingesta directa de minutas de precio aprobadas en Excel (`[+ Nuevo Acuerdo]`).
+
+---
+
+### Escenario 269: Canal 2 — Preforma de Cotización con Telemetría de Demanda Histórica, Negociación de Utilidad Constante y Aprobación de Vigencia (SDD v1.9.240)
+- **Given** una cuenta institucional recurrente (e.g. *Colegio Anglo*, *Aldimark*, *Club de Suboficiales*, etc.) que requiere cotización, renovación o actualización de su acuerdo de precios,
+- **When** el analista comercial accede a `/admin/commercial/quotes/create` y selecciona al cliente y su canasta contractual de SKUs (`quote_templates`),
+- **Then** el sistema opera bajo los siguientes contratos matemáticos y de experiencia de usuario:
+  1. **Línea Base Inicial de Utilidad (Herencia de General Institucional Dinámico):**
+     - La utilidad inicial para cada producto de la canasta hereda estrictamente las reglas de margen de `General institucional dinámico` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`).
+     - El precio se calcula en tiempo real congelando el costo base de hoy desde `commercial_cost_matrix` bajo la fórmula canónica:
+       $$\text{Precio Unitario Antes de IVA} = \text{Costo Neto Matriz} \times \left(1 + \frac{\text{Margen o Utilidad\%}}{100}\right)$$
+       con redondeo hacia el múltiplo superior de \$50 COP.
+  2. **Telemetría de Volumen Consumido del Último Periodo (Instrumento de Negociación):**
+     - El sistema consulta reactivamente la tabla de pedidos (`orders` y `order_items`) para el `client_id` (o su red de sucursales) en una ventana configurable de evaluación (por defecto 30 días).
+     - La tabla de preforma de la cotización proyecta obligatoriamente:
+       - **Columna `Volumen Último Periodo`**: Cantidad real demandada por el cliente (`X Kg` o `Y Und`) junto con el número de pedidos en que se solicitó.
+       - **Columna `Utilidad Proyectada ($ COP)`**: Ganancia monetaria esperada para FruFresco calculada como:
+         $$\text{Utilidad Total} = \text{Volumen Consumido} \times (\text{Precio Cotizado} - \text{Costo Matriz})$$
+     - Esta visibilidad permite al negociador ajustar el margen porcentual (% constante) de un SKU sabiendo con certeza si el volumen histórico respalda la rentabilidad neta total de la cuenta.
+  3. **Persistencia como Cotización Pendiente (`status = 'draft'` / `'sent'`):**
+     - Al guardar la cotización, los costos y precios quedan registrados con fecha, folio formal (`COT-XXXX`) y estado pendiente (`draft` o `sent`), permitiendo iterar versiones durante la negociación.
+  4. **Aprobación Ágil de Acuerdo con Vigencia desde la Galería de Cotizaciones:**
+     - Cuando el cliente acepta la cotización, el usuario activa la acción **`[Aprobar y Congelar Acuerdo de Precios]`** desde la galería de cotizaciones (`/admin/commercial/quotes`) o desde el visor de detalle (`/admin/commercial/quotes/[id]`).
+     - Al tratarse de un cliente formalizado existente (`client_id` con perfil corporativo), el modal **NO solicita reingreso de RUT, GPS ni dirección**.
+     - El modal se focaliza exclusivamente en definir la **Vigencia del Acuerdo**:
+       - Selector de fecha de inicio (`start_date`, por defecto hoy).
+       - Selector de fecha de vencimiento (`valid_until`) con presets de acceso rápido: `15 días` | `30 días (1 mes)` | `60 días` | `Personalizado`.
+     - Al confirmar, el sistema ejecuta la transición atómica de la FSM:
+       $$\text{quotes.status} = \text{'agreement'}$$
+       con su correspondiente snapshot de nombre (`[Cliente] - Acuerdo [DD-MM-AA]`).
+     - A partir de ese milisegundo, los precios congelados toman **Prevalencia Nivel 1/2** en la ingesta de pedidos (`orders/create` y Mesa de Trabajo), sustituyendo cualquier tarifa flotante anterior.
+
+---
+
+### Escenario 270: Canal 3 — Ingesta Documental de Listas de Cliente (Excel/PDF), Auditoría de Margen Matriz y Lista Abierta $0 (SDD v1.9.241)
+- **Given** el modal `Crear Acuerdo Comercial Institucional` (`CommercialAgreementsModule.tsx`),
+- **When** el equipo comercial recibe una lista de precios impuesta por el cliente (licitación pública, contrato escolar o institucional en Excel o PDF) o requiere formalizar suministro continuo a consumo abierto,
+- **Then** el asistente secuencial de 3 pasos opera bajo la doctrina de diseño industrial (`disenador-web`):
+  1. **Paso 1 — Selección de Cliente Limpia (Sin Comodines Desconectados):**
+     - Se restringe la selección exclusivamente a **Casa Matriz** (con réplica en cascada a sus sedes vinculadas) o a **Sucursal Individual**.
+     - Se suprime la opción de "Acuerdo Grupal Comodín", canalizando las listas masivas multicliente exclusivamente a Canal 1.
+  2. **Paso 2 — Vigencia & Nomenclatura Determinista:**
+     - Selección de fechas con presets (`2 semanas`, `1 mes`, `3 meses`, `Personalizado`) y generación de nombre contractual `[NIT] - [RAZÓN SOCIAL] - [VIGENCIA]`.
+  3. **Paso 3 — Ingesta Externa & Auditoría de Márgenes:**
+     - **Zona de Ingesta Drag & Drop:** Carga de `.xlsx`, `.xls` o `.pdf` con procesamiento IA Gemini para matching automático contra el catálogo de productos.
+     - **Auditoría Financiera de Margen:** Cada precio pactado se contrasta en tiempo real contra el costo base vivo de `commercial_cost_matrix`. Los ítems con margen negativo o inferior al umbral de seguridad se marcan en semáforo rojo (`⚠️ Margen Negativo`) alertando al comercial antes de firmar.
+     - **Mesa de Reconciliación:** Resolución de ítems sin coincidencia y edición in-situ de precios.
+     - **Acceso Express a Consumo Abierto:** Botón `[🛒 Lista Abierta ($0)]` para suministros diarios liquidados a costo vigente.
+     - **Poka-Yoke Bloqueante:** Prohibido consagrar si existen ítems sin asignar (`hasUnmatchedItems = true`). Al consagrar, persiste en `quotes` con `status = 'agreement'`.
+
+---
+
+### Escenario 271: Consola Maestra Full-Width (1600px) para Modelos de Precios y Listas de Cotización, Erradicación de Capas Redundantes y Cinta Docked de Segmentos (SDD v1.9.244)
+- **Given** el submódulo de configuración de tarifas, márgenes y listas de cotización (`/admin/commercial?tab=operations&subtab=settings` y `src/app/admin/commercial/settings/page.tsx`),
+- **When** el analista comercial audita, modula o calibra los márgenes de utilidad de los modelos de precios (*General institucional dinámico*, *Clientes Hogar*, *Grande*, *Mediano*, *Pequeño*, etc.) o gestiona los catálogos de productos asociados a las **Listas de Cotización (Plantillas B2B)**,
+- **Then** la interfaz adopta el estándar canónico **Swiss Precision Industrial UI (DESIGN_SYSTEM_MANUAL.md)** erradicando el confinamiento visual y las filas fantasma devoradoras de espacio vertical:
+  1. **Demolición del Split-View Lateral en Ambos Submódulos (Liberación de 350px):**
+     - Se elimina la columna izquierda estática de 320px-360px tanto en la vista de *Modelos de Precios* como en *Listas de Cotización*, erradicando la fragmentación visual y el doble scroll (*Scroll Trapping*).
+     - La tabla de precios y la tabla de catálogo de cotización se expanden al **100% del ancho del viewport (1600px)**, otorgando aire tipográfico y legibilidad a todas las columnas.
+  2. **Buscador Maestro de Cabecera (Omnibox Searchable Combobox & Cero Iconos Decorativos):**
+     - Se reemplaza el dropdown nativo rígido (`<select>`) por un **Buscador Interactivo Omnibox con autocompletado en tiempo real**.
+     - Al enfocar o escribir sobre el buscador, se despliega un panel flotante limpio con las listas/modelos coincidentes (`Nombre` + badge de `productos` o `margen`).
+     - **Purificación Tipográfica Suiza:** Quedan erradicados los iconos Lucide decorativos y los emojis en las pestañas (`Modelos de Precios` y `Listas de Cotización`), en las opciones de selección y en la botonera de acciones (`[Nueva Lista]`, `[Exportar Excel]`, `[Importar Excel]`, `[Editar]`, `[Eliminar]`), privilegiando una interfaz pura, sobria e industrial.
+  3. **Cintas de Control Esbeltas del Elemento Activo (Altura Máxima 44px):**
+     - Se condensan las cabeceras pesadas en franjas horizontales compactas con botones de herramientas agrupados en texto puro: `[Excel / Exportar / Importar]`, `[Editar]` y `[Eliminar]`.
+  4. **Poda Radical de Capas Redundantes & Erradicación de Espacio Vacío:**
+     - Se elimina la fila dedicada de navegación intermedia en `settings/page.tsx` que ocupaba 60px de altura dejando un 85% de espacio vacío desértico.
+     - Se suprime el chip inerte `Módulo activo: Modelos de Precios` en la barra de operaciones de `commercial/page.tsx`.
+     - El selector de subvistas `[Modelos de Precios | Listas de Cotización]` se promueve directamente al slot derecho de la barra de Operaciones como pastilla segmentada compacta, ganando más de 50px de viewport vertical útil y permitiendo que la tabla ascienda al pliegue visual inmediato.
+  5. **Estándar Tabular Suizo & Erradicación de Botones Flotantes Obstructivos:**
+     - Thead congelado en `0.65rem` mayúsculas con color Gris Slate `#64748B`.
+     - Inputs de utilidad con micro-borde `1px solid #CBD5E1` y formato numérico decimal limpio.
+     - Celdas monetarias alineadas a la derecha con `tabular-nums`.
+     - Se elimina el botón flotante inferior derecho que se superponía sobre las celdas de la tabla, reubicando sus acciones en la barra de herramientas principal.
