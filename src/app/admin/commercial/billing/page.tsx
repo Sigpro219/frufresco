@@ -883,28 +883,56 @@ export default function BillingDashboard() {
     ) => {
         const prodId = item.product_id || item.products?.id;
         const prodName = (item.products?.name || item.nickname || '').toLowerCase().trim();
+        const cleanName = prodName.replace(/\s*\([^)]*\)/g, '').trim();
+        const words = cleanName.split(/\s+/).filter((w: string) => w.length > 3);
 
         // 1. Check matching return
         const matchedReturn = returnsList.find(r => 
             (prodId && r.product_id === prodId) ||
-            (r.products?.name && r.products.name.toLowerCase().trim() === prodName) ||
-            (r.reason && r.reason.toLowerCase().includes(prodName))
+            (r.products?.name && r.products.name.toLowerCase().trim() === cleanName) ||
+            (r.reason && (r.reason.toLowerCase().includes(cleanName) || words.some((w: string) => r.reason.toLowerCase().includes(w))))
         );
 
-        // 2. Check matching PQR
+        // 2. Check matching PQR (checking subject, description and resolution_notes)
         const matchedPqr = pqrsList.find(p => 
-            (p.subject && p.subject.toLowerCase().includes(prodName)) ||
-            (p.description && p.description.toLowerCase().includes(prodName)) ||
+            (p.subject && (p.subject.toLowerCase().includes(cleanName) || words.some((w: string) => p.subject.toLowerCase().includes(w)))) ||
+            (p.description && (p.description.toLowerCase().includes(cleanName) || words.some((w: string) => p.description.toLowerCase().includes(w)))) ||
+            (p.resolution_notes && (p.resolution_notes.toLowerCase().includes(cleanName) || words.some((w: string) => p.resolution_notes.toLowerCase().includes(w)))) ||
             (matchedReturn?.reason && p.id && matchedReturn.reason.includes(p.id.substring(0, 8)))
         );
 
         if (!matchedReturn && !matchedPqr) return null;
 
-        // Quantity returned / claimed
-        const qtyClaimed = Number(matchedReturn?.quantity_returned) || (() => {
-            const m = matchedPqr?.description?.match(/Cantidad:\s*(\d+(?:[.,]\d+)?)\s*(?:Kg|kg|und|Und)?/i);
-            return m ? parseFloat(m[1].replace(',', '.')) : null;
-        })() || 0;
+        // Quantity returned / claimed (check return, resolution_notes lines, or description)
+        let qtyClaimed = Number(matchedReturn?.quantity_returned) || 0;
+        let totalPqrClaimed = 0;
+        pqrsList.forEach(p => {
+            const resNotes = p.resolution_notes || '';
+            const lines = resNotes.split('\n');
+            lines.forEach((l: string) => {
+                if (l.trim().startsWith('•')) {
+                    const lowerL = l.toLowerCase();
+                    if (lowerL.includes(cleanName) || words.some((w: string) => lowerL.includes(w))) {
+                        const m = l.match(/•\s*([^:]+):\s*([\d.,]+)\s*([A-Za-z]+)\s*@/i);
+                        if (m) {
+                            const parsed = parseFloat(m[2].replace(',', '.'));
+                            if (!isNaN(parsed) && parsed > 0) {
+                                totalPqrClaimed += parsed;
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+        if (totalPqrClaimed > 0) {
+            qtyClaimed = Math.max(qtyClaimed, totalPqrClaimed);
+        }
+
+        if (qtyClaimed === 0 && matchedPqr?.description) {
+            const m = matchedPqr.description.match(/Cantidad:\s*([\d.,]+)\s*(?:Kg|kg|und|Und|Atado|atado)?/i);
+            if (m) qtyClaimed = parseFloat(m[1].replace(',', '.')) || 0;
+        }
 
         const unit = item.unit || item.products?.unit_of_measure || 'Kg';
         const notes = ((matchedPqr?.resolution_notes || '') + ' ' + (matchedReturn?.reason || '')).toLowerCase();
@@ -2825,6 +2853,8 @@ export default function BillingDashboard() {
 
             const exportRows: any[] = [];
             fullOrders.forEach((order: any) => {
+                // Omitir pedidos liquidados en $0 por SAC o con saldo no facturable
+                if (Number(order.total || 0) <= 0) return;
                 const clientName = order.profiles?.razon_social || order.profiles?.company_name || 'Cliente General';
                 const nit = order.profiles?.nit || '222222222222';
                 const isIva = !!order.profiles?.iva_responsible;
@@ -2840,6 +2870,8 @@ export default function BillingDashboard() {
 
                 (order.order_items || []).forEach((item: any) => {
                     const rawQty = Number(item.quantity) || 0;
+                    // Omitir productos con cantidad 0 (no despachados o descontados 100% en PQR)
+                    if (rawQty <= 0) return;
                     const rawUnitPrice = Number(item.unit_price) || 0;
                     const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
                     const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
@@ -6980,16 +7012,21 @@ export default function BillingDashboard() {
                     let pqrDeductionsTotal = 0;
                     let initialInvoiceTotal = orderTotal;
 
-                    // 1. Extraer bitácora en admin_notes: [AJUSTE FACTURA PQR ...]: Valor ajustado de $PREV a $NEW (-$DED)
+                    // 1. Extraer bitácora en admin_notes: [AJUSTE FACTURA PQR ...]: Valor ajustado de $PREV a $NEW (-$DED) (soporta múltiples ajustes)
                     if (selectedOrderDetail.admin_notes) {
-                        const matchAdj = selectedOrderDetail.admin_notes.match(/\[AJUSTE FACTURA[^\]]*\]:\s*Valor ajustado de\s*\$?([\d.,]+)\s*a\s*\$?([\d.,]+)\s*\(-?\$?([\d.,]+)\)/i);
-                        if (matchAdj) {
-                            const prevVal = parseFloat(matchAdj[1].replace(/\./g, '').replace(/,/g, '')) || 0;
-                            const dedVal = parseFloat(matchAdj[3].replace(/\./g, '').replace(/,/g, '')) || 0;
-                            if (prevVal > 0 && dedVal > 0) {
-                                initialInvoiceTotal = prevVal;
-                                pqrDeductionsTotal = dedVal;
-                            }
+                        const adjRegex = /\[AJUSTE FACTURA[^\]]*\]:\s*Valor ajustado de\s*\$?([\d.,]+)\s*a\s*\$?([\d.,]+)\s*\(-?\$?([\d.,]+)\)/gi;
+                        let m;
+                        let firstInitial: number | null = null;
+                        let totalDeductions = 0;
+                        while ((m = adjRegex.exec(selectedOrderDetail.admin_notes)) !== null) {
+                            const prev = parseFloat(m[1].replace(/\./g, '').replace(/,/g, '')) || 0;
+                            const ded = parseFloat(m[3].replace(/\./g, '').replace(/,/g, '')) || 0;
+                            if (firstInitial === null) firstInitial = prev;
+                            totalDeductions += ded;
+                        }
+                        if (firstInitial !== null && totalDeductions > 0) {
+                            initialInvoiceTotal = firstInitial;
+                            pqrDeductionsTotal = totalDeductions;
                         } else {
                             const matchNc = selectedOrderDetail.admin_notes.match(/\[NOTA_CREDITO_PQR[^\]]*VALOR:\s*-?\$?([\d.,]+)\]/i);
                             if (matchNc) {
@@ -7172,6 +7209,30 @@ export default function BillingDashboard() {
                                     
                                     {/* Componentes 2 y 3: Fixed Upper Summary Section (Cards Grid) */}
                                     <div style={{ padding: '0.75rem 1.5rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', flexShrink: 0 }}>
+                                        {/* ALERTA VISUAL: PEDIDO LIQUIDADO AL 100% POR NOVEDADES SAC ($0 FACTURABLE) */}
+                                        {orderTotal === 0 && pqrDeductionsTotal > 0 && (
+                                            <div style={{
+                                                backgroundColor: '#FEF2F2',
+                                                border: '1.5px solid #F87171',
+                                                borderRadius: '8px',
+                                                padding: '0.55rem 0.85rem',
+                                                marginBottom: '0.65rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                                boxShadow: '0 1px 3px rgba(220, 38, 38, 0.08)'
+                                            }}>
+                                                <AlertTriangle size={18} color="#DC2626" style={{ flexShrink: 0 }} />
+                                                <div>
+                                                    <div style={{ fontWeight: '900', color: '#991B1B', fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                                        Pedido Liquidado en $0 por SAC (100% Novedad / Sin Entrega Física) • No Facturable en World Office
+                                                    </div>
+                                                    <div style={{ color: '#7F1D1D', fontSize: '0.68rem', marginTop: '1px', lineHeight: '1.2' }}>
+                                                        Este pedido tuvo resolución de PQR con Opción 4 (Ajuste de Factura) por el valor total de <strong>{formatMoney(pqrDeductionsTotal)}</strong>. Todas las cantidades fueron descontadas por producto escaso/avería, por lo que su saldo neto a facturar es <strong>$0</strong>. No genera cobro al cliente ni factura electrónica.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
                                             
                                             {/* Card 1: Razón Social, Dirección & Contacto */}
@@ -7425,16 +7486,31 @@ export default function BillingDashboard() {
                                                                     )}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right' }}>
-                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType !== 'sin_costo' ? (
+                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType !== 'sin_costo' ? (() => {
+                                                                        const netQty = Number(item.quantity || 0);
+                                                                        const claimed = Number((itemNovelty as any).qtyClaimed || 0);
+                                                                        const origQty = netQty + claimed;
+                                                                        const uom = item.unit || item.products?.unit_of_measure || 'Kg';
+                                                                        return (
+                                                                            <div>
+                                                                                <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                    {origQty} {uom}
+                                                                                </div>
+                                                                                <div style={{ fontWeight: '900', color: netQty === 0 ? '#DC2626' : '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
+                                                                                    {netQty === 0 ? `0 ${uom} (No entregado)` : `${netQty} ${uom} Facturables`}
+                                                                                </div>
+                                                                                <span style={{ fontSize: '0.58rem', color: '#DC2626', fontWeight: '800' }}>
+                                                                                    -{claimed} PQR
+                                                                                </span>
+                                                                            </div>
+                                                                        );
+                                                                    })() : Number(item.quantity || 0) === 0 ? (
                                                                         <div>
-                                                                            <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
-                                                                                {item.quantity} {item.unit || item.products?.unit_of_measure || 'Kg'}
+                                                                            <div style={{ fontWeight: '800', color: '#94A3B8', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
+                                                                                0 {item.unit || item.products?.unit_of_measure || 'Kg'}
                                                                             </div>
-                                                                            <div style={{ fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
-                                                                                {Math.max(0, Number(item.quantity) - (itemNovelty as any).qtyClaimed)} {item.unit || item.products?.unit_of_measure || 'Kg'}
-                                                                            </div>
-                                                                            <span style={{ fontSize: '0.58rem', color: '#DC2626', fontWeight: '800' }}>
-                                                                                -{(itemNovelty as any).qtyClaimed} PQR
+                                                                            <span style={{ fontSize: '0.58rem', color: '#64748B', fontWeight: '700' }}>
+                                                                                (Sin Despacho)
                                                                             </span>
                                                                         </div>
                                                                     ) : (
@@ -7454,16 +7530,22 @@ export default function BillingDashboard() {
                                                                     {formatMoney(item.unit_price || 0)}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right', fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
-                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType !== 'sin_costo' ? (
-                                                                        <div>
-                                                                            <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
-                                                                                {formatMoney(itemTotal)}
+                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType !== 'sin_costo' ? (() => {
+                                                                        const netQty = Number(item.quantity || 0);
+                                                                        const claimed = Number((itemNovelty as any).qtyClaimed || 0);
+                                                                        const origQty = netQty + claimed;
+                                                                        const origTotal = origQty * Number(item.unit_price || 0);
+                                                                        return (
+                                                                            <div>
+                                                                                <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                    {formatMoney(origTotal)}
+                                                                                </div>
+                                                                                <div style={{ fontWeight: '900', color: netQty === 0 ? '#DC2626' : '#059669', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
+                                                                                    {formatMoney(itemTotal)}
+                                                                                </div>
                                                                             </div>
-                                                                            <div style={{ fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
-                                                                                {formatMoney(Math.max(0, Number(item.quantity) - (itemNovelty as any).qtyClaimed) * Number(item.unit_price || 0))}
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : (
+                                                                        );
+                                                                    })() : (
                                                                         formatMoney(itemTotal)
                                                                     )}
                                                                 </td>
