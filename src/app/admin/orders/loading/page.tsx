@@ -3791,7 +3791,7 @@ function OrderLoadingContent() {
                 {openHeaderDropdown && (
                     <div 
                         onClick={() => setOpenHeaderDropdown(null)} 
-                        style={{ position: 'fixed', inset: 0, zIndex: 90, backgroundColor: 'transparent' }} 
+                        onMouseDown={() => setOpenHeaderDropdown(null)} style={{ position: 'fixed', inset: 0, zIndex: 90, backgroundColor: 'transparent' }} 
                     />
                 )}
 
@@ -3801,7 +3801,7 @@ function OrderLoadingContent() {
                         {viewMode === 'table' ? (
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'visible', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead style={{ position: 'sticky', top: `${85 + dockHeight - 1}px`, zIndex: 35, backgroundColor: '#F8FAFB' }}>
+                                    <thead style={{ position: 'sticky', top: `${85 + dockHeight - 1}px`, zIndex: openHeaderDropdown ? 95 : 35, backgroundColor: '#F8FAFB' }}>
                                         <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '2px solid #CBD5E1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)' }}>
 
 
@@ -3823,10 +3823,10 @@ function OrderLoadingContent() {
                                                         <div onClick={() => { setFilterClientType(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === '' ? 'bold' : 'normal', backgroundColor: filterClientType === '' ? '#F1F5F9' : 'transparent' }}>
                                                             <Filter size={13} style={{ color: '#64748B' }} /> Todos los tipos
                                                         </div>
-                                                        <div onClick={() => { setFilterClientType('b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === 'b2b' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2b' ? '#F1F5F9' : 'transparent' }}>
+                                                        <div onClick={() => { setFilterClientType('b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === 'b2b' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2b' ? '#EEF2FF' : 'transparent', color: filterClientType === 'b2b' ? '#4F46E5' : '#334155' }}>
                                                             <Building2 size={13} style={{ color: THEME.colors.primary }} /> Institucional (B2B)
                                                         </div>
-                                                        <div onClick={() => { setFilterClientType('b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === 'b2c' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2c' ? '#F1F5F9' : 'transparent' }}>
+                                                        <div onClick={() => { setFilterClientType('b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === 'b2c' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2c' ? '#FCE7F3' : 'transparent', color: filterClientType === 'b2c' ? '#BE185D' : '#334155' }}>
                                                             <Home size={13} style={{ color: '#EC4899' }} /> Hogar (B2C)
                                                         </div>
                                                     </div>
