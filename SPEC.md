@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.257 (Homologación Estricta de Plantilla de Migración World Office Desktop de 57 Columnas: Resolución Canónica de `Encab: Sucursal` como Sucursal o Razón Social sin `'Principal'`, Normalización de `Detalle: UnidadDeMedida` (`kg`/`Und.`/`LB`), Vencimiento de Cartera Real, `Encab: Nota` (`Segun OC ...`) y Resiliencia de Esquema en `billing_invoices` — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.258 (Herencia Estricta de Conteo Físico Real (`bodegaPost10am ?? physicalCount ?? 0`) sin Fallback al Calculado Teórico y Sincronización por Fecha en Sábana de Alistamiento (`INV[...]`), Balance Diario y Planilla de Compras — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 280 Escenarios BDD Ininterrumpidos (1..280)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 281 Escenarios BDD Ininterrumpidos (1..281)
 
 ---
 
@@ -11671,3 +11671,13 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Si no tiene Orden de Compra, coloca directamente el nombre de la Sucursal o Razón Social del cliente (ej. `AMA TU MASCOTA`, `YANUBA -150 CEDRITOS`).
   6. **Resiliencia Poka-Yoke en Emisión de Corte Oficial (`billing_invoices`):**
      - Al confirmar un corte oficial en `billing/page.tsx`, si la base de datos aún no tiene aplicadas las columnas extendidas (`due_date`, `payment_status`, `invoice_prefix`, `invoice_number_raw`), ejecuta un fallback automático insertando las columnas base (`order_id`, `cut_id`, `invoice_number`, `total_base`, `total_tax`, `total_final`, `status`) para que la emisión del corte jamás se bloquee en producción.
+
+---
+
+### Escenario 281: Herencia Estricta de Conteo Físico Real (`bodegaPost10am ?? physicalCount ?? 0`) sin Fallback al Calculado Teórico y Sincronización por Fecha en Sábana de Alistamiento (`INV[...]`), Balance Diario y Planilla de Compras (SDD v1.9.258)
+- **Given** un cierre oficial de inventario del día anterior (`D-1`, ej. `2026-10-21`) en `daily_inventory_closings` donde ciertos productos tuvieron conteo físico explícito en bodega (ej. `Banano criollo: physicalCount = 28, bodegaPost10am = 28`, `Mandarina arrayana: physicalCount = 130`) y otros productos quedaron sin existencia física contada al cierre (`physicalCount = null, bodegaPost10am = null`) aunque su cálculo teórico (`Col S: calculatedStock`) arrojara un remanente matemático (ej. `Banano uraba: purchases = 18, salesKg = 9, calculatedStock = 9, physicalCount = null`),
+- **When** el sistema proyecta el **Inventario Inicial (`Col E` / `INV[...]`)** para la operación del día siguiente (`D`, ej. `2026-10-22`) en la Sábana de Alistamiento (`/admin/orders/alistamiento-print`), la Sábana de Balance Diario (`InventoryDailyBalanceTab.tsx`) y la Planilla Maestra de Compras (`/admin/procurement/purchases-print`),
+- **Then** el motor de inventario aplica las siguientes reglas innegociables:
+  1. **Prohibición Absoluta de Fallback a `calculatedStock` (`Col S`):** El saldo inicial heredado de un cierre previo (`D-1`) se obtiene **exclusivamente** del conteo físico real en bodega (`item.bodegaPost10am ?? item.physicalCount ?? 0`). Si un SKU tiene `physicalCount === null` y `bodegaPost10am === null` al cierre del turno, su inventario físico inicial para el día siguiente es estrictamente **`0`** (`INV[0]`), jamás el saldo teórico calculado.
+  2. **Protección contra Filas Resumen de Familia en `snapshot_items`:** Al iterar `snapshot_items` de `daily_inventory_closings`, se respeta únicamente la primera aparición individual de cada `productId` (`if (map[item.productId] === undefined)`), impidiendo que una fila totalizadora de familia al final de la hoja sobrescriba el stock individual del producto padre (ej. garantizando `Mandarina arrayana = 130` en lugar del consolidado familiar `153`).
+  3. **Sincronización Histórica por Fecha en Sábana de Alistamiento (`/admin/orders/alistamiento-print`):** La sábana consulta `daily_inventory_closings` con `.lt('closing_date', selectedDate).order('closing_date', { ascending: false }).limit(1)` para poblar `inventoryMap`, garantizando que `INV[...]` refleje el inventario inicial exacto del día operativo consultado (`selectedDate`), usando `inventory_stocks` únicamente como respaldo cuando no exista cierre previo.

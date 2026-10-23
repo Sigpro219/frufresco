@@ -110,14 +110,13 @@ export default function PurchasesPrintPage() {
 
                 if (latestClosing?.snapshot_items && Array.isArray(latestClosing.snapshot_items) && latestClosing.snapshot_items.length > 0) {
                     latestClosing.snapshot_items.forEach((item: any) => {
+                        if (!item.productId || stockMap[item.productId] !== undefined) return;
                         const finalStock = item.bodegaPost10am !== null && item.bodegaPost10am !== undefined
                             ? Number(item.bodegaPost10am)
                             : (item.physicalCount !== null && item.physicalCount !== undefined
                                 ? Number(item.physicalCount)
-                                : Number(item.calculatedStock || 0));
-                        if (item.productId) {
-                            stockMap[item.productId] = Math.max(0, finalStock);
-                        }
+                                : 0);
+                        stockMap[item.productId] = Math.max(0, finalStock);
                     });
                     hasOfficialClosing = true;
                 }

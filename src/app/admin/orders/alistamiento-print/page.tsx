@@ -569,16 +569,46 @@ export default function AlistamientoSabanaPrintPage() {
             // Ordenar pedidos por número de bahía física en suelo
             parsedOrders.sort((a, b) => a.first_space - b.first_space);
 
-            // Fetch existencias de inventario en paralelo
-            const { data: stockRows } = await supabase
-                .from('inventory_stocks')
-                .select('product_id, quantity')
-                .eq('status', 'available');
-
+            // Fetch existencias de inventario inicial para la fecha seleccionada (SDD v1.9.258 Escenario 281):
+            // 1. Priorizar el Conteo Físico Real (bodegaPost10am ?? physicalCount ?? 0) del último cierre oficial previo a selectedDate.
+            // 2. Nunca usar calculatedStock cuando physicalCount es null.
             const newInventoryMap: Record<string, number> = {};
-            (stockRows || []).forEach((row: { product_id: string; quantity: number }) => {
-                newInventoryMap[row.product_id] = (newInventoryMap[row.product_id] ?? 0) + row.quantity;
-            });
+            let loadedFromClosing = false;
+            try {
+                const { data: prevClosing } = await supabase
+                    .from('daily_inventory_closings')
+                    .select('snapshot_items, closing_date')
+                    .lt('closing_date', selectedDate)
+                    .order('closing_date', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (prevClosing?.snapshot_items && Array.isArray(prevClosing.snapshot_items) && prevClosing.snapshot_items.length > 0) {
+                    prevClosing.snapshot_items.forEach((item: any) => {
+                        if (!item.productId || newInventoryMap[item.productId] !== undefined) return;
+                        const finalStock = item.bodegaPost10am !== null && item.bodegaPost10am !== undefined
+                            ? Number(item.bodegaPost10am)
+                            : (item.physicalCount !== null && item.physicalCount !== undefined
+                                ? Number(item.physicalCount)
+                                : 0);
+                        newInventoryMap[item.productId] = Math.max(0, finalStock);
+                    });
+                    loadedFromClosing = true;
+                }
+            } catch (closeErr) {
+                console.warn('Error consultando daily_inventory_closings en alistamiento-print:', closeErr);
+            }
+
+            if (!loadedFromClosing) {
+                const { data: stockRows } = await supabase
+                    .from('inventory_stocks')
+                    .select('product_id, quantity')
+                    .eq('status', 'available');
+
+                (stockRows || []).forEach((row: { product_id: string; quantity: number }) => {
+                    newInventoryMap[row.product_id] = (newInventoryMap[row.product_id] ?? 0) + row.quantity;
+                });
+            }
             setInventoryMap(newInventoryMap);
 
             setOrders(parsedOrders);

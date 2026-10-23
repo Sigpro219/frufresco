@@ -735,14 +735,13 @@ export default function InventoryDailyBalanceTab({
 
                 if (prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
                     prevCloseData.snapshot_items.forEach((item: any) => {
+                        if (!item.productId || prevClosingSnapshots[item.productId] !== undefined) return;
                         const finalStock = item.bodegaPost10am !== null && item.bodegaPost10am !== undefined
                             ? Number(item.bodegaPost10am)
                             : (item.physicalCount !== null && item.physicalCount !== undefined
                                 ? Number(item.physicalCount)
-                                : Number(item.calculatedStock || 0));
-                        if (item.productId) {
-                            prevClosingSnapshots[item.productId] = finalStock;
-                        }
+                                : 0);
+                        prevClosingSnapshots[item.productId] = Math.max(0, finalStock);
                     });
                 }
             } catch (prevErr) {
