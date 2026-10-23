@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.252 (Estandarización Integral del Generador de Cotizaciones `/admin/commercial/quotes/create` con Universal Letterhead, Mesa de Negociación 1600px, Conexión Bidireccional a Modelos por Cliente y Ordenamiento Multi-Columna en Galería — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.257 (Homologación Estricta de Plantilla de Migración World Office Desktop de 57 Columnas: Resolución Canónica de `Encab: Sucursal` como Sucursal o Razón Social sin `'Principal'`, Normalización de `Detalle: UnidadDeMedida` (`kg`/`Und.`/`LB`), Vencimiento de Cartera Real, `Encab: Nota` (`Segun OC ...`) y Resiliencia de Esquema en `billing_invoices` — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 277 Escenarios BDD Ininterrumpidos (1..277)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 280 Escenarios BDD Ininterrumpidos (1..280)
 
 ---
 
@@ -11648,3 +11648,26 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   4. **Reconocimiento en Consola SAC y Flujo de Auditoría Interna (`utils.ts`, `page.tsx`, `PqrAuditModal.tsx`):**
      - `getPqrAuthorInfo` detecta automáticamente los expedientes con `[ÁMBITO: INTERNO]` o sin cliente asociado, proyectando en la columna *Cliente & Canal* el avatar `IN`, el área operativa, el rótulo `NOVEDAD INTERNA PLANTA / RRHH` y el badge `Ámbito Interno (Sin Pedido)`.
      - En `PqrAuditModal.tsx`, cuando el expediente es de ámbito interno (`isInternalCase`), el **Paso 1** reemplaza los bloques de *Pedido Asociado* y *Declaración de Averías de Fruta* por la **Ficha de Contexto Operativo & Disciplinario Interno** con botón directo (icono Lucide `ArrowRight`) hacia el **Paso 3 (Causa Raíz RCA & Imputabilidad Nominal)**.
+
+---
+
+### Escenario 280: Homologación Estricta de Plantilla de Migración World Office Desktop (`formato_migracion`) y Resiliencia de Emisión de Cortes Oficiales (SDD v1.9.257)
+- **Given** la validación contable de World Office Desktop al importar la hoja `Detalle migración` (57 columnas) generada desde `/admin/commercial/billing` (`src/lib/worldOfficeExport.ts` y `src/app/admin/commercial/billing/page.tsx`),
+- **When** el líder de Facturación descarga el archivo plano de World Office o pulsa **"Confirmar y Emitir Corte Oficial"**,
+- **Then** el sistema aplica las siguientes 6 reglas de homologación exacta contra el formato nativo de migración de World Office:
+  1. **Prohibición de `"Principal"` en `Encab: Sucursal` (Columna AD):**
+     - `Detalle: Bodega` (Columna AG) conserva siempre el valor `'Principal'` (bodega de despacho de FruFresco).
+     - En cambio, `Encab: Sucursal` (Columna AD) representa la sucursal del tercero registrada en World Office:
+       * Si el cliente posee sucursal hija (`EMPRESA - SUCURSAL` o `parent_id`), `resolveWorldOfficeBranch(profile, parentProfile)` retorna el nombre limpio de la **Sucursal** (ej. `EL CUBO`, `CATERING`, `YANUBA -150 CEDRITOS`).
+       * Si el cliente **NO tiene sucursales** (cliente único), retorna el **nombre de la Razón Social / Cliente** (`razon_social || company_name || contact_name`, ej. `AMA TU MASCOTA`, `CENTRO SOCIAL DE SUBOFICIALES Y NIVEL EJECUTIVO DE LA POLICIA NACIONAL`, `CREPES Y WAFFLES S A`), prohibiendo retornar `'Principal'`.
+  2. **Cálculo Efectivo de `Detalle: Vencimiento` (Columna AM):**
+     - Cuando el pedido es de tipo `Credito` (cliente B2B), si `payment_days` en el perfil es `0` o `null`, aplica por defecto `30` días de plazo comercial (`Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0)`), y `calculateDueDate` soporta entradas tanto en formato ISO (`YYYY-MM-DD`) como `DD/MM/YYYY` para sumar los días exactos a la fecha de factura.
+  3. **Normalización de Catálogo en `Detalle: UnidadDeMedida` (Columna AH):**
+     - Normaliza cualquier variante de unidad de medida hacia los tres códigos exactos aceptados por el importador de World Office: **`kg`** (minúscula para kilogramos), **`LB`** (para libras) y **`Und.`** (para unidades, atados, bandejas o presentaciones por gramaje).
+  4. **Tipado Numérico Estricto en `Encab: Tercero Interno` (Columna F) y `Encab: Tercero Externo` (Columna G):**
+     - Exporta el código de vendedor/tercero interno (`456282`) y el NIT/cédula limpio del cliente como celdas de tipo `number` en Excel.
+  5. **Formato Canónico de `Encab: Nota` (Columna H):**
+     - Si el pedido cuenta con Orden de Compra (`purchase_order_number`), formatea `Segun OC {cleanOc}` (ej. `Segun OC 4506447501` o `Segun OC 5108`).
+     - Si no tiene Orden de Compra, coloca directamente el nombre de la Sucursal o Razón Social del cliente (ej. `AMA TU MASCOTA`, `YANUBA -150 CEDRITOS`).
+  6. **Resiliencia Poka-Yoke en Emisión de Corte Oficial (`billing_invoices`):**
+     - Al confirmar un corte oficial en `billing/page.tsx`, si la base de datos aún no tiene aplicadas las columnas extendidas (`due_date`, `payment_status`, `invoice_prefix`, `invoice_number_raw`), ejecuta un fallback automático insertando las columnas base (`order_id`, `cut_id`, `invoice_number`, `total_base`, `total_tax`, `total_final`, `status`) para que la emisión del corte jamás se bloquee en producción.

@@ -182,6 +182,9 @@ export function calculateDueDate(baseDateInput: string | Date | null | undefined
     if (typeof baseDateInput === 'string' && /^\d{4}-\d{2}-\d{2}/.test(baseDateInput.trim())) {
         const [y, m, d] = baseDateInput.trim().substring(0, 10).split('-').map(Number);
         dObj = new Date(y, m - 1, d);
+    } else if (typeof baseDateInput === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(baseDateInput.trim())) {
+        const [d, m, y] = baseDateInput.trim().split('/').map(Number);
+        dObj = new Date(y, m - 1, d);
     } else if (baseDateInput) {
         dObj = new Date(baseDateInput);
     } else {
@@ -195,6 +198,13 @@ export function calculateDueDate(baseDateInput: string | Date | null | undefined
     return `${d}/${m}/${y}`;
 }
 
+export function normalizeWorldOfficeUom(rawUom: string | null | undefined): string {
+    const clean = String(rawUom || 'kg').trim();
+    if (/^(lb|lbs|libra|libras)$/i.test(clean)) return 'LB';
+    if (/^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(clean)) return 'kg';
+    return 'Und.';
+}
+
 /**
  * Generates and triggers download of Excel file formatted for World Office Desktop (57-column matrix)
  * Matches the official layout audited from the Gemba ('Detalle migración' sheet)
@@ -206,12 +216,13 @@ export function calculateDueDate(baseDateInput: string | Date | null | undefined
  * NOT the corporate parent legal name.
  */
 export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): string {
-    if (!profile) return 'Principal';
+    if (!profile && !parentProfile) return '';
 
-    const fullName = (profile.company_name || profile.razon_social || '').trim();
-    if (!fullName) return 'Principal';
+    const fullName = (profile?.company_name || profile?.razon_social || profile?.contact_name || '').trim();
+    const legalName = (profile?.razon_social || profile?.company_name || profile?.contact_name || parentProfile?.razon_social || parentProfile?.company_name || '').trim();
+    if (!fullName && !legalName) return '';
 
-    const isBranch = Boolean(profile.parent_id) || Boolean(profile.branch_id) || profile.is_corporate_parent === false;
+    const isBranch = Boolean(profile?.parent_id) || Boolean(profile?.branch_id) || profile?.is_corporate_parent === false;
 
     // Pattern 1: 'EMPRESA - SUCURSAL' (e.g. 'CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - EL CUBO')
     if (fullName.includes(' - ')) {
@@ -234,11 +245,12 @@ export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): str
     }
 
     // Pattern 3: If it is explicitly marked as branch without hyphen separator (e.g. 'ESCUELA URBANA EL PROGRESO')
-    if (isBranch && profile.parent_id) {
+    if (isBranch && profile?.parent_id && fullName) {
         return fullName;
     }
 
-    return 'Principal';
+    // Fallback for single clients without branches: Razón Social / Legal Name (NEVER 'Principal')
+    return legalName || fullName;
 }
 
 /**
@@ -248,29 +260,20 @@ export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): str
  * 2. Other clients: Format 'FV segun orden de compra {OC} - {Sucursal}' if OC exists, otherwise 'FV - {Sucursal}'.
  */
 export function resolveWorldOfficeNote(order: any, profile: any, branchName?: string, parentProfile?: any): string {
-    const rawNit = String(parentProfile?.nit || profile?.nit || '').replace(/\D/g, '');
-    const clientCombined = `${parentProfile?.company_name || ''} ${parentProfile?.razon_social || ''} ${profile?.company_name || ''} ${profile?.razon_social || ''}`;
-    const isColsubsidio = rawNit === '860007336' || /colsubsidio/i.test(clientCombined);
-
     const rawOc = (order?.purchase_order_number || '').trim();
-    const cleanOc = rawOc.replace(/^oc\s*[:#-]?\s*/i, '').trim();
-
-    if (isColsubsidio) {
-        // Colsubsidio strictly requires the numeric OC (4506...) or Solped (790...) without prefixes or branch name
-        return cleanOc;
-    }
-
-    // Other clients:
-    const resolvedBranch = branchName || resolveWorldOfficeBranch(profile, parentProfile);
-    const branchLabel = resolvedBranch && resolvedBranch !== 'Principal' 
-        ? resolvedBranch 
-        : (profile?.company_name || profile?.razon_social || 'Sede Principal');
+    const cleanOc = rawOc
+        .replace(/^(fv\s*)?(segun\s*)?(orden\s*de\s*compra|oc)\s*[:#-]?\s*/i, '')
+        .trim();
 
     if (cleanOc) {
-        return `FV segun orden de compra ${cleanOc} - ${branchLabel}`;
+        return `Segun OC ${cleanOc}`;
     }
 
-    return `FV - ${branchLabel}`;
+    const resolvedBranch = branchName && branchName !== 'Principal'
+        ? branchName
+        : resolveWorldOfficeBranch(profile, parentProfile);
+
+    return resolvedBranch || (profile?.razon_social || profile?.company_name || profile?.contact_name || '').trim();
 }
 
 export async function downloadWorldOfficeExcel(
@@ -290,13 +293,17 @@ export async function downloadWorldOfficeExcel(
         const cleanNit = String(rawNit).replace(/\D/g, '') || '222222222222';
         const docDateStr = formatDateDDMMYYYY(item.fecha);
         const deliveryDateStr = formatDateDDMMYYYY(item.fechaEntrega || item.fecha);
-        const dueDateStr = item.fechaVencimiento 
-            ? formatDateDDMMYYYY(item.fechaVencimiento) 
-            : calculateDueDate(item.fecha, item.diasCredito ?? 30);
-
         const paymentMethod = item.formaPago 
             ? item.formaPago 
             : ((item.diasCredito ?? 30) > 0 ? 'Credito' : 'Contado');
+
+        const effectiveCreditDays = paymentMethod === 'Credito'
+            ? (Number(item.diasCredito) > 0 ? Number(item.diasCredito) : 30)
+            : (Number(item.diasCredito) || 0);
+
+        const dueDateStr = item.fechaVencimiento 
+            ? formatDateDDMMYYYY(item.fechaVencimiento) 
+            : calculateDueDate(item.fecha, effectiveCreditDays);
 
         // IVA is represented as decimal in WO Desktop: 0 or 0.19
         let ivaDecimal = 0;
@@ -312,15 +319,24 @@ export async function downloadWorldOfficeExcel(
             ? Math.round(rawDocNum) 
             : (parseInt(String(rawDocNum).replace(/\D/g, ''), 10) || 1);
 
+        const numericTerceroInterno = Number(String(item.terceroInterno || '456282').replace(/\D/g, '')) || 456282;
+        const numericTerceroExterno = /^\d+$/.test(cleanNit) ? Number(cleanNit) : cleanNit;
+        const cleanSucursal = (item.sucursal && item.sucursal !== 'Principal')
+            ? item.sucursal
+            : (item.razonSocial || '');
+        const cleanProducto = typeof item.codigoProducto === 'number'
+            ? item.codigoProducto
+            : (/^\d+$/.test(String(item.codigoProducto || '').trim()) ? Number(String(item.codigoProducto).trim()) : item.codigoProducto);
+
         const row: Record<WorldOfficeColumnKey, any> = {
             'EMPRESA': item.empresa || 'INVESTMENTS CORTES SAS',
             'Encab: Tipo Documento': item.tipoDocumento || 'FV',
             'Encab: Prefijo': item.prefijo || '',
             'Encab: Documento Número': cleanDocNum,
             'Encab: Fecha': docDateStr,
-            'Encab: Tercero Interno': item.terceroInterno || '456282',
-            'Encab: Tercero Externo': cleanNit,
-            'Encab: Nota': typeof item.notaEncabezado === 'string' ? item.notaEncabezado : (item.razonSocial || ''),
+            'Encab: Tercero Interno': numericTerceroInterno,
+            'Encab: Tercero Externo': numericTerceroExterno,
+            'Encab: Nota': typeof item.notaEncabezado === 'string' && item.notaEncabezado.trim() ? item.notaEncabezado : (cleanSucursal || item.razonSocial || ''),
             'Encab: FormaPago': paymentMethod,
             'Encab: Fecha Entrega': deliveryDateStr,
             'Encab: Prefijo Documento Externo': '',
@@ -342,11 +358,11 @@ export async function downloadWorldOfficeExcel(
             'Encab: Personalizado 13': '',
             'Encab: Personalizado 14': '',
             'Encab: Personalizado 15': '',
-            'Encab: Sucursal': item.sucursal || 'Principal',
+            'Encab: Sucursal': cleanSucursal,
             'Encab: Clasificación': '',
-            'Detalle: Producto': item.codigoProducto,
+            'Detalle: Producto': cleanProducto,
             'Detalle: Bodega': item.bodega || 'Principal',
-            'Detalle: UnidadDeMedida': item.unidadMedida || 'kg',
+            'Detalle: UnidadDeMedida': normalizeWorldOfficeUom(item.unidadMedida),
             'Detalle: Cantidad': Number(item.cantidad) || 0,
             'Detalle: IVA': ivaDecimal,
             'Detalle: Valor Unitario': Number(item.valorUnitario) || 0,

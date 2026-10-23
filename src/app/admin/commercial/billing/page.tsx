@@ -2468,10 +2468,29 @@ export default function BillingDashboard() {
                 };
             });
 
-            const { data: createdInvoices, error: invErr } = await supabase
+            let { data: createdInvoices, error: invErr } = await supabase
                 .from('billing_invoices')
                 .insert(invoicesToInsert)
                 .select();
+
+            // Poka-Yoke Schema Resilience: Fallback to base columns if extended columns are not yet in PostgREST cache
+            if (invErr && /column|schema cache/i.test(invErr.message || '')) {
+                const fallbackInvoices = invoicesToInsert.map(inv => ({
+                    order_id: inv.order_id,
+                    cut_id: inv.cut_id,
+                    invoice_number: inv.invoice_number,
+                    total_base: inv.total_base,
+                    total_tax: inv.total_tax,
+                    total_final: inv.total_final,
+                    status: inv.status
+                }));
+                const fallbackRes = await supabase
+                    .from('billing_invoices')
+                    .insert(fallbackInvoices)
+                    .select();
+                createdInvoices = fallbackRes.data;
+                invErr = fallbackRes.error;
+            }
 
             if (invErr) throw invErr;
 
@@ -2703,7 +2722,7 @@ export default function BillingDashboard() {
                 .select(`
                     id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
+                        id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
                         id, quantity, unit_price, nickname, unit, product_id,
@@ -2753,11 +2772,11 @@ export default function BillingDashboard() {
             cutOrders.forEach((order: any) => {
                 const prof = order.profiles || {};
                 const parentProf = prof.parent_id ? cutParentsMap.get(prof.parent_id) : null;
-                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || 'Cliente General').trim();
+                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || prof.contact_name || 'Cliente General').trim();
                 const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
                 const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
                 const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
-                const paymentDays = parentProf?.payment_days ?? prof.payment_days ?? (isB2B ? 30 : 0);
+                const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
 
                 const rawInv = invoiceMap.get(order.id) || order.sequence_id;
                 const cleanInvNum = parseInt(String(rawInv).replace(/\D/g, ''), 10) || order.sequence_id;
@@ -2873,7 +2892,7 @@ export default function BillingDashboard() {
                 .select(`
                     id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
+                        id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
                         id, quantity, unit_price, nickname, unit,
@@ -2919,11 +2938,11 @@ export default function BillingDashboard() {
 
                 const prof = order.profiles || {};
                 const parentProf = prof.parent_id ? pendingParentsMap.get(prof.parent_id) : null;
-                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || 'Cliente General').trim();
+                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || prof.contact_name || 'Cliente General').trim();
                 const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
                 const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
                 const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
-                const paymentDays = parentProf?.payment_days ?? prof.payment_days ?? (isB2B ? 30 : 0);
+                const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
 
                 // Consecutivo Fiscal Oficial para WorldOffice (Columna D: estrictamente numérico puro, ej: 68494)
                 const mappedInv = pendingInvoiceMap.get(order.id);
@@ -3021,7 +3040,7 @@ export default function BillingDashboard() {
                 .select(`
                     id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
+                        id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
                         id, quantity, unit_price, nickname, unit,
@@ -3067,11 +3086,11 @@ export default function BillingDashboard() {
             fullOrders.forEach((order: any) => {
                 const prof = order.profiles || {};
                 const parentProf = prof.parent_id ? previewParentsMap.get(prof.parent_id) : null;
-                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || 'Cliente General').trim();
+                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || prof.contact_name || 'Cliente General').trim();
                 const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
                 const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
                 const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
-                const paymentDays = parentProf?.payment_days ?? prof.payment_days ?? (isB2B ? 30 : 0);
+                const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
 
                 const mappedInv = previewMap.get(order.id);
                 const cleanInvNum = mappedInv?.docNum || parseInt(String(mappedInv?.projected || order.sequence_id).replace(/\D/g, ''), 10) || order.sequence_id;
