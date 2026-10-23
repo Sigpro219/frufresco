@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.245 (Calibración Forense de Migración World Office Desktop: Desacople de Sucursal Limpia en Columna AD, Gobernanza Estricta de Notas y Órdenes de Compra en Columna H, Consola Maestra Full-Width 1600px en Tarifas y Erradicación de Capas Redundantes — 76/76 Pantallas Certificadas)
-> **Fecha:** 22 de Octubre, 2026  
+> **Versión:** 1.9.246 (Blindaje de Consecutivo Fiscal Numérico Puro en Columna D, Resolución Jerárquica de Sucursales Padre-Hijo en Columna AD e Inyección Robusta de OC/Solped en Columna H para World Office Desktop — 76/76 Pantallas Certificadas)
+> **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 272 Escenarios BDD Ininterrumpidos (1..272)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 273 Escenarios BDD Ininterrumpidos (1..273)
 
 ---
 
@@ -24,11 +24,11 @@
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271 (§7.1 - §7.18) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272 (§39.1 - §39.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **272 Escenarios Canónicos (1..272)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **273 Escenarios Canónicos (1..273)** | **🟢 100%** |
 
 ---
 
@@ -11472,3 +11472,20 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
        * Sin OC: `FV - {Sucursal}`.
   3. **Persistencia y Cobertura E2E:**
      - Se integra `purchase_order_number` en todos los endpoints y consultas de exportación (`exportToWorldOffice`, `handleExportPendingToWorldOffice`, `handleExportPreviewToWorldOffice`), garantizando total paridad en cortes programados, exportaciones manuales y previsualizaciones.
+
+---
+
+### Escenario 273: Blindaje de Consecutivo Fiscal Numérico Puro (Columna D) e Inyección Jerárquica Matriz/Sucursal en Planos World Office Desktop (SDD v1.9.246)
+- **Given** el submódulo de facturación masiva y generación de archivos planos contables para World Office Desktop (`/admin/commercial/billing`, `worldOfficeExport.ts` y `src/app/admin/commercial/billing/page.tsx`),
+- **When** el área contable exporta pedidos en pre-corte, cortes programados o previsualizaciones para cargarlos en el validador oficial de World Office Desktop,
+- **Then** el exportador garantiza que ningún registro sea rechazado o marcado en rojo por el cargador contable:
+  1. **Columna D (`Encab: Documento Número`) — Consecutivo Fiscal Numérico Puro (Cero Rechazos en Rojo):**
+     - Queda estrictamente erradicado el prefijo `REM-` (ej: `REM-1141`) en la exportación de Facturas de Venta (`FV`).
+     - El valor inyectado en la Columna D corresponde **exclusivamente al consecutivo numérico de la factura fiscal** proyectada o asignada en el panel de facturación (`68494`, `68495`), sanitizado como número entero puro (`parseInt(replace(/\D/g, ''))`).
+     - Si por contingencia un registro ingresara con letras o formato texto, la función canónica `downloadWorldOfficeExcel` aplica un filtro de seguridad que garantiza que la Columna D contenga únicamente dígitos enteros positivos.
+  2. **Columna H (`Encab: Nota`) — Ingesta Obligatoria de Órdenes de Compra:**
+     - Se auditan e incorporan las columnas `purchase_order_number`, `invoice_id` y relaciones a `billing_invoices` en todas las consultas de Supabase de los exportadores (`handleExportPendingToWorldOffice`, `handleExportCutToWorldOffice`, `handleExportPreviewToWorldOffice`).
+     - Para **Colsubsidio (NIT 860007336)**, se garantiza que viaje **únicamente el número de OC o Solped**, sin prefijos, sin etiquetas y sin nombre de sucursal.
+     - Para los demás clientes, se formatea como `FV segun orden de compra {OC} - {Sucursal}` (o `FV - {Sucursal}` si no hay OC).
+  3. **Columna AD (`Encab: Sucursal`) — Resolución Jerárquica Matriz / Sede:**
+     - En clientes configurados con relación padre-hijo (`parent_id`), la exportación consulta e inyecta el **NIT y la Razón Social de la Casa Matriz** para el encabezado contable, mientras que la **Columna AD** arrastra el nombre limpio de la sucursal (ej: `EL CUBO`, `BELLAVISTA`).

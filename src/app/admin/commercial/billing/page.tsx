@@ -2683,7 +2683,7 @@ export default function BillingDashboard() {
             const { data: cutOrders, error: cutOrdersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total, logistics_data,
+                    id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
                     profiles (
                         id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
@@ -2716,23 +2716,42 @@ export default function BillingDashboard() {
                 if (inv.order_id && inv.invoice_number) invoiceMap.set(inv.order_id, inv.invoice_number);
             });
 
+            // 2.1 Fetch parent profiles if any cut order belongs to a branch
+            const cutParentIds = Array.from(new Set((cutOrders as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
+            const cutParentsMap = new Map(parentProfilesMap);
+            if (cutParentIds.length > 0) {
+                const missingParents = cutParentIds.filter(id => !cutParentsMap.has(id));
+                if (missingParents.length > 0) {
+                    const { data: extraParents } = await supabase
+                        .from('profiles')
+                        .select('id, company_name, razon_social, nit, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
+                        .in('id', missingParents);
+                    (extraParents || []).forEach((p: any) => cutParentsMap.set(p.id, p));
+                }
+            }
+
             // 3. Build flattened 57-column export rows
             const exportRows: any[] = [];
             cutOrders.forEach((order: any) => {
-                const clientName = order.profiles?.razon_social || order.profiles?.company_name || 'Cliente General';
-                const nit = order.profiles?.nit || '222222222222';
-                const isIva = !!order.profiles?.iva_responsible;
-                const isB2B = order.profiles?.role === 'b2b_client' || order.type === 'b2b' || !!order.profiles?.parent_id;
-                const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
-                const invNum = invoiceMap.get(order.id) || `REM-${order.sequence_id}`;
+                const prof = order.profiles || {};
+                const parentProf = prof.parent_id ? cutParentsMap.get(prof.parent_id) : null;
+                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || 'Cliente General').trim();
+                const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
+                const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
+                const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
+                const paymentDays = parentProf?.payment_days ?? prof.payment_days ?? (isB2B ? 30 : 0);
+
+                const rawInv = invoiceMap.get(order.id) || order.sequence_id;
+                const cleanInvNum = parseInt(String(rawInv).replace(/\D/g, ''), 10) || order.sequence_id;
+                const invNum = cleanInvNum;
 
                 // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
-                const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb');
+                const isClientInLb = (prof.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (parentProf?.logistics_data?.billing_weight_unit === 'lb');
                 // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
-                const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+                const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
                 const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
-                const branchName = resolveWorldOfficeBranch(order.profiles);
-                const noteStr = resolveWorldOfficeNote(order, order.profiles, branchName);
+                const branchName = resolveWorldOfficeBranch(prof, parentProf);
+                const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
 
                 (order.order_items || []).forEach((item: any) => {
                     const baseItemQty = Number(item.quantity) || 0;
@@ -2834,7 +2853,7 @@ export default function BillingDashboard() {
             const { data: fullOrders, error: ordersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total, logistics_data,
+                    id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
                     profiles (
                         id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
@@ -2853,24 +2872,54 @@ export default function BillingDashboard() {
                 return;
             }
 
+            // Mapeo canónico de números de factura fiscal según la posición en la vista de Facturación
+            const pendingInvoiceMap = new Map<string, { docNum: number; projected: string }>();
+            filteredPendingOrders.forEach((o, idx) => {
+                const proj = o.billing_invoices?.invoice_number || o.invoice_number || `${invoicePrefix}-${invoiceNextNumber + idx}`;
+                const clean = parseInt(String(proj).replace(/\D/g, ''), 10) || (invoiceNextNumber + idx);
+                pendingInvoiceMap.set(o.id, { docNum: clean, projected: proj });
+            });
+
+            // Respaldo de perfiles padre para resolución precisa de sucursales en WorldOffice
+            const pendingParentIds = Array.from(new Set((fullOrders as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
+            const pendingParentsMap = new Map(parentProfilesMap);
+            if (pendingParentIds.length > 0) {
+                const missingParents = pendingParentIds.filter(id => !pendingParentsMap.has(id));
+                if (missingParents.length > 0) {
+                    const { data: extraParents } = await supabase
+                        .from('profiles')
+                        .select('id, company_name, razon_social, nit, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
+                        .in('id', missingParents);
+                    (extraParents || []).forEach((p: any) => pendingParentsMap.set(p.id, p));
+                }
+            }
+
             const exportRows: any[] = [];
             fullOrders.forEach((order: any) => {
                 // Omitir pedidos liquidados en $0 por SAC o con saldo no facturable
                 if (Number(order.total || 0) <= 0) return;
-                const clientName = order.profiles?.razon_social || order.profiles?.company_name || 'Cliente General';
-                const nit = order.profiles?.nit || '222222222222';
-                const isIva = !!order.profiles?.iva_responsible;
-                const isB2B = order.profiles?.role === 'b2b_client' || order.type === 'b2b' || !!order.profiles?.parent_id;
-                const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
-                const invNum = `REM-${order.sequence_id}`;
+
+                const prof = order.profiles || {};
+                const parentProf = prof.parent_id ? pendingParentsMap.get(prof.parent_id) : null;
+                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || 'Cliente General').trim();
+                const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
+                const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
+                const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
+                const paymentDays = parentProf?.payment_days ?? prof.payment_days ?? (isB2B ? 30 : 0);
+
+                // Consecutivo Fiscal Oficial para WorldOffice (Columna D: estrictamente numérico puro, ej: 68494)
+                const mappedInv = pendingInvoiceMap.get(order.id);
+                const rawInv = order.billing_invoices?.invoice_number || mappedInv?.projected || `${invoicePrefix}-${invoiceNextNumber}`;
+                const cleanInvNum = mappedInv?.docNum || parseInt(String(rawInv).replace(/\D/g, ''), 10) || order.sequence_id;
+                const invNum = cleanInvNum;
 
                 // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
-                const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb');
+                const isClientInLb = (prof.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (parentProf?.logistics_data?.billing_weight_unit === 'lb');
                 // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
-                const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+                const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
                 const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
-                const branchName = resolveWorldOfficeBranch(order.profiles);
-                const noteStr = resolveWorldOfficeNote(order, order.profiles, branchName);
+                const branchName = resolveWorldOfficeBranch(prof, parentProf);
+                const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
 
                 (order.order_items || []).forEach((item: any) => {
                     const rawQty = Number(item.quantity) || 0;
@@ -2952,7 +3001,7 @@ export default function BillingDashboard() {
             const { data: fullOrders, error: ordersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total, logistics_data,
+                    id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
                     profiles (
                         id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
@@ -2975,27 +3024,48 @@ export default function BillingDashboard() {
             const activePrefix = isNcSlot ? ncPrefix : invoicePrefix;
             const startNumber = isNcSlot ? ncNextNumber : invoiceNextNumber;
 
-            const previewMap = new Map<string, string>();
+            const previewMap = new Map<string, { docNum: number; projected: string }>();
             previewOrders.forEach((po, idx) => {
-                previewMap.set(po.id, po.projectedInvoiceNumber || `${activePrefix}-${startNumber + idx}`);
+                const proj = po.projectedInvoiceNumber || `${activePrefix}-${startNumber + idx}`;
+                const clean = parseInt(String(proj).replace(/\D/g, ''), 10) || (startNumber + idx);
+                previewMap.set(po.id, { docNum: clean, projected: proj });
             });
+
+            // Respaldo de perfiles padre para resolución precisa de sucursales en WorldOffice
+            const previewParentIds = Array.from(new Set((fullOrders as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
+            const previewParentsMap = new Map(parentProfilesMap);
+            if (previewParentIds.length > 0) {
+                const missingParents = previewParentIds.filter(id => !previewParentsMap.has(id));
+                if (missingParents.length > 0) {
+                    const { data: extraParents } = await supabase
+                        .from('profiles')
+                        .select('id, company_name, razon_social, nit, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
+                        .in('id', missingParents);
+                    (extraParents || []).forEach((p: any) => previewParentsMap.set(p.id, p));
+                }
+            }
 
             const exportRows: any[] = [];
             fullOrders.forEach((order: any) => {
-                const clientName = order.profiles?.razon_social || order.profiles?.company_name || 'Cliente General';
-                const nit = order.profiles?.nit || '222222222222';
-                const isIva = !!order.profiles?.iva_responsible;
-                const isB2B = order.profiles?.role === 'b2b_client' || order.type === 'b2b' || !!order.profiles?.parent_id;
-                const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
-                const invNum = previewMap.get(order.id) || `REM-${order.sequence_id}`;
+                const prof = order.profiles || {};
+                const parentProf = prof.parent_id ? previewParentsMap.get(prof.parent_id) : null;
+                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || 'Cliente General').trim();
+                const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
+                const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
+                const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
+                const paymentDays = parentProf?.payment_days ?? prof.payment_days ?? (isB2B ? 30 : 0);
+
+                const mappedInv = previewMap.get(order.id);
+                const cleanInvNum = mappedInv?.docNum || parseInt(String(mappedInv?.projected || order.sequence_id).replace(/\D/g, ''), 10) || order.sequence_id;
+                const invNum = cleanInvNum;
 
                 // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
-                const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb');
+                const isClientInLb = (prof.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (parentProf?.logistics_data?.billing_weight_unit === 'lb');
                 // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
-                const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
+                const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
                 const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
-                const branchName = resolveWorldOfficeBranch(order.profiles);
-                const noteStr = resolveWorldOfficeNote(order, order.profiles, branchName);
+                const branchName = resolveWorldOfficeBranch(prof, parentProf);
+                const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
 
                 (order.order_items || []).forEach((item: any) => {
                     const rawQty = Number(item.quantity) || 0;

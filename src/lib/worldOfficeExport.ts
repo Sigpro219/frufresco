@@ -205,7 +205,7 @@ export function calculateDueDate(baseDateInput: string | Date | null | undefined
  * but the branch column MUST match the exact sub-branch name (e.g. 'EL CUBO', 'CATERING'),
  * NOT the corporate parent legal name.
  */
-export function resolveWorldOfficeBranch(profile: any): string {
+export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): string {
     if (!profile) return 'Principal';
 
     const fullName = (profile.company_name || profile.razon_social || '').trim();
@@ -213,7 +213,7 @@ export function resolveWorldOfficeBranch(profile: any): string {
 
     const isBranch = Boolean(profile.parent_id) || Boolean(profile.branch_id) || profile.is_corporate_parent === false;
 
-    // Pattern: 'EMPRESA - SUCURSAL' (e.g. 'CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - EL CUBO')
+    // Pattern 1: 'EMPRESA - SUCURSAL' (e.g. 'CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - EL CUBO')
     if (fullName.includes(' - ')) {
         const parts = fullName.split(' - ');
         // Take everything after the first ' - '
@@ -221,7 +221,19 @@ export function resolveWorldOfficeBranch(profile: any): string {
         if (candidate) return candidate;
     }
 
-    // If it is explicitly marked as branch without hyphen separator (e.g. 'ESCUELA URBANA EL PROGRESO')
+    // Pattern 2: If parent profile is available and child name differs from parent name
+    if (parentProfile) {
+        const parentName = (parentProfile.company_name || parentProfile.razon_social || '').trim();
+        if (fullName && parentName && fullName.toLowerCase() !== parentName.toLowerCase()) {
+            if (fullName.toLowerCase().startsWith(parentName.toLowerCase())) {
+                const sub = fullName.slice(parentName.length).trim().replace(/^[-–—:\s]+/, '');
+                if (sub) return sub;
+            }
+            return fullName;
+        }
+    }
+
+    // Pattern 3: If it is explicitly marked as branch without hyphen separator (e.g. 'ESCUELA URBANA EL PROGRESO')
     if (isBranch && profile.parent_id) {
         return fullName;
     }
@@ -235,11 +247,10 @@ export function resolveWorldOfficeBranch(profile: any): string {
  * 1. Colsubsidio (NIT 860007336): Strictly the clean Purchase Order / Solped number (e.g. '4506447348' or '7900424083').
  * 2. Other clients: Format 'FV segun orden de compra {OC} - {Sucursal}' if OC exists, otherwise 'FV - {Sucursal}'.
  */
-export function resolveWorldOfficeNote(order: any, profile: any, branchName?: string): string {
-    const rawNit = String(profile?.nit || '').replace(/\D/g, '');
-    const isColsubsidio = rawNit === '860007336' || 
-        /colsubsidio/i.test(profile?.company_name || '') || 
-        /colsubsidio/i.test(profile?.razon_social || '');
+export function resolveWorldOfficeNote(order: any, profile: any, branchName?: string, parentProfile?: any): string {
+    const rawNit = String(parentProfile?.nit || profile?.nit || '').replace(/\D/g, '');
+    const clientCombined = `${parentProfile?.company_name || ''} ${parentProfile?.razon_social || ''} ${profile?.company_name || ''} ${profile?.razon_social || ''}`;
+    const isColsubsidio = rawNit === '860007336' || /colsubsidio/i.test(clientCombined);
 
     const rawOc = (order?.purchase_order_number || '').trim();
     const cleanOc = rawOc.replace(/^oc\s*[:#-]?\s*/i, '').trim();
@@ -250,7 +261,7 @@ export function resolveWorldOfficeNote(order: any, profile: any, branchName?: st
     }
 
     // Other clients:
-    const resolvedBranch = branchName || resolveWorldOfficeBranch(profile);
+    const resolvedBranch = branchName || resolveWorldOfficeBranch(profile, parentProfile);
     const branchLabel = resolvedBranch && resolvedBranch !== 'Principal' 
         ? resolvedBranch 
         : (profile?.company_name || profile?.razon_social || 'Sede Principal');
@@ -295,13 +306,17 @@ export async function downloadWorldOfficeExcel(
             ivaDecimal = item.tarifaIva > 1 ? item.tarifaIva / 100 : item.tarifaIva;
         }
 
-        const docNum = item.numero ?? (item as any).consecutivo ?? 1;
+        const rawDocNum = item.numero ?? (item as any).consecutivo ?? 1;
+        // GEMBA-WO: Para Factura de Venta ('FV'), la Columna D ('Encab: Documento Número') exige estrictamente un entero numérico puro (ej: 68494).
+        const cleanDocNum = typeof rawDocNum === 'number' 
+            ? Math.round(rawDocNum) 
+            : (parseInt(String(rawDocNum).replace(/\D/g, ''), 10) || 1);
 
         const row: Record<WorldOfficeColumnKey, any> = {
             'EMPRESA': item.empresa || 'INVESTMENTS CORTES SAS',
             'Encab: Tipo Documento': item.tipoDocumento || 'FV',
             'Encab: Prefijo': item.prefijo || '',
-            'Encab: Documento Número': docNum,
+            'Encab: Documento Número': cleanDocNum,
             'Encab: Fecha': docDateStr,
             'Encab: Tercero Interno': item.terceroInterno || '456282',
             'Encab: Tercero Externo': cleanNit,
