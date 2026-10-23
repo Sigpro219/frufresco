@@ -365,6 +365,9 @@ export default function QuoteDetailPage() {
     const handleOpenFormalizeAgreement = () => {
         if (quote.status === 'converted') return alert('Esta cotización ya fue convertida a pedido.');
         if (quote.status === 'agreement') return alert('Esta cotización ya es un Acuerdo Comercial activo.');
+        if (quote.status === 'expired' || quote.status === 'superseded' || quote.status === 'rejected') {
+            return alert('Esta cotización se encuentra vencida o reemplazada. Por protección de margen ante la volatilidad de Corabastos, utiliza el botón de Recotizar / Duplicar para actualizar los costos a hoy antes de congelar un acuerdo.');
+        }
 
         if (clientProfile) {
             // Ya tiene cliente formalizado
@@ -834,6 +837,25 @@ export default function QuoteDetailPage() {
                                     }}>
                                         <CheckCircle size={15} strokeWidth={2} />
                                         <span>CONVERTIDA A PEDIDO</span>
+                                    </button>
+                                </Link>
+                            ) : (quote.status === 'expired' || quote.status === 'superseded' || quote.status === 'rejected') ? (
+                                <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none' }}>
+                                    <button style={{ 
+                                        backgroundColor: '#FFFBEB', 
+                                        color: '#B45309', 
+                                        border: '1.5px solid #FDE68A', 
+                                        padding: '0.6rem 1.2rem', 
+                                        borderRadius: '10px', 
+                                        fontWeight: '800', 
+                                        fontSize: '0.82rem', 
+                                        cursor: 'pointer', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '0.5rem'
+                                    }}>
+                                        <Sparkles size={16} strokeWidth={2} />
+                                        <span>COTIZACIÓN {quote.status === 'expired' ? 'VENCIDA' : 'HISTÓRICA'} &bull; RECOTIZAR CON COSTOS DE HOY →</span>
                                     </button>
                                 </Link>
                             ) : quote.status === 'agreement' ? (

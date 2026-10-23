@@ -206,19 +206,41 @@ function CreateQuotePageContent() {
                 if (iErr) throw iErr;
 
                 if (iData) {
-                    const loadedItems = iData.map((item: any) => ({
-                        product_id: item.product_id,
-                        variant_id: item.variant_id || null,
-                        name: item.product_name || item.products?.name || 'Producto',
-                        sku: item.sku || item.products?.sku || '',
-                        unit: item.unit_of_measure || item.products?.unit_of_measure || 'Kg',
-                        cost: item.cost_basis || 0,
-                        margin: item.margin_percent || 0,
-                        variant_adjustment: 0,
-                        price: item.unit_price || 0,
-                        iva_rate: item.iva_rate || 0,
-                        quantity: item.quantity || 1
-                    }));
+                    // Consultar costos vivos de hoy desde commercial_cost_matrix para recotizar sobre costo real vigente
+                    const prodIds = iData.map((it: any) => it.product_id).filter(Boolean);
+                    const liveCostMap: Record<string, number> = {};
+                    if (prodIds.length > 0) {
+                        const { data: liveMatrix } = await supabase
+                            .from('commercial_cost_matrix')
+                            .select('product_id, manual_cost')
+                            .in('product_id', prodIds);
+                        (liveMatrix || []).forEach((row: any) => {
+                            if (Number(row.manual_cost) > 0) {
+                                liveCostMap[row.product_id] = Number(row.manual_cost);
+                            }
+                        });
+                    }
+
+                    const loadedItems = iData.map((item: any) => {
+                        const liveCost = liveCostMap[item.product_id] || Number(item.cost_basis) || 0;
+                        const margin = Number(item.margin_percent) || 34.2;
+                        const recalculatedPrice = liveCost > 0
+                            ? Math.ceil((liveCost * (1 + margin / 100)) / 50) * 50
+                            : (Number(item.unit_price) || 0);
+                        return {
+                            product_id: item.product_id,
+                            variant_id: item.variant_id || null,
+                            name: item.product_name || item.products?.name || 'Producto',
+                            sku: item.sku || item.products?.sku || '',
+                            unit: item.unit_of_measure || item.products?.unit_of_measure || 'Kg',
+                            cost: liveCost,
+                            margin: margin,
+                            variant_adjustment: 0,
+                            price: recalculatedPrice,
+                            iva_rate: item.iva_rate || 0,
+                            quantity: item.quantity || 1
+                        };
+                    });
                     setItems(loadedItems);
                 }
             }
@@ -782,7 +804,7 @@ function CreateQuotePageContent() {
                     total_amount: totalAmount,
                     status: 'draft',
                     start_date: new Date().toISOString().split('T')[0],
-                    valid_until: null,
+                    valid_until: (() => { const d = new Date(); d.setDate(d.getDate() + 8); return d.toISOString().split('T')[0]; })(),
                     parent_quote_id: parentQuoteId,
                     version: parentQuoteId ? originalQuoteVersion + 1 : 1,
                     // payment_terms_days stored in app_settings & profiles.payment_days
@@ -842,7 +864,7 @@ function CreateQuotePageContent() {
             if (duplicateFrom) {
                 const { error: rejectError } = await supabase
                     .from('quotes')
-                    .update({ status: 'rejected' })
+                    .update({ status: 'superseded' })
                     .eq('id', duplicateFrom);
                 if (rejectError) {
                     console.error('Error rejecting original quote:', rejectError);

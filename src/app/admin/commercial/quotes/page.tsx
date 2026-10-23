@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2, RefreshCw, Copy } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 
 export default function QuotesListPage({ embedded = false }: { embedded?: boolean } = {}) {
@@ -236,34 +236,70 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
         });
     };
 
-    const formatQuoteNumber = (seq: number, status?: string, dateStr?: string) => {
+    const getEffectiveStatus = (quote: any): string => {
+        if (!quote) return 'draft';
+        const raw = quote.status || 'draft';
+        if (raw === 'expired' || raw === 'superseded' || raw === 'rejected' || raw === 'agreement' || raw === 'converted') {
+            return raw;
+        }
+        // Si tiene valid_until explícito en el pasado, pasa a expired
+        if (quote.valid_until) {
+            const end = new Date(quote.valid_until.split('T')[0] + 'T23:59:59');
+            if (end < new Date()) return 'expired';
+        }
+        return raw;
+    };
+
+    const isHistoricalAgreement = (quote: any): boolean => {
+        if (!quote) return false;
+        const eff = getEffectiveStatus(quote);
+        if (eff !== 'expired' && eff !== 'superseded') return false;
+        const snap = (quote.model_snapshot_name || '').toLowerCase();
+        return !quote.model_id && (snap.includes('acuerdo') || snap.includes('convenio') || /\d{2}-\d{2}-\d{2}/.test(snap));
+    };
+
+    const formatQuoteNumber = (seq: number, status?: string, dateStr?: string, quote?: any) => {
         const date = dateStr ? new Date(dateStr) : new Date();
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const paddedSeq = String(seq).padStart(4, '0');
-        const prefix = status === 'agreement' ? 'ACI' : 'COT';
+        const prefix = (status === 'agreement' || (quote && isHistoricalAgreement(quote))) ? 'ACI' : 'COT';
         return `${prefix} ${day}${month} ${paddedSeq}`;
     };
 
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'draft': return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', whiteSpace: 'nowrap' }}>Borrador</span>;
-            case 'sent': return <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', whiteSpace: 'nowrap' }}>Enviada</span>;
-            case 'accepted': return <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', whiteSpace: 'nowrap' }}>Aceptada</span>;
-            case 'converted': return <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #10B981', display: 'inline-block', whiteSpace: 'nowrap' }}>Pedido Creado</span>;
-            case 'agreement': return <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #3B82F6', display: 'inline-block', whiteSpace: 'nowrap' }}>Acuerdo Comercial</span>;
-            case 'rejected': return <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', whiteSpace: 'nowrap' }}>Rechazada</span>;
-            default: return status;
+    const getStatusBadge = (status: string, quote?: any) => {
+        const eff = quote ? getEffectiveStatus(quote) : status;
+        const wasAgreement = quote ? isHistoricalAgreement(quote) : false;
+        switch (eff) {
+            case 'draft':
+                return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', border: '1px solid #E5E7EB', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>Borrador</span>;
+            case 'sent':
+                return <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', border: '1px solid #BFDBFE', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>Enviada</span>;
+            case 'accepted':
+                return <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', border: '1px solid #A7F3D0', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>Aceptada</span>;
+            case 'expired':
+                return <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>{wasAgreement ? 'Acuerdo Vencido' : 'Vencida (8d)'}</span>;
+            case 'superseded':
+                return <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>{wasAgreement ? 'Acuerdo Reemplazado' : 'Reemplazada'}</span>;
+            case 'converted':
+                return <span style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #10B981', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>Pedido Creado</span>;
+            case 'agreement':
+                return <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #3B82F6', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>Acuerdo Comercial</span>;
+            case 'rejected':
+                return <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>Rechazada</span>;
+            default:
+                return <span style={{ backgroundColor: '#F1F5F9', color: '#64748B', padding: '0.25rem 0.65rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-block', whiteSpace: 'nowrap' }}>{eff}</span>;
         }
     };
 
     const filteredQuotes = quotes.filter(q => {
+        const effStatus = getEffectiveStatus(q);
         const term = searchTerm.toLowerCase();
         const matchesSearch = !term || 
             (q.client_name && q.client_name.toLowerCase().includes(term)) ||
-            (q.quote_number && q.quote_number.toLowerCase().includes(term)) ||
+            (q.quote_number && String(q.quote_number).toLowerCase().includes(term)) ||
             (q.model_snapshot_name && q.model_snapshot_name.toLowerCase().includes(term));
-        const matchesStatus = filterStatus === 'all' || q.status === filterStatus;
+        const matchesStatus = filterStatus === 'all' || effStatus === filterStatus;
         return matchesSearch && matchesStatus;
     });
 
@@ -380,14 +416,15 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                         )}
                     </div>
 
-                    {/* FILTROS RÁPIDOS DE ESTADO */}
-                    <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '10px', height: '40px', alignItems: 'center' }}>
+                    {/* FILTROS RÁPIDOS DE ESTADO CANÓNICOS (Escenario 275 SDD) */}
+                    <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '10px', height: '40px', alignItems: 'center', flexWrap: 'wrap' }}>
                         {[
-                            { id: 'all', label: 'Todas' },
-                            { id: 'draft', label: 'Borrador' },
-                            { id: 'sent', label: 'Enviadas' },
-                            { id: 'approved', label: 'Aprobadas' },
-                            { id: 'rejected', label: 'Rechazadas' }
+                            { id: 'all', label: `Todas (${quotes.length})` },
+                            { id: 'draft', label: `Borrador (${quotes.filter(q => getEffectiveStatus(q) === 'draft').length})` },
+                            { id: 'sent', label: `Enviadas (${quotes.filter(q => getEffectiveStatus(q) === 'sent').length})` },
+                            { id: 'expired', label: `Vencidas (${quotes.filter(q => getEffectiveStatus(q) === 'expired').length})` },
+                            { id: 'superseded', label: `Reemplazadas (${quotes.filter(q => getEffectiveStatus(q) === 'superseded').length})` },
+                            { id: 'rejected', label: `Rechazadas (${quotes.filter(q => getEffectiveStatus(q) === 'rejected').length})` }
                         ].map(f => (
                             <button
                                 key={f.id}
@@ -490,7 +527,7 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                                 color: '#475569',
                                                 border: '1px solid #E2E8F0'
                                             }}>
-                                                {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.status, quote.created_at) : '---'}
+                                                {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.status, quote.created_at, quote) : '---'}
                                             </span>
                                         </td>
                                         <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
@@ -509,7 +546,7 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                              {formatMoney(quote.total_amount || quote.total || 0)}
                                          </td>
                                          <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                             {getStatusBadge(quote.status)}
+                                             {getStatusBadge(quote.status, quote)}
                                          </td>
                                          <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -543,37 +580,99 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                                          <FileText size={12} strokeWidth={2} /> PDF
                                                      </button>
                                                  </Link>
-                                                 {quote.status !== 'agreement' && (
-                                                     <button 
-                                                         onClick={() => handleOpenApproveModal(quote)}
-                                                         title="Aprobar propuesta y congelar acuerdo de precios"
-                                                         style={{ 
-                                                             height: '32px',
-                                                             boxSizing: 'border-box',
-                                                             border: '1px solid #A7F3D0',
-                                                             backgroundColor: '#ECFDF5',
-                                                             color: '#047857',
-                                                             padding: '0 0.75rem',
-                                                             borderRadius: THEME.radius.sm,
-                                                             cursor: 'pointer', 
-                                                             fontWeight: '700',
-                                                             fontSize: '0.75rem',
-                                                             display: 'inline-flex',
-                                                             alignItems: 'center',
-                                                             justifyContent: 'center',
-                                                             gap: '4px',
-                                                             transition: 'all 0.2s'
-                                                         }}
-                                                         onMouseEnter={(e) => {
-                                                             e.currentTarget.style.backgroundColor = '#D1FAE5';
-                                                         }}
-                                                         onMouseLeave={(e) => {
-                                                             e.currentTarget.style.backgroundColor = '#ECFDF5';
-                                                         }}
-                                                     >
-                                                         <Handshake size={13} strokeWidth={2} /> Aprobar y Congelar
-                                                     </button>
-                                                 )}
+                                                 {(() => {
+                                                     const eff = getEffectiveStatus(quote);
+                                                     if (eff === 'sent' || eff === 'draft' || eff === 'accepted') {
+                                                         return (
+                                                             <button 
+                                                                 onClick={() => handleOpenApproveModal(quote)}
+                                                                 title="Aprobar propuesta vigente y congelar acuerdo de precios"
+                                                                 style={{ 
+                                                                     height: '32px',
+                                                                     boxSizing: 'border-box',
+                                                                     border: '1px solid #A7F3D0',
+                                                                     backgroundColor: '#ECFDF5',
+                                                                     color: '#047857',
+                                                                     padding: '0 0.75rem',
+                                                                     borderRadius: THEME.radius.sm,
+                                                                     cursor: 'pointer', 
+                                                                     fontWeight: '700',
+                                                                     fontSize: '0.75rem',
+                                                                     display: 'inline-flex',
+                                                                     alignItems: 'center',
+                                                                     justifyContent: 'center',
+                                                                     gap: '4px',
+                                                                     transition: 'all 0.2s'
+                                                                 }}
+                                                                 onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#D1FAE5'; }}
+                                                                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ECFDF5'; }}
+                                                             >
+                                                                 <Handshake size={13} strokeWidth={2} /> Aprobar y Congelar
+                                                             </button>
+                                                         );
+                                                     }
+                                                     if (eff === 'expired') {
+                                                         return (
+                                                             <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                                                 <button 
+                                                                     title="Recotizar canasta actualizando a costos vivos de hoy"
+                                                                     style={{ 
+                                                                         height: '32px',
+                                                                         boxSizing: 'border-box',
+                                                                         border: '1px solid #FDE68A',
+                                                                         backgroundColor: '#FFFBEB',
+                                                                         color: '#B45309',
+                                                                         padding: '0 0.75rem',
+                                                                         borderRadius: THEME.radius.sm,
+                                                                         cursor: 'pointer', 
+                                                                         fontWeight: '700',
+                                                                         fontSize: '0.75rem',
+                                                                         display: 'inline-flex',
+                                                                         alignItems: 'center',
+                                                                         justifyContent: 'center',
+                                                                         gap: '4px',
+                                                                         transition: 'all 0.2s'
+                                                                     }}
+                                                                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEF3C7'; }}
+                                                                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFBEB'; }}
+                                                                 >
+                                                                     <RefreshCw size={12} strokeWidth={2} /> Recotizar Hoy
+                                                                 </button>
+                                                             </Link>
+                                                         );
+                                                     }
+                                                     if (eff === 'superseded' || eff === 'rejected') {
+                                                         return (
+                                                             <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                                                 <button 
+                                                                     title="Duplicar como nueva cotización con precios actualizados"
+                                                                     style={{ 
+                                                                         height: '32px',
+                                                                         boxSizing: 'border-box',
+                                                                         border: '1px solid #CBD5E1',
+                                                                         backgroundColor: '#F8FAFC',
+                                                                         color: '#475569',
+                                                                         padding: '0 0.75rem',
+                                                                         borderRadius: THEME.radius.sm,
+                                                                         cursor: 'pointer', 
+                                                                         fontWeight: '700',
+                                                                         fontSize: '0.75rem',
+                                                                         display: 'inline-flex',
+                                                                         alignItems: 'center',
+                                                                         justifyContent: 'center',
+                                                                         gap: '4px',
+                                                                         transition: 'all 0.2s'
+                                                                     }}
+                                                                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F1F5F9'; }}
+                                                                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                                                                 >
+                                                                     <Copy size={12} strokeWidth={2} /> Duplicar
+                                                                 </button>
+                                                             </Link>
+                                                         );
+                                                     }
+                                                     return null;
+                                                 })()}
                                                  <Link href={`/admin/commercial/quotes/${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                                                      <button style={{ 
                                                          height: '32px',

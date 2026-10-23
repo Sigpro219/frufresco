@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **275 Escenarios Canónicos (1..275)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **276 Escenarios Canónicos (1..275)** | **🟢 100%** |
 
 ---
 
@@ -11558,3 +11558,19 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
        3. `Cotizaciones` (Paso 3 - Proposición): Generación de propuestas y cotizaciones dinámicas para prospectos y clientes cruzando Costos + Modelos.
        4. `Acuerdos Especiales` (Paso 4 - Formalización): Congelación de cotizaciones aprobadas como convenios vinculantes de tarifa fija para despachos.
        5. `Campañas Temporales` (Paso 5 - Excepciones): Promociones estacionales o ajustes temporales con ventana de vigencia delimitada.
+
+### Escenario 276: Blindaje del Ciclo de Vida de Cotizaciones, Gobernanza Estricta de Estados Muertos y Recotización Dinámica a Costos de Hoy (SDD v1.9.251)
+- **Given** el Historial de Cotizaciones en `/admin/commercial?tab=operations&subtab=quotes`, el generador en `/admin/commercial/quotes/create` y la vista de detalle en `/admin/commercial/quotes/[id]`.
+- **When** un comercial audita el pipeline de cotizaciones o interactúa con registros en distintos estados de madurez (`draft`, `sent`, `expired`, `superseded`, `rejected`, `agreement`).
+- **Then**:
+  1. **Prohibición Estricta de Congelación en Estados Caducados o Reemplazados (Cierre Fisura 1):**
+     - Queda terminantemente prohibido exponer o ejecutar la acción `[Aprobar y Congelar]` sobre cotizaciones en estado `expired`, `superseded` o `rejected`, tanto en la galería como en la vista de detalle.
+     - Exclusivamente las cotizaciones vigentes (`draft`, `sent`, `accepted`) habilitan la transición hacia `status = 'agreement'`.
+  2. **Transformación Reactiva a `[Recotizar Hoy]` con Costos Vivos de Plaza:**
+     - Para toda cotización en estado `expired`, el botón de acción principal muta automáticamente a `[Recotizar Hoy]` (`/admin/commercial/quotes/create?duplicate_from={id}`).
+     - Al recotizar, el motor (`loadDuplicateQuote`) intercepta la canasta histórica, consulta en vivo `commercial_cost_matrix` para los `product_id`s involucrados, actualiza el costo base al valor vigente del día y recalcula las tarifas aplicando el margen original y redondeo a múltiplos de $50 COP, marcando la versión anterior como `superseded`.
+  3. **Saneamiento de Filtros, Telemetría y Badges Institucionales (Cierre Fisuras 2, 3, 5 y 6):**
+     - Se erradica el filtro fantasma `approved` y se reemplaza por la botonera canónica con telemetría en vivo: `Todas (N)`, `Borrador (N)`, `Enviadas (N)`, `Vencidas (N)`, `Reemplazadas (N)` y `Rechazadas (N)`.
+     - Se implementan insignias estilizadas institucionales para `expired` (`Vencida (8d)` / `Acuerdo Vencido`) y `superseded` (`Reemplazada` / `Acuerdo Reemplazado`), diferenciando con el prefijo `ACI` aquellos registros históricos que provinieron de convenios previos frente al prefijo `COT` de propuestas de cotización.
+  4. **Inyección Determinística de Vigencia de 8 Días Calendario al Crear (`GAP-11` - Cierre Fisura 4):**
+     - Toda nueva cotización insertada en `quotes` calcula y persiste obligatoriamente `valid_until = start_date + 8 días calendario`, garantizando que el evaluador `getEffectiveStatus` detecte y transicione de forma determinística cualquier propuesta caducada sin intervención manual.
