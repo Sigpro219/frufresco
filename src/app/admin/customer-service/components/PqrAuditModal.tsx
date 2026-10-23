@@ -3379,10 +3379,14 @@ export default function PqrAuditModal({
                                                         borderRadius: '8px',
                                                         fontSize: '0.74rem',
                                                         fontWeight: 800,
-                                                        cursor: 'pointer'
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px'
                                                     }}
                                                 >
-                                                    Ir a Causa Raíz (RCA) & Imputabilidad Nominal →
+                                                    <span>Ir a Causa Raíz (RCA) & Imputabilidad Nominal</span>
+                                                    <ArrowRight size={14} />
                                                 </button>
                                             </div>
                                         </div>

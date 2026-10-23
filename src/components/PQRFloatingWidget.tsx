@@ -4,8 +4,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
     MessageSquarePlus, X, Send, CheckCircle2,
-    UploadCloud, Loader2, Search, User, Building2, UserCheck,
-    ShieldAlert, Package, Settings, Users, Wrench, Clock, Sparkles, ChevronDown
+    UploadCloud, Loader2, Search, Building2, UserCheck,
+    ShieldAlert, Settings, Users, Wrench, Clock,
+    AlertTriangle, PackageX, Truck, FileText
 } from 'lucide-react';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
@@ -31,131 +32,133 @@ interface CollaboratorItem {
 type ScopeMode = 'client' | 'internal';
 type InternalSubscope = 'rrhh_convivencia' | 'proceso_planta' | 'equipos_sst';
 
-interface InternalPreset {
+interface QuickChip {
     id: string;
     label: string;
-    subscope: InternalSubscope;
-    categoryL1: string;
-    subtypeL2: string;
-    defaultArea: string;
+    icon: React.ComponentType<{ size?: number; color?: string }>;
+    scope: ScopeMode;
+    // Client fields
+    category?: 'producto' | 'entrega' | 'facturacion' | 'otro';
+    // Internal fields
+    subscope?: InternalSubscope;
+    categoryL1?: string;
+    subtypeL2?: string;
+    defaultArea?: string;
+    // Shared
     defaultType: 'queja' | 'reclamo' | 'peticion' | 'sugerencia';
     defaultPriority: 'low' | 'normal' | 'high' | 'urgent';
-    subjectTemplate: string;
 }
 
-const INTERNAL_PRESETS: InternalPreset[] = [
-    // RRHH & Convivencia
+const QUICK_CHIPS: QuickChip[] = [
+    // Ámbito Cliente / Pedido
+    {
+        id: 'client_calidad',
+        label: 'Calidad / Avería',
+        icon: AlertTriangle,
+        scope: 'client',
+        category: 'producto',
+        defaultType: 'reclamo',
+        defaultPriority: 'high'
+    },
+    {
+        id: 'client_faltante',
+        label: 'Faltante en entrega',
+        icon: PackageX,
+        scope: 'client',
+        category: 'entrega',
+        defaultType: 'reclamo',
+        defaultPriority: 'high'
+    },
+    {
+        id: 'client_ruta',
+        label: 'Retraso en ruta',
+        icon: Truck,
+        scope: 'client',
+        category: 'entrega',
+        defaultType: 'queja',
+        defaultPriority: 'normal'
+    },
+    {
+        id: 'client_factura',
+        label: 'Diferencia en factura',
+        icon: FileText,
+        scope: 'client',
+        category: 'facturacion',
+        defaultType: 'reclamo',
+        defaultPriority: 'normal'
+    },
+    // Ámbito Interno / Planta & RRHH
     {
         id: 'llegada_tarde',
         label: 'Llegada tarde a turno',
+        icon: Clock,
+        scope: 'internal',
         subscope: 'rrhh_convivencia',
         categoryL1: 'talento_humano_disciplina',
         subtypeL2: 'llegada_tarde_turno',
         defaultArea: 'Picking / Alistamiento',
         defaultType: 'queja',
-        defaultPriority: 'normal',
-        subjectTemplate: 'Llegada tarde a turno programado'
+        defaultPriority: 'normal'
     },
     {
         id: 'falta_respeto',
         label: 'Falta de respeto / Convivencia',
+        icon: Users,
+        scope: 'internal',
         subscope: 'rrhh_convivencia',
         categoryL1: 'talento_humano_disciplina',
         subtypeL2: 'falta_respeto_convivencia',
         defaultArea: 'Bodega / Recepción',
         defaultType: 'queja',
-        defaultPriority: 'high',
-        subjectTemplate: 'Falta de respeto / Incidente de convivencia en planta'
+        defaultPriority: 'high'
     },
-    {
-        id: 'desacato_instruccion',
-        label: 'Desacato de instrucción',
-        subscope: 'rrhh_convivencia',
-        categoryL1: 'talento_humano_disciplina',
-        subtypeL2: 'desacato_instruccion_operativa',
-        defaultArea: 'Bodega / Recepción',
-        defaultType: 'reclamo',
-        defaultPriority: 'high',
-        subjectTemplate: 'Desacato de instrucción operativa en turno'
-    },
-    {
-        id: 'incumplimiento_epp',
-        label: 'Incumplimiento EPP / BPM',
-        subscope: 'rrhh_convivencia',
-        categoryL1: 'talento_humano_disciplina',
-        subtypeL2: 'incumplimiento_epp_bpm',
-        defaultArea: 'Picking / Alistamiento',
-        defaultType: 'queja',
-        defaultPriority: 'normal',
-        subjectTemplate: 'Incumplimiento de dotación EPP o normas BPM'
-    },
-    // Proceso & Sincronización de Planta
     {
         id: 'lanzamiento_tardio',
         label: 'Lanzamiento tardío de operación',
+        icon: AlertTriangle,
+        scope: 'internal',
         subscope: 'proceso_planta',
         categoryL1: 'proceso_operativo_interno',
         subtypeL2: 'lanzamiento_tardio_operacion',
         defaultArea: 'Comercial / Programación',
         defaultType: 'reclamo',
-        defaultPriority: 'high',
-        subjectTemplate: 'Lanzamiento tardío de operación afectó salida de rutas'
+        defaultPriority: 'high'
     },
     {
         id: 'retraso_salida_flota',
-        label: 'Retraso en salida de flota / muelle',
+        label: 'Retraso salida de flota',
+        icon: Truck,
+        scope: 'internal',
         subscope: 'proceso_planta',
         categoryL1: 'proceso_operativo_interno',
         subtypeL2: 'retraso_salida_flota_muelle',
         defaultArea: 'Transporte / Despachos',
         defaultType: 'reclamo',
-        defaultPriority: 'high',
-        subjectTemplate: 'Retraso en cargue y salida de flota en muelle'
+        defaultPriority: 'high'
     },
-    {
-        id: 'demora_abastecimiento',
-        label: 'Entrada tardía de mercancía de plaza',
-        subscope: 'proceso_planta',
-        categoryL1: 'proceso_operativo_interno',
-        subtypeL2: 'demora_recepcion_abastecimiento',
-        defaultArea: 'Compras / Abastecimiento',
-        defaultType: 'queja',
-        defaultPriority: 'high',
-        subjectTemplate: 'Demora en ingreso de mercancía de plaza al muelle'
-    },
-    // Equipos, SST & 5S
     {
         id: 'falla_bascula',
-        label: 'Falla de báscula / impresora',
+        label: 'Falla de báscula / equipo',
+        icon: Wrench,
+        scope: 'internal',
         subscope: 'equipos_sst',
         categoryL1: 'proceso_operativo_interno',
         subtypeL2: 'falla_equipos_bascula_sistema',
         defaultArea: 'Picking / Alistamiento',
         defaultType: 'peticion',
-        defaultPriority: 'high',
-        subjectTemplate: 'Falla técnica en báscula / impresora de alistamiento'
+        defaultPriority: 'high'
     },
     {
-        id: 'novedad_cava',
-        label: 'Novedad en cuarto frío / cava',
-        subscope: 'equipos_sst',
-        categoryL1: 'proceso_operativo_interno',
-        subtypeL2: 'falla_equipos_bascula_sistema',
-        defaultArea: 'Bodega / Recepción',
-        defaultType: 'reclamo',
-        defaultPriority: 'urgent',
-        subjectTemplate: 'Anomalía operativa en cuarto frío / infraestructura'
-    },
-    {
-        id: 'orden_aseo_5s',
-        label: 'Incumplimiento Orden y Aseo (5S)',
-        subscope: 'equipos_sst',
+        id: 'incumplimiento_epp',
+        label: 'Incumplimiento EPP / 5S',
+        icon: ShieldAlert,
+        scope: 'internal',
+        subscope: 'rrhh_convivencia',
         categoryL1: 'talento_humano_disciplina',
         subtypeL2: 'incumplimiento_epp_bpm',
         defaultArea: 'Bodega / Recepción',
         defaultType: 'queja',
-        defaultPriority: 'normal',
-        subjectTemplate: 'Novedad de entrega de turno / Orden y Aseo (5S)'
+        defaultPriority: 'normal'
     }
 ];
 
@@ -174,60 +177,52 @@ export default function PQRFloatingWidget() {
     const [submitted, setSubmitted] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Scope Switcher: 'client' (Externo) vs 'internal' (Planta / RRHH / Proceso)
+    // 1. Scope Switcher: 'client' vs 'internal'
     const [scopeMode, setScopeMode] = useState<ScopeMode>('client');
 
-    // Clients search state (for 'client' scope)
+    // 2A. Clients & Orders state (for 'client' scope)
     const [clients, setClients] = useState<ClientProfile[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedClient, setSelectedClient] = useState<ClientProfile | null>(null);
     const [showDropdown, setShowDropdown] = useState(false);
     const [highlightedClientIndex, setHighlightedClientIndex] = useState(0);
-
-    // Recent orders for selected operational branch
     const [branchOrders, setBranchOrders] = useState<Array<{ id: string; sequence_id: number; total: number; delivery_date?: string; created_at: string; status: string }>>([]);
     const [selectedOrderId, setSelectedOrderId] = useState<string>('');
     const [loadingOrders, setLoadingOrders] = useState(false);
 
-    // Internal Scope state (for 'internal' scope)
+    // 2B. Internal Scope state (for 'internal' scope)
     const [internalSubscope, setInternalSubscope] = useState<InternalSubscope>('rrhh_convivencia');
     const [internalArea, setInternalArea] = useState<string>('Picking / Alistamiento');
     const [internalCategoryL1, setInternalCategoryL1] = useState<string>('talento_humano_disciplina');
     const [internalSubtypeL2, setInternalSubtypeL2] = useState<string>('llegada_tarde_turno');
-    const [selectedPresetId, setSelectedPresetId] = useState<string>('');
     const [involvedCollaborator, setInvolvedCollaborator] = useState<CollaboratorItem | null>(null);
     const [involvedCollabQuery, setInvolvedCollabQuery] = useState('');
     const [showInvolvedCollabDropdown, setShowInvolvedCollabDropdown] = useState(false);
 
-    // Collaborator / Reporter state
-    const [collaborators, setCollaborators] = useState<CollaboratorItem[]>([]);
-    const [selectedCollaborator, setSelectedCollaborator] = useState<CollaboratorItem | null>(null);
-    const [changingReporter, setChangingReporter] = useState(false);
-
-    // Form state
+    // 3. Quick Chip & Unified Description state (Raptor 3: 1 single text field)
+    const [selectedChipId, setSelectedChipId] = useState<string>('client_calidad');
     const [type, setType] = useState<'queja' | 'reclamo' | 'peticion' | 'sugerencia'>('reclamo');
     const [category, setCategory] = useState<'producto' | 'entrega' | 'facturacion' | 'otro'>('producto');
-    const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
-    const [subject, setSubject] = useState('');
+    const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('high');
     const [description, setDescription] = useState('');
     const [files, setFiles] = useState<FileList | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+    // Reporter state
+    const [collaborators, setCollaborators] = useState<CollaboratorItem[]>([]);
+    const [selectedCollaborator, setSelectedCollaborator] = useState<CollaboratorItem | null>(null);
+    const [changingReporter, setChangingReporter] = useState(false);
+
     const dropdownRef = useRef<HTMLDivElement>(null);
     const involvedCollabRef = useRef<HTMLDivElement>(null);
 
-    // Global Escape key listener to close widget cleanly
     useEffect(() => {
         if (!isOpen) return;
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                if (showDropdown) {
-                    setShowDropdown(false);
-                } else if (showInvolvedCollabDropdown) {
-                    setShowInvolvedCollabDropdown(false);
-                } else {
-                    setIsOpen(false);
-                }
+                if (showDropdown) setShowDropdown(false);
+                else if (showInvolvedCollabDropdown) setShowInvolvedCollabDropdown(false);
+                else setIsOpen(false);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -235,12 +230,8 @@ export default function PQRFloatingWidget() {
     }, [isOpen, showDropdown, showInvolvedCollabDropdown]);
 
     useEffect(() => {
-        if (isOpen && clients.length === 0) {
-            fetchClients();
-        }
-        if (isOpen && collaborators.length === 0) {
-            fetchCollaboratorsAndCurrentUser();
-        }
+        if (isOpen && clients.length === 0) fetchClients();
+        if (isOpen && collaborators.length === 0) fetchCollaboratorsAndCurrentUser();
     }, [isOpen]);
 
     useEffect(() => {
@@ -256,7 +247,6 @@ export default function PQRFloatingWidget() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Preview image cleanup
     useEffect(() => {
         if (!files || files.length === 0) {
             setPreviewUrl(null);
@@ -280,7 +270,7 @@ export default function PQRFloatingWidget() {
         }
     };
 
-    // Poka-Yoke SDD v1.9.253: Identify pure Parent Matrices that have child branches.
+    // Poka-Yoke SDD v1.9.253: Filter out pure Parent Matrices so operators only select operational branches
     const parentMatrixIds = useMemo(() => {
         const ids = new Set<string>();
         clients.forEach(c => {
@@ -311,11 +301,7 @@ export default function PQRFloatingWidget() {
                 .limit(12);
             const list = data || [];
             setBranchOrders(list);
-            if (list.length > 0) {
-                setSelectedOrderId(list[0].id);
-            } else {
-                setSelectedOrderId('');
-            }
+            setSelectedOrderId(list.length > 0 ? list[0].id : '');
         } catch (err) {
             console.error('Error fetching branch orders for PQR:', err);
             setBranchOrders([]);
@@ -358,7 +344,7 @@ export default function PQRFloatingWidget() {
                     setSelectedCollaborator({
                         id: user.id,
                         contact_name: fullName,
-                        role: prof?.role || 'Ejecutivo SAC / Operaciones'
+                        role: prof?.role || 'Operaciones'
                     });
                 } else if (collabList.length > 0) {
                     setSelectedCollaborator(collabList[0]);
@@ -396,37 +382,31 @@ export default function PQRFloatingWidget() {
         );
     }, [collaborators, involvedCollabQuery]);
 
-    const activePresets = useMemo(() => {
-        return INTERNAL_PRESETS.filter(p => p.subscope === internalSubscope);
-    }, [internalSubscope]);
+    const visibleChips = useMemo(() => {
+        return QUICK_CHIPS.filter(c => c.scope === scopeMode);
+    }, [scopeMode]);
 
-    const handleSelectSubscope = (sub: InternalSubscope) => {
-        setInternalSubscope(sub);
-        setSelectedPresetId('');
-        if (sub === 'rrhh_convivencia') {
-            setInternalCategoryL1('talento_humano_disciplina');
-            setInternalSubtypeL2('llegada_tarde_turno');
-            setType('queja');
-        } else if (sub === 'proceso_planta') {
-            setInternalCategoryL1('proceso_operativo_interno');
-            setInternalSubtypeL2('lanzamiento_tardio_operacion');
-            setType('reclamo');
-        } else {
-            setInternalCategoryL1('proceso_operativo_interno');
-            setInternalSubtypeL2('falla_equipos_bascula_sistema');
-            setType('peticion');
+    const handleSelectChip = (chip: QuickChip) => {
+        setSelectedChipId(chip.id);
+        setType(chip.defaultType);
+        setPriority(chip.defaultPriority);
+        if (chip.scope === 'client' && chip.category) {
+            setCategory(chip.category);
         }
+        if (chip.scope === 'internal') {
+            if (chip.subscope) setInternalSubscope(chip.subscope);
+            if (chip.categoryL1) setInternalCategoryL1(chip.categoryL1);
+            if (chip.subtypeL2) setInternalSubtypeL2(chip.subtypeL2);
+            if (chip.defaultArea) setInternalArea(chip.defaultArea);
+        }
+        setErrorMsg(null);
     };
 
-    const handleApplyPreset = (preset: InternalPreset) => {
-        setSelectedPresetId(preset.id);
-        setInternalCategoryL1(preset.categoryL1);
-        setInternalSubtypeL2(preset.subtypeL2);
-        setInternalArea(preset.defaultArea);
-        setType(preset.defaultType);
-        setPriority(preset.defaultPriority);
-        setSubject(preset.subjectTemplate);
+    const handleSwitchScope = (nextScope: ScopeMode) => {
+        setScopeMode(nextScope);
         setErrorMsg(null);
+        const firstChip = QUICK_CHIPS.find(c => c.scope === nextScope);
+        if (firstChip) handleSelectChip(firstChip);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -434,11 +414,11 @@ export default function PQRFloatingWidget() {
         setErrorMsg(null);
 
         if (scopeMode === 'client' && !selectedClient) {
-            setErrorMsg('Selecciona una sucursal operativa para vincular la PQR comercial.');
+            setErrorMsg('Selecciona la sucursal o cliente del reporte.');
             return;
         }
-        if (!subject.trim()) {
-            setErrorMsg('Ingresa un asunto claro para identificar el caso.');
+        if (!description.trim()) {
+            setErrorMsg('Describe brevemente qué sucedió.');
             return;
         }
 
@@ -470,9 +450,16 @@ export default function PQRFloatingWidget() {
                 }
             }
 
+            const activeChip = QUICK_CHIPS.find(c => c.id === selectedChipId);
+            const cleanFirstLine = description.trim().split('\n')[0].trim();
+            const shortSnippet = cleanFirstLine.length > 62 ? `${cleanFirstLine.substring(0, 62)}...` : cleanFirstLine;
+            const synthesizedSubject = activeChip
+                ? `${activeChip.label}: ${shortSnippet}`
+                : shortSnippet;
+
             const reporterHeader = selectedCollaborator
                 ? `[Radicado por Colaborador FruFresco: ${selectedCollaborator.contact_name} (${selectedCollaborator.role})]`
-                : `[Radicado por Colaborador FruFresco: Mesa de Ayuda SAC]`;
+                : `[Radicado por Colaborador FruFresco: Mesa Operativa]`;
 
             if (scopeMode === 'internal') {
                 const areaLower = internalArea.toLowerCase();
@@ -503,10 +490,7 @@ export default function PQRFloatingWidget() {
                     }] : []
                 });
 
-                const finalSubject = subject.trim().startsWith('[INTERNA')
-                    ? subject.trim()
-                    : `[INTERNA - ${internalArea}] ${subject.trim()}`;
-
+                const finalSubject = `[INTERNA - ${internalArea}] ${synthesizedSubject}`;
                 const finalDescription = `${reporterHeader}\n${internalHeader}\n\n${description.trim()}\n\n${rcaTag}`;
 
                 const { error } = await supabase
@@ -536,7 +520,7 @@ export default function PQRFloatingWidget() {
                         type,
                         category,
                         priority,
-                        subject: subject.trim(),
+                        subject: synthesizedSubject,
                         description: finalDescription,
                         primary_photo_url: primaryPhotoUrl,
                         additional_photos: additionalPhotos.length > 0 ? additionalPhotos : null,
@@ -550,17 +534,15 @@ export default function PQRFloatingWidget() {
             setTimeout(() => {
                 setSubmitted(false);
                 setIsOpen(false);
-                setSubject('');
                 setDescription('');
                 setFiles(null);
                 setSelectedClient(null);
                 setSearchQuery('');
                 setBranchOrders([]);
                 setSelectedOrderId('');
-                setSelectedPresetId('');
                 setInvolvedCollaborator(null);
                 setInvolvedCollabQuery('');
-            }, 1800);
+            }, 1600);
 
         } catch (err: any) {
             console.error('Error submitting PQR:', err);
@@ -576,7 +558,7 @@ export default function PQRFloatingWidget() {
         fontWeight: 800,
         color: '#475569',
         textTransform: 'uppercase',
-        letterSpacing: '0.05em',
+        letterSpacing: '0.04em',
         marginBottom: '5px'
     };
 
@@ -637,7 +619,7 @@ export default function PQRFloatingWidget() {
             position: 'fixed',
             bottom: '20px',
             right: '20px',
-            width: '450px',
+            width: '430px',
             maxWidth: 'calc(100vw - 24px)',
             maxHeight: 'calc(100vh - 40px)',
             backgroundColor: '#FFFFFF',
@@ -649,42 +631,39 @@ export default function PQRFloatingWidget() {
             display: 'flex',
             flexDirection: 'column',
             fontFamily: 'var(--font-inter), sans-serif',
-            animation: 'slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
+            animation: 'slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
-            {/* 1. OBSIDIAN SLATE HEADER (Skin 1 Design Manual) */}
+            {/* 1. OBSIDIAN HEADER + INTEGRATED REPORTER LINE */}
             <div style={{
                 backgroundColor: '#0F172A',
                 color: '#FFFFFF',
-                padding: '14px 18px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
+                padding: '13px 16px 11px 16px',
                 borderBottom: '1px solid #1E293B',
                 flexShrink: 0
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        backgroundColor: scopeMode === 'client' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(56, 189, 248, 0.15)',
-                        border: scopeMode === 'client' ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                    }}>
-                        {scopeMode === 'client' ? (
-                            <ShieldAlert size={19} color="#34D399" />
-                        ) : (
-                            <Settings size={19} color="#38BDF8" />
-                        )}
-                    </div>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '9px',
+                            backgroundColor: scopeMode === 'client' ? 'rgba(16, 185, 129, 0.16)' : 'rgba(56, 189, 248, 0.16)',
+                            border: scopeMode === 'client' ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                        }}>
+                            {scopeMode === 'client' ? (
+                                <ShieldAlert size={17} color="#34D399" />
+                            ) : (
+                                <Settings size={17} color="#38BDF8" />
+                            )}
+                        </div>
+                        <div>
                             <h3 style={{
                                 margin: 0,
-                                fontSize: '0.95rem',
+                                fontSize: '0.94rem',
                                 fontWeight: 800,
                                 letterSpacing: '-0.01em',
                                 fontFamily: 'var(--font-outfit), sans-serif',
@@ -692,70 +671,105 @@ export default function PQRFloatingWidget() {
                             }}>
                                 Radicar PQR / Novedad
                             </h3>
-                            <span style={{
-                                fontSize: '0.62rem',
-                                fontWeight: 800,
-                                padding: '2px 7px',
-                                borderRadius: '999px',
-                                backgroundColor: scopeMode === 'client' ? 'rgba(16, 185, 129, 0.18)' : 'rgba(56, 189, 248, 0.18)',
-                                color: scopeMode === 'client' ? '#6EE7B7' : '#7DD3FC',
-                                border: scopeMode === 'client' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(56, 189, 248, 0.3)'
-                            }}>
-                                {scopeMode === 'client' ? 'COMERCIAL' : 'PLANTA & RRHH'}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '0.69rem', color: '#94A3B8' }}>
+                                <UserCheck size={12} color="#34D399" />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}>
+                                    Radica: <strong style={{ color: '#E2E8F0' }}>{selectedCollaborator?.contact_name || 'Mesa Operativa'}</strong>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setChangingReporter(!changingReporter)}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: '#38BDF8',
+                                        fontSize: '0.67rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        textDecoration: 'underline'
+                                    }}
+                                >
+                                    {changingReporter ? 'Cerrar' : 'Cambiar'}
+                                </button>
+                            </div>
                         </div>
-                        <p style={{ margin: '2px 0 0 0', fontSize: '0.71rem', color: '#94A3B8', fontWeight: 500 }}>
-                            {scopeMode === 'client'
-                                ? 'Reclamación de cliente vinculada a sucursal y pedido'
-                                : 'Reporte interno de operación, convivencia o equipos'}
-                        </p>
                     </div>
+
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen(false)}
+                        style={{
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '8px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            color: '#CBD5E1',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        title="Cerrar (Esc)"
+                    >
+                        <X size={15} />
+                    </button>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    style={{
-                        width: '30px',
-                        height: '30px',
-                        borderRadius: '8px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        color: '#CBD5E1',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.15s ease'
-                    }}
-                    title="Cerrar (Esc)"
-                >
-                    <X size={16} />
-                </button>
+
+                {changingReporter && (
+                    <div style={{ marginTop: '8px' }}>
+                        <select
+                            value={selectedCollaborator?.id || ''}
+                            onChange={(e) => {
+                                const found = collaborators.find(c => c.id === e.target.value);
+                                if (found) setSelectedCollaborator(found);
+                                setChangingReporter(false);
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '6px 8px',
+                                borderRadius: '7px',
+                                border: '1px solid #334155',
+                                fontSize: '0.75rem',
+                                backgroundColor: '#1E293B',
+                                color: '#FFFFFF',
+                                fontWeight: 600,
+                                outline: 'none'
+                            }}
+                        >
+                            <option value="" disabled>Selecciona tu nombre...</option>
+                            {collaborators.map(c => (
+                                <option key={c.id} value={c.id}>
+                                    {c.contact_name} — {c.role}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
             </div>
 
-            {/* 2. BODY CONTENT */}
+            {/* 2. BODY CONTENT (Raptor 3: 4 Clean Steps, Zero Bloat) */}
             {submitted ? (
-                <div style={{ padding: '44px 24px', textAlign: 'center', backgroundColor: '#FFFFFF' }}>
+                <div style={{ padding: '40px 24px', textAlign: 'center', backgroundColor: '#FFFFFF' }}>
                     <div style={{
-                        width: '56px',
-                        height: '56px',
-                        borderRadius: '16px',
+                        width: '52px',
+                        height: '52px',
+                        borderRadius: '14px',
                         backgroundColor: '#ECFDF5',
                         border: '1px solid #A7F3D0',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        margin: '0 auto 14px auto'
+                        margin: '0 auto 12px auto'
                     }}>
-                        <CheckCircle2 size={30} color="#0D7A57" />
+                        <CheckCircle2 size={28} color="#0D7A57" />
                     </div>
-                    <h4 style={{ fontSize: '1.08rem', fontWeight: 800, color: '#0F172A', margin: '0 0 6px 0', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                    <h4 style={{ fontSize: '1.02rem', fontWeight: 800, color: '#0F172A', margin: '0 0 6px 0', fontFamily: 'var(--font-outfit), sans-serif' }}>
                         {scopeMode === 'client' ? 'PQR Comercial Radicada' : 'Novedad Interna Registrada'}
                     </h4>
-                    <p style={{ fontSize: '0.82rem', color: '#64748B', margin: 0, lineHeight: 1.45 }}>
-                        {scopeMode === 'client'
-                            ? 'El caso fue vinculado a la sucursal operativa y está disponible en la consola de Gestión de Calidad.'
-                            : 'La incidencia interna quedó clasificada en la consola de Calidad sin afectar el FTR comercial de clientes.'}
+                    <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0, lineHeight: 1.45 }}>
+                        Disponible de inmediato en la consola de Gestión de Calidad.
                     </p>
                 </div>
             ) : (
@@ -770,200 +784,95 @@ export default function PQRFloatingWidget() {
                         backgroundColor: '#FFFFFF'
                     }}
                 >
-                    {/* A. DUAL-SCOPE SEGMENTED SWITCHER */}
-                    <div>
-                        <label style={labelStyle}>1. Ámbito de la Novedad</label>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '4px',
-                            backgroundColor: '#F1F5F9',
-                            padding: '4px',
-                            borderRadius: '11px',
-                            border: '1px solid #CBD5E1'
-                        }}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setScopeMode('client');
-                                    setErrorMsg(null);
-                                }}
-                                style={{
-                                    padding: '8px 10px',
-                                    borderRadius: '8px',
-                                    border: scopeMode === 'client' ? '1px solid #CBD5E1' : '1px solid transparent',
-                                    backgroundColor: scopeMode === 'client' ? '#FFFFFF' : 'transparent',
-                                    color: scopeMode === 'client' ? '#0F172A' : '#64748B',
-                                    fontWeight: scopeMode === 'client' ? 800 : 600,
-                                    fontSize: '0.76rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '6px',
-                                    boxShadow: scopeMode === 'client' ? '0 1px 3px rgba(15, 23, 42, 0.08)' : 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <Building2 size={14} color={scopeMode === 'client' ? '#0D7A57' : '#64748B'} />
-                                <span>Cliente / Pedido</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setScopeMode('internal');
-                                    setErrorMsg(null);
-                                    if (!subject && !selectedPresetId) {
-                                        handleSelectSubscope(internalSubscope);
-                                    }
-                                }}
-                                style={{
-                                    padding: '8px 10px',
-                                    borderRadius: '8px',
-                                    border: scopeMode === 'internal' ? '1px solid #CBD5E1' : '1px solid transparent',
-                                    backgroundColor: scopeMode === 'internal' ? '#FFFFFF' : 'transparent',
-                                    color: scopeMode === 'internal' ? '#0F172A' : '#64748B',
-                                    fontWeight: scopeMode === 'internal' ? 800 : 600,
-                                    fontSize: '0.76rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '6px',
-                                    boxShadow: scopeMode === 'internal' ? '0 1px 3px rgba(15, 23, 42, 0.08)' : 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <Settings size={14} color={scopeMode === 'internal' ? '#0284C7' : '#64748B'} />
-                                <span>Interna / Planta & RRHH</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* B. REPORTER BAR (Compact Swiss Slate Card) */}
+                    {/* STEP 1: DUAL-SCOPE SWITCHER */}
                     <div style={{
-                        backgroundColor: '#F8FAFC',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '10px',
-                        padding: '8px 11px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px'
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '4px',
+                        backgroundColor: '#F1F5F9',
+                        padding: '4px',
+                        borderRadius: '11px',
+                        border: '1px solid #CBD5E1'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                                <div style={{
-                                    width: '26px',
-                                    height: '26px',
-                                    borderRadius: '7px',
-                                    backgroundColor: '#EAEFEA',
-                                    border: '1px solid #C4D7C4',
-                                    color: '#0D7A57',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexShrink: 0
-                                }}>
-                                    <UserCheck size={14} />
-                                </div>
-                                <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                        Reportado por
-                                    </div>
-                                    <div style={{ fontSize: '0.77rem', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {selectedCollaborator ? `${selectedCollaborator.contact_name} • ${selectedCollaborator.role}` : 'Mesa Operativa FruFresco'}
-                                    </div>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setChangingReporter(!changingReporter)}
-                                style={{
-                                    background: '#FFFFFF',
-                                    border: '1px solid #CBD5E1',
-                                    borderRadius: '6px',
-                                    padding: '3px 8px',
-                                    fontSize: '0.66rem',
-                                    fontWeight: 700,
-                                    color: '#334155',
-                                    cursor: 'pointer',
-                                    flexShrink: 0
-                                }}
-                            >
-                                {changingReporter ? 'Listo' : 'Cambiar'}
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => handleSwitchScope('client')}
+                            style={{
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                border: scopeMode === 'client' ? '1px solid #CBD5E1' : '1px solid transparent',
+                                backgroundColor: scopeMode === 'client' ? '#FFFFFF' : 'transparent',
+                                color: scopeMode === 'client' ? '#0F172A' : '#64748B',
+                                fontWeight: scopeMode === 'client' ? 800 : 600,
+                                fontSize: '0.76rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                boxShadow: scopeMode === 'client' ? '0 1px 3px rgba(15, 23, 42, 0.08)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            <Building2 size={14} color={scopeMode === 'client' ? '#0D7A57' : '#64748B'} />
+                            <span>Cliente / Pedido</span>
+                        </button>
 
-                        {changingReporter && (
-                            <select
-                                value={selectedCollaborator?.id || ''}
-                                onChange={(e) => {
-                                    const found = collaborators.find(c => c.id === e.target.value);
-                                    if (found) setSelectedCollaborator(found);
-                                    setChangingReporter(false);
-                                }}
-                                style={{
-                                    width: '100%',
-                                    padding: '6px 8px',
-                                    borderRadius: '7px',
-                                    border: '1px solid #CBD5E1',
-                                    fontSize: '0.76rem',
-                                    backgroundColor: '#FFFFFF',
-                                    color: '#0F172A',
-                                    fontWeight: 600,
-                                    outline: 'none'
-                                }}
-                            >
-                                <option value="" disabled>Selecciona tu nombre...</option>
-                                {collaborators.map(c => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.contact_name} — {c.role}
-                                    </option>
-                                ))}
-                            </select>
-                        )}
+                        <button
+                            type="button"
+                            onClick={() => handleSwitchScope('internal')}
+                            style={{
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                border: scopeMode === 'internal' ? '1px solid #CBD5E1' : '1px solid transparent',
+                                backgroundColor: scopeMode === 'internal' ? '#FFFFFF' : 'transparent',
+                                color: scopeMode === 'internal' ? '#0F172A' : '#64748B',
+                                fontWeight: scopeMode === 'internal' ? 800 : 600,
+                                fontSize: '0.76rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                boxShadow: scopeMode === 'internal' ? '0 1px 3px rgba(15, 23, 42, 0.08)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            <Settings size={14} color={scopeMode === 'internal' ? '#0284C7' : '#64748B'} />
+                            <span>Interna / Planta & RRHH</span>
+                        </button>
                     </div>
 
-                    {/* C. SCOPE-SPECIFIC BLOCK */}
+                    {/* STEP 2: TARGET (BRANCH + ORDER vs AREA + PERSON) */}
                     {scopeMode === 'client' ? (
-                        /* ================= ÁMBITO EXTERNO: CLIENTE & PEDIDO ================= */
                         <>
                             <div ref={dropdownRef} style={{ position: 'relative' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-                                    <label style={{ ...labelStyle, marginBottom: 0 }}>2. Sucursal / Cliente Operativo *</label>
-                                    <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '4px', border: '1px solid #A7F3D0' }}>
-                                        Poka-Yoke Sede Activo
-                                    </span>
-                                </div>
+                                <label style={labelStyle}>Sucursal / Cliente *</label>
 
                                 {selectedClient ? (
                                     <div style={{
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        padding: '9px 12px',
+                                        padding: '8px 11px',
                                         backgroundColor: '#F0FDF4',
                                         border: '1px solid #86EFAC',
                                         borderRadius: '10px',
-                                        fontSize: '0.82rem',
+                                        fontSize: '0.8rem',
                                         color: '#065F46'
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                                            <Building2 size={16} color="#0D7A57" style={{ flexShrink: 0 }} />
-                                            <div style={{ truncate: 'true', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as any}>
+                                            <Building2 size={15} color="#0D7A57" style={{ flexShrink: 0 }} />
+                                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <strong style={{ color: '#0F172A' }}>{selectedClient.company_name || selectedClient.contact_name}</strong>
                                                     {selectedClient.parent_id && (
-                                                        <span style={{ fontSize: '0.6rem', fontWeight: 800, backgroundColor: '#DCFCE7', color: '#166534', padding: '1px 5px', borderRadius: '4px' }}>
+                                                        <span style={{ fontSize: '0.58rem', fontWeight: 800, backgroundColor: '#DCFCE7', color: '#166534', padding: '1px 5px', borderRadius: '4px' }}>
                                                             SUCURSAL
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div style={{ fontSize: '0.7rem', color: '#047857', marginTop: '1px' }}>
-                                                    {selectedClient.parent_id && parentMap.get(selectedClient.parent_id)
-                                                        ? `Matriz: ${parentMap.get(selectedClient.parent_id)?.company_name} • `
-                                                        : ''}
+                                                <div style={{ fontSize: '0.68rem', color: '#047857' }}>
                                                     {selectedClient.address || (selectedClient.nit ? `NIT: ${selectedClient.nit}` : 'Sede Operativa')}
                                                 </div>
                                             </div>
@@ -999,7 +908,7 @@ export default function PQRFloatingWidget() {
                                             <Search size={15} style={{ position: 'absolute', left: '11px', top: '10px', color: '#64748B' }} />
                                             <input
                                                 type="text"
-                                                placeholder="Buscar sucursal, matriz, NIT o dirección..."
+                                                placeholder="Buscar sucursal, cliente, NIT o dirección..."
                                                 value={searchQuery}
                                                 onChange={(e) => {
                                                     setSearchQuery(e.target.value);
@@ -1050,7 +959,7 @@ export default function PQRFloatingWidget() {
                                                 border: '1px solid #CBD5E1',
                                                 borderRadius: '10px',
                                                 marginTop: '4px',
-                                                maxHeight: '210px',
+                                                maxHeight: '200px',
                                                 overflowY: 'auto',
                                                 zIndex: 30,
                                                 boxShadow: '0 12px 24px -4px rgba(15, 23, 42, 0.16)'
@@ -1073,7 +982,7 @@ export default function PQRFloatingWidget() {
                                                                     padding: '8px 12px',
                                                                     cursor: 'pointer',
                                                                     borderBottom: '1px solid #F1F5F9',
-                                                                    fontSize: '0.79rem',
+                                                                    fontSize: '0.78rem',
                                                                     backgroundColor: isHighlighted ? '#F1F5F9' : '#FFFFFF'
                                                                 }}
                                                             >
@@ -1087,10 +996,9 @@ export default function PQRFloatingWidget() {
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <div style={{ fontSize: '0.69rem', color: '#64748B', display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '2px' }}>
+                                                                <div style={{ fontSize: '0.68rem', color: '#64748B', display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '2px' }}>
                                                                     {parent && <span style={{ color: '#0D7A57', fontWeight: 700 }}>Matriz: {parent.company_name}</span>}
                                                                     {client.address && <span>• {client.address}</span>}
-                                                                    {client.nit && <span>• NIT: {client.nit}</span>}
                                                                 </div>
                                                             </div>
                                                         );
@@ -1106,33 +1014,27 @@ export default function PQRFloatingWidget() {
                                 )}
                             </div>
 
-                            {/* Order Selector when Branch is selected */}
                             {selectedClient && (
-                                <div style={{
-                                    backgroundColor: '#F8FAFC',
-                                    border: '1px solid #E2E8F0',
-                                    borderRadius: '10px',
-                                    padding: '8px 10px'
-                                }}>
-                                    <label style={{ ...labelStyle, marginBottom: '4px' }}>
-                                        Pedido Asociado de la Sede {loadingOrders ? '(Cargando...)' : ''}
+                                <div>
+                                    <label style={labelStyle}>
+                                        Pedido Asociado {loadingOrders ? '(Cargando...)' : ''}
                                     </label>
                                     <select
                                         value={selectedOrderId}
                                         onChange={(e) => setSelectedOrderId(e.target.value)}
                                         style={{
                                             width: '100%',
-                                            padding: '7px 9px',
-                                            borderRadius: '8px',
+                                            padding: '7px 10px',
+                                            borderRadius: '9px',
                                             border: '1px solid #CBD5E1',
-                                            fontSize: '0.77rem',
-                                            backgroundColor: '#FFFFFF',
+                                            fontSize: '0.78rem',
+                                            backgroundColor: '#F8FAFC',
                                             color: '#0F172A',
                                             fontWeight: 700,
                                             outline: 'none'
                                         }}
                                     >
-                                        <option value="">-- Sin pedido específico / Consulta general --</option>
+                                        <option value="">-- Sin pedido específico --</option>
                                         {branchOrders.map(ord => (
                                             <option key={ord.id} value={ord.id}>
                                                 Pedido #{ord.sequence_id} — {ord.delivery_date || new Date(ord.created_at).toLocaleDateString('es-CO')} (${Number(ord.total || 0).toLocaleString('es-CO')})
@@ -1141,407 +1043,208 @@ export default function PQRFloatingWidget() {
                                     </select>
                                 </div>
                             )}
-
-                            {/* Categoría Comercial Pills */}
-                            <div>
-                                <label style={labelStyle}>3. Categoría Comercial</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '5px' }}>
-                                    {[
-                                        { id: 'producto', label: 'Producto' },
-                                        { id: 'entrega', label: 'Entrega' },
-                                        { id: 'facturacion', label: 'Factura' },
-                                        { id: 'otro', label: 'Otro' }
-                                    ].map(cat => {
-                                        const active = category === cat.id;
-                                        return (
-                                            <button
-                                                key={cat.id}
-                                                type="button"
-                                                onClick={() => setCategory(cat.id as any)}
-                                                style={{
-                                                    padding: '6px 4px',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.72rem',
-                                                    fontWeight: active ? 800 : 600,
-                                                    backgroundColor: active ? '#0F172A' : '#F8FAFC',
-                                                    color: active ? '#FFFFFF' : '#475569',
-                                                    border: active ? '1px solid #0F172A' : '1px solid #CBD5E1',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                {cat.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
                         </>
                     ) : (
-                        /* ================= ÁMBITO INTERNO: PLANTA, PROCESO & RRHH ================= */
-                        <>
-                            {/* 1. Sub-Ámbito Interno */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                             <div>
-                                <label style={labelStyle}>2. Naturaleza de la Falta o Novedad Interna</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                                    {[
-                                        { id: 'rrhh_convivencia', label: 'Convivencia & RRHH', sub: 'Horario / Respeto', icon: Users, color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
-                                        { id: 'proceso_planta', label: 'Proceso & Planta', sub: 'Arranque / Salida', icon: Clock, color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD' },
-                                        { id: 'equipos_sst', label: 'Equipos & 5S', sub: 'Básculas / Cava', icon: Wrench, color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' }
-                                    ].map(item => {
-                                        const IconComp = item.icon;
-                                        const active = internalSubscope === item.id;
-                                        return (
-                                            <button
-                                                key={item.id}
-                                                type="button"
-                                                onClick={() => handleSelectSubscope(item.id as InternalSubscope)}
-                                                style={{
-                                                    padding: '8px 6px',
-                                                    borderRadius: '10px',
-                                                    backgroundColor: active ? item.bg : '#F8FAFC',
-                                                    border: active ? `1.5px solid ${item.color}` : '1px solid #E2E8F0',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    gap: '3px',
-                                                    textAlign: 'center',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                <IconComp size={15} color={active ? item.color : '#64748B'} />
-                                                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: active ? '#0F172A' : '#475569', lineHeight: 1.15 }}>
-                                                    {item.label}
-                                                </span>
-                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 600 }}>
-                                                    {item.sub}
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                <label style={labelStyle}>Área Operativa *</label>
+                                <select
+                                    value={internalArea}
+                                    onChange={(e) => setInternalArea(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 9px',
+                                        borderRadius: '9px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.76rem',
+                                        fontWeight: 700,
+                                        color: '#0F172A',
+                                        backgroundColor: '#F8FAFC',
+                                        outline: 'none'
+                                    }}
+                                >
+                                    {INTERNAL_AREAS.map(area => (
+                                        <option key={area} value={area}>{area}</option>
+                                    ))}
+                                </select>
                             </div>
 
-                            {/* 2. Quick Preset Chips (1-Click) */}
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-                                    <label style={{ ...labelStyle, marginBottom: 0 }}>Motivos Frecuentes (1 Clic)</label>
-                                    <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 600 }}>Autocompleta RCA</span>
-                                </div>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                                    {activePresets.map(preset => {
-                                        const isSelected = selectedPresetId === preset.id;
-                                        return (
-                                            <button
-                                                key={preset.id}
-                                                type="button"
-                                                onClick={() => handleApplyPreset(preset)}
-                                                style={{
-                                                    padding: '5px 9px',
-                                                    borderRadius: '999px',
-                                                    fontSize: '0.71rem',
-                                                    fontWeight: isSelected ? 800 : 600,
-                                                    backgroundColor: isSelected ? '#0F172A' : '#F1F5F9',
-                                                    color: isSelected ? '#FFFFFF' : '#334155',
-                                                    border: isSelected ? '1px solid #0F172A' : '1px solid #CBD5E1',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                <Sparkles size={11} color={isSelected ? '#38BDF8' : '#64748B'} />
-                                                <span>{preset.label}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* 3. Área Operativa + Colaborador Involucrado (2 Columns) */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                <div>
-                                    <label style={labelStyle}>Área / Proceso *</label>
-                                    <select
-                                        value={internalArea}
-                                        onChange={(e) => setInternalArea(e.target.value)}
-                                        style={{
-                                            width: '100%',
-                                            padding: '7px 8px',
-                                            borderRadius: '8px',
-                                            border: '1px solid #CBD5E1',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 700,
-                                            color: '#0F172A',
-                                            backgroundColor: '#F8FAFC',
-                                            outline: 'none'
-                                        }}
-                                    >
-                                        {INTERNAL_AREAS.map(area => (
-                                            <option key={area} value={area}>{area}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div ref={involvedCollabRef} style={{ position: 'relative' }}>
-                                    <label style={labelStyle}>Persona Involucrada</label>
-                                    {involvedCollaborator ? (
-                                        <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            padding: '6px 8px',
-                                            borderRadius: '8px',
-                                            backgroundColor: '#F0F9FF',
-                                            border: '1px solid #7DD3FC',
-                                            fontSize: '0.74rem',
-                                            fontWeight: 700,
-                                            color: '#0C4A6E'
-                                        }}>
-                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {involvedCollaborator.contact_name}
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setInvolvedCollaborator(null);
-                                                    setInvolvedCollabQuery('');
-                                                }}
-                                                style={{
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    color: '#0284C7',
-                                                    display: 'flex',
-                                                    padding: 0
-                                                }}
-                                            >
-                                                <X size={13} />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <input
-                                                type="text"
-                                                placeholder="Opcional (o proceso gral)..."
-                                                value={involvedCollabQuery}
-                                                onChange={(e) => {
-                                                    setInvolvedCollabQuery(e.target.value);
-                                                    setShowInvolvedCollabDropdown(true);
-                                                }}
-                                                onFocus={() => setShowInvolvedCollabDropdown(true)}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '7px 8px',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid #CBD5E1',
-                                                    fontSize: '0.75rem',
-                                                    color: '#0F172A',
-                                                    backgroundColor: '#F8FAFC',
-                                                    outline: 'none'
-                                                }}
-                                            />
-                                            {showInvolvedCollabDropdown && (
-                                                <div style={{
-                                                    position: 'absolute',
-                                                    top: '100%',
-                                                    left: 0,
-                                                    right: 0,
-                                                    backgroundColor: '#FFFFFF',
-                                                    border: '1px solid #CBD5E1',
-                                                    borderRadius: '8px',
-                                                    marginTop: '3px',
-                                                    maxHeight: '150px',
-                                                    overflowY: 'auto',
-                                                    zIndex: 35,
-                                                    boxShadow: '0 10px 20px rgba(15, 23, 42, 0.15)'
-                                                }}>
+                            <div ref={involvedCollabRef} style={{ position: 'relative' }}>
+                                <label style={labelStyle}>Persona (Opcional)</label>
+                                {involvedCollaborator ? (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '7px 9px',
+                                        borderRadius: '9px',
+                                        backgroundColor: '#F0F9FF',
+                                        border: '1px solid #7DD3FC',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        color: '#0C4A6E'
+                                    }}>
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {involvedCollaborator.contact_name}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setInvolvedCollaborator(null);
+                                                setInvolvedCollabQuery('');
+                                            }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0284C7', display: 'flex', padding: 0 }}
+                                        >
+                                            <X size={13} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <input
+                                            type="text"
+                                            placeholder="Proceso general o buscar..."
+                                            value={involvedCollabQuery}
+                                            onChange={(e) => {
+                                                setInvolvedCollabQuery(e.target.value);
+                                                setShowInvolvedCollabDropdown(true);
+                                            }}
+                                            onFocus={() => setShowInvolvedCollabDropdown(true)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px 9px',
+                                                borderRadius: '9px',
+                                                border: '1px solid #CBD5E1',
+                                                fontSize: '0.76rem',
+                                                color: '#0F172A',
+                                                backgroundColor: '#F8FAFC',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                        {showInvolvedCollabDropdown && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '100%',
+                                                left: 0,
+                                                right: 0,
+                                                backgroundColor: '#FFFFFF',
+                                                border: '1px solid #CBD5E1',
+                                                borderRadius: '9px',
+                                                marginTop: '3px',
+                                                maxHeight: '150px',
+                                                overflowY: 'auto',
+                                                zIndex: 35,
+                                                boxShadow: '0 10px 20px rgba(15, 23, 42, 0.15)'
+                                            }}>
+                                                <div
+                                                    onClick={() => {
+                                                        setInvolvedCollaborator(null);
+                                                        setInvolvedCollabQuery('');
+                                                        setShowInvolvedCollabDropdown(false);
+                                                    }}
+                                                    style={{
+                                                        padding: '7px 10px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: 700,
+                                                        color: '#64748B',
+                                                        borderBottom: '1px solid #F1F5F9',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    N/A — Proceso General de Planta
+                                                </div>
+                                                {filteredInvolvedCollabs.map(col => (
                                                     <div
+                                                        key={col.id}
                                                         onClick={() => {
-                                                            setInvolvedCollaborator(null);
-                                                            setInvolvedCollabQuery('');
+                                                            setInvolvedCollaborator(col);
                                                             setShowInvolvedCollabDropdown(false);
                                                         }}
                                                         style={{
                                                             padding: '6px 10px',
-                                                            fontSize: '0.72rem',
-                                                            fontWeight: 700,
-                                                            color: '#64748B',
-                                                            borderBottom: '1px solid #F1F5F9',
+                                                            fontSize: '0.74rem',
+                                                            color: '#0F172A',
+                                                            borderBottom: '1px solid #F8FAFC',
                                                             cursor: 'pointer'
                                                         }}
+                                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
+                                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
                                                     >
-                                                        N/A — Proceso General de Planta
+                                                        <div style={{ fontWeight: 700 }}>{col.contact_name}</div>
+                                                        <div style={{ fontSize: '0.65rem', color: '#64748B' }}>{col.role}</div>
                                                     </div>
-                                                    {filteredInvolvedCollabs.map(col => (
-                                                        <div
-                                                            key={col.id}
-                                                            onClick={() => {
-                                                                setInvolvedCollaborator(col);
-                                                                setShowInvolvedCollabDropdown(false);
-                                                            }}
-                                                            style={{
-                                                                padding: '6px 10px',
-                                                                fontSize: '0.74rem',
-                                                                color: '#0F172A',
-                                                                borderBottom: '1px solid #F8FAFC',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
-                                                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
-                                                        >
-                                                            <div style={{ fontWeight: 700 }}>{col.contact_name}</div>
-                                                            <div style={{ fontSize: '0.65rem', color: '#64748B' }}>{col.role}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
-                        </>
+                        </div>
                     )}
 
-                    {/* D. TIPO & PRIORIDAD (Modern Segmented Pills) */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                            <label style={labelStyle}>Tipo de Registro</label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                                {[
-                                    { id: 'reclamo', label: 'Reclamo' },
-                                    { id: 'queja', label: 'Queja / Falta' },
-                                    { id: 'peticion', label: 'Novedad' },
-                                    { id: 'sugerencia', label: 'Kaizen' }
-                                ].map(t => {
-                                    const active = type === t.id;
-                                    return (
-                                        <button
-                                            key={t.id}
-                                            type="button"
-                                            onClick={() => setType(t.id as any)}
-                                            style={{
-                                                padding: '5px 4px',
-                                                borderRadius: '7px',
-                                                fontSize: '0.69rem',
-                                                fontWeight: active ? 800 : 600,
-                                                backgroundColor: active ? '#0F172A' : '#F8FAFC',
-                                                color: active ? '#FFFFFF' : '#475569',
-                                                border: active ? '1px solid #0F172A' : '1px solid #CBD5E1',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            {t.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <div>
-                            <label style={labelStyle}>Nivel de Prioridad</label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                                {[
-                                    { id: 'low', label: 'Baja', dot: '#64748B' },
-                                    { id: 'normal', label: 'Normal', dot: '#0284C7' },
-                                    { id: 'high', label: 'Alta', dot: '#D97706' },
-                                    { id: 'urgent', label: 'Urgente', dot: '#DC2626' }
-                                ].map(p => {
-                                    const active = priority === p.id;
-                                    return (
-                                        <button
-                                            key={p.id}
-                                            type="button"
-                                            onClick={() => setPriority(p.id as any)}
-                                            style={{
-                                                padding: '5px 6px',
-                                                borderRadius: '7px',
-                                                fontSize: '0.69rem',
-                                                fontWeight: active ? 800 : 600,
-                                                backgroundColor: active ? '#0F172A' : '#F8FAFC',
-                                                color: active ? '#FFFFFF' : '#475569',
-                                                border: active ? '1px solid #0F172A' : '1px solid #CBD5E1',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '5px'
-                                            }}
-                                        >
-                                            <span style={{
-                                                width: '6px',
-                                                height: '6px',
-                                                borderRadius: '50%',
-                                                backgroundColor: active ? '#34D399' : p.dot
-                                            }} />
-                                            <span>{p.label}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* E. ASUNTO & DESCRIPCIÓN */}
+                    {/* STEP 3: UNIFIED MOTIVE CHIPS + SINGLE DESCRIPTION FIELD */}
                     <div>
-                        <label style={labelStyle}>Asunto / Resumen Ejecutivo *</label>
-                        <input
-                            type="text"
+                        <label style={labelStyle}>¿Qué sucedió? *</label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
+                            {visibleChips.map(chip => {
+                                const IconComp = chip.icon;
+                                const active = selectedChipId === chip.id;
+                                return (
+                                    <button
+                                        key={chip.id}
+                                        type="button"
+                                        onClick={() => handleSelectChip(chip)}
+                                        style={{
+                                            padding: '5px 9px',
+                                            borderRadius: '8px',
+                                            fontSize: '0.71rem',
+                                            fontWeight: active ? 800 : 600,
+                                            backgroundColor: active ? '#0F172A' : '#F8FAFC',
+                                            color: active ? '#FFFFFF' : '#334155',
+                                            border: active ? '1px solid #0F172A' : '1px solid #CBD5E1',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        <IconComp size={12} color={active ? '#34D399' : '#64748B'} />
+                                        <span>{chip.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <textarea
                             required
+                            rows={3}
                             placeholder={
                                 scopeMode === 'client'
-                                    ? 'Ej: Fresa golpeada en entrega o faltante de 2 Kg...'
-                                    : 'Ej: Llegada tarde a turno / Lanzamiento tardío de operación...'
+                                    ? 'Ej: Llegaron 2 Kg de fresa golpeada o faltó 1 caja de aguacate...'
+                                    : 'Ej: Se lanzó la operación a las 5:40 AM retrasando la salida de rutas...'
                             }
-                            value={subject}
+                            value={description}
                             onChange={(e) => {
-                                setSubject(e.target.value);
+                                setDescription(e.target.value);
                                 setErrorMsg(null);
                             }}
                             style={{
                                 width: '100%',
-                                padding: '8px 11px',
-                                borderRadius: '9px',
+                                padding: '9px 11px',
+                                borderRadius: '10px',
                                 border: '1px solid #CBD5E1',
                                 fontSize: '0.8rem',
-                                fontWeight: 600,
-                                color: '#0F172A',
-                                backgroundColor: '#F8FAFC',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
-
-                    <div>
-                        <label style={labelStyle}>Descripción Detallada de los Hechos *</label>
-                        <textarea
-                            required
-                            rows={2}
-                            placeholder={
-                                scopeMode === 'client'
-                                    ? 'Describe el producto afectado, cantidad y observación del cliente...'
-                                    : 'Describe qué ocurrió, hora del suceso y cómo impactó el turno o la salida...'
-                            }
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '8px 11px',
-                                borderRadius: '9px',
-                                border: '1px solid #CBD5E1',
-                                fontSize: '0.79rem',
                                 color: '#0F172A',
                                 backgroundColor: '#F8FAFC',
                                 resize: 'vertical',
                                 fontFamily: 'inherit',
+                                lineHeight: 1.45,
                                 outline: 'none'
                             }}
                         />
                     </div>
 
-                    {/* F. COMPACT EVIDENCE DROPZONE */}
+                    {/* STEP 4: COMPACT EVIDENCE DROPZONE + SUBMIT */}
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1558,12 +1261,12 @@ export default function PQRFloatingWidget() {
                                 <img
                                     src={previewUrl}
                                     alt="Preview"
-                                    style={{ width: '34px', height: '34px', borderRadius: '7px', objectFit: 'cover', border: '1px solid #CBD5E1', flexShrink: 0 }}
+                                    style={{ width: '32px', height: '32px', borderRadius: '7px', objectFit: 'cover', border: '1px solid #CBD5E1', flexShrink: 0 }}
                                 />
                             ) : (
                                 <div style={{
-                                    width: '34px',
-                                    height: '34px',
+                                    width: '32px',
+                                    height: '32px',
                                     borderRadius: '8px',
                                     backgroundColor: '#FFFFFF',
                                     border: '1px solid #E2E8F0',
@@ -1572,15 +1275,15 @@ export default function PQRFloatingWidget() {
                                     justifyContent: 'center',
                                     flexShrink: 0
                                 }}>
-                                    <UploadCloud size={16} color="#64748B" />
+                                    <UploadCloud size={15} color="#64748B" />
                                 </div>
                             )}
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {files && files.length > 0 ? `${files.length} evidencia(s) adjunta(s)` : 'Evidencia Fotográfica (Opcional)'}
+                                    {files && files.length > 0 ? `${files.length} foto(s) adjunta(s)` : 'Adjuntar Foto (Opcional)'}
                                 </div>
-                                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>
-                                    {files && files.length > 0 ? 'Clic para reemplazar fotos' : 'Foto de producto, minuta, reloj o equipo'}
+                                <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
+                                    {files && files.length > 0 ? 'Clic para cambiar' : 'Evidencia de producto, turno o equipo'}
                                 </div>
                             </div>
                         </div>
@@ -1619,7 +1322,6 @@ export default function PQRFloatingWidget() {
                         />
                     </div>
 
-                    {/* ERROR BANNER (Zero-Alert Dogma) */}
                     {errorMsg && (
                         <div style={{
                             padding: '8px 11px',
@@ -1634,7 +1336,6 @@ export default function PQRFloatingWidget() {
                         </div>
                     )}
 
-                    {/* G. SUBMIT BUTTON */}
                     <button
                         type="submit"
                         disabled={loading || (scopeMode === 'client' && !selectedClient)}
@@ -1658,10 +1359,10 @@ export default function PQRFloatingWidget() {
                         {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} color="#34D399" />}
                         <span>
                             {loading
-                                ? 'Radicando en Consola...'
+                                ? 'Radicando...'
                                 : scopeMode === 'client'
                                     ? 'Radicar PQR Comercial'
-                                    : 'Registrar Novedad Interna de Planta'}
+                                    : 'Registrar Novedad Interna'}
                         </span>
                     </button>
                 </form>
@@ -1669,7 +1370,7 @@ export default function PQRFloatingWidget() {
 
             <style jsx>{`
                 @keyframes slideUp {
-                    from { transform: translateY(16px); opacity: 0; }
+                    from { transform: translateY(14px); opacity: 0; }
                     to { transform: translateY(0); opacity: 1; }
                 }
             `}</style>
