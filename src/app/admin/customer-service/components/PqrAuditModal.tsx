@@ -22,7 +22,8 @@ import {
     DefectCategoryL1,
     ImputedEntity,
     ItemImputation,
-    cleanHumanResolutionNotes
+    cleanHumanResolutionNotes,
+    stripRcaMetadataTags
 } from '@/lib/rcaTaxonomy';
 import { useAuth } from '@/lib/authContext';
 import { 
@@ -504,6 +505,9 @@ export default function PqrAuditModal({
             setResolutionOption('opt4');
             setSelectedWaTemplate('credit_note');
         } else if (rawNotes.includes('Opción 1') || rawNotes.includes('Cerrar Conforme') || rawNotes.includes('Cerrado conforme')) {
+            setResolutionOption('opt1');
+            setSelectedWaTemplate('closing');
+        } else if (getPqrAuthorInfo(pqr).isInternalCase) {
             setResolutionOption('opt1');
             setSelectedWaTemplate('closing');
         } else {
@@ -2616,7 +2620,7 @@ export default function PqrAuditModal({
                                     </div>
                                     <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0F172A' }}>{formatCleanPqrSubject(pqr.subject)}</div>
                                     <div style={{ fontSize: '0.74rem', color: '#334155', lineHeight: '1.5', whiteSpace: 'pre-line', backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                        {(pqr.description || 'Sin descripción ingresada.').replace(/\s*\[Radicado por[^\]]+\]/gi, '').trim()}
+                                        {stripRcaMetadataTags(pqr.description || 'Sin descripción ingresada.').replace(/\s*\[Radicado por[^\]]+\]/gi, '').replace(/\s*\[\u00c1MBITO:\s*INTERNO[^\]]+\]/gi, '').trim()}
                                     </div>
                                     {authorInfo.isColleagueLogged && (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: '#0D7A57', backgroundColor: '#EAEFEA', padding: '4px 8px', borderRadius: '6px', border: '1px solid #C4D7C4' }}>
@@ -2672,6 +2676,25 @@ export default function PqrAuditModal({
                                                 <span style={{ color: '#334155', fontWeight: '700' }}>
                                                     {assignedRouteDriver ? `${assignedRouteDriver.name}${assignedRouteDriver.plate ? ` (${assignedRouteDriver.plate})` : ''}` : 'No asignado'}
                                                 </span>
+                                            </div>
+                                        </div>
+                                    ) : authorInfo.isInternalCase ? (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', backgroundColor: '#F0F9FF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #BAE6FD', fontSize: '0.74rem' }}>
+                                            <div>
+                                                <span style={{ color: '#0369A1', fontSize: '0.64rem', fontWeight: 800, textTransform: 'uppercase', display: 'block' }}>Ámbito del Caso</span>
+                                                <strong style={{ color: '#0F172A', fontSize: '0.8rem' }}>Operación Interna / RRHH</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#0369A1', fontSize: '0.64rem', fontWeight: 800, textTransform: 'uppercase', display: 'block' }}>Área / Proceso</span>
+                                                <strong style={{ color: '#0284C7', fontSize: '0.8rem' }}>{authorInfo.internalArea || 'Planta General'}</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#0369A1', fontSize: '0.64rem', fontWeight: 800, textTransform: 'uppercase', display: 'block' }}>Sub-Ámbito</span>
+                                                <span style={{ color: '#334155', fontWeight: 700, fontSize: '0.72rem' }}>{authorInfo.internalSubscopeLabel || 'Gestión Interna'}</span>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#0369A1', fontSize: '0.64rem', fontWeight: 800, textTransform: 'uppercase', display: 'block' }}>Persona Involucrada</span>
+                                                <span style={{ color: '#0F172A', fontWeight: 800, fontSize: '0.72rem' }}>{authorInfo.internalCollaborator || 'Proceso / Turno General'}</span>
                                             </div>
                                         </div>
                                     ) : (
@@ -3324,6 +3347,43 @@ export default function PqrAuditModal({
                                                         })}
                                                     </div>
                                                 )}
+                                            </div>
+                                        </div>
+                                    ) : authorInfo.isInternalCase ? (
+                                        <div style={{ padding: '1.25rem 1.4rem', backgroundColor: '#F8FAFC', border: '1px solid #BAE6FD', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#E0F2FE', color: '#0284C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    <ShieldCheck size={18} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0F172A' }}>
+                                                        Expediente de Gestión Interna (Planta, Proceso & RRHH)
+                                                    </div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#0369A1', fontWeight: 600 }}>
+                                                        Exento de pedido comercial • No penaliza el indicador FTR de clientes
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ fontSize: '0.74rem', color: '#334155', lineHeight: 1.5, backgroundColor: '#FFFFFF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                Este reporte evalúa una desviación operativa interna (ej. llegada tarde a turno, convivencia laboral, lanzamiento tardío de operación o falla de equipos). No requiere declarar averías de fruta ni notas crédito comerciales.
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCurrentStep(3)}
+                                                    style={{
+                                                        padding: '8px 14px',
+                                                        backgroundColor: '#0F172A',
+                                                        color: '#FFFFFF',
+                                                        border: 'none',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.74rem',
+                                                        fontWeight: 800,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Ir a Causa Raíz (RCA) & Imputabilidad Nominal →
+                                                </button>
                                             </div>
                                         </div>
                                     ) : (

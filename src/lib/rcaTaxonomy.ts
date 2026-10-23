@@ -95,6 +95,29 @@ export const RCA_CATEGORIES_L1: DefectCategoryL1[] = [
             { code: 'rechazo_subjetivo', label: 'Rechazo por criterio subjetivo', typicalResponsible: 'cliente', description: 'Criterio estético personal que no viola la ficha técnica pactada.' }
         ]
     }
+,
+    {
+        code: 'talento_humano_disciplina',
+        label: '8. Convivencia, Disciplina & Talento Humano',
+        description: 'Novedades internas de horario, convivencia laboral, disciplina operativa o cumplimiento de normas BPM/SST.',
+        subtypes: [
+            { code: 'llegada_tarde_turno', label: 'Llegada tarde a turno / Incumplimiento de horario laboral', typicalResponsible: 'picking', description: 'Retraso en la hora de ingreso al turno programado de planta, bodega o ruta.' },
+            { code: 'falta_respeto_convivencia', label: 'Falta de respeto / Conflicto interpersonal o mal trato', typicalResponsible: 'bodega', description: 'Conducta inapropiada, agresión verbal o falta de respeto entre compañeros o hacia líderes.' },
+            { code: 'desacato_instruccion_operativa', label: 'Desacato de instrucción operativa o abandono de puesto', typicalResponsible: 'bodega', description: 'Omisión deliberada de directrices del supervisor o ausencia no autorizada del área.' },
+            { code: 'incumplimiento_epp_bpm', label: 'Incumplimiento de dotación, EPP o normas BPM/SST', typicalResponsible: 'bodega', description: 'Falta de uso de elementos de protección personal o protocolos de inocuidad en planta.' }
+        ]
+    },
+    {
+        code: 'proceso_operativo_interno',
+        label: '9. Proceso Interno & Sincronización Operativa',
+        description: 'Desviaciones de proceso, cuellos de botella en planta, atraso en arranque de operación o fallas de equipos.',
+        subtypes: [
+            { code: 'lanzamiento_tardio_operacion', label: 'Lanzamiento tardío de operación / Liberación demorada de órdenes', typicalResponsible: 'comercial', description: 'Liberación tardía del corte de pedidos hacia alistamiento, comprimiendo la ventana operativa.' },
+            { code: 'retraso_salida_flota_muelle', label: 'Atraso en cargue o salida de flota por cuello de botella en planta', typicalResponsible: 'bodega', description: 'Demora en el despacho de vehículos por congestión en picking, pesaje o muelle.' },
+            { code: 'demora_recepcion_abastecimiento', label: 'Entrada tardía de mercancía de plaza a muelle de recepción', typicalResponsible: 'proveedor', description: 'Retraso en el ingreso de insumos desde Corabastos que retrasa el inicio del alistamiento.' },
+            { code: 'falla_equipos_bascula_sistema', label: 'Falla de básculas, impresoras térmicas, cava o sistema', typicalResponsible: 'bodega', description: 'Indisponibilidad técnica de herramientas de pesaje, etiquetado, cuarto frío o red.' }
+        ]
+    }
 ];
 
 export interface ResponsibleParty {
@@ -514,7 +537,31 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
     let inferredSubtype = 'pendiente_dictamen';
     let inferredResponsible: any = 'no_definido';
 
-    if ( fullText.includes('magulla') || fullText.includes('golpe') || fullText.includes('aplastad') || fullText.includes('partid') || fullText.includes('volcad') || fullText.includes('reventad') ) {
+    if (fullText.includes('llegada tarde') || fullText.includes('llego tarde') || fullText.includes('lleg\u00f3 tarde') || fullText.includes('horario laboral') || fullText.includes('impuntual')) {
+        inferredCatL1 = 'talento_humano_disciplina';
+        inferredSubtype = 'llegada_tarde_turno';
+        inferredResponsible = 'picking';
+    } else if (fullText.includes('falta de respeto') || fullText.includes('groser') || fullText.includes('mal trato') || fullText.includes('convivencia') || fullText.includes('agresi') || fullText.includes('irrespeto')) {
+        inferredCatL1 = 'talento_humano_disciplina';
+        inferredSubtype = 'falta_respeto_convivencia';
+        inferredResponsible = 'bodega';
+    } else if (fullText.includes('desacato') || fullText.includes('abandono de puesto') || fullText.includes('dotaci\u00f3n') || fullText.includes('epp')) {
+        inferredCatL1 = 'talento_humano_disciplina';
+        inferredSubtype = 'desacato_instruccion_operativa';
+        inferredResponsible = 'bodega';
+    } else if (fullText.includes('lanzamiento tard') || fullText.includes('lanz\u00f3 demasiado tarde') || fullText.includes('lanzo tarde') || fullText.includes('liberaci\u00f3n demorada') || fullText.includes('arranque tard')) {
+        inferredCatL1 = 'proceso_operativo_interno';
+        inferredSubtype = 'lanzamiento_tardio_operacion';
+        inferredResponsible = 'comercial';
+    } else if (fullText.includes('salida de flota') || fullText.includes('retraso en salida') || fullText.includes('afect\u00f3 la salida') || fullText.includes('cuello de botella')) {
+        inferredCatL1 = 'proceso_operativo_interno';
+        inferredSubtype = 'retraso_salida_flota_muelle';
+        inferredResponsible = 'bodega';
+    } else if (fullText.includes('b\u00e1scula') || fullText.includes('bascula') || fullText.includes('impresora') || fullText.includes('falla de equipo')) {
+        inferredCatL1 = 'proceso_operativo_interno';
+        inferredSubtype = 'falla_equipos_bascula_sistema';
+        inferredResponsible = 'bodega';
+    } else if ( fullText.includes('magulla') || fullText.includes('golpe') || fullText.includes('aplastad') || fullText.includes('partid') || fullText.includes('volcad') || fullText.includes('reventad') ) {
         inferredCatL1 = 'dano_mecanico';
         inferredSubtype = 'golpe_magulladura';
         inferredResponsible = 'transporte';
@@ -624,7 +671,9 @@ export function getStoredTaxonomy(): DefectCategoryL1[] {
         if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed;
+                const existingCodes = new Set(parsed.map((c: any) => c.code));
+                const missingCanonical = RCA_CATEGORIES_L1.filter(c => !existingCodes.has(c.code));
+                return [...parsed, ...missingCanonical];
             }
         }
     } catch (e) {
@@ -739,3 +788,69 @@ export const DISPOSICION_SANITARIA_TEMPLATES: SanitaryDisposalTemplate[] = [
     }
 ];
 
+
+
+export interface InternalPqrMetadata {
+    isInternal: boolean;
+    subscope: 'rrhh_convivencia' | 'proceso_planta' | 'equipos_sst' | '';
+    subscopeLabel: string;
+    area: string;
+    collaboratorName: string;
+    collaboratorId: string;
+    responsibleCode: 'picking' | 'bodega' | 'transporte' | 'comercial' | 'proveedor';
+}
+
+export function parseInternalPqrMetadata(record?: {
+    client_id?: string | null;
+    order_id?: string | null;
+    subject?: string | null;
+    description?: string | null;
+} | null): InternalPqrMetadata {
+    const empty: InternalPqrMetadata = {
+        isInternal: false,
+        subscope: '',
+        subscopeLabel: '',
+        area: 'Planta & Operaciones',
+        collaboratorName: '',
+        collaboratorId: '',
+        responsibleCode: 'bodega'
+    };
+    if (!record) return empty;
+    const sub = record.subject || '';
+    const desc = record.description || '';
+    const tagMatch = desc.match(/\[\u00c1MBITO:\s*INTERNO\s*\|\s*SUBTIPO:\s*([^|\]]+)(?:\s*\|\s*\u00c1REA:\s*([^|\]]+))?(?:\s*\|\s*COLABORADOR:\s*([^|\]]+))?(?:\s*\|\s*COLAB_ID:\s*([^\]]+))?\]/i);
+    const isInternalBySubject = /^\[INTERNA(?:\s*-\s*[^\]]+)?\]/i.test(sub);
+    const isInternal = Boolean(tagMatch || isInternalBySubject || (!record.client_id && (desc.includes('[\u00c1MBITO: INTERNO') || isInternalBySubject)));
+    if (!isInternal) return empty;
+
+    const rawSubscope = (tagMatch?.[1]?.trim() || 'proceso_planta') as any;
+    const subscope: 'rrhh_convivencia' | 'proceso_planta' | 'equipos_sst' =
+        rawSubscope === 'rrhh_convivencia' || rawSubscope === 'equipos_sst' ? rawSubscope : 'proceso_planta';
+    const subscopeLabel =
+        subscope === 'rrhh_convivencia' ? 'Convivencia, Disciplina & RRHH' :
+        subscope === 'equipos_sst' ? 'Equipos, Infraestructura & SST' :
+        'Proceso & Sincronización de Planta';
+
+    const subjectAreaMatch = sub.match(/^\[INTERNA\s*-\s*([^\]]+)\]/i);
+    const area = (tagMatch?.[2]?.trim() || subjectAreaMatch?.[1]?.trim() || 'Planta & Operaciones');
+    const collaboratorName = (tagMatch?.[3]?.trim() || '');
+    const collaboratorId = (tagMatch?.[4]?.trim() || '');
+
+    const areaLower = area.toLowerCase();
+    const responsibleCode: 'picking' | 'bodega' | 'transporte' | 'comercial' | 'proveedor' =
+        areaLower.includes('picking') || areaLower.includes('alistamiento') ? 'picking' :
+        areaLower.includes('transporte') || areaLower.includes('ruta') || areaLower.includes('despacho') ? 'transporte' :
+        areaLower.includes('comercial') || areaLower.includes('programaci') ? 'comercial' :
+        areaLower.includes('compra') || areaLower.includes('abastecimiento') ? 'proveedor' :
+        'bodega';
+
+    return {
+        isInternal: true,
+        subscope,
+        subscopeLabel,
+        area,
+        collaboratorName: collaboratorName === 'N/A (Proceso General)' ? '' : collaboratorName,
+        collaboratorId,
+        responsibleCode
+    };
+}

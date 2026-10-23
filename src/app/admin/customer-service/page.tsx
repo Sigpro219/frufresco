@@ -985,8 +985,8 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             width: '28px',
                                                             height: '28px',
                                                             borderRadius: '50%',
-                                                            backgroundColor: '#EAEFEA',
-                                                            color: '#0D7A57',
+                                                            backgroundColor: author.isInternalCase ? '#E0F2FE' : '#EAEFEA',
+                                                            color: author.isInternalCase ? '#0284C7' : '#0D7A57',
                                                             fontWeight: '900',
                                                             fontSize: '0.72rem',
                                                             display: 'flex',
@@ -994,29 +994,35 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             justifyContent: 'center',
                                                             flexShrink: 0
                                                         }}>
-                                                            {getClientInitials(author.clientDisplayName)}
+                                                            {author.isInternalCase ? 'IN' : getClientInitials(author.clientDisplayName)}
                                                         </div>
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
                                                             <div style={{ fontWeight: '800', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={author.clientDisplayName}>
                                                                 {author.clientDisplayName}
                                                             </div>
                                                             <div style={{ fontSize: '0.69rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                {author.nit ? <span>NIT: {author.nit}</span> : <span>Consumidor Final</span>}
-                                                                {author.phoneParsed.isValid && (
-                                                                    <a
-                                                                        href={`https://wa.me/${author.phoneParsed.waNumber}?text=${encodeURIComponent(buildPqrWhatsAppMessage(pqr, 'initial'))}`}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        onClick={e => e.stopPropagation()}
-                                                                        style={{ color: '#0D7A57', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
-                                                                        title="Chat WhatsApp con Cliente"
-                                                                    >
-                                                                        <MessageCircle size={12} />
-                                                                    </a>
+                                                                {author.isInternalCase ? (
+                                                                    <span style={{ color: '#0284C7', fontWeight: 700 }}>Área: {author.internalArea}</span>
+                                                                ) : (
+                                                                    <>
+                                                                        {author.nit ? <span>NIT: {author.nit}</span> : <span>Consumidor Final</span>}
+                                                                        {author.phoneParsed.isValid && (
+                                                                            <a
+                                                                                href={`https://wa.me/${author.phoneParsed.waNumber}?text=${encodeURIComponent(buildPqrWhatsAppMessage(pqr, 'initial'))}`}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                onClick={e => e.stopPropagation()}
+                                                                                style={{ color: '#0D7A57', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
+                                                                                title="Chat WhatsApp con Cliente"
+                                                                            >
+                                                                                <MessageCircle size={12} />
+                                                                            </a>
+                                                                        )}
+                                                                    </>
                                                                 )}
                                                             </div>
-                                                            <div style={{ fontSize: '0.65rem', color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {pqr.profiles?.corporate_role ? pqr.profiles.corporate_role.toUpperCase() : 'CANAL INSTITUCIONAL'}
+                                                            <div style={{ fontSize: '0.65rem', color: author.isInternalCase ? '#7C3AED' : '#94A3B8', fontWeight: author.isInternalCase ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {author.isInternalCase ? 'NOVEDAD INTERNA PLANTA / RRHH' : (pqr.profiles?.corporate_role ? pqr.profiles.corporate_role.toUpperCase() : 'CANAL INSTITUCIONAL')}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1028,7 +1034,11 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                         <div style={{ fontWeight: '700', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatCleanPqrSubject(pqr.subject)}>
                                                             {formatCleanPqrSubject(pqr.subject)}
                                                         </div>
-                                                        {pqr.order_id ? (
+                                                        {author.isInternalCase ? (
+                                                            <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#0369A1', backgroundColor: '#F0F9FF', padding: '1px 6px', borderRadius: '4px', border: '1px solid #BAE6FD', display: 'inline-block', width: 'fit-content' }}>
+                                                                Ámbito Interno (Sin Pedido)
+                                                            </span>
+                                                        ) : pqr.order_id ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                 <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#F1F5F9', color: '#334155', border: '1px solid #E2E8F0' }}>
                                                                     Pedido #{pqr.orders?.sequence_id || 'N/A'}
@@ -1045,7 +1055,9 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             </span>
                                                         )}
                                                         <div style={{ fontSize: '0.65rem', color: '#94A3B8' }}>
-                                                            {pqr.orders?.delivery_date ? `Entrega: ${pqr.orders.delivery_date}` : 'Registro Directo'}
+                                                            {author.isInternalCase
+                                                                ? (author.internalSubscopeLabel || 'Gestión Interna de Planta')
+                                                                : (pqr.orders?.delivery_date ? `Entrega: ${pqr.orders.delivery_date}` : 'Registro Directo')}
                                                         </div>
                                                     </div>
                                                 </td>

@@ -1,8 +1,9 @@
 import React from 'react';
+import { parseInternalPqrMetadata } from '@/lib/rcaTaxonomy';
 
 export interface PQR {
     id: string;
-    client_id: string;
+    client_id: string | null;
     order_id: string | null;
     type: 'queja' | 'reclamo' | 'peticion' | 'sugerencia' | 'felicitacion';
     category: 'producto' | 'entrega' | 'facturacion' | 'otro';
@@ -164,11 +165,55 @@ export interface PqrAuthorInfo {
     isClient: boolean;
     isColleagueLogged: boolean;
     colleagueName?: string;
+    isInternalCase?: boolean;
+    internalArea?: string;
+    internalSubscopeLabel?: string;
+    internalCollaborator?: string;
 }
 
 export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
     const subject = p.subject || '';
     const desc = p.description || '';
+    const internalMeta = parseInternalPqrMetadata(p);
+
+    if (internalMeta.isInternal) {
+        const collabMatch = desc.match(/\[Radicado por Colaborador FruFresco:\s*([^\]]+)\]/i) || desc.match(/\[Radicado por:\s*([^\]]+)\]/i);
+        const reporterName = collabMatch?.[1]?.trim() || 'Supervisor / Operador de Planta';
+        const displayTarget = internalMeta.collaboratorName
+            ? internalMeta.collaboratorName
+            : ('Planta \u2022 ' + internalMeta.area);
+        return {
+            channel: 'mesa_ayuda',
+            channelLabel: 'Novedad Interna Planta / RRHH',
+            channelBadgeColor: '#0284C7',
+            channelBadgeBg: '#F0F9FF',
+            channelBadgeBorder: '#BAE6FD',
+            authorTitle: 'Reporte Operativo / Disciplinario Interno',
+            authorName: reporterName,
+            authorRole: internalMeta.subscopeLabel + ' \u2014 ' + internalMeta.area,
+            authorInitials: 'IN',
+            receptionChannel: 'Widget Interno de Planta & Operaciones FruFresco',
+            companyName: 'Operaci\u00f3n Interna FruFresco',
+            clientDisplayName: displayTarget,
+            sedeOrBranch: internalMeta.area,
+            clientContact: internalMeta.collaboratorName || 'Proceso / Turno Operativo',
+            nit: internalMeta.area.toUpperCase(),
+            email: '',
+            phone: '',
+            phoneRaw: '',
+            phoneParsed: { display: '', waNumber: '', isValid: false },
+            isPhoneValid: false,
+            isDriver: false,
+            isClient: false,
+            isColleagueLogged: true,
+            colleagueName: reporterName,
+            isInternalCase: true,
+            internalArea: internalMeta.area,
+            internalSubscopeLabel: internalMeta.subscopeLabel,
+            internalCollaborator: internalMeta.collaboratorName
+        };
+    }
+
     const company = p.profiles?.company_name || 'Empresa No Especificada';
 
     // Extract filing contact & phone embedded in PQR description if present

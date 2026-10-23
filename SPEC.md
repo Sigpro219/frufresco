@@ -11613,3 +11613,40 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Al abrir un expediente sin pedido en `PqrAuditModal.tsx`, la consulta de `clientRecentOrders` expande el alcance a toda la familia corporativa del cliente (perfil actual, su `parent_id`, todas las sucursales hermanas/hijas vinculadas a la misma matriz y perfiles con idéntico NIT limpio), proyectando el nombre de la sucursal y dirección en cada opción del selector.
      - Al ejecutar `handleLinkOrder`, el sistema actualiza atómicamente tanto `order_id` como `client_id = orderData.profile_id`, rectificando automáticamente cualquier caso histórico hacia la sucursal operativa real que recibió el despacho.
 
+
+---
+
+### Escenario 279: Arquitectura de Doble Ámbito para PQRS Internas (Planta, Proceso & RRHH) vs. Externas (Cliente & Pedido) y Modernización Industrial Skin 1 de `PQRFloatingWidget.tsx` (SDD v1.9.254)
+- **Given** que el widget global de registro de novedades (`src/components/PQRFloatingWidget.tsx`) y la consola de Gestión de Calidad (`/admin/customer-service`) son operados transversalmente por todo el personal de planta, logística, abastecimiento y administración de FruFresco,
+- **When** un operario, líder de turno o supervisor necesita reportar tanto reclamaciones comerciales de clientes externos como novedades internas de operación, disciplina o sincronización de planta (ej. llegada tarde a turno, falta de respeto/convivencia, lanzamiento tardío de la operación que retrasó la salida de flota, o falla de básculas/equipos),
+- **Then** el sistema implementa una **Arquitectura de Doble Ámbito (Externo vs. Interno)** y moderniza el modal flotante bajo el estándar **Skin 1 (Swiss Precision Slate)**:
+  1. **Rediseño Industrial Skin 1 (Swiss Precision Slate & Obsidian Header) en `PQRFloatingWidget.tsx`:**
+     - **Cabecera Obsidiana (`#0F172A`):** Sustituye el antiguo encabezado verde saturado por una cabecera ejecutiva `#0F172A` con insignia esmeralda `#10B981`, subtítulo técnico y cierre accesible (`Escape`).
+     - **Geometría y Ergonomía (`440px`):** Amplía el contenedor flotante a `440px` (adaptable a móvil `calc(100vw - 24px)`) con fondo `#FFFFFF`, tarjetas internas `#F8FAFC`, bordes `#E2E8F0` y jerarquía tipográfica `Outfit` / `Inter`.
+     - **Controles Segmentados Interactivos:** Sustituye los `<select>` nativos planos de Tipo y Prioridad por botoneras de píldoras táctiles con indicadores cromáticos semánticos (`Baja`, `Normal`, `Alta`, `Urgente`) y navegación por teclado (`Tab`, `Enter`, `Escape`).
+     - **Zona de Evidencia Compacta:** Dropzone horizontal estilizada con previsualización instantánea de miniatura y contador de archivos.
+  2. **Conmutador de Doble Ámbito en Radicación (`scopeMode: 'client' | 'internal'`):**
+     - **`[ 🏢 Cliente / Pedido ]` (Ámbito Externo Comercial):** Exige seleccionar una **Sucursal Operativa** (`deliverableClients`, excluyendo Casas Matrices puras) y permite vincular el **Pedido Asociado** reciente de la sede, clasificando la categoría comercial (`producto`, `entrega`, `facturacion`, `otro`).
+     - **`[ ⚙️ Interna / Planta & RRHH ]` (Ámbito Interno Operativo y Disciplinario):**
+       * Exime por completo la selección de cliente y pedido (`client_id: null`, `order_id: null`), evitando contaminar o castigar el indicador comercial **First Time Right (`FTR %`)** de entregas a clientes.
+       * **Sub-Ámbito Interno (Píldoras de Clasificación):**
+         1. `Convivencia, Disciplina & RRHH` (`talento_humano_disciplina`): Llegadas tarde a turno, faltas de respeto/convivencia, desacato de instrucciones o incumplimiento de EPP/BPM.
+         2. `Proceso & Sincronización de Planta` (`proceso_operativo_interno`): Lanzamiento tardío de operación, cuello de botella en cargue/salida de rutas, demora en abastecimiento de plaza.
+         3. `Equipos, Infraestructura & SST` (`proceso_operativo_interno` / `falla_equipos_bascula_sistema`): Fallas en básculas, impresoras térmicas, cuarto frío o condiciones inseguras.
+       * **Chips de Motivos Frecuentes (1-Click Presets):** Permite autocompletar asunto, macrocausa L1 y subcausa L2 con un clic (*"Llegada tarde a turno"*, *"Falta de respeto / Convivencia"*, *"Lanzamiento tardío de operación"*, *"Retraso en salida de flota"*, *"Falla de báscula / equipo"*).
+       * **Área Operativa & Colaborador Involucrado (Opcional):** Selector de área responsable (`Picking / Alistamiento`, `Bodega / Recepción`, `Transporte / Despachos`, `Compras / Abastecimiento`, `Comercial / Programación`, `Administración / RRHH`) y buscador opcional de colaborador (`collaborators`) para imputación nominal temprana o reporte de proceso general.
+       * **Serialización Canónica:** Persiste en `subject` el prefijo `[INTERNA - {ÁREA}] {asunto}` y en `description` el bloque estructurado `[ÁMBITO: INTERNO | SUBTIPO: ... | ÁREA: ... | COLABORADOR: ...]` junto con `[RCA_METADATA: ...]` pre-clasificado.
+  3. **Expansión de Taxonomía RCA Nivel 1 y Nivel 2 (`src/lib/rcaTaxonomy.ts`):**
+     - **Macrocausa 8 — `8. Convivencia, Disciplina & Talento Humano` (`talento_humano_disciplina`):**
+       * `llegada_tarde_turno`: Llegada tarde a turno / Incumplimiento de horario laboral.
+       * `falta_respeto_convivencia`: Falta de respeto / Conflicto interpersonal o mal trato.
+       * `desacato_instruccion_operativa`: Desacato de instrucción operativa o abandono de puesto.
+       * `incumplimiento_epp_bpm`: Incumplimiento de dotación, EPP o normas BPM/SST.
+     - **Macrocausa 9 — `9. Proceso Interno & Sincronización Operativa` (`proceso_operativo_interno`):**
+       * `lanzamiento_tardio_operacion`: Lanzamiento tardío de operación / Liberación demorada de órdenes.
+       * `retraso_salida_flota_muelle`: Atraso en cargue o salida de flota por cuello de botella en planta.
+       * `demora_recepcion_abastecimiento`: Entrada tardía de mercancía de plaza a muelle de recepción.
+       * `falla_equipos_bascula_sistema`: Falla de básculas, impresoras térmicas, cava o sistema.
+  4. **Reconocimiento en Consola SAC y Flujo de Auditoría Interna (`utils.ts`, `page.tsx`, `PqrAuditModal.tsx`):**
+     - `getPqrAuthorInfo` detecta automáticamente los expedientes con `[ÁMBITO: INTERNO]` o sin cliente asociado, proyectando en la columna *Cliente & Canal* la identidad **`Operación Interna FruFresco`**, el badge **`⚙️ INTERNA • {ÁREA}`** y el colaborador o proceso involucrado.
+     - En `PqrAuditModal.tsx`, cuando el expediente es de ámbito interno (`isInternalCase`), el **Paso 1** reemplaza los bloques de *Pedido Asociado* y *Declaración de Averías de Fruta* por la **Ficha de Incidencia Operativa / Disciplinaria Interna** (Área, Tipo de Falta o Cuello de Botella, Colaborador Involucrado y Evidencia), y el **Paso 2** oculta el bloque bromatológico de disposición sanitaria de fruta y adapta las tarjetas de dictamen hacia gestión interna (*Cierre Formativo / Compromiso*, *Plan de Acción Kaizen de Proceso*, o *Llamado de Atención RRHH / Cargo Patrimonial*).
