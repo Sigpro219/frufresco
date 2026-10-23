@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.246 (Blindaje de Consecutivo Fiscal Numérico Puro en Columna D, Resolución Jerárquica de Sucursales Padre-Hijo en Columna AD e Inyección Robusta de OC/Solped en Columna H para World Office Desktop — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.252 (Estandarización Integral del Generador de Cotizaciones `/admin/commercial/quotes/create` con Universal Letterhead, Mesa de Negociación 1600px, Conexión Bidireccional a Modelos por Cliente y Ordenamiento Multi-Columna en Galería — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 273 Escenarios BDD Ininterrumpidos (1..273)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 277 Escenarios BDD Ininterrumpidos (1..277)
 
 ---
 
@@ -23,7 +23,7 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
@@ -11574,3 +11574,26 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Se implementan insignias estilizadas institucionales para `expired` (`Vencida (8d)` / `Acuerdo Vencido`) y `superseded` (`Reemplazada` / `Acuerdo Reemplazado`), diferenciando con el prefijo `ACI` aquellos registros históricos que provinieron de convenios previos frente al prefijo `COT` de propuestas de cotización.
   4. **Inyección Determinística de Vigencia de 8 Días Calendario al Crear (`GAP-11` - Cierre Fisura 4):**
      - Toda nueva cotización insertada en `quotes` calcula y persiste obligatoriamente `valid_until = start_date + 8 días calendario`, garantizando que el evaluador `getEffectiveStatus` detecte y transicione de forma determinística cualquier propuesta caducada sin intervención manual.
+  5. **Ordenamiento Interactivo Multi-Columna en Historial de Cotizaciones (`/admin/commercial/quotes`):**
+     - Todos los encabezados de datos de la tabla (`ID`, `FECHA`, `CLIENTE`, `MODELO`, `TOTAL`, `ESTADO`) incorporan botones interactivos de ordenamiento ascendente/descendente (`ArrowUp`, `ArrowDown`, `ArrowUpDown`), iniciando por defecto en orden cronológico descendente (`created_at desc`).
+
+---
+
+### Escenario 277: Estandarización Integral del Generador de Cotizaciones (`/admin/commercial/quotes/create`) con Universal Letterhead, Mesa de Negociación 1600px y Conexión Bidireccional al Pipeline de Modelos por Cliente (SDD v1.9.252)
+- **Given** la pantalla de creación y negociación de propuestas comerciales en `/admin/commercial/quotes/create` (`src/app/admin/commercial/quotes/create/page.tsx`),
+- **When** el analista comercial estructura una cotización para un cliente institucional B2B o un prospecto CRM (Lead),
+- **Then** la interfaz cumple de forma estricta con la identidad documental oficial, el estándar industrial de 1600px y la integración con los Pasos 1 y 2 del pipeline comercial:
+  1. **Unificación Documental con `Universal Letterhead` (`PROPUESTA COMERCIAL DE PRECIOS`):**
+     - Se erradica el contenedor estrecho legacy de `1000px` y el membrete improvisado antiguo, adoptando el componente canónico `Letterhead` de *Investments Cortés S.A.S. (NIT 901.393.217-5)*.
+     - Proyecta el **Micro-Grid Oficial de Información del Cliente y Condiciones**, **Agrupación Jerárquica Doble A-Z por Categoría Agrícola** (`CATEGORY_PRIORITY`: Verduras, Frutas, Hortalizas, Tubérculos y Plátanos, etc.), **Sello de Garantía Operativa FruFresco B2B**, **Términos Legales con Vigencia de 8 Días Calendario** y **Bloque Solemne de Firmas de Aceptación**.
+     - Incorpora conmutador de vista en tiempo real: **`[Mesa de Negociación (1600px)]`** (despliega las columnas internas de negociación `COSTO HOY`, `UTILIDAD %`, `CONSUMO 30D` y `UTIL. PROY.`) vs **`[Vista Documento Cliente (Carta)]`** (previsualización exacta de impresión limpia a 215.9mm).
+  2. **Integración Automática con el Pipeline Comercial (`Paso 1 Matriz` $\to$ `Paso 2 Modelos` $\to$ `Paso 3 Cotizaciones`):**
+     - **Línea Base Institucional por Defecto:** El selector `2A. Modelo Estándar (Línea Base)` inicia determinísticamente en `General institucional dinámico` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`), erradicando la selección accidental de `Clientes Hogar (10%)`.
+     - **Conexión Bidireccional con `2B. Modelo por Cliente / Canasta` (`quote_templates`):**
+       * Al seleccionar un Cliente Institucional en el bloque `1. Destinatario`, el sistema localiza automáticamente su canasta en `quote_templates`, inyecta las **utilidades personalizadas por producto** calibradas en el Paso 2 (`app_settings` bajo `quote_template_margins:{template_id}`), consulta los costos vivos de hoy desde `commercial_cost_matrix` y cruza el consumo consolidado de los últimos 30 días (Casa Matriz + Sucursales).
+       * Si el operador selecciona primero una `Canasta de Cliente` en el bloque `2B`, el sistema vincula automáticamente la Casa Matriz correspondiente en el bloque `1. Destinatario` y carga su demanda de 30 días.
+     - **Desacople de Plazo de Pago vs Vigencia de Oferta:** El bloque `3. Plazo de Pago` permite elegir la condición crediticia (`Contado`, `8`, `15`, `30`, `45`, `60 Días Crédito`) sincronizada con `profiles.payment_days`, mientras que `Vigencia Oferta` permanece gobernada por la regla de `8 Días Calendario`.
+     - **Doble Acción de Persistencia en el Pipeline:** `[Guardar Borrador]` almacena en `status = 'draft'`, mientras que `[Emitir e Imprimir PDF Oficial]` persiste en `status = 'sent'` y abre el documento oficial `/admin/commercial/quotes/{id}/print`.
+  3. **Cinta KPI de Telemetría y Barra Sticky Superior de Productos:**
+     - Proyecta en vivo 5 indicadores de negociación: `SKUs en Propuesta`, `Consumo Cliente (Últ. 30d)`, `Margen Bruto Ponderado`, `Utilidad Mensual Proyectada ($ COP)` y `Total Cotización (c/IVA)`.
+     - La barra de herramientas sticky superior integra a la izquierda el filtro en vivo de la canasta (`Filtrar productos dentro de esta cotización...`) y a la derecha el buscador `+ Catálogo Maestro` para añadir SKUs sin desplazarse al final del documento.
