@@ -11539,3 +11539,14 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
        * Utilidad Bruta Mensual Proyectada en \$ COP.
   4. **Persistencia Ligera sin Deuda Técnica:**
      - Las calibraciones de margen de la canasta se persisten de forma no invasiva mediante el almacén `app_settings` bajo la clave `quote_template_margins:{template_id}` con guardado reactivo, alimentando directamente la preforma de cotizaciones en Canal 2 (`quotes/create`) y la congelación vinculante de Acuerdos Comerciales.
+  5. **Ergonomía Visual, Limpieza de SKU y Canonicidad de Unidades de Compra (SDD v1.9.249):**
+     - En la celda de Producto de la canasta, se elimina la sobrecarga de información redundante como el texto `SKU: ...`, exponiendo con claridad el nombre del producto en negrita y la Unidad de Medida institucional debajo.
+     - La unidad de compra/venta se normaliza estrictamente a unidades institucionales canónicas (`Kg` o `Unidad`). Para productos como "Cidrón" y otras hortalizas, se erradican de raíz designaciones retail obsoletas como "Atado", unificando el maestro en base de datos y la vista en `Kg`.
+  6. **Jerarquización de Buscadores y Comportamiento Sticky Magnético Multi-Línea (`estandar-galerias-frufresco`):**
+     - Se separan con absoluta claridad los niveles de búsqueda:
+       * **Nivel 1 (Macro - Contexto de Cuenta):** Selector superior rotulado como `Cliente / Canasta:` para buscar y seleccionar entre las 94 Casas Matrices activas.
+       * **Nivel 2 (Micro - Filtrado de Canasta):** Barra de herramientas in-situ con Omnibox `Filtrar productos en esta canasta...` y pastilla de telemetría de productos filtrados.
+       * **Acción de Expansión:** Control diferenciado `+ Catálogo Maestro: [Buscar y agregar producto...]` para añadir SKUs sin colisionar con la búsqueda interna.
+     - **Protocolo Sticky Docked de 2 Niveles Operativos (Tolerancia Cero - Gap = 0px):**
+       * **Línea Sticky 1 (Toolbar de la Canasta):** Anclada magnéticamente a `top: 139px` (vista embebida) / `top: 0px` (vista directa) con `zIndex: 40`, fondo blanco sólido y sombra inferior sutil.
+       * **Línea Sticky 2 (Thead de la Tabla):** Anclada a `top: 193px` con `zIndex: 35`, regla Chromium `borderCollapse: 'separate', borderSpacing: 0` y anclaje individual en cada celda `<th>` con fondo sólido `#F8FAFC`, permitiendo el flujo continuo de filas sin desbordes.

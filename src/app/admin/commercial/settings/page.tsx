@@ -2354,7 +2354,7 @@ export default function PricingSettingsPage({
                                     <input
                                         type="text"
                                         value={isTemplatePickerOpen ? templateSearchQuery : (selectedTemplate ? `${selectedTemplate.name} (${templateCounts[selectedTemplate.id] || 0} prod.)` : '')}
-                                        placeholder="Buscar lista de cotización..."
+                                        placeholder="Buscar cliente matriz o lista de cotización..."
                                         onFocus={() => {
                                             setIsTemplatePickerOpen(true);
                                             setTemplateSearchQuery('');
@@ -2678,272 +2678,286 @@ export default function PricingSettingsPage({
                     )}
 
                     {/* TEMPLATE ITEMS TABLE CARD */}
-                    {selectedTemplate ? (
-                        <div style={{
-                            backgroundColor: 'white',
-                            borderRadius: THEME.radius.lg,
-                            boxShadow: THEME.shadow.md,
-                            border: `1px solid ${THEME.colors.border}`,
-                            position: 'relative'
-                        }}>
-                            {/* Toolbar: Search in list & Search and Add Product */}
-                            <div style={{
-                                padding: '0.85rem 1.25rem',
-                                borderBottom: `1px solid ${THEME.colors.border}`,
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                gap: '1rem',
-                                flexWrap: 'wrap',
-                                backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                                backdropFilter: 'blur(12px)',
-                                borderTopLeftRadius: THEME.radius.lg,
-                                borderTopRightRadius: THEME.radius.lg
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '280px' }}>
-                                    <div style={{ position: 'relative', width: '280px' }}>
-                                        <Search size={15} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar en esta lista..."
-                                            value={templateSearchFilter}
-                                            onChange={e => setTemplateSearchFilter(e.target.value)}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.45rem 2rem 0.45rem 2.2rem',
-                                                borderRadius: '8px',
-                                                border: `1px solid ${THEME.colors.border}`,
-                                                fontSize: '0.85rem',
-                                                outline: 'none'
-                                            }}
-                                        />
-                                        {templateSearchFilter && (
-                                            <button 
-                                                onClick={() => setTemplateSearchFilter('')}
-                                                style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        )}
-                                    </div>
-                                    <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: THEME.colors.textSecondary, whiteSpace: 'nowrap' }}>
-                                        {templateItems.filter(item => {
-                                            const term = templateSearchFilter.toLowerCase().trim();
-                                            if (!term) return true;
-                                            return (item.name || '').toLowerCase().includes(term) || String(item.accounting_id || '').includes(term);
-                                        }).length} productos filtrados
-                                    </span>
-                                </div>
+                    {selectedTemplate ? (() => {
+                        const defaultMargin = 34.2;
+                        const computedRows = templateItems.map(item => {
+                            const cost = templateCosts[item.product_id] || 0;
+                            const margin = templateMargins[item.product_id] !== undefined ? templateMargins[item.product_id] : defaultMargin;
+                            const projectedPrice = cost > 0 ? Math.ceil((cost * (1 + margin / 100)) / 50) * 50 : 0;
+                            const demandInfo = templateDemand[item.product_id] || { volume: 0, ordersCount: 0 };
+                            const monthlyVolume = demandInfo.volume;
+                            const projectedProfit = monthlyVolume > 0 && cost > 0 ? monthlyVolume * (projectedPrice - cost) : 0;
+                            const projectedRevenue = monthlyVolume > 0 && projectedPrice > 0 ? monthlyVolume * projectedPrice : 0;
+                            return {
+                                ...item,
+                                cost,
+                                margin,
+                                projectedPrice,
+                                monthlyVolume,
+                                ordersCount: demandInfo.ordersCount,
+                                projectedProfit,
+                                projectedRevenue
+                            };
+                        });
 
-                                {/* Right: Add Product Omnibox */}
-                                <div style={{ position: 'relative', width: '320px' }}>
-                                    <Search size={15} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.primary }} />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar y agregar producto..."
-                                        value={templateProductSearch}
-                                        onChange={e => {
-                                            setTemplateProductSearch(e.target.value);
-                                            searchTemplateProducts(e.target.value);
-                                        }}
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.45rem 2rem 0.45rem 2.2rem',
-                                            borderRadius: '8px',
-                                            border: `1.5px solid ${THEME.colors.primary}`,
-                                            fontSize: '0.85rem',
-                                            outline: 'none',
-                                            backgroundColor: '#F0FDF4'
-                                        }}
-                                    />
-                                    {templateProductSearch && (
-                                        <button 
-                                            onClick={() => {
-                                                setTemplateProductSearch('');
-                                                setTemplateProductsFound([]);
-                                            }}
-                                            style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    )}
-                                    {templateProductsFound.length > 0 && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: '100%',
-                                            left: 0,
-                                            right: 0,
-                                            backgroundColor: 'white',
-                                            border: `1px solid ${THEME.colors.border}`,
-                                            borderRadius: '8px',
-                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                            zIndex: 20,
-                                            maxHeight: '250px',
-                                            overflowY: 'auto',
-                                            marginTop: '4px'
-                                        }}>
-                                            {templateProductsFound.map(p => (
-                                                <div
-                                                    key={p.id}
-                                                    onClick={() => addProductToTemplate(p.id)}
-                                                    style={{
-                                                        padding: '0.65rem 0.85rem',
-                                                        cursor: 'pointer',
-                                                        borderBottom: `1px solid ${THEME.colors.border}`,
-                                                        fontSize: '0.82rem',
-                                                        transition: 'background 0.15s',
-                                                        textAlign: 'left'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-                                                >
-                                                    <span style={{ fontWeight: 'bold', color: '#1E293B', marginRight: '6px' }}>[{p.accounting_id || 'SIN ID'}]</span>
-                                                    <span style={{ color: '#475569' }}>{p.name}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                        const totalVolumeKg = computedRows.reduce((acc, r) => acc + (r.monthlyVolume || 0), 0);
+                        const totalProfitCOP = computedRows.reduce((acc, r) => acc + (r.projectedProfit || 0), 0);
+                        const totalRevenueCOP = computedRows.reduce((acc, r) => acc + (r.projectedRevenue || 0), 0);
+                        const weightedMargin = totalRevenueCOP > 0 ? (totalProfitCOP / totalRevenueCOP) * 100 : (computedRows.length > 0 ? computedRows.reduce((acc, r) => acc + r.margin, 0) / computedRows.length : defaultMargin);
 
-                            {/* Table */}
-                            {loadingTemplateItems ? (
-                                <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando canasta y telemetría de cliente...</div>
-                            ) : templateItems.length === 0 ? (
-                                <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Esta canasta no tiene productos asociados. Usa el buscador de arriba para agregar.</div>
-                            ) : (() => {
-                                const defaultMargin = 34.2;
-                                const computedRows = templateItems.map(item => {
-                                    const cost = templateCosts[item.product_id] || 0;
-                                    const margin = templateMargins[item.product_id] !== undefined ? templateMargins[item.product_id] : defaultMargin;
-                                    const projectedPrice = cost > 0 ? Math.ceil((cost * (1 + margin / 100)) / 50) * 50 : 0;
-                                    const demandInfo = templateDemand[item.product_id] || { volume: 0, ordersCount: 0 };
-                                    const monthlyVolume = demandInfo.volume;
-                                    const projectedProfit = monthlyVolume > 0 && cost > 0 ? monthlyVolume * (projectedPrice - cost) : 0;
-                                    const projectedRevenue = monthlyVolume > 0 && projectedPrice > 0 ? monthlyVolume * projectedPrice : 0;
-                                    return {
-                                        ...item,
-                                        cost,
-                                        margin,
-                                        projectedPrice,
-                                        monthlyVolume,
-                                        ordersCount: demandInfo.ordersCount,
-                                        projectedProfit,
-                                        projectedRevenue
-                                    };
-                                });
+                        const filteredRows = computedRows.filter(item => {
+                            const term = templateSearchFilter.toLowerCase().trim();
+                            if (!term) return true;
+                            return (item.name || '').toLowerCase().includes(term) || 
+                                   String(item.accounting_id || '').includes(term);
+                        });
 
-                                const totalVolumeKg = computedRows.reduce((acc, r) => acc + (r.monthlyVolume || 0), 0);
-                                const totalProfitCOP = computedRows.reduce((acc, r) => acc + (r.projectedProfit || 0), 0);
-                                const totalRevenueCOP = computedRows.reduce((acc, r) => acc + (r.projectedRevenue || 0), 0);
-                                const weightedMargin = totalRevenueCOP > 0 ? (totalProfitCOP / totalRevenueCOP) * 100 : (computedRows.length > 0 ? computedRows.reduce((acc, r) => acc + r.margin, 0) / computedRows.length : defaultMargin);
+                        const stickyBase = embedded ? 139 : 0;
+                        const stickyToolbarTop = `${stickyBase}px`;
+                        const stickyTheadTop = `${stickyBase + 54}px`;
 
-                                return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
-                                        {/* CINTA KPI DE RENTABILIDAD Y DEMANDA ON-SCREEN */}
-                                        <div style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            backgroundColor: '#F8FAFC',
-                                            border: '1px solid #E2E8F0',
-                                            borderRadius: '12px',
-                                            padding: '0.85rem 1.25rem',
-                                            flexWrap: 'wrap',
-                                            gap: '12px'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
-                                                <div>
-                                                    <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Canasta de Cliente:</span>
-                                                    <div style={{ fontSize: '0.92rem', fontWeight: '800', color: THEME.colors.textMain }}>
-                                                        {selectedTemplate?.name}
-                                                    </div>
-                                                    {templateClientProfile ? (
-                                                        <span style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '700' }}>
-                                                            ● Cuenta Matriz vinculada (Consumo consolidado matriz + sucursales)
-                                                        </span>
-                                                    ) : (
-                                                        <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
-                                                            Canasta institucional general
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div style={{ height: '32px', width: '1px', backgroundColor: '#E2E8F0' }} />
-                                                <div>
-                                                    <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>SKUs Activos:</span>
-                                                    <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#1E293B' }}>{templateItems.length} prod.</div>
-                                                </div>
-                                                <div style={{ height: '32px', width: '1px', backgroundColor: '#E2E8F0' }} />
-                                                <div>
-                                                    <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Consumo 30 Días:</span>
-                                                    <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#0369A1' }}>
-                                                        {totalVolumeKg >= 1000 ? `${(totalVolumeKg / 1000).toFixed(2)} Ton` : `${Math.round(totalVolumeKg)} Kg/Und`}
-                                                    </div>
-                                                </div>
-                                                <div style={{ height: '32px', width: '1px', backgroundColor: '#E2E8F0' }} />
-                                                <div>
-                                                    <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Margen Ponderado:</span>
-                                                    <div style={{ fontSize: '0.92rem', fontWeight: '800', color: weightedMargin >= 30 ? '#0D7A57' : '#D97706' }}>
-                                                        {weightedMargin.toFixed(1)}%
-                                                    </div>
-                                                </div>
-                                                <div style={{ height: '32px', width: '1px', backgroundColor: '#E2E8F0' }} />
-                                                <div>
-                                                    <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Utilidad Proyectada:</span>
-                                                    <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#0D7A57', fontFamily: 'monospace' }}>
-                                                        {formatMoney(totalProfitCOP)}
-                                                    </div>
-                                                </div>
+                        return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
+                                {/* CINTA KPI DE RENTABILIDAD Y DEMANDA ON-SCREEN */}
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '12px',
+                                    padding: '0.85rem 1.25rem',
+                                    flexWrap: 'wrap',
+                                    gap: '12px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                                        <div>
+                                            <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Canasta de Cliente:</span>
+                                            <div style={{ fontSize: '0.92rem', fontWeight: '800', color: THEME.colors.textMain }}>
+                                                {selectedTemplate?.name}
                                             </div>
+                                            {templateClientProfile ? (
+                                                <span style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '700' }}>
+                                                    ● Cuenta Matriz vinculada (Consumo consolidado matriz + sucursales)
+                                                </span>
+                                            ) : (
+                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                                                    Canasta institucional general
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div style={{ height: '32px', width: '1px', backgroundColor: '#E2E8F0' }} />
+                                        <div>
+                                            <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>SKUs Activos:</span>
+                                            <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#1E293B' }}>{templateItems.length} prod.</div>
+                                        </div>
+                                        <div style={{ height: '32px', width: '1px', backgroundColor: '#E2E8F0' }} />
+                                        <div>
+                                            <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Consumo 30 Días:</span>
+                                            <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#0369A1' }}>
+                                                {totalVolumeKg >= 1000 ? `${(totalVolumeKg / 1000).toFixed(2)} Ton` : `${Math.round(totalVolumeKg)} Kg/Und`}
+                                            </div>
+                                        </div>
+                                        <div style={{ height: '32px', width: '1px', backgroundColor: '#E2E8F0' }} />
+                                        <div>
+                                            <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Margen Ponderado:</span>
+                                            <div style={{ fontSize: '0.92rem', fontWeight: '800', color: weightedMargin >= 30 ? '#0D7A57' : '#D97706' }}>
+                                                {weightedMargin.toFixed(1)}%
+                                            </div>
+                                        </div>
+                                        <div style={{ height: '32px', width: '1px', backgroundColor: '#E2E8F0' }} />
+                                        <div>
+                                            <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Utilidad Proyectada:</span>
+                                            <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#0D7A57', fontFamily: 'monospace' }}>
+                                                {formatMoney(totalProfitCOP)}
+                                            </div>
+                                        </div>
+                                    </div>
 
-                                            <button
-                                                type="button"
-                                                onClick={handleSaveTemplateMargins}
-                                                disabled={savingTemplateMargins}
-                                                style={{
-                                                    padding: '0.55rem 1.1rem',
-                                                    backgroundColor: '#0D7A57',
-                                                    color: 'white',
-                                                    borderRadius: '8px',
-                                                    border: 'none',
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: '700',
-                                                    cursor: savingTemplateMargins ? 'not-allowed' : 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)'
-                                                }}
-                                            >
-                                                {savingTemplateMargins ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                                                {savingTemplateMargins ? 'Guardando...' : 'Guardar Márgenes'}
-                                            </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveTemplateMargins}
+                                        disabled={savingTemplateMargins}
+                                        style={{
+                                            padding: '0.55rem 1.1rem',
+                                            backgroundColor: '#0D7A57',
+                                            color: 'white',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            fontSize: '0.8rem',
+                                            fontWeight: '700',
+                                            cursor: savingTemplateMargins ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)'
+                                        }}
+                                    >
+                                        {savingTemplateMargins ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                        {savingTemplateMargins ? 'Guardando...' : 'Guardar Márgenes'}
+                                    </button>
+                                </div>
+
+                                {/* TABLE WRAPPER CONTAINER (Anti-secuestro de scroll: overflow visible) */}
+                                <div style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: THEME.radius.lg,
+                                    boxShadow: THEME.shadow.md,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    overflow: 'visible',
+                                    position: 'relative'
+                                }}>
+                                    {/* FILA STICKY 1: TOOLBAR DE PRODUCTOS DE LA CANASTA */}
+                                    <div style={{
+                                        position: 'sticky',
+                                        top: stickyToolbarTop,
+                                        zIndex: 40,
+                                        backgroundColor: '#FFFFFF',
+                                        padding: '0.65rem 1.25rem',
+                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        gap: '1rem',
+                                        flexWrap: 'wrap',
+                                        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                                        borderTopLeftRadius: THEME.radius.lg,
+                                        borderTopRightRadius: THEME.radius.lg
+                                    }}>
+                                        {/* Izquierda: Buscador Omnibox dentro de la Canasta */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '300px' }}>
+                                            <div style={{ position: 'relative', width: '320px' }}>
+                                                <Search size={15} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Filtrar productos en esta canasta..."
+                                                    value={templateSearchFilter}
+                                                    onChange={e => setTemplateSearchFilter(e.target.value)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.45rem 2rem 0.45rem 2.2rem',
+                                                        borderRadius: '8px',
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.85rem',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                                {templateSearchFilter && (
+                                                    <button 
+                                                        onClick={() => setTemplateSearchFilter('')}
+                                                        style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: THEME.colors.textSecondary, whiteSpace: 'nowrap' }}>
+                                                {filteredRows.length} productos filtrados
+                                            </span>
                                         </div>
 
-                                        <div style={{ overflowX: 'auto', width: '100%' }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                        {/* Derecha: Acción de Agregar Producto del Catálogo Maestro */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.primary, whiteSpace: 'nowrap' }}>
+                                                + Catálogo Maestro:
+                                            </span>
+                                            <div style={{ position: 'relative', width: '280px' }}>
+                                                <Search size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.primary }} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar y agregar producto..."
+                                                    value={templateProductSearch}
+                                                    onChange={e => {
+                                                        setTemplateProductSearch(e.target.value);
+                                                        searchTemplateProducts(e.target.value);
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.42rem 1.8rem 0.42rem 2.1rem',
+                                                        borderRadius: '8px',
+                                                        border: `1.5px solid ${THEME.colors.primary}`,
+                                                        fontSize: '0.82rem',
+                                                        outline: 'none',
+                                                        backgroundColor: '#F0FDF4'
+                                                    }}
+                                                />
+                                                {templateProductSearch && (
+                                                    <button 
+                                                        onClick={() => {
+                                                            setTemplateProductSearch('');
+                                                            setTemplateProductsFound([]);
+                                                        }}
+                                                        style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                )}
+                                                {templateProductsFound.length > 0 && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '100%',
+                                                        left: 0,
+                                                        right: 0,
+                                                        backgroundColor: 'white',
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        borderRadius: '8px',
+                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                                        zIndex: 60,
+                                                        maxHeight: '250px',
+                                                        overflowY: 'auto',
+                                                        marginTop: '4px'
+                                                    }}>
+                                                        {templateProductsFound.map(p => (
+                                                            <div
+                                                                key={p.id}
+                                                                onClick={() => addProductToTemplate(p.id)}
+                                                                style={{
+                                                                    padding: '0.65rem 0.85rem',
+                                                                    cursor: 'pointer',
+                                                                    borderBottom: `1px solid ${THEME.colors.border}`,
+                                                                    fontSize: '0.82rem',
+                                                                    transition: 'background 0.15s',
+                                                                    textAlign: 'left'
+                                                                }}
+                                                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                            >
+                                                                <span style={{ fontWeight: 'bold', color: '#1E293B', marginRight: '6px' }}>[{p.accounting_id || 'SIN ID'}]</span>
+                                                                <span style={{ color: '#475569' }}>{p.name}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Table Content */}
+                                    {loadingTemplateItems ? (
+                                        <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando canasta y telemetría de cliente...</div>
+                                    ) : templateItems.length === 0 ? (
+                                        <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Esta canasta no tiene productos asociados. Usa el buscador de arriba para agregar.</div>
+                                    ) : (
+                                        <div style={{ width: '100%', overflow: 'visible' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                                                {/* FILA STICKY 2: THEAD CON REGLA CHROMIUM */}
                                                 <thead>
-                                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '8%' }}>ID ERP</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '22%' }}>Producto</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%' }}>Categoría</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '11%', textAlign: 'right' }}>Costo Base</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'center' }}>Utilidad %</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '11%', textAlign: 'right' }}>Precio Final</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'right' }}>Consumo 30d</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'right' }}>Utilidad Total</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '6%', textAlign: 'center' }}></th>
+                                                    <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '8%', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>ID ERP</th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '22%', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Producto</th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Categoría</th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '11%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Costo Base</th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'center', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Utilidad %</th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '11%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Precio Final</th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Consumo 30d</th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Utilidad Total</th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '6%', textAlign: 'center', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {computedRows
-                                                        .filter(item => {
-                                                            const term = templateSearchFilter.toLowerCase().trim();
-                                                            if (!term) return true;
-                                                            return (item.name || '').toLowerCase().includes(term) || 
-                                                                   String(item.accounting_id || '').includes(term);
-                                                        })
-                                                        .map(item => (
+                                                    {filteredRows.map(item => {
+                                                        const cleanUnit = item.unit_of_measure === 'Atado' ? 'Kg' : (item.unit_of_measure || 'Kg');
+                                                        return (
                                                             <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }}>
                                                                 <td style={{ padding: '0.65rem 1.25rem', fontWeight: '800', fontFamily: 'monospace', color: '#475569', fontSize: '0.85rem' }}>
                                                                     {item.accounting_id || '—'}
@@ -2951,7 +2965,7 @@ export default function PricingSettingsPage({
                                                                 <td style={{ padding: '0.65rem 1.25rem', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
                                                                     <div>{item.name}</div>
                                                                     <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>
-                                                                        {item.sku ? `SKU: ${item.sku} • ` : ''}{item.unit_of_measure || 'Kg'}
+                                                                        {cleanUnit}
                                                                     </div>
                                                                 </td>
                                                                 <td style={{ padding: '0.65rem 1.25rem' }}>
@@ -2967,7 +2981,7 @@ export default function PricingSettingsPage({
                                                                     </span>
                                                                 </td>
                                                                 <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontWeight: '700', color: '#475569', fontSize: '0.85rem', fontFamily: 'monospace' }}>
-                                                                    {item.cost > 0 ? `$${formatNumber(item.cost)}` : <span style={{ color: '#EF4444' }}>Sin Costo</span>}
+                                                                    {item.cost > 0 ? `${formatNumber(item.cost)}` : <span style={{ color: '#EF4444' }}>Sin Costo</span>}
                                                                 </td>
                                                                 <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }}>
                                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -2992,12 +3006,12 @@ export default function PricingSettingsPage({
                                                                     </div>
                                                                 </td>
                                                                 <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontWeight: '800', color: THEME.colors.primary, fontSize: '0.9rem', fontFamily: 'monospace' }}>
-                                                                    {item.projectedPrice > 0 ? `$${formatNumber(item.projectedPrice)}` : '—'}
+                                                                    {item.projectedPrice > 0 ? `${formatNumber(item.projectedPrice)}` : '—'}
                                                                 </td>
                                                                 <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }}>
                                                                     <div>
                                                                         <span style={{ fontWeight: '800', fontSize: '0.85rem', color: item.monthlyVolume > 0 ? '#0284C7' : '#94A3B8' }}>
-                                                                            {item.monthlyVolume > 0 ? `${formatNumber(item.monthlyVolume, 1)} ${item.unit_of_measure || 'Kg'}` : '0'}
+                                                                            {item.monthlyVolume > 0 ? `${formatNumber(item.monthlyVolume, 1)} ${cleanUnit}` : '0'}
                                                                         </span>
                                                                         {item.ordersCount > 0 && (
                                                                             <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block' }}>
@@ -3026,16 +3040,16 @@ export default function PricingSettingsPage({
                                                                     </button>
                                                                 </td>
                                                             </tr>
-                                                        ))
-                                                    }
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    ) : (
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })() : (
                         <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary, border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, backgroundColor: 'white' }}>
                             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}><ArrowLeftCircle size={44} color="#94A3B8" /></div>
                             <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona una lista</h3>
