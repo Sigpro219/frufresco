@@ -164,6 +164,12 @@ export default function CommercialPage() {
             description: 'Inteligencia de costos de compra vs matriz autorizada'
         },
         {
+            id: 'settings',
+            label: 'Modelos de Precios',
+            icon: <Sliders size={16} strokeWidth={2} />,
+            description: 'Configuración de márgenes por segmento y listas'
+        },
+        {
             id: 'quotes',
             label: 'Cotizaciones',
             icon: <FileText size={16} strokeWidth={2} />,
@@ -174,12 +180,6 @@ export default function CommercialPage() {
             label: 'Acuerdos Especiales',
             icon: <Handshake size={16} strokeWidth={2} />,
             description: 'Negociación corporativa B2B Nutresa & Colsubsidio con SIPSA'
-        },
-        {
-            id: 'settings',
-            label: 'Modelos de Precios',
-            icon: <Sliders size={16} strokeWidth={2} />,
-            description: 'Configuración de márgenes por segmento y listas'
         },
         {
             id: 'campaigns',

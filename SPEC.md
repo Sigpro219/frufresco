@@ -11550,3 +11550,11 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - **Protocolo Sticky Docked de 2 Niveles Operativos (Tolerancia Cero - Gap = 0px):**
        * **Línea Sticky 1 (Toolbar de la Canasta):** Anclada magnéticamente a `top: 139px` (vista embebida) / `top: 0px` (vista directa) con `zIndex: 40`, fondo blanco sólido y sombra inferior sutil.
        * **Línea Sticky 2 (Thead de la Tabla):** Anclada a `top: 193px` con `zIndex: 35`, regla Chromium `borderCollapse: 'separate', borderSpacing: 0` y anclaje individual en cada celda `<th>` con fondo sólido `#F8FAFC`, permitiendo el flujo continuo de filas sin desbordes.
+
+  7. **Funnel Lógico y Secuencia Operativa de Subpestañas Comerciales (SDD v1.9.250):**
+     - La barra de navegación de *Operaciones & Gestión* se estructura siguiendo el orden cronológico riguroso del ciclo de fijación de precios y ventas B2B:
+       1. `Matriz de Costos` (Paso 1 - Fundamento): Consolidación de costos vivos de compra mayorista de plaza (Corabastos).
+       2. `Modelos de Precios` (Paso 2 - Calibración): Definición de márgenes y fórmulas (Modelos Estándar para pulso general y Modelos por Cliente para canastas específicas con telemetría a 30 días).
+       3. `Cotizaciones` (Paso 3 - Proposición): Generación de propuestas y cotizaciones dinámicas para prospectos y clientes cruzando Costos + Modelos.
+       4. `Acuerdos Especiales` (Paso 4 - Formalización): Congelación de cotizaciones aprobadas como convenios vinculantes de tarifa fija para despachos.
+       5. `Campañas Temporales` (Paso 5 - Excepciones): Promociones estacionales o ajustes temporales con ventana de vigencia delimitada.
