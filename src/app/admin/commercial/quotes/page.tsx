@@ -56,7 +56,7 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                 .from('quotes')
                 .update({
                     status: 'agreement',
-                    name: snapshotName,
+                    model_snapshot_name: snapshotName,
                     start_date: approvalStartDate,
                     valid_until: approvalValidUntil
                 })
