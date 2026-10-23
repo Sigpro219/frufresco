@@ -218,7 +218,7 @@ export default function B2BReportNoveltyModal({
                 : `Reporte de autoservicio B2B registrado por ${clientProfile?.company_name || clientProfile?.contact_name || 'Cliente B2B'}.\n\n• Categoría: ${category}\n• Motivo: ${reason}\n• Detalle: ${description.trim()}\n\n${rcaTag}`;
 
             const { error: pqrErr } = await supabase.from('customer_service_pqrs').insert({
-                client_id: clientProfile?.id || order.profile_id,
+                client_id: order.profile_id || clientProfile?.id,
                 order_id: order.id,
                 type: 'reclamo',
                 category: reportType === 'product' ? 'producto' : category,

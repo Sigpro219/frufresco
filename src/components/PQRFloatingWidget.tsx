@@ -30,6 +30,9 @@ export default function PQRFloatingWidget() {
     const [clientSearch, setClientSearch] = useState('');
     const [showClientDropdown, setShowClientDropdown] = useState(false);
     const [focusedClientIndex, setFocusedClientIndex] = useState(-1);
+    const [clientRecentOrders, setClientRecentOrders] = useState<any[]>([]);
+    const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+    const [loadingClientOrders, setLoadingClientOrders] = useState(false);
 
     // Photo uploads
     const [primaryPhoto, setPrimaryPhoto] = useState<File | null>(null);
@@ -51,7 +54,7 @@ export default function PQRFloatingWidget() {
         const fetchClients = async () => {
             const { data } = await supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, role, nit, address, phone, contact_phone')
+                .select('id, company_name, contact_name, role, nit, address, phone, contact_phone, parent_id, is_corporate_parent')
                 .in('role', ['b2b_client', 'b2c_client'])
                 .order('company_name', { ascending: true });
             setClients(data || []);
@@ -87,6 +90,8 @@ export default function PQRFloatingWidget() {
                 setSubject('');
                 setDescription('');
                 setSelectedClientId('');
+                setSelectedOrderId('');
+                setClientRecentOrders([]);
                 setClientSearch('');
                 setShowClientDropdown(false);
                 setFocusedClientIndex(-1);
@@ -195,10 +200,10 @@ export default function PQRFloatingWidget() {
             const creatorRoleLabel = profile?.role ? (roleLabels[profile.role] || profile.role) : 'Operaciones';
             const formattedDescription = `[Radicado por Colaborador FruFresco: ${creatorDisplayName} (${creatorRoleLabel})]\n\n${description.trim()}`;
 
-            // 3. Insert PQR record (always with order_id: null; order association happens during resolution in CS)
+            // 3. Insert PQR record (Poka-Yoke: strictly operational branch + optional/preselected order_id)
             const { error } = await supabase.from('customer_service_pqrs').insert({
                 client_id: selectedClientId,
-                order_id: null,
+                order_id: selectedOrderId || null,
                 type: pqrType,
                 category: category,
                 priority: priority,
@@ -222,15 +227,76 @@ export default function PQRFloatingWidget() {
         }
     };
 
-    // Multi-term fuzzy client filtering
+    // Poka-Yoke SDD: Identificar Casas Matrices (que tienen sucursales hijas) para impedir asignarles PQRs directamente
+    const parentMatrixIds = useMemo(() => {
+        const set = new Set<string>();
+        clients.forEach(c => {
+            if (c.parent_id) set.add(c.parent_id);
+        });
+        return set;
+    }, [clients]);
+
+    const matrixClientsMap = useMemo(() => {
+        const map = new Map<string, any>();
+        clients.forEach(c => map.set(c.id, c));
+        return map;
+    }, [clients]);
+
+    // Multi-term fuzzy client filtering (Excluye Casas Matrices puras y redirige a sus Sucursales Operativas)
     const filteredClients = useMemo(() => {
         if (!clientSearch.trim()) return [];
         const tokens = clientSearch.toLowerCase().trim().split(/\s+/).filter(Boolean);
-        return clients.filter(c => {
-            const text = `${c.company_name || ''} ${c.contact_name || ''} ${c.nit || ''} ${c.address || ''} ${c.phone || ''} ${c.contact_phone || ''}`.toLowerCase();
-            return tokens.every(token => text.includes(token));
+
+        const matchedParentMatrixIds = new Set<string>();
+        clients.forEach(c => {
+            if (parentMatrixIds.has(c.id)) {
+                const mText = `${c.company_name || ''} ${c.contact_name || ''} ${c.nit || ''}`.toLowerCase();
+                if (tokens.every(token => mText.includes(token))) {
+                    matchedParentMatrixIds.add(c.id);
+                }
+            }
+        });
+
+        const deliverableClients = clients.filter(c => !parentMatrixIds.has(c.id));
+
+        return deliverableClients.filter(c => {
+            const parentMatrix = c.parent_id ? matrixClientsMap.get(c.parent_id) : null;
+            const isDirectBranch = Boolean(c.parent_id && matchedParentMatrixIds.has(c.parent_id));
+            const text = `${c.company_name || ''} ${parentMatrix?.company_name || ''} ${c.contact_name || ''} ${c.nit || parentMatrix?.nit || ''} ${c.address || ''} ${c.phone || ''} ${c.contact_phone || ''}`.toLowerCase();
+            return isDirectBranch || tokens.every(token => text.includes(token));
         }).slice(0, 20);
-    }, [clients, clientSearch]);
+    }, [clients, clientSearch, parentMatrixIds, matrixClientsMap]);
+
+    // Cargar pedidos recientes de la sucursal seleccionada para permitir vinculaci?n inmediata
+    useEffect(() => {
+        if (!selectedClientId) {
+            setClientRecentOrders([]);
+            setSelectedOrderId('');
+            return;
+        }
+        let cancelled = false;
+        setLoadingClientOrders(true);
+        (async () => {
+            try {
+                const { data } = await supabase
+                    .from('orders')
+                    .select('id, sequence_id, total, created_at, delivery_date, shipping_address')
+                    .eq('profile_id', selectedClientId)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+                if (!cancelled) {
+                    const list = data || [];
+                    setClientRecentOrders(list);
+                    setSelectedOrderId(list.length > 0 ? list[0].id : '');
+                }
+            } catch (e) {
+                console.error('Error fetching branch orders in PQR widget:', e);
+            } finally {
+                if (!cancelled) setLoadingClientOrders(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [selectedClientId]);
 
     // Auto-scroll to focused client in dropdown
     useEffect(() => {
@@ -344,7 +410,7 @@ export default function PQRFloatingWidget() {
                             {/* Client Lookup with Keyboard Arrow Navigation */}
                             <div style={{ position: 'relative' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                                    Cliente afectado *
+                                    Cliente / Sucursal Operativa afectada *
                                 </label>
                                 {selectedClientId ? (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', border: '1px solid #CBD5E1', borderRadius: '8px', backgroundColor: '#F8FAFC' }}>
@@ -479,6 +545,32 @@ export default function PQRFloatingWidget() {
                                     </>
                                 )}
                             </div>
+
+                            {/* Selector de Pedido Reciente de la Sucursal */}
+                            {selectedClientId && (
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                        Pedido Asociado de la Sede {loadingClientOrders ? '(Cargando...)' : `(${clientRecentOrders.length})`}
+                                    </label>
+                                    <select
+                                        value={selectedOrderId}
+                                        onChange={e => setSelectedOrderId(e.target.value)}
+                                        disabled={loadingClientOrders}
+                                        style={{
+                                            width: '100%', padding: '8px', borderRadius: '8px',
+                                            border: '1px solid #CBD5E1', fontSize: '0.78rem',
+                                            outline: 'none', backgroundColor: 'white', fontWeight: '600', color: '#1E293B'
+                                        }}
+                                    >
+                                        <option value=''>-- Asociar pedido despu?s en Calidad --</option>
+                                        {clientRecentOrders.map(ord => (
+                                            <option key={ord.id} value={ord.id}>
+                                                Pedido #{ord.sequence_id} ? {ord.delivery_date || new Date(ord.created_at).toLocaleDateString('es-CO')} ? ${Number(ord.total || 0).toLocaleString('es-CO')}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
                             {/* Type and Category */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>

@@ -11597,3 +11597,19 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   3. **Cinta KPI de Telemetría y Barra Sticky Superior de Productos:**
      - Proyecta en vivo 5 indicadores de negociación: `SKUs en Propuesta`, `Consumo Cliente (Últ. 30d)`, `Margen Bruto Ponderado`, `Utilidad Mensual Proyectada ($ COP)` y `Total Cotización (c/IVA)`.
      - La barra de herramientas sticky superior integra a la izquierda el filtro en vivo de la canasta (`Filtrar productos dentro de esta cotización...`) y a la derecha el buscador `+ Catálogo Maestro` para añadir SKUs sin desplazarse al final del documento.
+
+---
+
+### Escenario 278: Poka-Yoke de Prohibición de Asignación de PQRS a Casas Matrices, Selección Estricta de Sucursal Operativa y Resolución Jerárquica de Pedidos en Gestión de Calidad (SDD v1.9.253)
+- **Given** la arquitectura multi-sede de clientes institucionales B2B donde las **Casas Matrices** (`parentMatrixIds` / `is_corporate_parent`) actúan como entidades jurídicas paraguas que **no ejecutan pedidos directos**, sino que la operación física de despacho y facturación recae exclusivamente sobre sus **Sucursales Operativas** (`profiles.parent_id = matriz.id`),
+- **When** un colaborador interno radica una novedad en el widget flotante (`src/components/PQRFloatingWidget.tsx`), un cliente reporta desde el portal B2B (`src/components/B2BReportNoveltyModal.tsx`), o el auditor de Calidad vincula un pedido en la consola técnica (`src/app/admin/customer-service/components/PqrAuditModal.tsx`),
+- **Then** el sistema aplica un blindaje **Poka-Yoke de 3 niveles** que erradica la orfandad de pedidos en PQRS:
+  1. **Nivel 1 — Poka-Yoke de Entrada en Radicación (`PQRFloatingWidget.tsx` y `B2BReportNoveltyModal.tsx`):**
+     - **Exclusión Estricta de Casas Matrices Puras:** En paridad con el motor de Toma de Pedidos (`/admin/orders/create`), el buscador de clientes calcula `parentMatrixIds` (todo perfil que sea `parent_id` de al menos una sede hija) y filtra `deliverableClients = clients.filter(c => !parentMatrixIds.has(c.id))`.
+     - **Redirección Inteligente a Sucursales Operativas:** Cuando el colaborador busca por la razón social o NIT de la Casa Matriz (ej. *"ANGLO"*, *"ECCI"*, *"CARNICOLAS"*), el desplegable proyecta directamente sus **Sucursales Hijas** identificadas con el badge `[Sucursal]`, el nombre de la matriz y la dirección física de entrega, impidiendo físicamente radicar una PQR sobre una matriz sin pedidos.
+     - **Vinculación Temprana de Pedido desde la Radicación:** Al seleccionar la sucursal operativa en `PQRFloatingWidget.tsx`, el formulario consulta sus pedidos recientes y habilita el selector opcional `Pedido Asociado` (preseleccionando el último pedido reciente de la sede) para que el caso nazca vinculado desde el minuto cero.
+     - En `B2BReportNoveltyModal.tsx`, la inserción prioriza `client_id: order.profile_id || clientProfile?.id`, garantizando que el expediente apunte siempre a la sede titular del pedido.
+  2. **Nivel 2 — Resolución Jerárquica Multi-Sede y Autocorrección en Auditoría (`PqrAuditModal.tsx`):**
+     - Al abrir un expediente sin pedido en `PqrAuditModal.tsx`, la consulta de `clientRecentOrders` expande el alcance a toda la familia corporativa del cliente (perfil actual, su `parent_id`, todas las sucursales hermanas/hijas vinculadas a la misma matriz y perfiles con idéntico NIT limpio), proyectando el nombre de la sucursal y dirección en cada opción del selector.
+     - Al ejecutar `handleLinkOrder`, el sistema actualiza atómicamente tanto `order_id` como `client_id = orderData.profile_id`, rectificando automáticamente cualquier caso histórico hacia la sucursal operativa real que recibió el despacho.
+

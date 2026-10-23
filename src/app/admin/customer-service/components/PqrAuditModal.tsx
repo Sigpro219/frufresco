@@ -615,13 +615,46 @@ export default function PqrAuditModal({
             setLoadingRecentOrders(true);
             (async () => {
                 try {
+                    // Poka-Yoke SDD: Resolver toda la familia corporativa (Sucursal, Casa Matriz y Sedes Hermanas / mismo NIT)
+                    const familyIds = new Set<string>([pqr.client_id]);
+                    const { data: currProf } = await supabase
+                        .from('profiles')
+                        .select('id, parent_id, nit')
+                        .eq('id', pqr.client_id)
+                        .maybeSingle();
+
+                    const rootId = currProf?.parent_id || pqr.client_id;
+                    familyIds.add(rootId);
+
+                    const cleanNit = (currProf?.nit || '').replace(/[^0-9]/g, '');
+                    const orFilters = [`parent_id.eq.${rootId}`, `id.eq.${rootId}`];
+                    if (cleanNit.length >= 6) {
+                        orFilters.push(`nit.ilike.%${cleanNit}%`);
+                    }
+
+                    const { data: relatedProfiles } = await supabase
+                        .from('profiles')
+                        .select('id, company_name')
+                        .or(orFilters.join(','));
+
+                    const branchNameMap = new Map<string, string>();
+                    (relatedProfiles || []).forEach((rp: any) => {
+                        familyIds.add(rp.id);
+                        if (rp.company_name) branchNameMap.set(rp.id, rp.company_name);
+                    });
+
                     const { data: recentOrders } = await supabase
                         .from('orders')
-                        .select('id, sequence_id, total, status, created_at, shipping_address, origin_source, admin_notes')
-                        .eq('profile_id', pqr.client_id)
+                        .select('id, sequence_id, profile_id, total, status, created_at, delivery_date, shipping_address, origin_source, admin_notes')
+                        .in('profile_id', Array.from(familyIds))
                         .order('created_at', { ascending: false })
-                        .limit(10);
-                    setClientRecentOrders(recentOrders || []);
+                        .limit(25);
+
+                    const enrichedOrders = (recentOrders || []).map((o: any) => ({
+                        ...o,
+                        branch_name: branchNameMap.get(o.profile_id) || ''
+                    }));
+                    setClientRecentOrders(enrichedOrders);
                 } catch (err) {
                     console.error('Error fetching client recent orders:', err);
                 } finally {
@@ -1377,14 +1410,20 @@ export default function PqrAuditModal({
         try {
             const { data: orderData, error: ordErr } = await supabase
                 .from('orders')
-                .select('id, sequence_id, total, created_at, origin_source, admin_notes, shipping_address')
+                .select('id, sequence_id, profile_id, total, created_at, origin_source, admin_notes, shipping_address')
                 .eq('id', orderIdToLink)
                 .single();
             if (ordErr) throw ordErr;
 
+            // Poka-Yoke SDD: Si la PQR fue radicada sobre una Casa Matriz o sede hermana, normalizar client_id a la Sucursal Operativa real del pedido
+            const updatePayload: any = { order_id: orderIdToLink };
+            if (orderData.profile_id && orderData.profile_id !== pqr.client_id) {
+                updatePayload.client_id = orderData.profile_id;
+            }
+
             const { error: updateErr } = await supabase
                 .from('customer_service_pqrs')
-                .update({ order_id: orderIdToLink })
+                .update(updatePayload)
                 .eq('id', pqr.id);
             if (updateErr) throw updateErr;
 
