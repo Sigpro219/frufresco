@@ -1,38 +1,89 @@
-﻿'use client';
+'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
-
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { THEME } from '@/lib/adminTheme';
-import { 
-    Sparkles, 
-    Search, 
-    CircleDot, 
-    Printer, 
-    Save, 
-    Package, 
-    AlertTriangle, 
-    Plus, 
-    Trash2, 
-    ChevronRight, 
-    ArrowLeft, 
-    Building2, 
-    Check,
-    TrendingUp
+import Letterhead from '@/components/Letterhead';
+import {
+    Sparkles,
+    Search,
+    CircleDot,
+    Printer,
+    Save,
+    Package,
+    AlertTriangle,
+    Plus,
+    Trash2,
+    ArrowLeft,
+    Building2,
+    ShieldCheck,
+    Eye,
+    Sliders,
+    TrendingUp,
+    X,
+    FileText,
+    CheckCircle2
 } from 'lucide-react';
+
+const normalizeUnit = (u?: string) => {
+    if (!u) return 'Kg';
+    const clean = u.trim();
+    if (clean.toLowerCase() === 'atado') return 'Kg';
+    return clean;
+};
+
+const formatCategoryTitle = (cat?: string) => {
+    if (!cat) return 'Otros Productos';
+    const c = cat.toUpperCase().trim();
+    if (c === 'FR' || c.startsWith('FRUT')) return 'Frutas';
+    if (c === 'VE' || c.startsWith('VERD')) return 'Verduras';
+    if (c === 'HO' || c.startsWith('HORT')) return 'Hortalizas';
+    if (c === 'TU' || c.startsWith('TUBER') || c.startsWith('TUBÉR')) return 'Tubérculos y Plátanos';
+    if (c === 'DE' || c.startsWith('DESP') || c.startsWith('ABARR')) return 'Despensa y Abarrotes';
+    if (c === 'LA' || c.startsWith('LACT') || c.startsWith('LÁCT')) return 'Lácteos y Derivados';
+    if (c === 'CO' || c.startsWith('CONG') || c.startsWith('PULP')) return 'Congelados y Pulpas';
+    if (c === 'PR' || c.startsWith('PROC') || c.startsWith('PELAD')) return 'Procesados y Pelados';
+    if (c === 'HI' || c.startsWith('HIER')) return 'Hierbas Aromáticas';
+    return cat;
+};
+
+const CATEGORY_PRIORITY = [
+    'Verduras',
+    'Frutas',
+    'Hortalizas',
+    'Tubérculos y Plátanos',
+    'Despensa y Abarrotes',
+    'Lácteos y Derivados',
+    'Congelados y Pulpas',
+    'Procesados y Pelados',
+    'Hierbas Aromáticas',
+    'Otros Productos'
+];
+
+const normalizeEntityName = (s?: string) =>
+    (s || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/\b(S\.?A\.?S\.?|LTDA\.?|S\.?A\.?|B2B|CLIENTE|LISTA|PLANTILLA)\b/g, '')
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
 
 function CreateQuotePageContent() {
     const formatPrice = (value: number) => {
         return new Intl.NumberFormat('es-CO', {
             minimumFractionDigits: 0,
-            maximumFractionDigits: 2
-        }).format(value);
+            maximumFractionDigits: 0
+        }).format(Math.round(value || 0));
     };
 
     const printDocRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const duplicateFrom = searchParams ? searchParams.get('duplicate_from') : null;
 
     const formatQuoteNumber = (seq: number, dateStr?: string) => {
         const date = dateStr ? new Date(dateStr) : new Date();
@@ -46,9 +97,61 @@ function CreateQuotePageContent() {
     const [clientName, setClientName] = useState('');
     const [selectedClientId, setSelectedClientId] = useState('');
     const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
-    const [selectedModelId, setSelectedModelId] = useState('');
+    const [selectedModelId, setSelectedModelId] = useState(GENERAL_INSTITUCIONAL_ID);
     const [clientDemandMap, setClientDemandMap] = useState<Map<string, { volume: number; ordersCount: number }>>(new Map());
     const [loadingDemand, setLoadingDemand] = useState(false);
+
+    const [items, setItems] = useState<any[]>([]);
+    const [paymentTermsDays, setPaymentTermsDays] = useState(30);
+    const [basketFilter, setBasketFilter] = useState('');
+    const [viewMode, setViewMode] = useState<'negotiation' | 'print_preview'>('negotiation');
+    const [customMarginsAppliedCount, setCustomMarginsAppliedCount] = useState<number>(0);
+
+    // DATA STATE
+    const [clients, setClients] = useState<any[]>([]);
+    const [leads, setLeads] = useState<any[]>([]);
+    const [templates, setTemplates] = useState<any[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [loadingTemplate, setLoadingTemplate] = useState(false);
+    const [models, setModels] = useState<any[]>([]);
+    const [rules, setRules] = useState<any[]>([]);
+    const [baseGiRules, setBaseGiRules] = useState<any[]>([]);
+    const [clientSearch, setClientSearch] = useState('');
+    const [showClientResults, setShowClientResults] = useState(false);
+    const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [nicknames, setNicknames] = useState<any[]>([]);
+    const [conversions, setConversions] = useState<any[]>([]);
+    const [matrixCosts, setMatrixCosts] = useState<Record<string, number>>({});
+    const [saving, setSaving] = useState(false);
+    const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
+    const [originalQuoteVersion, setOriginalQuoteVersion] = useState<number>(1);
+    const [parentQuoteId, setParentQuoteId] = useState<string | null>(null);
+
+    // MODAL STATE FOR NEW CLIENT
+    const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [newClient, setNewClient] = useState({
+        company_name: '',
+        contact_name: '',
+        nit: '',
+        phone: '',
+        address: '',
+        role: 'b2b_client' as 'b2b_client' | 'b2c_client',
+        pricing_model_id: GENERAL_INSTITUCIONAL_ID
+    });
+
+    const [appSettings, setAppSettings] = useState<Record<string, string>>({
+        provider_nit: '901.393.217-5',
+        provider_legal_name: 'Investments Cortés S.A.S.',
+        provider_logo_url: '/logo-investments.png',
+        provider_address: 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C., Colombia',
+        provider_email: 'contacto@investmentscortes.com',
+        app_name: 'FruFresco',
+        app_logo_url: '',
+        primary_color: '#0D7A57',
+        secondary_color: '#64748B'
+    });
 
     const fetchClientDemand = async (clientId: string) => {
         if (!clientId) {
@@ -57,11 +160,13 @@ function CreateQuotePageContent() {
         }
         setLoadingDemand(true);
         try {
+            const clientObj = clients.find(c => c.id === clientId);
+            const rootId = clientObj?.parent_id || clientId;
             const { data: branches } = await supabase
                 .from('profiles')
                 .select('id')
-                .eq('parent_id', clientId);
-            const clientIds = [clientId, ...(branches || []).map(b => b.id)];
+                .eq('parent_id', rootId);
+            const clientIds = Array.from(new Set([rootId, clientId, ...(branches || []).map(b => b.id)]));
 
             const cycleStartIso = new Date(Date.now() - 30 * 86400000).toISOString();
             const { data: modelOrders } = await supabase
@@ -98,59 +203,6 @@ function CreateQuotePageContent() {
             setLoadingDemand(false);
         }
     };
-    const [items, setItems] = useState<any[]>([]);
-    const [paymentTermsDays, setPaymentTermsDays] = useState(30);
-    const [introTitle, setIntroTitle] = useState('Suministro de Frutas y Verduras de Alta Calidad');
-    const [introDesc, setIntroDesc] = useState('Nuestras cotizaciones combinan frescura, calidad garantizada y entregas puntuales del campo a su negocio. Los productos son seleccionados minuciosamente bajo los estándares óptimos de inocuidad y empaque.');
-
-    // DATA STATE
-    const [clients, setClients] = useState<any[]>([]);
-    const [leads, setLeads] = useState<any[]>([]);
-    const [templates, setTemplates] = useState<any[]>([]);
-    const [selectedTemplateId, setSelectedTemplateId] = useState('');
-    const [loadingTemplate, setLoadingTemplate] = useState(false);
-    const [models, setModels] = useState<any[]>([]);
-    const [rules, setRules] = useState<any[]>([]); 
-    const [clientSearch, setClientSearch] = useState('');
-    const [showClientResults, setShowClientResults] = useState(false);
-    const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [nicknames, setNicknames] = useState<any[]>([]);
-    const [conversions, setConversions] = useState<any[]>([]);
-    const [matrixCosts, setMatrixCosts] = useState<Record<string, number>>({});
-    const [saving, setSaving] = useState(false);
-    const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
-    const [originalQuoteVersion, setOriginalQuoteVersion] = useState<number>(1);
-    const [parentQuoteId, setParentQuoteId] = useState<string | null>(null);
-
-    // MODAL STATE FOR NEW CLIENT
-    const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-    const [newClient, setNewClient] = useState({
-        company_name: '',
-        contact_name: '',
-        nit: '',
-        phone: '',
-        address: '',
-        role: 'b2b_client' as 'b2b_client' | 'b2c_client',
-        pricing_model_id: ''
-    });
-
-    // BRANDING & SETTINGS
-    const [appSettings, setAppSettings] = useState<Record<string, string>>({
-        provider_nit: '901.393.217',
-        provider_legal_name: 'Investments Cortes S.A.S',
-        provider_logo_url: '/logo-investments.png',
-        provider_address: 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C., Colombia',
-        provider_email: 'contacto@investmentscortes.com',
-        app_name: 'FruFresco',
-        app_logo_url: '',
-        primary_color: '#111827',
-        secondary_color: '#64748B'
-    });
-
-    const searchParams = useSearchParams();
-    const duplicateFrom = searchParams ? searchParams.get('duplicate_from') : null;
 
     useEffect(() => {
         fetchInitialData();
@@ -164,7 +216,6 @@ function CreateQuotePageContent() {
 
     const loadDuplicateQuote = async (quoteId: string) => {
         try {
-            // 1. Fetch quote details
             const { data: qData, error: qErr } = await supabase
                 .from('quotes')
                 .select('*')
@@ -176,7 +227,6 @@ function CreateQuotePageContent() {
             if (qData) {
                 setParentQuoteId(qData.id);
                 setOriginalQuoteVersion(qData.version || 1);
-                // Pre-populate client info
                 if (qData.client_id) {
                     setSelectedClientId(qData.client_id);
                     fetchClientDemand(qData.client_id);
@@ -191,22 +241,26 @@ function CreateQuotePageContent() {
                     setClientSearch(qData.client_name || '');
                 }
 
-                // Pre-populate model and settings
                 if (qData.model_id) setSelectedModelId(qData.model_id);
-                if (qData.payment_terms_days) { setPaymentTermsDays(qData.payment_terms_days); } else { const { data: ptS } = await supabase.from('app_settings').select('value').eq('key', `quote_payment_days:${quoteId}`).maybeSingle(); if (ptS?.value && !isNaN(Number(ptS.value))) setPaymentTermsDays(Number(ptS.value)); }
-                if (qData.intro_title) setIntroTitle(qData.intro_title);
-                if (qData.intro_desc) setIntroDesc(qData.intro_desc);
+                if (qData.payment_terms_days) {
+                    setPaymentTermsDays(qData.payment_terms_days);
+                } else {
+                    const { data: ptS } = await supabase
+                        .from('app_settings')
+                        .select('value')
+                        .eq('key', `quote_payment_days:${quoteId}`)
+                        .maybeSingle();
+                    if (ptS?.value && !isNaN(Number(ptS.value))) setPaymentTermsDays(Number(ptS.value));
+                }
 
-                // 2. Fetch quote items
                 const { data: iData, error: iErr } = await supabase
                     .from('quote_items')
-                    .select('*, products(name, unit_of_measure, sku, iva_rate)')
+                    .select('*, products(name, unit_of_measure, sku, iva_rate, category, accounting_id)')
                     .eq('quote_id', quoteId);
 
                 if (iErr) throw iErr;
 
                 if (iData) {
-                    // Consultar costos vivos de hoy desde commercial_cost_matrix para recotizar sobre costo real vigente
                     const prodIds = iData.map((it: any) => it.product_id).filter(Boolean);
                     const liveCostMap: Record<string, number> = {};
                     if (prodIds.length > 0) {
@@ -223,7 +277,7 @@ function CreateQuotePageContent() {
 
                     const loadedItems = iData.map((item: any) => {
                         const liveCost = liveCostMap[item.product_id] || Number(item.cost_basis) || 0;
-                        const margin = Number(item.margin_percent) || 34.2;
+                        const margin = Number(item.margin_percent) || 34.5;
                         const recalculatedPrice = liveCost > 0
                             ? Math.ceil((liveCost * (1 + margin / 100)) / 50) * 50
                             : (Number(item.unit_price) || 0);
@@ -232,12 +286,14 @@ function CreateQuotePageContent() {
                             variant_id: item.variant_id || null,
                             name: item.product_name || item.products?.name || 'Producto',
                             sku: item.sku || item.products?.sku || '',
-                            unit: item.unit_of_measure || item.products?.unit_of_measure || 'Kg',
+                            accounting_id: item.products?.accounting_id || item.sku || item.product_id?.slice(0, 8),
+                            category: item.products?.category || 'Otros Productos',
+                            unit: normalizeUnit(item.unit_of_measure || item.products?.unit_of_measure || 'Kg'),
                             cost: liveCost,
                             margin: margin,
                             variant_adjustment: 0,
                             price: recalculatedPrice,
-                            iva_rate: item.iva_rate || 0,
+                            iva_rate: item.iva_rate ?? item.products?.iva_rate ?? 0,
                             quantity: item.quantity || 1
                         };
                     });
@@ -252,43 +308,46 @@ function CreateQuotePageContent() {
 
     const fetchInitialData = async () => {
         try {
-            const { data: sData, error: sErr } = await supabase.from('app_settings').select('*');
-            if (sErr) console.warn('Error fetching app_settings:', sErr);
+            const { data: sData } = await supabase.from('app_settings').select('*');
             if (sData) {
                 const settingsMap: Record<string, string> = {};
                 sData.forEach((s: any) => { settingsMap[s.key] = s.value; });
                 setAppSettings(prev => ({ ...prev, ...settingsMap }));
             }
 
-            const { data: mData, error: mErr } = await supabase.from('pricing_models').select('*').order('name');
-            if (mErr) console.warn('Error fetching pricing_models:', mErr);
+            const { data: mData } = await supabase.from('pricing_models').select('*').order('name');
             if (mData && mData.length > 0) {
                 setModels(mData);
-                setSelectedModelId(mData[0].id);
+                // SDD Escenario 269.1: Línea Base Inicial hereda de General Institucional Dinámico
+                const giModel = mData.find((m: any) => m.id === GENERAL_INSTITUCIONAL_ID) || mData[0];
+                if (!duplicateFrom) {
+                    setSelectedModelId(giModel.id);
+                }
             }
 
-            const { data: cData, error: cErr } = await supabase.from('profiles').select('id, company_name, contact_name, nit, phone, address, pricing_model_id, parent_id, role').in('role', ['b2b_client', 'b2c_client']).order('company_name');
-            if (cErr) console.warn('Error fetching profiles:', cErr);
+            const { data: cData } = await supabase
+                .from('profiles')
+                .select('id, company_name, razon_social, contact_name, nit, phone, contact_phone, email, address, pricing_model_id, parent_id, role, payment_days')
+                .in('role', ['b2b_client', 'b2c_client'])
+                .order('company_name');
             if (cData) setClients(cData || []);
 
-            const { data: lData, error: lErr } = await supabase.from('leads').select('id, company_name, contact_name, phone, email, business_type, business_size, nit, address, municipality').order('company_name');
-            if (lErr) console.warn('Error fetching leads:', lErr);
+            const { data: lData } = await supabase
+                .from('leads')
+                .select('id, company_name, contact_name, phone, email, business_type, business_size, nit, address, municipality')
+                .order('company_name');
             if (lData) setLeads(lData || []);
 
-            const { data: tData, error: tErr } = await supabase.from('quote_templates').select('*').order('name');
-            if (tErr) console.warn('Error fetching quote_templates:', tErr);
+            const { data: tData } = await supabase.from('quote_templates').select('*').order('name');
             if (tData) setTemplates(tData || []);
 
-            const { data: convData, error: convErr } = await supabase.from('product_conversions').select('*');
-            if (convErr) console.warn('Error fetching product_conversions:', convErr);
+            const { data: convData } = await supabase.from('product_conversions').select('*');
             if (convData) setConversions(convData || []);
 
-            // Fetch active commercial cost matrix as Single Source of Truth
-            const { data: matrixRows, error: mtxErr } = await supabase
+            const { data: matrixRows } = await supabase
                 .from('commercial_cost_matrix')
                 .select('product_id, manual_cost')
                 .eq('is_active', true);
-            if (mtxErr) console.warn('Error fetching commercial_cost_matrix:', mtxErr);
             if (matrixRows) {
                 const mMap: Record<string, number> = {};
                 matrixRows.forEach((r: any) => {
@@ -299,13 +358,11 @@ function CreateQuotePageContent() {
                 setMatrixCosts(mMap);
             }
 
-            // Fetch next sequential quote number
-            const { data: latestQuotes, error: qErr } = await supabase
+            const { data: latestQuotes } = await supabase
                 .from('quotes')
                 .select('quote_number')
                 .order('quote_number', { ascending: false })
                 .limit(1);
-            if (qErr) console.warn('Error fetching latest quote number:', qErr);
             const nextNum = latestQuotes && latestQuotes.length > 0 ? (latestQuotes[0].quote_number + 1) : 1;
             setQuoteNumber(String(nextNum));
         } catch (err) {
@@ -314,30 +371,10 @@ function CreateQuotePageContent() {
     };
 
     useEffect(() => {
-        if (activeDropdownIndex >= 0) {
-            const container = document.getElementById('client-search-dropdown');
-            const activeItem = document.getElementById(`dropdown-item-${activeDropdownIndex}`);
-            if (container && activeItem) {
-                const containerTop = container.scrollTop;
-                const containerBottom = containerTop + container.clientHeight;
-                const elemTop = activeItem.offsetTop;
-                const elemBottom = elemTop + activeItem.offsetHeight;
-                if (elemTop < containerTop) {
-                    container.scrollTop = elemTop;
-                } else if (elemBottom > containerBottom) {
-                    container.scrollTop = elemBottom - container.clientHeight;
-                }
-            }
-        }
-    }, [activeDropdownIndex]);
-
-    useEffect(() => {
         if (selectedModelId) {
             fetchRules(selectedModelId);
         }
     }, [selectedModelId]);
-
-    const [baseGiRules, setBaseGiRules] = useState<any[]>([]);
 
     const fetchRules = async (modelId: string) => {
         const { data } = await supabase.from('pricing_rules').select('*').eq('model_id', modelId);
@@ -350,38 +387,82 @@ function CreateQuotePageContent() {
         }
     };
 
+    const getMarginForProduct = (productId: string, modelId: string, loadedRules: any[]) => {
+        const model = models.find(m => m.id === modelId);
+        if (!model) return 34.5;
+        let margin = Number(model.base_margin_percent) || 0;
+        const rule = loadedRules.find((r: any) => r.product_id === productId);
+        if (rule) {
+            margin += Number(rule.margin_adjustment) || 0;
+        } else if (modelId !== GENERAL_INSTITUCIONAL_ID) {
+            const giRule = baseGiRules.find((r: any) => r.product_id === productId);
+            if (giRule) {
+                margin += Number(giRule.margin_adjustment) || 0;
+            }
+        }
+        return Math.round(margin * 10) / 10;
+    };
+
+    useEffect(() => {
+        if (items.length > 0 && selectedModelId) {
+            setItems(prev => prev.map(item => {
+                if (item.has_custom_margin) return item;
+                const margin = getMarginForProduct(item.product_id, selectedModelId, rules);
+                const price = calculateFinalPrice(item.cost, margin);
+                return { ...item, margin, price };
+            }));
+        }
+    }, [rules]);
+
+    const calculateFinalPrice = (cost: number, marginPercent: number) => {
+        if (cost <= 0) return 0;
+        const rawPrice = cost * (1 + (marginPercent || 0) / 100);
+        return Math.ceil(rawPrice / 50) * 50;
+    };
+
     const handleClientChange = async (clientId: string) => {
         setSelectedClientId(clientId);
         fetchClientDemand(clientId);
         const client = clients.find(c => c.id === clientId);
         if (client) {
             setClientName(client.company_name || client.contact_name || '');
+            if (client.payment_days) {
+                setPaymentTermsDays(Number(client.payment_days));
+            }
             let resolvedModelId = client.pricing_model_id;
-            if (!resolvedModelId && client.parent_id) {
-                const parent = clients.find(c => c.id === client.parent_id);
-                if (parent) {
-                    resolvedModelId = parent.pricing_model_id;
-                }
+            const parentClient = client.parent_id ? clients.find(c => c.id === client.parent_id) : client;
+            if (!resolvedModelId && parentClient) {
+                resolvedModelId = parentClient.pricing_model_id;
             }
-            if (resolvedModelId) {
-                setSelectedModelId(resolvedModelId);
-            } else {
-                setSelectedModelId(GENERAL_INSTITUCIONAL_ID);
-            }
-            // Cargar máscaras de productos (Nicknames) para este cliente
+            const finalModelId = resolvedModelId || GENERAL_INSTITUCIONAL_ID;
+            setSelectedModelId(finalModelId);
+
             try {
                 const { data } = await supabase
                     .from('product_nicknames')
                     .select('*')
                     .eq('customer_id', clientId);
                 if (data) setNicknames(data);
-            } catch (err) {
-                console.error('Error cargando nicknames:', err);
+            } catch {
                 setNicknames([]);
+            }
+
+            // Conexión automática con Paso 2 (Modelos por Cliente / Canastas):
+            // Si el cliente o su Casa Matriz tiene una canasta configurada en quote_templates, cargarla automáticamente
+            if (!duplicateFrom && templates.length > 0) {
+                const exactNorm = normalizeEntityName(client.company_name);
+                const parentNorm = normalizeEntityName(parentClient?.company_name || client.company_name);
+                const matchedTemplate = templates.find(t => {
+                    const tNorm = normalizeEntityName(t.name);
+                    return tNorm.length >= 3 && (tNorm === exactNorm || tNorm === parentNorm || exactNorm.includes(tNorm) || parentNorm.includes(tNorm) || tNorm.includes(parentNorm));
+                });
+                if (matchedTemplate) {
+                    handleTemplateChange(matchedTemplate.id, finalModelId, true);
+                }
             }
         } else {
             setClientName('');
-            setSelectedModelId('');
+            setSelectedModelId(GENERAL_INSTITUCIONAL_ID);
             setNicknames([]);
         }
     };
@@ -398,46 +479,76 @@ function CreateQuotePageContent() {
         }
     };
 
-    const handleTemplateChange = async (templateId: string) => {
+    const handleTemplateChange = async (templateId: string, overrideModelId?: string, skipClientAutoSelect = false) => {
         setSelectedTemplateId(templateId);
-        if (!templateId) return;
+        if (!templateId) {
+            setCustomMarginsAppliedCount(0);
+            return;
+        }
+
+        const activeModelId = overrideModelId || selectedModelId || GENERAL_INSTITUCIONAL_ID;
+
+        // Si el usuario selecciona primero el Modelo por Cliente (Canasta) y aún no ha elegido destinatario,
+        // auto-vincular el cliente matriz correspondiente y cargar su demanda de 30 días
+        if (!skipClientAutoSelect && !selectedClientId && !selectedLeadId) {
+            const tmpl = templates.find(t => t.id === templateId);
+            if (tmpl) {
+                const tNorm = normalizeEntityName(tmpl.name);
+                const matchedClient =
+                    clients.find(c => !c.parent_id && normalizeEntityName(c.company_name) === tNorm) ||
+                    clients.find(c => !c.parent_id && (normalizeEntityName(c.company_name).includes(tNorm) || tNorm.includes(normalizeEntityName(c.company_name)))) ||
+                    clients.find(c => normalizeEntityName(c.company_name) === tNorm);
+                if (matchedClient) {
+                    setSelectedClientId(matchedClient.id);
+                    setClientName(matchedClient.company_name || matchedClient.contact_name || '');
+                    if (matchedClient.payment_days) setPaymentTermsDays(Number(matchedClient.payment_days));
+                    fetchClientDemand(matchedClient.id);
+                }
+            }
+        }
 
         setLoadingTemplate(true);
         try {
-            // 1. Fetch template items
-            const { data: itemData, error: itemsErr } = await supabase
-                .from('quote_template_items')
-                .select('product_id')
-                .eq('template_id', templateId);
+            // 1. Fetch template items + custom margins saved in Step 2 (Escenario 275.4: quote_template_margins:{template_id})
+            const [{ data: itemData, error: itemsErr }, { data: marginSetting }] = await Promise.all([
+                supabase.from('quote_template_items').select('product_id').eq('template_id', templateId),
+                supabase.from('app_settings').select('value').eq('key', `quote_template_margins:${templateId}`).maybeSingle()
+            ]);
 
             if (itemsErr) throw itemsErr;
             if (!itemData || itemData.length === 0) {
-                alert('La plantilla seleccionada no contiene productos.');
+                alert('La canasta seleccionada no contiene productos.');
                 setLoadingTemplate(false);
                 return;
             }
 
+            let customMarginsMap: Record<string, number> = {};
+            if (marginSetting?.value) {
+                try {
+                    customMarginsMap = JSON.parse(marginSetting.value) || {};
+                } catch {
+                    customMarginsMap = {};
+                }
+            }
+
             const productIds = itemData.map((it: any) => it.product_id);
 
-            // 2. Fetch products details
+            // 2. Fetch products with category and unit
             const { data: products, error: prodErr } = await supabase
                 .from('products')
-                .select('id, name, unit_of_measure, iva_rate, sku, accounting_id')
+                .select('id, name, unit_of_measure, iva_rate, sku, accounting_id, category')
                 .in('id', productIds)
                 .eq('is_active', true);
 
             if (prodErr) throw prodErr;
 
-            // 3. Fetch last 5 purchases for all these products to calculate cost basis in one query!
-            const { data: purchases, error: purErr } = await supabase
+            // 3. Fallback purchases for any SKU not in matrixCosts
+            const { data: purchases } = await supabase
                 .from('purchases')
                 .select('product_id, unit_price, purchase_unit, created_at')
                 .in('product_id', productIds)
                 .order('created_at', { ascending: false });
 
-            if (purErr) throw purErr;
-
-            // Group purchases by product_id
             const purchasesMap = new Map();
             if (purchases) {
                 purchases.forEach((p: any) => {
@@ -450,13 +561,10 @@ function CreateQuotePageContent() {
                 });
             }
 
-            // Calculate costs and margins
+            let customApplied = 0;
             const loadedItems = [];
             for (const p of products || []) {
-                // Priority 1: Commercial Cost Matrix (SSOT)
                 let cost = matrixCosts[p.id] || 0;
-
-                // Priority 2: Fallback to normalized purchases average if not in matrix
                 if (!cost) {
                     const prodPurchases = purchasesMap.get(p.id) || [];
                     if (prodPurchases.length > 0) {
@@ -481,7 +589,16 @@ function CreateQuotePageContent() {
                     }
                 }
 
-                const baseMargin = getMarginForProduct(p.id, selectedModelId, rules);
+                // Prioridad 1: Utilidad personalizada del Modelo por Cliente (Paso 2 SDD Escenario 275.4)
+                // Prioridad 2: Utilidad del Modelo Estándar (General Institucional Dinámico)
+                let baseMargin: number;
+                if (customMarginsMap[p.id] !== undefined && !isNaN(Number(customMarginsMap[p.id]))) {
+                    baseMargin = Number(customMarginsMap[p.id]);
+                    customApplied++;
+                } else {
+                    baseMargin = getMarginForProduct(p.id, activeModelId, rules);
+                }
+
                 const finalPrice = calculateFinalPrice(cost, baseMargin);
 
                 loadedItems.push({
@@ -490,9 +607,11 @@ function CreateQuotePageContent() {
                     name: p.name,
                     sku: p.sku,
                     accounting_id: p.accounting_id || p.sku || p.id?.slice(0, 8),
-                    unit: p.unit_of_measure,
+                    category: p.category || 'Otros Productos',
+                    unit: normalizeUnit(p.unit_of_measure),
                     cost: cost,
                     margin: baseMargin,
+                    has_custom_margin: customMarginsMap[p.id] !== undefined,
                     variant_adjustment: 0,
                     price: finalPrice,
                     iva_rate: p.iva_rate ?? 0,
@@ -500,71 +619,20 @@ function CreateQuotePageContent() {
                 });
             }
 
-            setItems(sortItemsByAccountingId(loadedItems));
+            setCustomMarginsAppliedCount(customApplied);
+            setItems(loadedItems);
         } catch (err: any) {
             console.error('Error loading template:', err);
-            alert('Error al cargar plantilla: ' + (err.message || err));
+            alert('Error al cargar canasta: ' + (err.message || err));
         } finally {
             setLoadingTemplate(false);
         }
     };
 
-    const sortItemsByAccountingId = (itemsList: any[]) => {
-        return [...itemsList].sort((a, b) => {
-            const idA = (a.accounting_id || a.sku || a.name || '').toString().toLowerCase();
-            const idB = (b.accounting_id || b.sku || b.name || '').toString().toLowerCase();
-            return idA.localeCompare(idB, 'es', { numeric: true, sensitivity: 'base' });
-        });
-    };
-
-    const sortItemsBySku = sortItemsByAccountingId;
-
-    const getMarginForProduct = (productId: string, modelId: string, loadedRules: any[]) => {
-        const model = models.find(m => m.id === modelId);
-        if (!model) return 0;
-        let margin = model.base_margin_percent;
-        const rule = loadedRules.find((r: any) => r.product_id === productId);
-        if (rule) {
-            margin += rule.margin_adjustment;
-        } else if (modelId !== GENERAL_INSTITUCIONAL_ID) {
-            const giRule = baseGiRules.find((r: any) => r.product_id === productId);
-            if (giRule) {
-                margin += giRule.margin_adjustment;
-            }
-        }
-        return margin;
-    };
-
-    useEffect(() => {
-        if (items.length > 0 && selectedModelId) {
-            recalcExistingItems();
-        }
-    }, [rules]);
-
-    const recalcExistingItems = () => {
-        const updated = items.map(item => {
-            const margin = getMarginForProduct(item.product_id, selectedModelId, rules);
-            const price = calculateFinalPrice(item.cost, margin);
-            return { ...item, margin, price };
-        });
-        setItems(sortItemsByAccountingId(updated));
-    };
-
-    const calculateFinalPrice = (cost: number, marginPercent: number) => {
-        if (cost <= 0) return 0;
-        // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen/Utilidad sobre Costo Efectivo (Markup Multiplicador)
-        const rawPrice = cost * (1 + (marginPercent || 0) / 100);
-        // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
-        return Math.ceil(rawPrice / 50) * 50;
-    };
-
     const calculateSmartAverageCost = async (productId: string, salesUnit: string) => {
-        // Priority 1: Commercial Cost Matrix from state
         if (matrixCosts[productId] && matrixCosts[productId] > 0) {
             return matrixCosts[productId];
         }
-
-        // Priority 2: Direct DB query in case state wasn't populated yet
         try {
             const { data: matrixRow } = await supabase
                 .from('commercial_cost_matrix')
@@ -575,11 +643,10 @@ function CreateQuotePageContent() {
             if (matrixRow?.manual_cost && Number(matrixRow.manual_cost) > 0) {
                 return Number(matrixRow.manual_cost);
             }
-        } catch (mErr) {
-            console.warn('Could not fetch commercial_cost_matrix row:', mErr);
+        } catch {
+            // fallback
         }
 
-        // Priority 3: Fallback to normalized purchases
         const { data: purchases } = await supabase
             .from('purchases')
             .select('unit_price, purchase_unit')
@@ -588,10 +655,8 @@ function CreateQuotePageContent() {
             .limit(5);
 
         if (!purchases || purchases.length === 0) return 0;
-
         let totalNormalizedCost = 0;
         let count = 0;
-
         purchases.forEach(p => {
             let cost = p.unit_price;
             if (p.purchase_unit && p.purchase_unit !== salesUnit) {
@@ -607,7 +672,6 @@ function CreateQuotePageContent() {
             totalNormalizedCost += cost;
             count++;
         });
-
         return count > 0 ? totalNormalizedCost / count : 0;
     };
 
@@ -631,7 +695,6 @@ function CreateQuotePageContent() {
             handleClientChange(data.id);
             setClientSearch('');
             setIsClientModalOpen(false);
-            
             setNewClient({
                 company_name: '',
                 contact_name: '',
@@ -639,11 +702,9 @@ function CreateQuotePageContent() {
                 phone: '',
                 address: '',
                 role: 'b2b_client',
-                pricing_model_id: ''
+                pricing_model_id: GENERAL_INSTITUCIONAL_ID
             });
-
         } catch (err: any) {
-            console.error('Error creating client:', err);
             alert('Error al crear el cliente: ' + (err.message || 'Error desconocido'));
         } finally {
             setSaving(false);
@@ -659,13 +720,13 @@ function CreateQuotePageContent() {
         const { data } = await supabase
             .from('products')
             .select(`
-                id, name, unit_of_measure, iva_rate, accounting_id,
+                id, name, unit_of_measure, iva_rate, accounting_id, category,
                 product_variants (*)
             `)
             .eq('is_active', true)
             .or(`name.ilike.%${term}%,accounting_id.ilike.%${term}%`)
-            .limit(10);
-            
+            .limit(12);
+
         if (data) {
             const filteredData = data.map(p => ({
                 ...p,
@@ -685,21 +746,27 @@ function CreateQuotePageContent() {
         const ivaRate = product.iva_rate ?? 0;
 
         const clientNickname = nicknames.find(n => n.product_id === product.id);
-        const displayName = clientNickname ? clientNickname.nickname : (variant ? `${product.name} (${Object.values(variant.options).join(' / ')})` : product.name);
+        const displayName = clientNickname
+            ? clientNickname.nickname
+            : (variant ? `${product.name} (${Object.values(variant.options).join(' / ')})` : product.name);
 
-        setItems(sortItemsByAccountingId([...items, {
-            product_id: product.id,
-            variant_id: variant?.id || null,
-            name: displayName,
-            accounting_id: product.accounting_id || product.id?.slice(0, 8),
-            unit: product.unit_of_measure,
-            cost: cost,
-            margin: baseMargin,
-            variant_adjustment: variantAdjustment,
-            price: finalPrice,
-            iva_rate: ivaRate,
-            quantity: 1
-        }]));
+        setItems(prev => [
+            ...prev,
+            {
+                product_id: product.id,
+                variant_id: variant?.id || null,
+                name: displayName,
+                accounting_id: product.accounting_id || product.id?.slice(0, 8),
+                category: product.category || 'Otros Productos',
+                unit: normalizeUnit(product.unit_of_measure),
+                cost: cost,
+                margin: baseMargin,
+                variant_adjustment: variantAdjustment,
+                price: finalPrice,
+                iva_rate: ivaRate,
+                quantity: 1
+            }
+        ]);
         setSearchTerm('');
         setSearchResults([]);
     };
@@ -744,7 +811,6 @@ function CreateQuotePageContent() {
             const validPrice = isNaN(numPrice) ? 0 : Math.max(0, numPrice);
             newItems[index].price = validPrice;
             if (validPrice > 0 && newItems[index].cost > 0) {
-                // Utilidad sobre Costo: (Precio - Costo) / Costo * 100
                 newItems[index].margin = Math.round(((validPrice - newItems[index].cost) / newItems[index].cost) * 1000) / 10;
             } else if (validPrice > 0 && newItems[index].cost <= 0) {
                 newItems[index].margin = 100;
@@ -755,12 +821,10 @@ function CreateQuotePageContent() {
         setItems(newItems);
     };
 
-    const router = useRouter();
-
-    const saveQuote = async (shouldRedirect = true) => {
-        if (!clientName) { alert('Ingresa el nombre del cliente'); return null; }
-        if (!selectedModelId) { alert('Selecciona un Modelo de Precios'); return null; }
-        if (items.length === 0) { alert('Agrega al menos un producto'); return null; }
+    const saveQuote = async (shouldRedirect = true, targetStatus: 'draft' | 'sent' = 'draft') => {
+        if (!clientName) { alert('Selecciona o ingresa el nombre del destinatario de la cotización'); return null; }
+        if (!selectedModelId) { alert('Selecciona un Modelo Base de Precios'); return null; }
+        if (items.length === 0) { alert('Agrega al menos un producto o selecciona una Canasta'); return null; }
 
         const invalidQtyItem = items.find(i => (parseFloat(i.quantity) || 0) <= 0);
         if (invalidQtyItem) { alert(`La cantidad para "${invalidQtyItem.name}" debe ser mayor a 0.`); return null; }
@@ -770,26 +834,23 @@ function CreateQuotePageContent() {
 
         setSaving(true);
         try {
-            // Sanitizar y limpiar items para asegurar que tengan valores numéricos correctos
-            const sanitizedItems = items.map(item => {
-                const qty = parseFloat(item.quantity) || 0;
-                const price = parseFloat(item.price) || 0;
-                const margin = parseFloat(item.margin) || 0;
-                const cost = parseFloat(item.cost) || 0;
-                return {
-                    ...item,
-                    quantity: qty,
-                    price: price,
-                    margin: margin,
-                    cost: cost
-                };
-            });
+            const sanitizedItems = items.map(item => ({
+                ...item,
+                quantity: parseFloat(item.quantity) || 0,
+                price: parseFloat(item.price) || 0,
+                margin: parseFloat(item.margin) || 0,
+                cost: parseFloat(item.cost) || 0
+            }));
 
             const subtotal = sanitizedItems.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0);
             const totalTax = sanitizedItems.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0) / 100), 0);
             const totalAmount = subtotal + totalTax;
 
             const selectedModel = models.find(m => m.id === selectedModelId);
+            const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+            const snapshotLabel = selectedTemplate
+                ? `${selectedTemplate.name} (${selectedModel?.name || 'Institucional'})`
+                : (selectedModel?.name || 'General Institucional');
 
             const { data: quote, error: qError } = await supabase
                 .from('quotes')
@@ -798,24 +859,30 @@ function CreateQuotePageContent() {
                     lead_id: selectedLeadId || null,
                     client_name: clientName,
                     model_id: selectedModelId,
-                    model_snapshot_name: selectedModel?.name,
+                    model_snapshot_name: snapshotLabel,
                     subtotal_amount: subtotal,
                     total_tax_amount: totalTax,
                     total_amount: totalAmount,
-                    status: 'draft',
+                    status: targetStatus,
                     start_date: new Date().toISOString().split('T')[0],
                     valid_until: (() => { const d = new Date(); d.setDate(d.getDate() + 8); return d.toISOString().split('T')[0]; })(),
                     parent_quote_id: parentQuoteId,
                     version: parentQuoteId ? originalQuoteVersion + 1 : 1,
-                    // payment_terms_days stored in app_settings & profiles.payment_days
                 })
                 .select()
                 .single();
 
             if (qError) throw qError;
-            try { await supabase.from('app_settings').upsert({ key: `quote_payment_days:${quote.id}`, value: String(paymentTermsDays ?? 30), description: `Plazo de pago cotización ${quote.quote_number || quote.id}` }); } catch (ptErr) { console.warn(ptErr); }
+            try {
+                await supabase.from('app_settings').upsert({
+                    key: `quote_payment_days:${quote.id}`,
+                    value: String(paymentTermsDays ?? 30),
+                    description: `Plazo de pago cotización ${quote.quote_number || quote.id}`
+                });
+            } catch (ptErr) {
+                console.warn(ptErr);
+            }
 
-            // Sincronizar días de crédito acordados hacia el perfil del cliente
             if (selectedClientId && paymentTermsDays) {
                 try {
                     await supabase
@@ -827,7 +894,6 @@ function CreateQuotePageContent() {
                 }
             }
 
-            // Pipeline CRM: si la cotización es para un Lead, mover su status automáticamente a contacted
             if (selectedLeadId) {
                 try {
                     await supabase
@@ -856,62 +922,51 @@ function CreateQuotePageContent() {
                 const { error: iError } = await supabase.from('quote_items').insert(quoteItemsArr);
                 if (iError) throw iError;
             } catch (itemErr) {
-                console.error('Error inserting quote items, rolling back quote header:', itemErr);
                 await supabase.from('quotes').delete().eq('id', quote.id);
                 throw itemErr;
             }
 
             if (duplicateFrom) {
-                const { error: rejectError } = await supabase
+                await supabase
                     .from('quotes')
                     .update({ status: 'superseded' })
                     .eq('id', duplicateFrom);
-                if (rejectError) {
-                    console.error('Error rejecting original quote:', rejectError);
-                }
             }
 
             if (shouldRedirect) {
-                if (duplicateFrom) {
-                    alert(`Se ha creado la nueva versión ${quote.quote_number || ''} y se ha descartado la cotización anterior.`);
-                } else {
-                    alert(`Cotización ${quote.quote_number || ''} guardada exitosamente`);
-                }
-                router.push('/admin/commercial/quotes');
+                router.push('/admin/commercial?tab=operations&subtab=quotes');
             } else {
                 setQuoteNumber(quote.quote_number || 'SAVED');
                 return quote;
             }
         } catch (err: any) {
-            console.error('Save Quote Error Detail:', JSON.stringify(err, null, 2), err);
             const errMsg = err?.message || err?.error_description || JSON.stringify(err);
-            alert('Error guardando: ' + errMsg);
+            alert('Error guardando cotización: ' + errMsg);
             return null;
         } finally {
             setSaving(false);
         }
     };
 
-    const handlePrint = async () => {
-        const savedQuote = await saveQuote(false);
-        if (!savedQuote || !savedQuote.id) {
-            return;
-        }
-
+    const handleEmitAndPrint = async () => {
+        const savedQuote = await saveQuote(false, 'sent');
+        if (!savedQuote || !savedQuote.id) return;
         window.open(`/admin/commercial/quotes/${savedQuote.id}/print`, '_blank');
-        router.push('/admin/commercial/quotes');
+        router.push('/admin/commercial?tab=operations&subtab=quotes');
     };
 
     const selectedClientInfo = clients.find(c => c.id === selectedClientId);
     const selectedLeadInfo = leads.find(l => l.id === selectedLeadId);
+    const selectedModelObj = models.find(m => m.id === selectedModelId);
+    const selectedTemplateObj = templates.find(t => t.id === selectedTemplateId);
 
-    const filteredClients = clients.filter(c => 
+    const filteredClients = clients.filter(c =>
         (c.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
         (c.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
         (c.nit?.toLowerCase().includes(clientSearch.toLowerCase()))
     );
 
-    const filteredLeads = leads.filter(l => 
+    const filteredLeads = leads.filter(l =>
         (l.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
         (l.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
         (l.phone?.toLowerCase().includes(clientSearch.toLowerCase())) ||
@@ -919,856 +974,1211 @@ function CreateQuotePageContent() {
     );
 
     const dropdownItems = [
-        ...filteredClients.map(c => ({ type: 'client' as const, id: c.id, label: c.company_name || c.contact_name, c })),
-        ...filteredLeads.map(l => ({ type: 'lead' as const, id: l.id, label: l.company_name || l.contact_name, l })),
-        { type: 'manual' as const, label: `+ Usar "${clientSearch}" como cliente manual` },
+        ...filteredClients.slice(0, 25).map(c => ({ type: 'client' as const, id: c.id, label: c.company_name || c.contact_name, c })),
+        ...filteredLeads.slice(0, 15).map(l => ({ type: 'lead' as const, id: l.id, label: l.company_name || l.contact_name, l })),
+        ...(clientSearch.trim() ? [{ type: 'manual' as const, label: `+ Usar "${clientSearch}" como destinatario manual` }] : []),
         { type: 'new_client' as const, label: 'Registrar cliente nuevo oficial' }
     ];
 
-    useEffect(() => {
-        setActiveDropdownIndex(-1);
-    }, [clientSearch]);
+    // Agrupación jerárquica por Categoría Agrícola (SDD §7.15.F.2) preservando _originalIndex para edición sin saltos
+    const groupedCategories = useMemo(() => {
+        const catMap = new Map<string, any[]>();
+        const term = basketFilter.trim().toLowerCase();
+
+        items.forEach((item, originalIndex) => {
+            if (term) {
+                const matchName = (item.name || '').toLowerCase().includes(term);
+                const matchId = String(item.accounting_id || '').toLowerCase().includes(term);
+                const matchCat = (item.category || '').toLowerCase().includes(term);
+                if (!matchName && !matchId && !matchCat) return;
+            }
+            const catTitle = formatCategoryTitle(item.category);
+            if (!catMap.has(catTitle)) {
+                catMap.set(catTitle, []);
+            }
+            catMap.get(catTitle)!.push({ ...item, _originalIndex: originalIndex });
+        });
+
+        const groups: { category: string; items: any[] }[] = [];
+        catMap.forEach((groupItems, category) => {
+            groupItems.sort((a, b) =>
+                (a.name || '').toString().localeCompare((b.name || '').toString(), 'es', { numeric: true, sensitivity: 'base' })
+            );
+            groups.push({ category, items: groupItems });
+        });
+
+        groups.sort((a, b) => {
+            const idxA = CATEGORY_PRIORITY.indexOf(a.category);
+            const idxB = CATEGORY_PRIORITY.indexOf(b.category);
+            const prioA = idxA !== -1 ? idxA : 999;
+            const prioB = idxB !== -1 ? idxB : 999;
+            if (prioA !== prioB) return prioA - prioB;
+            return a.category.localeCompare(b.category, 'es');
+        });
+
+        return groups;
+    }, [items, basketFilter]);
+
+    // Telemetría Financiera y de Negociación (Escenario 269 & 275.3 SDD)
+    const telemetry = useMemo(() => {
+        let subtotal = 0;
+        let totalTax = 0;
+        let totalCostQuoted = 0;
+        let totalDemand30dVolume = 0;
+        let totalProjectedMonthlyProfit = 0;
+        let totalProjectedMonthlyRevenue = 0;
+
+        items.forEach(i => {
+            const qty = parseFloat(i.quantity) || 0;
+            const price = Math.ceil(parseFloat(i.price) || 0);
+            const cost = parseFloat(i.cost) || 0;
+            const iva = parseFloat(i.iva_rate) || 0;
+
+            subtotal += price * qty;
+            totalTax += (price * qty) * (iva / 100);
+            totalCostQuoted += cost * qty;
+
+            const demand = clientDemandMap.get(i.product_id);
+            const vol30d = demand?.volume || 0;
+            totalDemand30dVolume += vol30d;
+
+            const effectiveVol = vol30d > 0 ? vol30d : qty;
+            totalProjectedMonthlyProfit += effectiveVol * (price - cost);
+            totalProjectedMonthlyRevenue += effectiveVol * price;
+        });
+
+        const weightedMarginPct = totalProjectedMonthlyRevenue > 0
+            ? ((totalProjectedMonthlyProfit / totalProjectedMonthlyRevenue) * 100)
+            : (subtotal > 0 ? (((subtotal - totalCostQuoted) / subtotal) * 100) : 0);
+
+        return {
+            subtotal,
+            totalTax,
+            totalAmount: subtotal + totalTax,
+            totalDemand30dVolume: Math.round(totalDemand30dVolume * 10) / 10,
+            totalProjectedMonthlyProfit: Math.round(totalProjectedMonthlyProfit),
+            weightedMarginPct: Math.round(weightedMarginPct * 10) / 10
+        };
+    }, [items, clientDemandMap]);
+
+    const docNumberStr = quoteNumber ? formatQuoteNumber(Number(quoteNumber)) : 'COT BORRADOR';
+    const clientDisplayName = selectedClientInfo?.razon_social || selectedClientInfo?.company_name || clientName || selectedLeadInfo?.company_name || 'Pendiente Seleccionar Cliente';
+    const clientNit = selectedClientInfo?.nit || selectedLeadInfo?.nit || 'Por definir en formalización';
+    const clientContact = selectedClientInfo?.contact_name || selectedLeadInfo?.contact_name || 'Comité de Compras';
+    const clientPhone = selectedClientInfo?.contact_phone || selectedClientInfo?.phone || selectedLeadInfo?.phone || 'Sin registrar';
+    const clientEmail = selectedClientInfo?.email || selectedLeadInfo?.email || 'contacto@cliente.com';
+    const clientAddress = selectedClientInfo?.address || selectedLeadInfo?.address || 'Bogotá D.C., Colombia';
+    const validityUntilDate = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 8);
+        return d.toLocaleDateString('es-CO');
+    })();
+
+    let globalRowCounter = 0;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif', paddingBottom: '4rem' }}>
+            {/* Override para permitir que Letterhead opere a 1600px en modo Mesa de Negociación y a 215.9mm en Vista Carta */}
+            <style dangerouslySetInnerHTML={{ __html: `
+                .letterhead-container.quote-workspace-wide {
+                    width: 100% !important;
+                    max-width: 1600px !important;
+                    margin: 0 auto !important;
+                    padding: 1.5rem 2rem !important;
+                    border-radius: 14px !important;
+                    overflow: visible !important;
+                }
+                .letterhead-container.quote-workspace-wide table {
+                    font-size: 0.82rem !important;
+                }
+                .letterhead-container.quote-workspace-wide th {
+                    font-size: 0.7rem !important;
+                    padding: 8px 10px !important;
+                }
+                .letterhead-container.quote-workspace-wide td {
+                    font-size: 0.82rem !important;
+                    padding: 6px 10px !important;
+                }
+            ` }} />
 
-
-            <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
-
-                <div className="no-print" style={{ marginBottom: '2rem' }}>
-                    <div style={{ marginBottom: '1rem' }}>
-                        <Link href="/admin/commercial" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver (Sin guardar)</Link>
+            <div style={{ width: '96%', maxWidth: '1600px', margin: '0 auto', paddingTop: '1.25rem' }}>
+                {/* BARRA DE NAVEGACIÓN Y PIPELINE (PASO 3: COTIZACIONES) */}
+                <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <Link
+                            href="/admin/commercial?tab=operations&subtab=quotes"
+                            style={{
+                                textDecoration: 'none',
+                                color: '#334155',
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                backgroundColor: 'white',
+                                padding: '0.45rem 0.9rem',
+                                borderRadius: '8px',
+                                border: '1px solid #CBD5E1',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                            }}
+                        >
+                            <ArrowLeft size={15} /> Volver a Cotizaciones
+                        </Link>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#DCFCE7', color: '#065F46', padding: '2px 8px', borderRadius: '5px', border: '1px solid #86EFAC' }}>
+                                    Paso 3 del Pipeline Comercial
+                                </span>
+                                {parentQuoteId && (
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 800, backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '5px', border: '1px solid #FDE68A' }}>
+                                        Recotización Dinámica v{originalQuoteVersion + 1} (Costos Vivos Hoy)
+                                    </span>
+                                )}
+                            </div>
+                            <h1 style={{ margin: '2px 0 0 0', fontSize: '1.35rem', fontWeight: 900, color: '#0F172A', letterSpacing: '-0.02em' }}>
+                                {parentQuoteId ? 'Recotizar Propuesta con Costos de Hoy' : 'Generador de Cotización & Mesa de Negociación B2B'}
+                            </h1>
+                        </div>
                     </div>
 
-                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', alignItems: 'start' }}>
-                        <div style={{ position: 'relative' }}>
-                            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '800', color: '#111827' }}>Destinatario de la Cotización</h3>
-                            {!selectedClientId && !selectedLeadId ? (
-                                <div style={{ position: 'relative' }}>
-                                    <input 
-                                        type="text"
-                                        placeholder="Buscar cliente o lead (Nombre, NIT, Contacto...)"
-                                        value={clientSearch}
-                                        onChange={(e) => {
-                                            setClientSearch(e.target.value);
-                                            setShowClientResults(true);
-                                        }}
-                                        onFocus={() => setShowClientResults(true)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'ArrowDown') {
-                                                e.preventDefault();
-                                                setActiveDropdownIndex(prev => (prev + 1) % dropdownItems.length);
-                                            } else if (e.key === 'ArrowUp') {
-                                                e.preventDefault();
-                                                setActiveDropdownIndex(prev => (prev - 1 + dropdownItems.length) % dropdownItems.length);
-                                            } else if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                if (activeDropdownIndex >= 0 && activeDropdownIndex < dropdownItems.length) {
-                                                    const item = dropdownItems[activeDropdownIndex];
-                                                    if (item.type === 'client') {
-                                                        handleClientChange(item.id);
-                                                        setSelectedLeadId(null);
-                                                        setShowClientResults(false);
-                                                        setClientSearch('');
-                                                    } else if (item.type === 'lead') {
-                                                        handleLeadChange(item.id);
-                                                        setSelectedClientId('');
-                                                        setShowClientResults(false);
-                                                        setClientSearch('');
-                                                    } else if (item.type === 'manual') {
-                                                        setClientName(clientSearch);
-                                                        setSelectedClientId('');
-                                            setClientDemandMap(new Map());
-                                            setSelectedLeadId(null);
-                                                        setShowClientResults(false);
-                                                    } else if (item.type === 'new_client') {
-                                                        setNewClient(prev => ({ ...prev, company_name: clientSearch, contact_name: clientSearch }));
-                                                        setIsClientModalOpen(true);
-                                                        setShowClientResults(false);
-                                                    }
-                                                }
-                                            } else if (e.key === 'Escape') {
-                                                setShowClientResults(false);
-                                            }
-                                        }}
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                    />
-                                    {showClientResults && clientSearch.length > 0 && (
-                                        <div 
-                                            id="client-search-dropdown"
-                                            style={{ 
-                                                position: 'absolute', 
-                                                top: '100%', 
-                                                left: 0, 
-                                                right: 0, 
-                                                backgroundColor: 'white', 
-                                                border: '1px solid #E5E7EB', 
-                                                borderRadius: '8px', 
-                                                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
-                                                zIndex: 50, 
-                                                marginTop: '4px', 
-                                                maxHeight: '250px', 
-                                                overflowY: 'auto' 
-                                            }}
-                                        >
-                                            {dropdownItems.map((item, idx) => {
-                                                const isActive = idx === activeDropdownIndex;
-                                                if (item.type === 'client') {
-                                                    const c = item.c;
-                                                    return (
-                                                        <div 
-                                                            key={c.id}
-                                                            id={`dropdown-item-${idx}`}
-                                                            onClick={() => {
-                                                                handleClientChange(c.id);
-                                                                setSelectedLeadId(null);
-                                                                setShowClientResults(false);
-                                                                setClientSearch('');
-                                                            }}
-                                                            style={{ 
-                                                                padding: '0.8rem', 
-                                                                cursor: 'pointer', 
-                                                                borderBottom: '1px solid #F3F4F6', 
-                                                                transition: 'background 0.2s',
-                                                                backgroundColor: isActive ? '#EFF6FF' : 'transparent'
-                                                            }}
-                                                            onMouseEnter={() => {
-                                                                setActiveDropdownIndex(idx);
-                                                            }}
-                                                        >
-                                                            <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
-                                                                <span style={{ color: appSettings.primary_color, marginRight: '4px' }}>[Cliente]</span> {c.company_name || c.contact_name}
-                                                            </div>
-                                                            <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                                                                {c.role === 'b2c_client' ? 'Consumidor Final' : `NIT: ${c.nit || 'Sin registro'}`} • {c.contact_name}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                } else if (item.type === 'lead') {
-                                                    const l = item.l;
-                                                    return (
-                                                        <div 
-                                                            key={`lead-${l.id}`}
-                                                            id={`dropdown-item-${idx}`}
-                                                            onClick={() => {
-                                                                handleLeadChange(l.id);
-                                                                setSelectedClientId('');
-                                                                setShowClientResults(false);
-                                                                setClientSearch('');
-                                                            }}
-                                                            style={{ 
-                                                                padding: '0.8rem', 
-                                                                cursor: 'pointer', 
-                                                                borderBottom: '1px solid #F3F4F6', 
-                                                                transition: 'background 0.2s',
-                                                                backgroundColor: isActive ? '#ECFEFF' : 'transparent'
-                                                            }}
-                                                            onMouseEnter={() => {
-                                                                setActiveDropdownIndex(idx);
-                                                            }}
-                                                        >
-                                                            <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
-                                                                <span style={{ color: '#16A34A', marginRight: '4px' }}>[Prospecto]</span> {l.company_name || l.contact_name}
-                                                            </div>
-                                                            <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                                                                {l.nit ? `NIT: ${l.nit} • ` : ''}Tel: {l.phone || 'Sin teléfono'} • Contacto: {l.contact_name}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                } else if (item.type === 'manual') {
-                                                    return (
-                                                        <div 
-                                                            key="manual-option"
-                                                            id={`dropdown-item-${idx}`}
-                                                            onClick={() => {
-                                                                setClientName(clientSearch);
-                                                                setSelectedClientId('');
-                                            setClientDemandMap(new Map());
-                                            setSelectedLeadId(null);
-                                                                setShowClientResults(false);
-                                                            }}
-                                                            style={{ 
-                                                                padding: '0.8rem', 
-                                                                cursor: 'pointer', 
-                                                                backgroundColor: isActive ? '#CCFBF1' : '#F0FDFA', 
-                                                                color: '#0F766E', 
-                                                                fontWeight: 'bold', 
-                                                                fontSize: '0.85rem', 
-                                                                textAlign: 'center' 
-                                                            }}
-                                                            onMouseEnter={() => {
-                                                                setActiveDropdownIndex(idx);
-                                                            }}
-                                                        >
-                                                            + Usar &quot;{clientSearch}&quot; como cliente manual
-                                                        </div>
-                                                    );
-                                                } else if (item.type === 'new_client') {
-                                                    return (
-                                                        <div 
-                                                            key="new-client-option"
-                                                            id={`dropdown-item-${idx}`}
-                                                            onClick={() => {
-                                                                setNewClient(prev => ({ ...prev, company_name: clientSearch, contact_name: clientSearch }));
-                                                                setIsClientModalOpen(true);
-                                                                setShowClientResults(false);
-                                                            }}
-                                                            style={{ 
-                                                                padding: '0.8rem', 
-                                                                cursor: 'pointer', 
-                                                                backgroundColor: isActive ? '#DBEAFE' : '#EFF6FF', 
-                                                                color: '#1E40AF', 
-                                                                fontWeight: 'bold', 
-                                                                fontSize: '0.85rem', 
-                                                                textAlign: 'center', 
-                                                                borderTop: '1px solid #DBEAFE' 
-                                                            }}
-                                                            onMouseEnter={() => {
-                                                                setActiveDropdownIndex(idx);
-                                                            }}
-                                                        >
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                                                                <Sparkles size={15} color="#2563EB" />
-                                                                <span>Registrar cliente nuevo oficial</span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            })}
-                                        </div>
-                                    )}
-                                    <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#374151' }}>O escribe nombre manual:</label>
-                                        <button 
-                                            type="button"
-                                            onClick={() => setIsClientModalOpen(true)}
-                                            style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: appSettings.primary_color, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                                        >
-                                            + Nuevo Cliente
-                                        </button>
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={clientName}
-                                        onChange={e => setClientName(e.target.value)}
-                                        placeholder="Nombre manual"
-                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #E5E7EB' }}
-                                    />
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1rem', backgroundColor: selectedLeadId ? '#F0FDF4' : '#F8FAFC', borderRadius: '12px', border: `1px solid ${selectedLeadId ? '#16A34A33' : `${appSettings.primary_color}33`}` }}>
-                                    <div>
-                                        <div style={{ fontSize: '0.7rem', color: selectedLeadId ? '#16A34A' : appSettings.primary_color, fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                            {selectedLeadId ? 'Prospecto Seleccionado (CRM)' : 'Cliente Seleccionado'}
-                                        </div>
-                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>
-                                            {clientName}
-                                        </div>
-                                        {selectedLeadId ? (
-                                            <>
-                                                {(() => {
-                                                    const lead = leads.find(l => l.id === selectedLeadId);
-                                                    if (!lead) return null;
-                                                    const bType = lead.business_type;
-                                                    const bSize = lead.business_size;
-                                                    let sizeBg = '#F3F4F6';
-                                                    let sizeTextCol = '#374151';
-                                                    let sizeDotColor = '#94A3B8';
-                                                    if (bSize) {
-                                                        if (bSize.includes('Grande') || bSize.includes('30M')) { sizeBg = '#DCFCE7'; sizeTextCol = '#15803D'; sizeDotColor = '#15803D'; }
-                                                        else if (bSize.includes('Mediano') || bSize.includes('10M')) { sizeBg = '#FEF3C7'; sizeTextCol = '#B45309'; sizeDotColor = '#D97706'; }
-                                                        else if (bSize.includes('Pequeño') || bSize.includes('< 10M') || bSize.includes('Peq')) { sizeBg = '#FEE2E2'; sizeTextCol = '#B91C1C'; sizeDotColor = '#DC2626'; }
-                                                    }
-                                                    return (
-                                                        <div style={{ fontSize: '0.85rem', color: '#4B5563', lineHeight: '1.4', marginTop: '4px' }}>
-                                                            <div>
-                                                                Lead ID: #{selectedLeadId} {lead.nit ? `• NIT: ${lead.nit}` : ''} • Tel: {lead.phone || 'Sin teléfono'}
-                                                            </div>
-                                                            {lead.email && <div>Email: {lead.email}</div>}
-                                                            {(lead.address || lead.municipality) && (
-                                                                <div>Dirección: {lead.address || ''}{lead.municipality ? ` - ${lead.municipality}` : ''}</div>
-                                                            )}
-                                                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-                                                                {bType && (
-                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                                                                        {bType}
-                                                                    </span>
-                                                                )}
-                                                                {bSize && (
-                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: sizeBg, color: sizeTextCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <CircleDot size={9} style={{ color: sizeDotColor }} />
-                                                                        {bSize}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </>
-                                        ) : (
-                                            <>
-                                                {selectedClientInfo && (
-                                                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-                                                        <span style={{ fontSize: '0.65rem', backgroundColor: selectedClientInfo.role === 'b2c_client' ? '#ECFDF5' : '#EFF6FF', color: selectedClientInfo.role === 'b2c_client' ? '#047857' : '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                                                            {selectedClientInfo.role === 'b2c_client' ? 'Cliente Hogar' : 'Cliente Institucional'}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                {selectedClientInfo?.nit && <div style={{ fontSize: '0.85rem', color: '#4B5563', marginTop: '4px' }}>NIT: {selectedClientInfo.nit}</div>}
-                                            </>
-                                        )}
-                                    </div>
-                                    <button 
-                                        onClick={() => {
-                                            setSelectedClientId('');
-                                            setClientDemandMap(new Map());
-                                            setSelectedLeadId(null);
-                                            setClientName('');
-                                            setClientSearch('');
-                                        }}
-                                        style={{ background: '#FEE2E2', color: '#EF4444', border: 'none', borderRadius: '6px', padding: '4px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}
-                                    >
-                                        Cambiar
-                                    </button>
-                                </div>
-                            )}
+                    {/* BOTONERA DE MODO Y GUARDADO */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', padding: '3px', borderRadius: '9px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('negotiation')}
+                                style={{
+                                    padding: '0.4rem 0.85rem',
+                                    borderRadius: '7px',
+                                    border: 'none',
+                                    backgroundColor: viewMode === 'negotiation' ? 'white' : 'transparent',
+                                    color: viewMode === 'negotiation' ? '#0D7A57' : '#475569',
+                                    fontWeight: 800,
+                                    fontSize: '0.76rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    boxShadow: viewMode === 'negotiation' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                }}
+                            >
+                                <Sliders size={13} /> Mesa de Negociación (1600px)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('print_preview')}
+                                style={{
+                                    padding: '0.4rem 0.85rem',
+                                    borderRadius: '7px',
+                                    border: 'none',
+                                    backgroundColor: viewMode === 'print_preview' ? 'white' : 'transparent',
+                                    color: viewMode === 'print_preview' ? '#0F172A' : '#475569',
+                                    fontWeight: 800,
+                                    fontSize: '0.76rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    boxShadow: viewMode === 'print_preview' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                }}
+                            >
+                                <Eye size={13} /> Vista Documento Cliente (Carta)
+                            </button>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <h3 style={{ margin: '0 0 0.2rem 0', fontSize: '1rem', fontWeight: '800', color: '#111827' }}>Configuración</h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Modelo de Precios</label>
-                                    <select
-                                        value={selectedModelId}
-                                        onChange={e => setSelectedModelId(e.target.value)}
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }}
+                        <button
+                            type="button"
+                            onClick={() => saveQuote(true, 'draft')}
+                            disabled={saving}
+                            style={{
+                                padding: '0.55rem 1rem',
+                                backgroundColor: 'white',
+                                color: '#334155',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '9px',
+                                fontWeight: 800,
+                                fontSize: '0.82rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            <Save size={15} /> {saving ? 'Guardando...' : 'Guardar Borrador'}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleEmitAndPrint}
+                            disabled={saving}
+                            style={{
+                                padding: '0.55rem 1.2rem',
+                                backgroundColor: '#0D7A57',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '9px',
+                                fontWeight: 800,
+                                fontSize: '0.82rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
+                            }}
+                        >
+                            <Printer size={15} /> Emitir e Imprimir PDF Oficial
+                        </button>
+                    </div>
+                </div>
+
+                {/* CONSOLA DE CONFIGURACIÓN EN 3 BLOQUES LÓGICOS DEL PIPELINE */}
+                <div className="no-print" style={{
+                    backgroundColor: 'white',
+                    padding: '1rem 1.25rem',
+                    borderRadius: '14px',
+                    border: '1px solid #CBD5E1',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                    marginBottom: '0.9rem',
+                    display: 'grid',
+                    gridTemplateColumns: '1.2fr 1.3fr 0.7fr',
+                    gap: '1.25rem',
+                    alignItems: 'start'
+                }}>
+                    {/* BLOQUE 1: DESTINATARIO (CLIENTE B2B O LEAD CRM) */}
+                    <div style={{ position: 'relative' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <label style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                1. Destinatario (Cliente Institucional / Prospecto CRM)
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setIsClientModalOpen(true)}
+                                style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '5px', background: '#ECFDF5', color: '#0D7A57', border: '1px solid #A7F3D0', cursor: 'pointer', fontWeight: 800 }}
+                            >
+                                + Nuevo Cliente
+                            </button>
+                        </div>
+
+                        {!selectedClientId && !selectedLeadId ? (
+                            <div style={{ position: 'relative' }}>
+                                <Search size={15} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar cliente B2B, NIT, sucursal o prospecto CRM..."
+                                    value={clientSearch}
+                                    onChange={(e) => {
+                                        setClientSearch(e.target.value);
+                                        setClientName(e.target.value);
+                                        setShowClientResults(true);
+                                    }}
+                                    onFocus={() => setShowClientResults(true)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'ArrowDown') {
+                                            e.preventDefault();
+                                            setActiveDropdownIndex(prev => (prev + 1) % dropdownItems.length);
+                                        } else if (e.key === 'ArrowUp') {
+                                            e.preventDefault();
+                                            setActiveDropdownIndex(prev => (prev - 1 + dropdownItems.length) % dropdownItems.length);
+                                        } else if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            if (activeDropdownIndex >= 0 && activeDropdownIndex < dropdownItems.length) {
+                                                const item = dropdownItems[activeDropdownIndex];
+                                                if (item.type === 'client') {
+                                                    handleClientChange(item.id);
+                                                    setSelectedLeadId(null);
+                                                    setShowClientResults(false);
+                                                    setClientSearch('');
+                                                } else if (item.type === 'lead') {
+                                                    handleLeadChange(item.id);
+                                                    setSelectedClientId('');
+                                                    setShowClientResults(false);
+                                                    setClientSearch('');
+                                                } else if (item.type === 'manual') {
+                                                    setClientName(clientSearch);
+                                                    setSelectedClientId('');
+                                                    setClientDemandMap(new Map());
+                                                    setSelectedLeadId(null);
+                                                    setShowClientResults(false);
+                                                } else if (item.type === 'new_client') {
+                                                    setNewClient(prev => ({ ...prev, company_name: clientSearch, contact_name: clientSearch }));
+                                                    setIsClientModalOpen(true);
+                                                    setShowClientResults(false);
+                                                }
+                                            }
+                                        } else if (e.key === 'Escape') {
+                                            setShowClientResults(false);
+                                        }
+                                    }}
+                                    style={{ width: '100%', height: '38px', paddingLeft: '34px', paddingRight: '12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.84rem', backgroundColor: '#F8FAFC', outline: 'none' }}
+                                />
+                                {showClientResults && (
+                                    <div
+                                        id="client-search-dropdown"
+                                        onMouseLeave={() => setShowClientResults(false)}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            left: 0,
+                                            right: 0,
+                                            backgroundColor: 'white',
+                                            border: '1px solid #CBD5E1',
+                                            borderRadius: '10px',
+                                            boxShadow: '0 12px 24px -4px rgba(0,0,0,0.12)',
+                                            zIndex: 90,
+                                            marginTop: '4px',
+                                            maxHeight: '280px',
+                                            overflowY: 'auto'
+                                        }}
                                     >
-                                        <option value="">-- Seleccionar --</option>
-                                        {models.map(m => (
-                                            <option key={m.id} value={m.id}>{m.name} (Base: {m.base_margin_percent}%)</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Preforma (Plantilla)</label>
-                                    <select
-                                        value={selectedTemplateId}
-                                        onChange={e => handleTemplateChange(e.target.value)}
-                                        disabled={loadingTemplate}
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }}
-                                    >
-                                        <option value="">{loadingTemplate ? 'Cargando...' : '-- Ninguna --'}</option>
-                                        {templates.map(t => (
-                                            <option key={t.id} value={t.id}>{t.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                        {dropdownItems.map((item, idx) => {
+                                            const isActive = idx === activeDropdownIndex;
+                                            if (item.type === 'client') {
+                                                const c = item.c;
+                                                return (
+                                                    <div
+                                                        key={c.id}
+                                                        id={`dropdown-item-${idx}`}
+                                                        onClick={() => {
+                                                            handleClientChange(c.id);
+                                                            setSelectedLeadId(null);
+                                                            setShowClientResults(false);
+                                                            setClientSearch('');
+                                                        }}
+                                                        onMouseEnter={() => setActiveDropdownIndex(idx)}
+                                                        style={{
+                                                            padding: '0.6rem 0.85rem',
+                                                            cursor: 'pointer',
+                                                            borderBottom: '1px solid #F1F5F9',
+                                                            backgroundColor: isActive ? '#F0FDF4' : 'transparent'
+                                                        }}
+                                                    >
+                                                        <div style={{ fontWeight: 700, fontSize: '0.84rem', color: '#0F172A' }}>
+                                                            <span style={{ color: '#0D7A57', marginRight: '5px', fontSize: '0.72rem', fontWeight: 800 }}>[CLIENTE]</span>
+                                                            {c.company_name || c.contact_name}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                            NIT: {c.nit || 'S/N'} &bull; {c.contact_name || 'Sin contacto'}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else if (item.type === 'lead') {
+                                                const l = item.l;
+                                                return (
+                                                    <div
+                                                        key={`lead-${l.id}`}
+                                                        id={`dropdown-item-${idx}`}
+                                                        onClick={() => {
+                                                            handleLeadChange(l.id);
+                                                            setSelectedClientId('');
+                                                            setShowClientResults(false);
+                                                            setClientSearch('');
+                                                        }}
+                                                        onMouseEnter={() => setActiveDropdownIndex(idx)}
+                                                        style={{
+                                                            padding: '0.6rem 0.85rem',
+                                                            cursor: 'pointer',
+                                                            borderBottom: '1px solid #F1F5F9',
+                                                            backgroundColor: isActive ? '#EFF6FF' : 'transparent'
+                                                        }}
+                                                    >
+                                                        <div style={{ fontWeight: 700, fontSize: '0.84rem', color: '#0F172A' }}>
+                                                            <span style={{ color: '#2563EB', marginRight: '5px', fontSize: '0.72rem', fontWeight: 800 }}>[PROSPECTO CRM]</span>
+                                                            {l.company_name || l.contact_name}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                            {l.nit ? `NIT: ${l.nit} • ` : ''}Tel: {l.phone || 'S/T'}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else if (item.type === 'manual') {
+                                                return (
+                                                    <div
+                                                        key="manual-option"
+                                                        onClick={() => {
+                                                            setClientName(clientSearch);
+                                                            setSelectedClientId('');
+                                                            setClientDemandMap(new Map());
+                                                            setSelectedLeadId(null);
+                                                            setShowClientResults(false);
+                                                        }}
+                                                        style={{
+                                                            padding: '0.6rem 0.85rem',
+                                                            cursor: 'pointer',
+                                                            backgroundColor: '#F0FDFA',
+                                                            color: '#0F766E',
+                                                            fontWeight: 800,
+                                                            fontSize: '0.8rem',
+                                                            textAlign: 'center'
+                                                        }}
+                                                    >
+                                                        {item.label}
+                                                    </div>
+                                                );
+                                            } else if (item.type === 'new_client') {
+                                                return (
+                                                    <div
+                                                        key="new-client-option"
+                                                        onClick={() => {
+                                                            setNewClient(prev => ({ ...prev, company_name: clientSearch, contact_name: clientSearch }));
+                                                            setIsClientModalOpen(true);
+                                                            setShowClientResults(false);
+                                                        }}
+                                                        style={{
+                                                            padding: '0.6rem 0.85rem',
+                                                            cursor: 'pointer',
+                                                            backgroundColor: '#EFF6FF',
+                                                            color: '#1D4ED8',
+                                                            fontWeight: 800,
+                                                            fontSize: '0.8rem',
+                                                            textAlign: 'center',
+                                                            borderTop: '1px solid #DBEAFE'
+                                                        }}
+                                                    >
+                                                        + Registrar cliente nuevo oficial
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })}
+                                    </div>
+                                )}
                             </div>
-
-
-
-                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                        ) : (
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '0.5rem 0.85rem',
+                                backgroundColor: selectedLeadId ? '#EFF6FF' : '#F0FDF4',
+                                borderRadius: '8px',
+                                border: `1px solid ${selectedLeadId ? '#BFDBFE' : '#BBF7D0'}`
+                            }}>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{ fontSize: '0.66rem', fontWeight: 900, textTransform: 'uppercase', color: selectedLeadId ? '#1D4ED8' : '#0D7A57' }}>
+                                            {selectedLeadId ? `Prospecto CRM #${selectedLeadId}` : 'Cliente Institucional'}
+                                        </span>
+                                        {selectedClientInfo?.nit && (
+                                            <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 700 }}>
+                                                &bull; NIT: {selectedClientInfo.nit}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {clientName}
+                                    </div>
+                                </div>
                                 <button
-                                    onClick={handlePrint}
-                                    disabled={saving}
-                                    style={{ 
-                                        flex: 1.5, 
-                                        padding: '0.8rem', 
-                                        backgroundColor: appSettings.primary_color || '#15803D', 
-                                        color: 'white', 
-                                        border: 'none', 
-                                        borderRadius: '8px', 
-                                        fontWeight: 'bold', 
-                                        cursor: 'pointer', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        justifyContent: 'center', 
-                                        gap: '0.5rem',
-                                        transition: 'all 0.2s'
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedClientId('');
+                                        setClientDemandMap(new Map());
+                                        setSelectedLeadId(null);
+                                        setClientName('');
+                                        setClientSearch('');
                                     }}
-                                    onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
-                                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                                    style={{ background: '#FEE2E2', color: '#B91C1C', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}
                                 >
-                                    <Printer size={16} /> Guardar e Imprimir
+                                    Cambiar
                                 </button>
-                                <button
-                                    onClick={() => saveQuote(true)}
-                                    disabled={saving}
-                                    style={{ 
-                                        flex: 1, 
-                                        padding: '0.8rem', 
-                                        backgroundColor: 'white', 
-                                        color: '#4B5563', 
-                                        border: '1px solid #D1D5DB', 
-                                        borderRadius: '8px', 
-                                        fontWeight: 'bold', 
-                                        cursor: 'pointer', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        justifyContent: 'center', 
-                                        gap: '0.5rem',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-                                >
-                                    <Save size={16} /> {saving ? 'Guardando...' : 'Solo Guardar'}
-                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* BLOQUE 2: CONEXIÓN AL PASO 2 DEL PIPELINE (MODELO BASE + MODELO POR CLIENTE / CANASTA) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr', gap: '0.75rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                                2A. Modelo Estándar (Línea Base)
+                            </label>
+                            <select
+                                value={selectedModelId}
+                                onChange={e => setSelectedModelId(e.target.value)}
+                                style={{ width: '100%', height: '38px', padding: '0 0.65rem', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}
+                            >
+                                {models.map(m => (
+                                    <option key={m.id} value={m.id}>
+                                        {m.name} (Base: {m.base_margin_percent}%)
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                <label style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    2B. Modelo por Cliente / Canasta
+                                </label>
+                                {customMarginsAppliedCount > 0 && (
+                                    <span style={{ fontSize: '0.66rem', fontWeight: 800, backgroundColor: '#DCFCE7', color: '#065F46', padding: '1px 6px', borderRadius: '4px' }}>
+                                        {customMarginsAppliedCount} utilidades cliente activas
+                                    </span>
+                                )}
+                            </div>
+                            <select
+                                value={selectedTemplateId}
+                                onChange={e => handleTemplateChange(e.target.value)}
+                                disabled={loadingTemplate}
+                                style={{ width: '100%', height: '38px', padding: '0 0.65rem', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: selectedTemplateId ? '#F0FDF4' : '#F8FAFC', fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}
+                            >
+                                <option value="">{loadingTemplate ? 'Cargando canasta y utilidades...' : '-- Seleccionar Canasta de Cliente --'}</option>
+                                {templates.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* BLOQUE 3: CONDICIONES DE CRÉDITO Y VIGENCIA CANÓNICA */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                                3. Plazo de Pago
+                            </label>
+                            <select
+                                value={paymentTermsDays}
+                                onChange={e => setPaymentTermsDays(Number(e.target.value))}
+                                style={{ width: '100%', height: '38px', padding: '0 0.6rem', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}
+                            >
+                                <option value={0}>Contado</option>
+                                <option value={8}>8 Días Crédito</option>
+                                <option value={15}>15 Días Crédito</option>
+                                <option value={30}>30 Días Crédito</option>
+                                <option value={45}>45 Días Crédito</option>
+                                <option value={60}>60 Días Crédito</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                                Vigencia Oferta
+                            </label>
+                            <div style={{
+                                height: '38px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '0 0.65rem',
+                                borderRadius: '8px',
+                                backgroundColor: '#F0FDF4',
+                                border: '1px solid #BBF7D0',
+                                fontSize: '0.76rem',
+                                fontWeight: 800,
+                                color: '#065F46'
+                            }}>
+                                8 Días ({validityUntilDate})
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div ref={printDocRef} id="quote-document" style={{ 
-                    backgroundColor: 'white', 
-                    minHeight: '800px', 
-                    padding: '3.5rem', 
-                    borderRadius: '8px', 
-                    border: '1px solid #E2E8F0',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)',
-                    position: 'relative'
+                {/* CINTA KPI DE TELEMETRÍA DE NEGOCIACIÓN (ESCENARIO 269 & 275.3 SDD) */}
+                <div className="no-print" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(5, 1fr)',
+                    gap: '0.75rem',
+                    marginBottom: '0.9rem'
                 }}>
-                    {/* Watermark in Preview (Browser Only) */}
-                    <div className="no-print" style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%) rotate(-30deg)',
-                        width: '400px',
-                        height: '400px',
-                        backgroundImage: `url(${appSettings.provider_logo_url || appSettings.app_logo_url})`,
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center',
-                        backgroundSize: 'contain',
-                        opacity: 0.03,
-                        pointerEvents: 'none',
-                        zIndex: 0
-                    }} />
-
-                    {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', position: 'relative', zIndex: 1 }}>
-                        <div>
-                            {(appSettings.provider_logo_url || appSettings.app_logo_url) && (
-                                <img src={appSettings.provider_logo_url || appSettings.app_logo_url} alt="Logo" style={{ maxHeight: '75px', objectFit: 'contain' }} />
-                            )}
-                        </div>
-                        <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#475569', lineHeight: '1.4' }}>
-                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1.1rem' }}>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}</div>
-                            <div>NIT: {appSettings.provider_nit || '901.393.217'}</div>
-                            <div>{appSettings.provider_address || 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C.'}</div>
-                            <div>{appSettings.provider_email || 'contacto@investmentscortes.com'}</div>
+                    <div style={{ backgroundColor: 'white', padding: '0.65rem 1rem', borderRadius: '10px', border: '1px solid #CBD5E1' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>SKUs en Propuesta</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#0F172A' }}>{items.length} productos</div>
+                    </div>
+                    <div style={{ backgroundColor: 'white', padding: '0.65rem 1rem', borderRadius: '10px', border: '1px solid #CBD5E1' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Consumo Cliente (Últ. 30d)</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#2563EB' }}>
+                            {loadingDemand ? 'Calculando...' : `${formatPrice(telemetry.totalDemand30dVolume)} Kg/Und`}
                         </div>
                     </div>
+                    <div style={{ backgroundColor: 'white', padding: '0.65rem 1rem', borderRadius: '10px', border: '1px solid #CBD5E1' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Margen Bruto Ponderado</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: telemetry.weightedMarginPct < 15 ? '#DC2626' : '#0D7A57' }}>
+                            {telemetry.weightedMarginPct}%
+                        </div>
+                    </div>
+                    <div style={{ backgroundColor: 'white', padding: '0.65rem 1rem', borderRadius: '10px', border: '1px solid #CBD5E1' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Utilidad Mensual Proyectada</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#0D7A57' }}>
+                            ${formatPrice(telemetry.totalProjectedMonthlyProfit)} COP
+                        </div>
+                    </div>
+                    <div style={{ backgroundColor: '#0F172A', padding: '0.65rem 1rem', borderRadius: '10px', border: '1px solid #0F172A', color: 'white' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>Total Cotización (c/IVA)</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#34D399' }}>
+                            ${formatPrice(telemetry.totalAmount)} COP
+                        </div>
+                    </div>
+                </div>
 
-                    {/* Thick Solid Line Separator */}
-                    <div style={{ borderTop: `3px solid ${appSettings.primary_color || '#15803D'}`, margin: '1.5rem 0 2rem 0', position: 'relative', zIndex: 1 }}></div>
-
-                    {/* Metadata columns: Prepared For & Official Quote */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
-                        <div style={{ width: '50%' }}>
-                            <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Propuesta para:</div>
-                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{clientName || 'Cliente General'}</div>
-                            {selectedClientInfo ? (
-                                <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                    {selectedClientInfo.company_name && selectedClientInfo.company_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
-                                        <div>{selectedClientInfo.company_name}</div>
-                                    )}
-                                    {selectedClientInfo.nit && <div>NIT: {selectedClientInfo.nit}</div>}
-                                    {selectedClientInfo.contact_name && <div>Atención: {selectedClientInfo.contact_name}</div>}
-                                    {selectedClientInfo.phone && <div>Teléfono: {selectedClientInfo.phone}</div>}
-                                    {selectedClientInfo.address && <div>Dirección: {selectedClientInfo.address}</div>}
-                                </div>
-                            ) : selectedLeadInfo ? (
-                                <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                    {selectedLeadInfo.company_name && selectedLeadInfo.company_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
-                                        <div>{selectedLeadInfo.company_name}</div>
-                                    )}
-                                    {selectedLeadInfo.nit && <div>NIT: {selectedLeadInfo.nit}</div>}
-                                    {selectedLeadInfo.contact_name && <div>Atención: {selectedLeadInfo.contact_name}</div>}
-                                    {selectedLeadInfo.phone && <div>Teléfono: {selectedLeadInfo.phone}</div>}
-                                    {selectedLeadInfo.email && <div>Email: {selectedLeadInfo.email}</div>}
-                                    {(selectedLeadInfo.address || selectedLeadInfo.municipality) && (
-                                        <div>Dirección: {selectedLeadInfo.address || ''}{selectedLeadInfo.municipality ? ` - ${selectedLeadInfo.municipality}` : ''}</div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
+                {/* BARRA STICKY DE BÚSQUEDA INTERNA Y ADICIÓN DE PRODUCTOS (ESTÁNDAR GALERÍAS FRUFRESCO) */}
+                <div className="no-print" style={{
+                    position: 'sticky',
+                    top: '0px',
+                    zIndex: 80,
+                    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+                    backdropFilter: 'blur(8px)',
+                    padding: '0.6rem 1rem',
+                    borderRadius: '12px',
+                    border: '1px solid #CBD5E1',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                    marginBottom: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    flexWrap: 'wrap'
+                }}>
+                    {/* FILTRAR DENTRO DE LA CANASTA */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '240px' }}>
+                        <div style={{ position: 'relative', flex: 1, maxWidth: '380px' }}>
+                            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                            <input
+                                type="text"
+                                value={basketFilter}
+                                onChange={e => setBasketFilter(e.target.value)}
+                                placeholder="Filtrar productos dentro de esta cotización..."
+                                style={{
+                                    width: '100%',
+                                    height: '34px',
+                                    paddingLeft: '30px',
+                                    paddingRight: basketFilter ? '26px' : '10px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.8rem',
+                                    backgroundColor: '#F8FAFC'
+                                }}
+                            />
+                            {basketFilter && (
+                                <button
+                                    type="button"
+                                    onClick={() => setBasketFilter('')}
+                                    style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#64748B' }}
+                                >
+                                    <X size={13} />
+                                </button>
                             )}
                         </div>
-                        <div style={{ width: '50%', textAlign: 'right' }}>
-                            <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Cotización</div>
-                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{quoteNumber ? formatQuoteNumber(Number(quoteNumber)) : 'Borrador'}</div>
-                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                <div>Fecha: {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-')}</div>
-                                <div>Validez: {paymentTermsDays || 30} días</div>
+                        <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#64748B', backgroundColor: '#F1F5F9', padding: '4px 10px', borderRadius: '6px' }}>
+                            Mostrando {groupedCategories.reduce((acc, g) => acc + g.items.length, 0)} de {items.length} SKUs
+                        </span>
+                    </div>
+
+                    {/* AGREGAR PRODUCTO DESDE EL CATÁLOGO MAESTRO */}
+                    <div style={{ position: 'relative', flex: 1, maxWidth: '460px', minWidth: '280px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0D7A57', whiteSpace: 'nowrap' }}>
+                                + Catálogo Maestro:
+                            </span>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <Plus size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#0D7A57' }} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar y agregar producto por nombre o ID ERP..."
+                                    value={searchTerm}
+                                    onChange={e => handleSearch(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        height: '34px',
+                                        paddingLeft: '30px',
+                                        paddingRight: '10px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #86EFAC',
+                                        backgroundColor: '#F0FDF4',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 600,
+                                        color: '#0F172A',
+                                        outline: 'none'
+                                    }}
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    {/* Table */}
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '1.5rem', position: 'relative', zIndex: 1 }}>
-                        <thead>
-                            <tr style={{ borderBottom: '1.5px solid #CBD5E1', color: '#475569', backgroundColor: '#F1F5F9' }}>
-                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%', textAlign: 'center' }}>#</th>
-                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '45%' }}>Producto</th>
-                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '12%', textAlign: 'center' }}>Cant.</th>
-                                <th className="no-print" style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '8%', textAlign: 'center' }}>IVA</th>
-                                <th className="no-print" style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Margen</th>
-                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Tarifa Unit.</th>
-                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Total</th>
-                                <th className="no-print" style={{ padding: '0.45rem 0.5rem', width: '4%' }}></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {items.map((item, index) => {
-                                return (
-                                    <tr key={index} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s' }}>
-                                        {/* Row Index */}
-                                        <td style={{ padding: '0.45rem 0.5rem', fontSize: '0.75rem', fontWeight: '700', color: '#94A3B8', textAlign: 'center' }}>
-                                            {String(index + 1).padStart(2, '0')}
-                                        </td>
-                                        
-                                        {/* Description */}
-                                        <td style={{ padding: '0.45rem 0.5rem' }}>
-                                            <div style={{ fontWeight: '600', color: '#0F172A', fontSize: '0.82rem' }}>{item.name}</div>
-                                            <span className="no-print" style={{ 
-                                                display: 'inline-block',
-                                                padding: '1px 6px',
-                                                borderRadius: '4px',
-                                                backgroundColor: '#F1F5F9',
-                                                color: '#64748B',
-                                                fontSize: '0.68rem',
-                                                fontWeight: '600',
-                                                marginTop: '2px'
-                                            }}>
-                                                Costo base: ${formatPrice(Math.ceil(item.cost))}
+                        {searchResults.length > 0 && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                right: 0,
+                                backgroundColor: 'white',
+                                zIndex: 100,
+                                boxShadow: '0 12px 24px rgba(0,0,0,0.14)',
+                                borderRadius: '10px',
+                                border: '1px solid #CBD5E1',
+                                marginTop: '4px',
+                                maxHeight: '300px',
+                                overflowY: 'auto'
+                            }}>
+                                {searchResults.map(p => (
+                                    <div key={p.id}>
+                                        <div
+                                            onClick={() => addProduct(p)}
+                                            style={{ padding: '0.6rem 0.9rem', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0FDF4'}
+                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                        >
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.82rem', color: '#0F172A' }}>
+                                                <Package size={14} color="#0D7A57" /> {p.name}
                                             </span>
-                                        </td>
-                                        
-                                        {/* Quantity */}
-                                        <td style={{ padding: '0.45rem 0.5rem', textAlign: 'center' }}>
-                                            <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
-                                                <input 
-                                                    type="number" 
-                                                    min="0.01" 
-                                                    step="any" 
-                                                    value={item.quantity === undefined || item.quantity === null ? '' : item.quantity} 
-                                                    onFocus={(e) => (e.target as HTMLInputElement).select()}
-                                                    onChange={e => {
-                                                        const raw = e.target.value;
-                                                        updateQuantity(index, raw === '' ? '' : parseFloat(raw));
-                                                    }} 
-                                                    style={{ width: '50px', padding: '0.25rem', textAlign: 'center', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold', fontSize: '0.8rem' }} 
-                                                />
-                                                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.unit}</span>
-                                            </div>
-                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A', fontSize: '7.8pt' }}>{parseFloat(item.quantity) || 0} {item.unit}</span>
-                                        </td>
-                                        
-                                        {/* IVA (No-print) */}
-                                        <td className="no-print" style={{ padding: '0.45rem 0.5rem', textAlign: 'center', color: '#475569', fontSize: '0.78rem', fontWeight: '600' }}>
-                                            {item.iva_rate || 0}%
-                                        </td>
-                                        
-                                        {/* Margin (No-print) with Poka-Yoke Warning */}
-                                        <td className="no-print" style={{ padding: '0.45rem 0.5rem', textAlign: 'center' }}>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                <input 
-                                                    type="number" 
-                                                    value={item.margin === undefined || item.margin === null ? '' : item.margin} 
-                                                    onFocus={(e) => (e.target as HTMLInputElement).select()}
-                                                    onChange={e => {
-                                                        const raw = e.target.value;
-                                                        if (raw === '') {
-                                                            handleMarginChange(index, '');
-                                                            return;
-                                                        }
-                                                        if (raw === '-') {
-                                                            handleMarginChange(index, '-');
-                                                            return;
-                                                        }
-                                                        const val = parseFloat(raw);
-                                                        if (!isNaN(val)) {
-                                                            handleMarginChange(index, val);
-                                                        }
-                                                    }} 
-                                                    style={{ 
-                                                        width: '45px', 
-                                                        padding: '0.25rem', 
-                                                        textAlign: 'center', 
-                                                        borderRadius: '4px', 
-                                                        border: `1px solid ${typeof item.margin === 'number' && item.margin < 15 ? '#FCA5A5' : '#CBD5E1'}`, 
-                                                        backgroundColor: typeof item.margin === 'number' && item.margin < 15 ? '#FEF2F2' : '#F8FAFC', 
-                                                        color: typeof item.margin === 'number' && item.margin < 15 ? '#B91C1C' : '#0F172A',
-                                                        fontWeight: 'bold', 
-                                                        fontSize: '0.8rem' 
-                                                    }} 
-                                                />
-                                                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 'bold' }}>%</span>
-                                                {typeof item.margin === 'number' && item.margin < 15 && (
-                                                    <span title={`Alerta Poka-Yoke: Margen (${item.margin}%) inferior al umbral mínimo recomendado (15%)`} style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help' }}>
-                                                        <AlertTriangle size={13} color="#DC2626" strokeWidth={2.5} />
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        
-                                        {/* Unit Price */}
-                                        <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right' }}>
-                                            <div className="no-print">
-                                                <input 
-                                                    type="number" 
-                                                    min="0"
-                                                    step="any"
-                                                    value={item.price === undefined || item.price === null ? '' : item.price} 
-                                                    onFocus={(e) => (e.target as HTMLInputElement).select()}
-                                                    onChange={e => {
-                                                        const raw = e.target.value;
-                                                        if (raw === '') {
-                                                            handlePriceChange(index, '');
-                                                            return;
-                                                        }
-                                                        const val = parseFloat(raw);
-                                                        if (!isNaN(val)) {
-                                                            handlePriceChange(index, val);
-                                                        }
-                                                    }} 
-                                                    style={{ width: '75px', padding: '0.25rem', textAlign: 'right', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold', fontSize: '0.8rem' }} 
-                                                />
-                                            </div>
-                                            <span className="only-print num-cell" style={{ fontWeight: '600', color: '#0F172A', fontSize: '7.8pt' }}>${formatPrice(Math.ceil(parseFloat(item.price) || 0))}</span>
-                                        </td>
-                                        
-                                        {/* Total */}
-                                        <td className="num-cell" style={{ padding: '0.45rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#0F172A', fontSize: '0.84rem' }}>
-                                            ${formatPrice(Math.ceil(parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
-                                        </td>
-                                        
-                                        {/* Action Button (No-print) */}
-                                        <td className="no-print" style={{ padding: '0.45rem 0.5rem', textAlign: 'center' }}>
-                                            <button 
-                                                onClick={() => removeItem(index)} 
-                                                title="Eliminar producto de la cotización"
-                                                style={{ color: '#EF4444', border: 'none', background: '#FEE2E2', cursor: 'pointer', fontWeight: 'bold', width: '22px', height: '22px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FCA5A5'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {/* Totals Rows inside tbody so they only print once at the end */}
-                            <tr style={{ borderTop: '1.5px solid #CBD5E1', color: '#475569' }}>
-                                <td colSpan={6}></td>
-                                <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.8rem' }}>Subtotal</td>
-                                <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem', color: '#0F172A' }}>
-                                    ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)), 0))}
-                                </td>
-                                <td></td>
-                            </tr>
-                            <tr style={{ color: '#64748B' }}>
-                                <td colSpan={6}></td>
-                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', fontWeight: '500', fontSize: '0.75rem' }}>Impuestos (IVA)</td>
-                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>
-                                    ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)) * ((i.iva_rate || 0)/100), 0))}
-                                </td>
-                                <td></td>
-                            </tr>
-                            <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
-                                <td colSpan={6}></td>
-                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '0.85rem' }}>Total</td>
-                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.15rem', color: appSettings.primary_color || '#15803D' }}>
-                                    ${formatPrice(
-                                        items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)), 0) + 
-                                        items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)) * ((i.iva_rate || 0) / 100), 0)
-                                    )}
-                                </td>
-                                <td></td>
-                            </tr>
-                        </tbody>
-                        <tfoot className="only-print print-spacer-tfoot" style={{ display: 'none' }}>
-                            <tr style={{ border: 'none' }}>
-                                <td colSpan={6} style={{ height: '48px', border: 'none', padding: 0 }}></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-
-                    <div className="no-print" style={{ marginTop: '2rem', padding: '2rem', backgroundColor: '#F9FAFB', borderRadius: '8px', border: '1px dashed #D1D5DB' }}>
-                        <h3 style={{ marginTop: 0 }}>Agregar Producto</h3>
-                        <div style={{ position: 'relative' }}>
-                            <input placeholder="Buscar producto por nombre o ID contable..." value={searchTerm} onChange={e => handleSearch(e.target.value)} disabled={!selectedModelId} style={{ width: '100%', padding: '1rem' }} />
-                            {searchResults.length > 0 && (
-                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 10px 15px rgba(0,0,0,0.1)', borderRadius: '0 0 8px 8px', border: '1px solid #D1D5DB', maxHeight: '300px', overflowY: 'auto' }}>
-                                    {searchResults.map(p => (
-                                        <div key={p.id}>
-                                            <div 
-                                                onClick={() => addProduct(p)} 
-                                                style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', backgroundColor: '#F9FAFB', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}
-                                            >
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                                    <Package size={14} color="#0D7A57" /> {p.name} (Maestro)
-                                                </span>
-                                                <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>Precio Base</span>
-                                            </div>
-                                            {p.product_variants?.map((v: any) => (
-                                                <div 
-                                                    key={v.id} 
-                                                    onClick={() => addProduct(p, v)}
-                                                    style={{ padding: '0.8rem 1rem 0.8rem 2.5rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', transition: 'background 0.2s' }}
-                                                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                >
-                                                    <span>↳ {Object.values(v.options).join(' / ')}</span>
-                                                    {v.price_adjustment_percent !== 0 && (
-                                                        <span style={{ 
-                                                            fontSize: '0.75rem', 
-                                                            fontWeight: 'bold', 
-                                                            color: v.price_adjustment_percent > 0 ? '#059669' : '#DC2626',
-                                                            backgroundColor: v.price_adjustment_percent > 0 ? '#ECFDF5' : '#FEF2F2',
-                                                            padding: '2px 6px',
-                                                            borderRadius: '4px'
-                                                        }}>
-                                                            {v.price_adjustment_percent > 0 ? '+' : ''}{v.price_adjustment_percent}%
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            ))}
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B' }}>
+                                                {normalizeUnit(p.unit_of_measure)} &bull; Costo: ${formatPrice(matrixCosts[p.id] || 0)}
+                                            </span>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
-                    {/* Print-only Footer for Page Numbers inside #quote-document */}
-                    <footer className="print-footer only-print">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7.5pt', color: '#94A3B8', borderTop: '1px solid #E2E8F0', paddingTop: '4px' }}>
-                            <span>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'} | contacto@investmentscortes.com</span>
-                            <span className="print-page-number"></span>
+                </div>
+
+                {/* DOCUMENTO OFICIAL UNIFICADO (UNIVERSAL LETTERHEAD) */}
+                <div ref={printDocRef}>
+                    <Letterhead
+                        title={parentQuoteId ? 'PROPUESTA COMERCIAL DE PRECIOS (RECOTIZACIÓN)' : 'PROPUESTA COMERCIAL DE PRECIOS'}
+                        subtitle="INVESTMENTS CORTES S.A.S. • Abastecimiento Agrícola & Dotación B2B"
+                        date={new Date().toLocaleDateString('es-CO')}
+                        reference={`#${docNumberStr}`}
+                        badge={selectedLeadId ? 'PROSPECTO B2B' : 'PROPUESTA OFICIAL'}
+                        badgeVariant="emerald"
+                        paperSize="letter"
+                        showWatermark={items.length <= 10}
+                        className={viewMode === 'negotiation' ? 'quote-workspace-wide' : ''}
+                    >
+                        {/* MICRO-GRID DE INFORMACIÓN DEL CLIENTE (ESTÁNDAR OFICIAL GOLDEN PRINT) */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1.25fr 1fr',
+                            gap: '10px',
+                            backgroundColor: '#F8FAFC',
+                            padding: '8px 12px',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '6px',
+                            fontSize: viewMode === 'negotiation' ? '0.8rem' : '7pt',
+                            marginBottom: '10px'
+                        }}>
+                            <div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>CLIENTE / RAZÓN SOCIAL:</strong> {clientDisplayName}
+                                </div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>NIT / C.C.:</strong> {clientNit}
+                                </div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>DIRECCIÓN DE ENTREGA:</strong> {clientAddress}
+                                </div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>ATENCIÓN / CONTACTO:</strong> {clientContact} &bull; Tel: {clientPhone}
+                                </div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>CORREO FACTURACIÓN:</strong> {clientEmail}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>DOCUMENTO:</strong> #{docNumberStr}
+                                </div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>FECHA EMISIÓN:</strong> {new Date().toLocaleDateString('es-CO')}
+                                </div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>VIGENCIA OFERTA:</strong>{' '}
+                                    <span style={{ color: '#0D7A57', fontWeight: 800 }}>8 Días Calendario (Hasta {validityUntilDate})</span>
+                                </div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>PLAZO DE PAGO:</strong>{' '}
+                                    {paymentTermsDays > 0 ? `${paymentTermsDays} Días de Crédito` : 'Contado contra entrega'}
+                                </div>
+                                <div style={{ lineHeight: 1.4 }}>
+                                    <strong style={{ color: '#0F172A' }}>MODELO / CANASTA:</strong>{' '}
+                                    {selectedTemplateObj ? `${selectedTemplateObj.name} (${selectedModelObj?.name || 'Institucional'})` : (selectedModelObj?.name || 'General Institucional Dinámico')}
+                                </div>
+                            </div>
                         </div>
-                    </footer>
+
+                        {/* TABLA DE PRODUCTOS CON AGRUPACIÓN JERÁRQUICA POR CATEGORÍA + TELEMETRÍA DE NEGOCIACIÓN */}
+                        {items.length === 0 ? (
+                            <div className="no-print" style={{
+                                padding: '3rem 2rem',
+                                textAlign: 'center',
+                                backgroundColor: '#F8FAFC',
+                                border: '1.5px dashed #CBD5E1',
+                                borderRadius: '10px',
+                                margin: '1rem 0'
+                            }}>
+                                <FileText size={32} color="#0D7A57" style={{ margin: '0 auto 0.5rem' }} />
+                                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0F172A', marginBottom: '4px' }}>
+                                    Selecciona un Cliente o una Canasta (2B) para cargar los productos automáticamente
+                                </div>
+                                <div style={{ fontSize: '0.84rem', color: '#64748B' }}>
+                                    También puedes buscar y añadir productos individuales desde la barra superior <strong>+ Catálogo Maestro</strong>.
+                                </div>
+                            </div>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#0F172A', color: 'white' }}>
+                                        <th className="text-center" style={{ width: '4%' }}>#</th>
+                                        <th style={{ width: viewMode === 'negotiation' ? '26%' : '42%' }}>DESCRIPCIÓN DEL PRODUCTO</th>
+                                        <th className="text-center" style={{ width: '6%' }}>UM</th>
+                                        <th className="text-center" style={{ width: '9%' }}>CANT.</th>
+                                        {viewMode === 'negotiation' && (
+                                            <>
+                                                <th className="no-print text-right" style={{ width: '10%', backgroundColor: '#1E293B' }}>COSTO HOY</th>
+                                                <th className="no-print text-center" style={{ width: '10%', backgroundColor: '#1E293B' }}>UTILIDAD %</th>
+                                                <th className="no-print text-right" style={{ width: '10%', backgroundColor: '#1E293B' }}>CONSUMO 30D</th>
+                                                <th className="no-print text-right" style={{ width: '11%', backgroundColor: '#1E293B' }}>UTIL. PROY.</th>
+                                            </>
+                                        )}
+                                        <th className="text-center" style={{ width: '6%' }}>IVA</th>
+                                        <th className="text-right" style={{ width: '11%' }}>PRECIO UNIT.</th>
+                                        <th className="text-right" style={{ width: '11%' }}>VALOR TOTAL</th>
+                                        {viewMode === 'negotiation' && (
+                                            <th className="no-print text-center" style={{ width: '4%', backgroundColor: '#1E293B' }}></th>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {groupedCategories.map(group => (
+                                        <React.Fragment key={group.category}>
+                                            <tr style={{ backgroundColor: '#F8FAFC', pageBreakInside: 'avoid' }}>
+                                                <td colSpan={viewMode === 'negotiation' ? 12 : 7} style={{
+                                                    padding: '4px 8px',
+                                                    borderLeft: '3.5px solid #0D7A57',
+                                                    borderTop: '1px solid #CBD5E1',
+                                                    borderBottom: '1px solid #CBD5E1',
+                                                    backgroundColor: '#F1F5F9'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                        <span style={{ fontWeight: 900, fontSize: viewMode === 'negotiation' ? '0.76rem' : '7.4pt', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                            {group.category}
+                                                        </span>
+                                                        <span style={{ fontSize: viewMode === 'negotiation' ? '0.7rem' : '6.8pt', fontWeight: 800, color: '#475569', backgroundColor: '#E2E8F0', padding: '1px 7px', borderRadius: '4px' }}>
+                                                            {group.items.length} {group.items.length === 1 ? 'producto' : 'productos'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+
+                                            {group.items.map(item => {
+                                                globalRowCounter++;
+                                                const idx = item._originalIndex;
+                                                const unitPrice = Math.ceil(parseFloat(item.price) || 0);
+                                                const qty = parseFloat(item.quantity) || 0;
+                                                const totalPrice = unitPrice * qty;
+                                                const cost = parseFloat(item.cost) || 0;
+                                                const demand = clientDemandMap.get(item.product_id);
+                                                const vol30d = demand?.volume || 0;
+                                                const orders30d = demand?.ordersCount || 0;
+                                                const projectedProfit = (vol30d > 0 ? vol30d : qty) * (unitPrice - cost);
+
+                                                return (
+                                                    <tr key={`${item.product_id}-${idx}`}>
+                                                        <td className="text-center" style={{ fontWeight: 700, color: '#64748B' }}>
+                                                            {String(globalRowCounter).padStart(2, '0')}
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ fontWeight: 700, color: '#0F172A' }}>{item.name}</div>
+                                                        </td>
+                                                        <td className="text-center" style={{ fontWeight: 600, color: '#475569' }}>
+                                                            {normalizeUnit(item.unit)}
+                                                        </td>
+                                                        <td className="text-center">
+                                                            {viewMode === 'negotiation' ? (
+                                                                <input
+                                                                    type="number"
+                                                                    min="0.01"
+                                                                    step="any"
+                                                                    value={item.quantity === undefined || item.quantity === null ? '' : item.quantity}
+                                                                    onFocus={e => e.target.select()}
+                                                                    onChange={e => updateQuantity(idx, e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                                                    style={{ width: '58px', padding: '3px 4px', textAlign: 'center', borderRadius: '5px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', fontWeight: 800, fontSize: '0.8rem' }}
+                                                                />
+                                                            ) : (
+                                                                <span style={{ fontWeight: 700 }}>{qty}</span>
+                                                            )}
+                                                        </td>
+
+                                                        {viewMode === 'negotiation' && (
+                                                            <>
+                                                                {/* COSTO BASE HOY */}
+                                                                <td className="no-print text-right" style={{ color: '#475569', fontWeight: 700, backgroundColor: '#F8FAFC' }}>
+                                                                    ${formatPrice(cost)}
+                                                                </td>
+
+                                                                {/* UTILIDAD % */}
+                                                                <td className="no-print text-center" style={{ backgroundColor: '#F8FAFC' }}>
+                                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                        <input
+                                                                            type="number"
+                                                                            step="0.1"
+                                                                            value={item.margin === undefined || item.margin === null ? '' : item.margin}
+                                                                            onFocus={e => e.target.select()}
+                                                                            onChange={e => {
+                                                                                const raw = e.target.value;
+                                                                                if (raw === '' || raw === '-') {
+                                                                                    handleMarginChange(idx, raw);
+                                                                                    return;
+                                                                                }
+                                                                                const val = parseFloat(raw);
+                                                                                if (!isNaN(val)) handleMarginChange(idx, val);
+                                                                            }}
+                                                                            style={{
+                                                                                width: '54px',
+                                                                                padding: '3px 4px',
+                                                                                textAlign: 'center',
+                                                                                borderRadius: '5px',
+                                                                                border: `1px solid ${typeof item.margin === 'number' && item.margin < 15 ? '#FCA5A5' : '#86EFAC'}`,
+                                                                                backgroundColor: typeof item.margin === 'number' && item.margin < 15 ? '#FEF2F2' : '#F0FDF4',
+                                                                                color: typeof item.margin === 'number' && item.margin < 15 ? '#B91C1C' : '#065F46',
+                                                                                fontWeight: 800,
+                                                                                fontSize: '0.8rem'
+                                                                            }}
+                                                                        />
+                                                                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B' }}>%</span>
+                                                                        {typeof item.margin === 'number' && item.margin < 15 && (
+                                                                            <span title="Alerta Poka-Yoke: Utilidad inferior al 15%">
+                                                                                <AlertTriangle size={13} color="#DC2626" />
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* CONSUMO 30D (ESCENARIO 269.2) */}
+                                                                <td className="no-print text-right" style={{ backgroundColor: '#F8FAFC' }}>
+                                                                    {vol30d > 0 ? (
+                                                                        <div>
+                                                                            <span style={{ fontWeight: 800, color: '#1D4ED8' }}>
+                                                                                {Math.round(vol30d * 10) / 10} {normalizeUnit(item.unit)}
+                                                                            </span>
+                                                                            <span style={{ display: 'block', fontSize: '0.65rem', color: '#64748B' }}>
+                                                                                {orders30d} ped. (30d)
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>0 {normalizeUnit(item.unit)}</span>
+                                                                    )}
+                                                                </td>
+
+                                                                {/* UTILIDAD PROYECTADA ($ COP) */}
+                                                                <td className="no-print text-right" style={{ backgroundColor: '#F8FAFC', fontWeight: 800, color: projectedProfit >= 0 ? '#0D7A57' : '#DC2626' }}>
+                                                                    ${formatPrice(projectedProfit)}
+                                                                    <span style={{ display: 'block', fontSize: '0.63rem', color: '#64748B', fontWeight: 600 }}>
+                                                                        {vol30d > 0 ? 'según 30d' : 'según cant.'}
+                                                                    </span>
+                                                                </td>
+                                                            </>
+                                                        )}
+
+                                                        <td className="text-center" style={{ color: '#64748B', fontWeight: 600 }}>
+                                                            {item.iva_rate || 0}%
+                                                        </td>
+
+                                                        <td className="text-right">
+                                                            {viewMode === 'negotiation' ? (
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="50"
+                                                                    value={item.price === undefined || item.price === null ? '' : item.price}
+                                                                    onFocus={e => e.target.select()}
+                                                                    onChange={e => {
+                                                                        const raw = e.target.value;
+                                                                        if (raw === '') {
+                                                                            handlePriceChange(idx, '');
+                                                                            return;
+                                                                        }
+                                                                        const val = parseFloat(raw);
+                                                                        if (!isNaN(val)) handlePriceChange(idx, val);
+                                                                    }}
+                                                                    style={{ width: '82px', padding: '3px 6px', textAlign: 'right', borderRadius: '5px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', fontWeight: 800, fontSize: '0.82rem' }}
+                                                                />
+                                                            ) : (
+                                                                <span style={{ fontWeight: 700 }}>${formatPrice(unitPrice)}</span>
+                                                            )}
+                                                        </td>
+
+                                                        <td className="text-right" style={{ fontWeight: 800, color: '#0F172A' }}>
+                                                            ${formatPrice(totalPrice)}
+                                                        </td>
+
+                                                        {viewMode === 'negotiation' && (
+                                                            <td className="no-print text-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeItem(idx)}
+                                                                    title="Quitar producto de la propuesta"
+                                                                    style={{ color: '#EF4444', border: 'none', background: '#FEE2E2', cursor: 'pointer', width: '24px', height: '24px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                >
+                                                                    <Trash2 size={13} />
+                                                                </button>
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr style={{ borderTop: '1.5px solid #CBD5E1' }}>
+                                        <td colSpan={viewMode === 'negotiation' ? 9 : 5}></td>
+                                        <td className="text-right" style={{ fontWeight: 700 }}>Subtotal:</td>
+                                        <td className="text-right" style={{ fontWeight: 800, color: '#0F172A' }}>
+                                            ${formatPrice(telemetry.subtotal)}
+                                        </td>
+                                        {viewMode === 'negotiation' && <td className="no-print"></td>}
+                                    </tr>
+                                    <tr>
+                                        <td colSpan={viewMode === 'negotiation' ? 9 : 5}></td>
+                                        <td className="text-right" style={{ fontWeight: 600, color: '#64748B' }}>Impuestos (IVA):</td>
+                                        <td className="text-right" style={{ fontWeight: 700, color: '#64748B' }}>
+                                            ${formatPrice(telemetry.totalTax)}
+                                        </td>
+                                        {viewMode === 'negotiation' && <td className="no-print"></td>}
+                                    </tr>
+                                    <tr style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #CBD5E1' }}>
+                                        <td colSpan={viewMode === 'negotiation' ? 9 : 5}></td>
+                                        <td className="text-right" style={{ fontWeight: 900, color: '#0F172A' }}>Total General:</td>
+                                        <td className="text-right" style={{ fontWeight: 900, color: '#0D7A57', fontSize: viewMode === 'negotiation' ? '0.95rem' : '10pt' }}>
+                                            ${formatPrice(telemetry.totalAmount)} COP
+                                        </td>
+                                        {viewMode === 'negotiation' && <td className="no-print"></td>}
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        )}
+
+                        {/* SELLO DE GARANTÍA OPERATIVA B2B FRUFRESCO */}
+                        <div style={{
+                            marginTop: '0.65rem',
+                            marginBottom: '0.5rem',
+                            padding: '0.55rem 0.85rem',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #CBD5E1',
+                            borderLeft: '3.5px solid #0D7A57',
+                            borderRadius: '5px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '10px'
+                        }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <ShieldCheck size={14} color="#0D7A57" /> Sello de Garantía Operativa FruFresco B2B
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '2px', lineHeight: 1.3 }}>
+                                    <strong>Cero Intermediarios:</strong> Abastecimiento directo de campo y plaza.{' '}
+                                    <strong>Puntualidad Suiza:</strong> Despachos matutinos en ventana acordada antes de apertura de cocina.{' '}
+                                    <strong>Cero Desperdicio:</strong> Selección y pesaje exacto con control de merma.
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0, paddingLeft: '10px', borderLeft: '1px solid #CBD5E1' }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0D7A57' }}>CALIDAD CERTIFICADA</div>
+                                <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Inocuidad & Trazabilidad</div>
+                            </div>
+                        </div>
+
+                        {/* CLÁUSULA LEGAL Y VIGENCIA COMERCIAL DE 8 DÍAS (GAP-11 & ESCENARIO 276) */}
+                        <div style={{
+                            padding: '0.5rem 0.75rem',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '5px',
+                            fontSize: '0.7rem',
+                            color: '#64748B',
+                            lineHeight: 1.35,
+                            marginBottom: '0.75rem'
+                        }}>
+                            <strong style={{ color: '#475569' }}>Términos y Condiciones Legales:</strong> Esta propuesta comercial tiene un carácter cotizador con vigencia de ocho (8) días calendario a partir de su emisión (hasta el {validityUntilDate}). Los precios finales quedarán perfeccionados y congelados una vez se apruebe y suscriba el Acuerdo Comercial correspondiente o se emita la primera orden de compra institucional.
+                        </div>
+
+                        {/* BLOQUE SOLEMNE DE FIRMAS DE ACEPTACIÓN COMERCIAL */}
+                        <div style={{
+                            marginTop: '0.85rem',
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: '24px',
+                            fontSize: '0.74rem',
+                            paddingTop: '8px',
+                            borderTop: '1px solid #CBD5E1',
+                            pageBreakInside: 'avoid'
+                        }}>
+                            <div>
+                                <div style={{ borderBottom: '1px solid #0F172A', height: '28px', marginBottom: '4px' }}></div>
+                                <strong style={{ color: '#0F172A' }}>Investments Cortés S.A.S. (FruFresco)</strong>
+                                <div style={{ color: '#64748B' }}>NIT: 901.393.217-5 &bull; Dirección Comercial</div>
+                            </div>
+                            <div>
+                                <div style={{ borderBottom: '1px solid #0F172A', height: '28px', marginBottom: '4px' }}></div>
+                                <strong style={{ color: '#0F172A' }}>Aceptación del Cliente / {clientDisplayName}</strong>
+                                <div style={{ color: '#64748B' }}>Firma, Sello Comercial y C.C. / NIT</div>
+                            </div>
+                        </div>
+                    </Letterhead>
                 </div>
             </div>
 
-            {/* QUICK CREATE CLIENT MODAL */}
+            {/* MODAL DE CREACIÓN RÁPIDA DE CLIENTE */}
             {isClientModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
                     <div style={{ backgroundColor: 'white', borderRadius: '16px', width: '100%', maxWidth: '500px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
-                        <div style={{ padding: '1.5rem', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0, fontWeight: '900', color: '#111827' }}>Registrar Nuevo Cliente</h3>
-                            <button onClick={() => setIsClientModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 style={{ margin: 0, fontWeight: 900, color: '#0F172A' }}>Registrar Nuevo Cliente</h3>
+                            <button onClick={() => setIsClientModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748B' }}>×</button>
                         </div>
-                        <form onSubmit={handleQuickCreateClient} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                                <button type="button" onClick={() => setNewClient(p => ({ ...p, role: 'b2b_client' }))} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: newClient.role === 'b2b_client' ? '#EFF6FF' : 'white', fontWeight: 'bold', color: newClient.role === 'b2b_client' ? '#1D4ED8' : '#6B7280' }}>Corporativo (B2B)</button>
-                                <button type="button" onClick={() => setNewClient(p => ({ ...p, role: 'b2c_client' }))} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: newClient.role === 'b2c_client' ? '#F0FDFA' : 'white', fontWeight: 'bold', color: newClient.role === 'b2c_client' ? '#0F766E' : '#6B7280' }}>Persona (B2C)</button>
+                        <form onSubmit={handleQuickCreateClient} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button type="button" onClick={() => setNewClient(p => ({ ...p, role: 'b2b_client' }))} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: newClient.role === 'b2b_client' ? '#ECFDF5' : 'white', fontWeight: 800, color: newClient.role === 'b2b_client' ? '#0D7A57' : '#64748B' }}>Institucional (B2B)</button>
+                                <button type="button" onClick={() => setNewClient(p => ({ ...p, role: 'b2c_client' }))} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: newClient.role === 'b2c_client' ? '#EFF6FF' : 'white', fontWeight: 800, color: newClient.role === 'b2c_client' ? '#1D4ED8' : '#64748B' }}>Hogar (B2C)</button>
                             </div>
 
                             {newClient.role === 'b2b_client' && (
                                 <>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Razón Social *</label>
-                                        <input required value={newClient.company_name} onChange={e => setNewClient(p => ({ ...p, company_name: e.target.value }))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #E5E7EB' }} />
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>Razón Social / Empresa *</label>
+                                        <input required value={newClient.company_name} onChange={e => setNewClient(p => ({ ...p, company_name: e.target.value }))} style={{ width: '100%', padding: '9px', borderRadius: '8px', border: '1px solid #CBD5E1' }} />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>NIT / RUT *</label>
-                                        <input required value={newClient.nit} onChange={e => setNewClient(p => ({ ...p, nit: e.target.value }))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #E5E7EB' }} />
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>NIT / RUT *</label>
+                                        <input required value={newClient.nit} onChange={e => setNewClient(p => ({ ...p, nit: e.target.value }))} style={{ width: '100%', padding: '9px', borderRadius: '8px', border: '1px solid #CBD5E1' }} />
                                     </div>
                                 </>
                             )}
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Nombre de Contacto *</label>
-                                <input required value={newClient.contact_name} onChange={e => setNewClient(p => ({ ...p, contact_name: e.target.value }))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #E5E7EB' }} />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>Nombre de Contacto *</label>
+                                <input required value={newClient.contact_name} onChange={e => setNewClient(p => ({ ...p, contact_name: e.target.value }))} style={{ width: '100%', padding: '9px', borderRadius: '8px', border: '1px solid #CBD5E1' }} />
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Teléfono</label>
-                                    <input value={newClient.phone} onChange={e => setNewClient(p => ({ ...p, phone: e.target.value }))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #E5E7EB' }} />
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>Teléfono</label>
+                                    <input value={newClient.phone} onChange={e => setNewClient(p => ({ ...p, phone: e.target.value }))} style={{ width: '100%', padding: '9px', borderRadius: '8px', border: '1px solid #CBD5E1' }} />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Modelo Precios</label>
-                                    <select value={newClient.pricing_model_id} onChange={e => setNewClient(p => ({ ...p, pricing_model_id: e.target.value }))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #E5E7EB', background: 'white' }}>
-                                        <option value="">Default</option>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>Modelo Precios</label>
+                                    <select value={newClient.pricing_model_id} onChange={e => setNewClient(p => ({ ...p, pricing_model_id: e.target.value }))} style={{ width: '100%', padding: '9px', borderRadius: '8px', border: '1px solid #CBD5E1', background: 'white' }}>
                                         {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                     </select>
                                 </div>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Dirección de Entrega</label>
-                                <input value={newClient.address} onChange={e => setNewClient(p => ({ ...p, address: e.target.value }))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #E5E7EB' }} />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569', marginBottom: '4px' }}>Dirección de Entrega</label>
+                                <input value={newClient.address} onChange={e => setNewClient(p => ({ ...p, address: e.target.value }))} style={{ width: '100%', padding: '9px', borderRadius: '8px', border: '1px solid #CBD5E1' }} />
                             </div>
 
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '1rem' }}>
-                                <button type="button" onClick={() => setIsClientModalOpen(false)} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: 'white', fontWeight: 'bold' }}>Cancelar</button>
-                                <button type="submit" disabled={saving} style={{ flex: 2, padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: appSettings.primary_color, color: 'white', fontWeight: 'bold' }}>{saving ? 'Guardando...' : 'Crear Registro'}</button>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '0.5rem' }}>
+                                <button type="button" onClick={() => setIsClientModalOpen(false)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: 800, cursor: 'pointer' }}>Cancelar</button>
+                                <button type="submit" disabled={saving} style={{ flex: 2, padding: '10px', borderRadius: '8px', border: 'none', backgroundColor: '#0D7A57', color: 'white', fontWeight: 800, cursor: 'pointer' }}>{saving ? 'Guardando...' : 'Crear Cliente'}</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-            <style dangerouslySetInnerHTML={{ __html: `
-                @media print { 
-                    .no-print { display: none !important; } 
-                    .only-print { display: block !important; }
-                    body { background-color: white !important; padding: 0 !important; margin: 0 !important; font-size: 8.5pt !important; line-height: 1.3 !important; }
-                    #quote-document { 
-                        box-shadow: none !important; 
-                        border: none !important; 
-                        width: 100% !important; 
-                        margin: 0 !important; 
-                        padding: 1.5cm !important;
-                        min-height: auto !important;
-                        position: static !important;
-                        overflow: visible;
-                    }
-                    table { border-collapse: collapse !important; }
-                    thead { display: table-header-group !important; }
-                    tfoot { display: table-row-group !important; }
-                    .print-spacer-tfoot { display: none !important; }
-                    .print-footer { display: none !important; }
-                    tr { page-break-inside: avoid !important; }
-                    th, td { padding: 4px 6px !important; font-size: 8.5pt !important; line-height: 1.3 !important; }
-                    h1 { font-size: 14pt !important; }
-                    h2, h3, h4 { font-size: 10pt !important; }
-                    p, span, div { font-size: 8.5pt !important; }
-                    @page { 
-                        size: letter portrait; 
-                        margin: 1.5cm 1.5cm 2cm 1.5cm;
-                        @bottom-left {
-                            content: "${appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}";
-                            font-size: 7.5pt;
-                            color: #94A3B8;
-                            font-family: system-ui, sans-serif;
-                            border-top: 1px solid #E2E8F0;
-                            padding-top: 4px;
-                        }
-                        @bottom-right {
-                            content: "Página " counter(page) " de " counter(pages);
-                            font-size: 7.5pt;
-                            color: #94A3B8;
-                            font-family: system-ui, sans-serif;
-                            border-top: 1px solid #E2E8F0;
-                            padding-top: 4px;
-                        }
-                    }
-                }
-                .only-print { display: none !important; }
-                .print-footer { display: none !important; }
-            ` }} />
-
         </main>
     );
 }
 
 export default function CreateQuotePage() {
     return (
-        <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'system-ui, sans-serif', color: '#64748B' }}>Cargando creador de cotizaciones...</div>}>
+        <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'system-ui, sans-serif', color: '#64748B' }}>Cargando generador de cotizaciones...</div>}>
             <CreateQuotePageContent />
         </Suspense>
     );
