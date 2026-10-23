@@ -23,12 +23,12 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **274 Escenarios Canónicos (1..274)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **275 Escenarios Canónicos (1..275)** | **🟢 100%** |
 
 ---
 
@@ -11507,3 +11507,35 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   2. **Unificación Nomenclatural en Vista de Detalle (`/admin/commercial/quotes/[id]`):**
      - Se purga la etiqueta legacy de onboarding (`"Cerrar Negociación: Alta de Cliente B2B y Cargar Acuerdo"`).
      - Para clientes con perfil institucional activo (`clientProfile`), el botón principal y la cabecera del modal adoptan el rótulo canónico estricto: **`[Aprobar y Congelar Acuerdo de Precios]`**, eliminando ambigüedades operativas.
+
+---
+
+### Escenario 275: Consola Maestra de Modelos por Cliente On-Screen (JIT), Separación Estricta de Modelos Estándar (Batch) y Telemetría de Utilidad Ponderada con Demanda Consolidada a 30 Días (SDD v1.9.248)
+- **Given** la arquitectura de fijación de tarifas comerciales en `/admin/commercial?tab=operations&subtab=settings` (`src/app/admin/commercial/settings/page.tsx`), las matrices de costos (`commercial_cost_matrix`), los modelos de precios (`pricing_models`) y las canastas cerradas de SKUs en `quote_templates`,
+- **When** la dirección comercial calibra los márgenes de utilidad de la compañía o modula tarifas y canastas específicas para cada cliente institucional recurrente,
+- **Then** el sistema implementa la doctrina de dos mundos complementarios que balancea el pulso de mercado diario con la negociación consultiva por cuenta sin sobrecargar la base de datos:
+  1. **División Arquitectónica de los Dos Mundos:**
+     - **Modelos Estándar (Macro / Batch Diario):** Dedicados a capturar el pulso diario de Corabastos para prospectos, menudeo y cotizaciones en frío sobre los 626 SKUs del catálogo general. Operan mediante recálculo nocturno desatendido a medianoche sobre los 6 modelos estructurales (*General Institucional Dinámico*, *Grande*, *Mediano*, *Pequeño*, *Clientes Hogar*, *Costo Puro*).
+     - **Modelos por Cliente (Micro / On-Screen JIT):** Dedicados a gobernar las canastas cerradas de consumo de cada Casa Matriz B2B (~94 cuentas activas). **Queda prohibido someter estos modelos a recálculos ciegos nocturnos en batch.** Su renderizado, cálculo de precios y telemetría de rentabilidad se evalúan **On-Screen en caliente (Just-In-Time)** exclusivamente al abrir la pantalla de la cuenta, optimizando el 100% de cómputo del servidor.
+  2. **Consola On-Screen con Telemetría de Demanda a 30 Días:**
+     - Al seleccionar un Modelo por Cliente, el sistema cruza reactivamente los `order_items` de los **últimos 30 días calendario sumando la Casa Matriz y todas sus sucursales vinculadas (`parent_id = matriz.id`)**.
+     - La tabla de productos proyecta las siguientes columnas obligatorias:
+       * `ID ERP`: Identificador contable único.
+       * `Producto`: Descripción comercial, SKU y Unidad de Medida.
+       * `Categoría`: Familia taxonómica del SKU.
+       * `Costo Base Hoy`: Costo vivo oficial de `commercial_cost_matrix` (o último costo de compras ponderado).
+       * `Utilidad %`: Input editable in-situ con porcentaje de margen comercial individual para este cliente, heredando inicialmente la tasa de `General Institucional Dinámico` y editable producto a producto.
+       * `Precio Resultante`: Tarifa redondeada al múltiplo superior de \$50 COP calculada como:
+         $$\text{Precio} = \left\lceil \frac{\text{Costo Base} \times \left(1 + \frac{\text{Utilidad}\%}{100}\right)}{50} \right\rceil \times 50$$
+       * `Consumo Mensual (30d)`: Cantidad real demandada por el cliente consolidado (Kg o Und) en el último ciclo de 30 días.
+       * `Utilidad Proyectada ($ COP)`: Ganancia monetaria esperada en el mes para ese SKU:
+         $$\text{Utilidad Total} = \text{Consumo Mensual} \times (\text{Precio Resultante} - \text{Costo Base})$$
+       * `Acciones`: Eliminación o adición de productos a la canasta.
+  3. **Cinta KPI de Rentabilidad Ponderada de la Canasta:**
+     - En el encabezado de la canasta, el sistema proyecta en tiempo real:
+       * Total SKUs activos en la canasta.
+       * Volumen mensual total demandado (Ton / Kg).
+       * Margen promedio ponderado de la cuenta (Gross Margin % sobre ventas proyectadas).
+       * Utilidad Bruta Mensual Proyectada en \$ COP.
+  4. **Persistencia Ligera sin Deuda Técnica:**
+     - Las calibraciones de margen de la canasta se persisten de forma no invasiva mediante el almacén `app_settings` bajo la clave `quote_template_margins:{template_id}` con guardado reactivo, alimentando directamente la preforma de cotizaciones en Canal 2 (`quotes/create`) y la congelación vinculante de Acuerdos Comerciales.

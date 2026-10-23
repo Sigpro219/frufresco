@@ -374,9 +374,7 @@ export default function CommercialPage() {
                                         boxShadow: pricingSettingsTab === 'models' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                                         transition: 'all 0.15s'
                                     }}
-                                >
-                                    Modelos de Precios
-                                </button>
+                                >Modelos Estándar</button>
                                 <button
                                     type="button"
                                     onClick={() => setPricingSettingsTab('templates')}
@@ -392,9 +390,7 @@ export default function CommercialPage() {
                                         boxShadow: pricingSettingsTab === 'templates' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                                         transition: 'all 0.15s'
                                     }}
-                                >
-                                    Listas de Cotización
-                                </button>
+                                >Modelos por Cliente (Canastas)</button>
                             </div>
                         ) : null}
                     </div>
