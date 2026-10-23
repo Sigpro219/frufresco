@@ -172,6 +172,8 @@ export interface CutPreviewOrder {
     documentRequirement: string;
     type?: string;
     admin_notes?: string;
+    logistics_data?: any;
+    origin_source?: string;
     profile: {
         company_name: string;
         razon_social?: string;
@@ -2189,7 +2191,10 @@ export default function BillingDashboard() {
                     created_at,
                     delivery_date,
                     admin_notes,
+                    special_notes,
                     type,
+                    logistics_data,
+                    origin_source,
                     profiles (
                         company_name,
                         razon_social,
@@ -2234,6 +2239,12 @@ export default function BillingDashboard() {
             let targetOrders = rawOrders || [];
             if (slot !== 'ADJ' && selectedOrderIds.length > 0) {
                 targetOrders = targetOrders.filter(o => selectedOrderIds.includes(o.id));
+            } else if (slot !== 'ADJ') {
+                // Escenario 121: En cortes oficiales de Facturación Masiva (FV), excluir automáticamente reposiciones de garantía de SAC a $0 COP
+                targetOrders = targetOrders.filter(o => {
+                    const rep = getOrderReplacementInfo(o);
+                    return !rep.isReplacement && o.origin_source !== 'customer_service';
+                });
             }
 
             if (!targetOrders || targetOrders.length === 0) {
@@ -2330,6 +2341,8 @@ export default function BillingDashboard() {
                     documentRequirement: prof?.print_invoice ? 'Factura Requerida' : 'Remisión Entrega',
                     type: o.type,
                     admin_notes: o.admin_notes,
+                    logistics_data: o.logistics_data,
+                    origin_source: o.origin_source,
                     profile: prof ? {
                         company_name: prof.company_name || 'Cliente sin nombre',
                         razon_social: prof.razon_social,
@@ -2362,7 +2375,12 @@ export default function BillingDashboard() {
         // Poka-Yoke Canónico (Escenario 121 SDD):
         // Se prohíbe emitir corte o factura definitiva sobre pedidos despachados sin precio o consumo abierto no liquidado (excepto Remisión Obsequio o Reposición)
         const unpricedOrder = previewOrders.find(o => {
-            const isGiftOrReplacement = o.profile?.document_type === 'gift_remission' || o.admin_notes?.includes('REMISIÓN DE OBSEQUIO') || o.admin_notes?.includes('REPOSICIÓN');
+            const rep = getOrderReplacementInfo(o);
+            const isGiftOrReplacement = o.profile?.document_type === 'gift_remission' 
+                || rep.isReplacement 
+                || o.origin_source === 'customer_service'
+                || /reposici[oó]n/i.test(o.admin_notes || '')
+                || /obsequio/i.test(o.admin_notes || '');
             if (isGiftOrReplacement) return false;
             return (
                 o.netTotal === 0 || 
