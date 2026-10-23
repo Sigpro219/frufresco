@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2, RefreshCw, Copy } from 'lucide-react';
+import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2, RefreshCw, Copy, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 
 export default function QuotesListPage({ embedded = false }: { embedded?: boolean } = {}) {
@@ -11,6 +11,17 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [sortField, setSortField] = useState<'quote_number' | 'created_at' | 'client_name' | 'model_snapshot_name' | 'total_amount' | 'status'>('created_at');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+    const handleSort = (field: 'quote_number' | 'created_at' | 'client_name' | 'model_snapshot_name' | 'total_amount' | 'status') => {
+        if (sortField === field) {
+            setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortField(field);
+            setSortDir(field === 'created_at' || field === 'total_amount' || field === 'quote_number' ? 'desc' : 'asc');
+        }
+    };
 
     // Estado para aprobación ágil directa a Acuerdo Comercial (Escenario 269 SDD)
     const [quoteToApprove, setQuoteToApprove] = useState<any | null>(null);
@@ -499,17 +510,76 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                             <thead style={{ backgroundColor: '#F9FAFB' }}>
                                 <tr style={{ backgroundColor: '#F9FAFB' }}>
-                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, borderTopLeftRadius: THEME.radius.lg, ...THEME.typography?.tableHeader }}>ID</th>
-                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Fecha</th>
-                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Cliente</th>
-                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Modelo</th>
-                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', textAlign: 'right', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Total</th>
-                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Estado</th>
+                                    {[
+                                        { field: 'quote_number' as const, label: 'ID', align: 'left' as const, first: true },
+                                        { field: 'created_at' as const, label: 'Fecha', align: 'left' as const },
+                                        { field: 'client_name' as const, label: 'Cliente', align: 'left' as const },
+                                        { field: 'model_snapshot_name' as const, label: 'Modelo', align: 'left' as const },
+                                        { field: 'total_amount' as const, label: 'Total', align: 'right' as const },
+                                        { field: 'status' as const, label: 'Estado', align: 'left' as const },
+                                    ].map(col => {
+                                        const isActive = sortField === col.field;
+                                        return (
+                                            <th
+                                                key={col.field}
+                                                onClick={() => handleSort(col.field)}
+                                                style={{
+                                                    backgroundColor: '#F9FAFB',
+                                                    borderBottom: `1.5px solid ${THEME.colors.border}`,
+                                                    padding: '0.85rem 1.25rem',
+                                                    textAlign: col.align,
+                                                    position: 'sticky',
+                                                    top: embedded ? '203px' : '146px',
+                                                    zIndex: 60,
+                                                    cursor: 'pointer',
+                                                    userSelect: 'none',
+                                                    ...(col.first ? { borderTopLeftRadius: THEME.radius.lg } : {}),
+                                                    ...THEME.typography?.tableHeader
+                                                }}
+                                            >
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: col.align === 'right' ? 'flex-end' : 'flex-start' }}>
+                                                    <span style={{ color: isActive ? THEME.colors.primary : undefined }}>{col.label}</span>
+                                                    <span style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        width: '20px',
+                                                        height: '20px',
+                                                        borderRadius: '5px',
+                                                        backgroundColor: isActive ? '#DCFCE7' : '#EEF2F6',
+                                                        color: isActive ? THEME.colors.primary : '#64748B',
+                                                        border: isActive ? '1px solid #86EFAC' : '1px solid #E2E8F0',
+                                                        transition: 'all 0.15s ease'
+                                                    }}>
+                                                        {isActive ? (
+                                                            sortDir === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                        ) : (
+                                                            <ArrowUpDown size={12} strokeWidth={2} />
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </th>
+                                        );
+                                    })}
+
+
+
+
+
                                     <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', textAlign: 'right', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, borderTopRightRadius: THEME.radius.lg }}></th>
                                 </tr>
                             </thead>
                                 <tbody>
-                                {filteredQuotes.map(quote => (
+                                {[...filteredQuotes].sort((a, b) => {
+                                    let cmp = 0;
+                                    if (sortField === 'quote_number') cmp = Number(a.quote_number || 0) - Number(b.quote_number || 0);
+                                    else if (sortField === 'created_at') cmp = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+                                    else if (sortField === 'client_name') cmp = String(a.client_name || '').localeCompare(String(b.client_name || ''), 'es', { sensitivity: 'base' });
+                                    else if (sortField === 'model_snapshot_name') cmp = String(a.model_snapshot_name || '').localeCompare(String(b.model_snapshot_name || ''), 'es', { sensitivity: 'base' });
+                                    else if (sortField === 'total_amount') cmp = Number(a.total_amount || a.total || 0) - Number(b.total_amount || b.total || 0);
+                                    else if (sortField === 'status') cmp = getEffectiveStatus(a).localeCompare(getEffectiveStatus(b), 'es', { sensitivity: 'base' });
+                                    return sortDir === 'asc' ? cmp : -cmp;
+                                }).map(quote => (
                                     <tr 
                                         key={quote.id} 
                                         style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s ease' }}
