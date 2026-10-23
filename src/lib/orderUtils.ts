@@ -384,11 +384,14 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
         }
         discretePart = `${origQty} ${noun} de ${weightStr}`;
     } else {
-        // Fallback: match from Presentación or variant_label like "Unidad 2000 gr"
+        // Fallback: match from Presentación or variant_label like "Unidad 2000 gr", "und de 160 gr", "und de 2 kg"
         const pres = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '');
-        const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
-        if (matchGr) {
-            const gr = parseFloat(matchGr[1].replace(',', '.'));
+        const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+        const matchKg = !matchGr && typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+        if (matchGr || matchKg) {
+            const gr = matchGr
+                ? parseFloat(matchGr[1].replace(',', '.'))
+                : parseFloat(matchKg![1].replace(',', '.')) * 1000;
             const kgPerUnit = gr / 1000;
             const currentQty = Number(item.quantity) || 1;
             const currentUnit = (item.unit || 'kg').toLowerCase();

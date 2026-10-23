@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.258 (Herencia Estricta de Conteo Físico Real (`bodegaPost10am ?? physicalCount ?? 0`) sin Fallback al Calculado Teórico y Sincronización por Fecha en Sábana de Alistamiento (`INV[...]`), Balance Diario y Planilla de Compras — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.259 (Blindaje Anti-Doble-Conversión Dual-Unit en Sábana de Alistamiento y Motor de Neteo de Compras cuando `order_items.unit === 'Kg'` + Soporte de Presentaciones `und de X gr/kg` — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 281 Escenarios BDD Ininterrumpidos (1..281)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 282 Escenarios BDD Ininterrumpidos (1..282)
 
 ---
 
@@ -11681,3 +11681,12 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   1. **Prohibición Absoluta de Fallback a `calculatedStock` (`Col S`):** El saldo inicial heredado de un cierre previo (`D-1`) se obtiene **exclusivamente** del conteo físico real en bodega (`item.bodegaPost10am ?? item.physicalCount ?? 0`). Si un SKU tiene `physicalCount === null` y `bodegaPost10am === null` al cierre del turno, su inventario físico inicial para el día siguiente es estrictamente **`0`** (`INV[0]`), jamás el saldo teórico calculado.
   2. **Protección contra Filas Resumen de Familia en `snapshot_items`:** Al iterar `snapshot_items` de `daily_inventory_closings`, se respeta únicamente la primera aparición individual de cada `productId` (`if (map[item.productId] === undefined)`), impidiendo que una fila totalizadora de familia al final de la hoja sobrescriba el stock individual del producto padre (ej. garantizando `Mandarina arrayana = 130` en lugar del consolidado familiar `153`).
   3. **Sincronización Histórica por Fecha en Sábana de Alistamiento (`/admin/orders/alistamiento-print`):** La sábana consulta `daily_inventory_closings` con `.lt('closing_date', selectedDate).order('closing_date', { ascending: false }).limit(1)` para poblar `inventoryMap`, garantizando que `INV[...]` refleje el inventario inicial exacto del día operativo consultado (`selectedDate`), usando `inventory_stocks` únicamente como respaldo cuando no exista cierre previo.
+
+---
+
+### Escenario 282: Blindaje Poka-Yoke Anti-Doble-Conversión Dual-Unit en Sábana de Alistamiento y Motor de Compras cuando `unit === 'Kg'` (SDD v1.9.259)
+- **Given** un ítem de pedido (`order_items`) cuya cantidad ya fue convertida y persistida en kilogramos en la base de datos (`unit = 'Kg'`, ej. `quantity = 3.68`, `unit = 'Kg'` para 23 unidades de 160 gr de `Banano uraba` en `COLSUBSIDIO - RESTAURANTE CAFÉ DE LETRAS`), pero cuyo `selected_options` o `variant_label` conserva la etiqueta de presentación (`"Presentación": "Unidad 160 gr"` o `"und de 160 gr"`) sin metadatos explícitos `_original_qty`,
+- **When** el motor de normalización calcula la masa neta en kilogramos en `normalizeToKg()` (`src/app/admin/orders/alistamiento-print/page.tsx`) y `normalizeDemandToKg()` (`src/lib/procurement/procurementNettingEngine.ts`),
+- **Then** el sistema aplica las siguientes salvaguardas matemáticas:
+  1. **Prohibición de Re-Multiplicación cuando `unit` ya es `Kg`:** Si `cleanRaw` es `'kg'`, `'kilo'`, `'kilos'` o `'kilogramo'` (`isRawAlreadyKg === true`), `quantity` ya representa la masa neta en kilogramos (`3.68 KG`). Queda estrictamente prohibido volver a multiplicar `quantity * kgPerUnit` (lo cual generaba el falso valor `3.68 * 0.160 = 0,59 KG`). La multiplicación `quantity * kgPerUnit` se ejecuta únicamente cuando `rawUnit` expresa conteo de unidades (`Unidad`, `Und`, `Unidad 160 gr`, etc.).
+  2. **Inferencia Inversa de Conteo Discreto en `formatStructuredSpecification` (`src/lib/orderUtils.ts`):** Soporta tanto el patrón `"Unidad 160 gr"` como `"und de 160 gr"` y `"und de 2 kg"` (con preposición opcional `de`), calculando `Math.round(currentQty / kgPerUnit)` cuando `currentUnit` es `Kg` para proyectar en la Fila 2 la instrucción exacta (`23 und de 160 gr`) en perfecta coherencia con la Fila 1 (`3,68 KG`).

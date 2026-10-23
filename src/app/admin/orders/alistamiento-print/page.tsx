@@ -140,22 +140,24 @@ function normalizeToKg(
         const calculatedKg = Number(origQty) * (Number(unitWeightGr) / 1000);
         effectiveKg = calculatedKg > 0 ? calculatedKg : quantity;
     } else {
-        // B. Detectar especificación de peso en texto de presentación (ej. "Unidad 7000 gr", "Unidad 10000 gr")
-        const matchGr = typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
-        const matchKg = !matchGr && typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+        // B. Detectar especificación de peso en texto de presentación (ej. "Unidad 7000 gr", "und de 160 gr")
+        // SDD v1.9.259: Si rawUnit ya es 'kg'/'kilo', quantity ya viene convertido a kilos en BD (ej. 3.68 kg para 23 und de 160 gr) y NO debe multiplicarse de nuevo.
+        const isRawAlreadyKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(cleanRaw);
+        const matchGr = typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+        const matchKg = !matchGr && typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
 
         if (matchGr) {
             const gr = parseFloat(matchGr[1].replace(',', '.'));
             const kgPerUnit = gr / 1000;
-            if (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText)) {
+            if (!isRawAlreadyKg && (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText))) {
                 effectiveKg = quantity * kgPerUnit;
             }
         } else if (matchKg) {
             const kgPerUnit = parseFloat(matchKg[1].replace(',', '.'));
-            if (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText)) {
+            if (!isRawAlreadyKg && (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText))) {
                 effectiveKg = quantity * kgPerUnit;
             }
-        } else if ((cleanRaw.includes('unidad') || cleanRaw.includes('und')) && productWeightKg && productWeightKg > 0 && productWeightKg !== 1) {
+        } else if (!isRawAlreadyKg && (cleanRaw.includes('unidad') || cleanRaw.includes('und')) && productWeightKg && productWeightKg > 0 && productWeightKg !== 1) {
             // Fruto entero sin presentación explícita pero con peso estándar en catálogo (ej. Piña golden 2 kg, Tomate 0.2 kg)
             effectiveKg = quantity * productWeightKg;
         } else if (cleanRaw.includes('libra') || cleanRaw === 'lb' || cleanRaw === 'lbs') {

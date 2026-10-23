@@ -277,21 +277,22 @@ export function normalizeDemandToKg(params: {
         const calculatedKg = Number(origQty) * (Number(unitWeightGr) / 1000);
         effectiveKg = calculatedKg > 0 ? calculatedKg : quantity;
     } else {
-        const matchGr = typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
-        const matchKg = !matchGr && typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+        const isRawAlreadyKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(cleanRaw);
+        const matchGr = typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+        const matchKg = !matchGr && typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
 
         if (matchGr) {
             const gr = parseFloat(matchGr[1].replace(',', '.'));
             const kgPerUnit = gr / 1000;
-            if (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText)) {
+            if (!isRawAlreadyKg && (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText))) {
                 effectiveKg = quantity * kgPerUnit;
             }
         } else if (matchKg) {
             const kgPerUnit = parseFloat(matchKg[1].replace(',', '.'));
-            if (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText)) {
+            if (!isRawAlreadyKg && (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText))) {
                 effectiveKg = quantity * kgPerUnit;
             }
-        } else if ((cleanRaw.includes('unidad') || cleanRaw.includes('und')) && productWeightKg && productWeightKg > 0 && productWeightKg !== 1) {
+        } else if (!isRawAlreadyKg && (cleanRaw.includes('unidad') || cleanRaw.includes('und')) && productWeightKg && productWeightKg > 0 && productWeightKg !== 1) {
             effectiveKg = quantity * productWeightKg;
         } else if (cleanRaw.includes('libra') || cleanRaw === 'lb' || cleanRaw === 'lbs') {
             effectiveKg = quantity * 0.5;
