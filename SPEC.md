@@ -23,12 +23,12 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **273 Escenarios Canónicos (1..273)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **274 Escenarios Canónicos (1..274)** | **🟢 100%** |
 
 ---
 
@@ -11489,3 +11489,21 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Para los demás clientes, se formatea como `FV segun orden de compra {OC} - {Sucursal}` (o `FV - {Sucursal}` si no hay OC).
   3. **Columna AD (`Encab: Sucursal`) — Resolución Jerárquica Matriz / Sede:**
      - En clientes configurados con relación padre-hijo (`parent_id`), la exportación consulta e inyecta el **NIT y la Razón Social de la Casa Matriz** para el encabezado contable, mientras que la **Columna AD** arrastra el nombre limpio de la sucursal (ej: `EL CUBO`, `BELLAVISTA`).
+
+---
+
+### Escenario 274: Cierre Forense de Brechas en Canal 2: Acción One-Click de Aprobación en Galería y Unificación Nomenclatural B2B (SDD v1.9.247)
+- **Given** la auditoría forense independiente (`/auditor-tirano-sdd`) sobre la gobernanza de los 3 canales de fijación de acuerdos institucionales (Escenarios 268, 269 y 270),
+- **When** el área comercial navega por la galería de cotizaciones activas (`/admin/commercial/quotes`) o consulta la vista de detalle de una propuesta formal (`/admin/commercial/quotes/[id]`),
+- **Then** el sistema garantiza una experiencia sin fricción y 100% fiel al contrato canónico:
+  1. **Acción One-Click en Galería de Cotizaciones (`/admin/commercial/quotes`):**
+     - Cada fila de cotización en estado no congelado (`status !== 'agreement'`) expone el botón de acción directa **`[Handshake Aprobar y Congelar]`** junto a los botones de `PDF` y `Ver Detalle`.
+     - Al pulsarlo, despliega un modal industrial centrado (`max-width: 540px`) que proyecta el folio `COT-XXXX`, la razón social del cliente y valida si cuenta con expediente institucional (`client_id`).
+     - Si el cliente ya está formalizado, presenta selector de fecha de inicio (hoy por defecto) y selector de fecha de vencimiento con cuatro (4) presets rápidos (`15 días`, `1 mes`, `2 meses`, `3 meses`).
+     - Al confirmar, ejecuta la mutación atómica:
+       $$\text{quotes.status} = \text{'agreement'}, \quad \text{name} = \text{"[Cliente] - Acuerdo [DD-MM-AA]"}$$
+       registra la traza en `agreement_audit_logs` con `action = 'ACTIVATE_commercial_agreement'` y refresca instantáneamente la galería sin requerir recarga completa del navegador.
+     - Si la cotización pertenece a un prospecto no formalizado (Lead sin perfil), el modal instruye al usuario y ofrece el botón de navegación hacia el kit de vinculación de clientes.
+  2. **Unificación Nomenclatural en Vista de Detalle (`/admin/commercial/quotes/[id]`):**
+     - Se purga la etiqueta legacy de onboarding (`"Cerrar Negociación: Alta de Cliente B2B y Cargar Acuerdo"`).
+     - Para clientes con perfil institucional activo (`clientProfile`), el botón principal y la cabecera del modal adoptan el rótulo canónico estricto: **`[Aprobar y Congelar Acuerdo de Precios]`**, eliminando ambigüedades operativas.

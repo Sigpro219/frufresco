@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter } from 'lucide-react';
+import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 
 export default function QuotesListPage({ embedded = false }: { embedded?: boolean } = {}) {
@@ -11,6 +11,83 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
+
+    // Estado para aprobación ágil directa a Acuerdo Comercial (Escenario 269 SDD)
+    const [quoteToApprove, setQuoteToApprove] = useState<any | null>(null);
+    const [approving, setApproving] = useState(false);
+    const [approvalStartDate, setApprovalStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [approvalValidUntil, setApprovalValidUntil] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        return d.toISOString().split('T')[0];
+    });
+    const [presetDays, setPresetDays] = useState<number>(30);
+
+    const handleOpenApproveModal = (quote: any) => {
+        setQuoteToApprove(quote);
+        const today = new Date();
+        const start = today.toISOString().split('T')[0];
+        setApprovalStartDate(start);
+        const until = new Date(today);
+        until.setDate(until.getDate() + 30);
+        setApprovalValidUntil(until.toISOString().split('T')[0]);
+        setPresetDays(30);
+    };
+
+    const handleApplyPreset = (days: number) => {
+        setPresetDays(days);
+        const base = approvalStartDate ? new Date(approvalStartDate + 'T12:00:00') : new Date();
+        base.setDate(base.getDate() + days);
+        setApprovalValidUntil(base.toISOString().split('T')[0]);
+    };
+
+    const handleConfirmApprove = async () => {
+        if (!quoteToApprove) return;
+        setApproving(true);
+        try {
+            const today = new Date();
+            const day = String(today.getDate()).padStart(2, '0');
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const yr = String(today.getFullYear()).slice(-2);
+            const clientName = quoteToApprove.client_name || quoteToApprove.profiles?.company_name || 'Cliente';
+            const snapshotName = `${clientName} - Acuerdo ${day}-${month}-${yr}`;
+
+            const { error: updErr } = await supabase
+                .from('quotes')
+                .update({
+                    status: 'agreement',
+                    name: snapshotName,
+                    start_date: approvalStartDate,
+                    valid_until: approvalValidUntil
+                })
+                .eq('id', quoteToApprove.id);
+
+            if (updErr) throw updErr;
+
+            try {
+                await supabase.from('agreement_audit_logs').insert({
+                    agreement_id: quoteToApprove.id,
+                    action: 'ACTIVATE_commercial_agreement',
+                    details: {
+                        source: 'QUOTES_GALLERY_DIRECT_APPROVAL',
+                        valid_until: approvalValidUntil,
+                        start_date: approvalStartDate
+                    }
+                });
+            } catch (auditErr) {
+                console.warn('Notice: Could not log agreement activation:', auditErr);
+            }
+
+            alert(`¡Acuerdo Comercial activado exitosamente para ${clientName}! Precios congelados hasta el ${new Date(approvalValidUntil + 'T12:00:00').toLocaleDateString('es-CO')}.`);
+            setQuoteToApprove(null);
+            fetchQuotes(true);
+        } catch (err: any) {
+            console.error('Error aprobando acuerdo:', err);
+            alert('Error al congelar acuerdo comercial: ' + (err.message || err));
+        } finally {
+            setApproving(false);
+        }
+    };
 
     const fetchQuotes = async (showSpinner = false) => {
         if (showSpinner) setLoading(true);
@@ -466,6 +543,37 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                                          <FileText size={12} strokeWidth={2} /> PDF
                                                      </button>
                                                  </Link>
+                                                 {quote.status !== 'agreement' && (
+                                                     <button 
+                                                         onClick={() => handleOpenApproveModal(quote)}
+                                                         title="Aprobar propuesta y congelar acuerdo de precios"
+                                                         style={{ 
+                                                             height: '32px',
+                                                             boxSizing: 'border-box',
+                                                             border: '1px solid #A7F3D0',
+                                                             backgroundColor: '#ECFDF5',
+                                                             color: '#047857',
+                                                             padding: '0 0.75rem',
+                                                             borderRadius: THEME.radius.sm,
+                                                             cursor: 'pointer', 
+                                                             fontWeight: '700',
+                                                             fontSize: '0.75rem',
+                                                             display: 'inline-flex',
+                                                             alignItems: 'center',
+                                                             justifyContent: 'center',
+                                                             gap: '4px',
+                                                             transition: 'all 0.2s'
+                                                         }}
+                                                         onMouseEnter={(e) => {
+                                                             e.currentTarget.style.backgroundColor = '#D1FAE5';
+                                                         }}
+                                                         onMouseLeave={(e) => {
+                                                             e.currentTarget.style.backgroundColor = '#ECFDF5';
+                                                         }}
+                                                     >
+                                                         <Handshake size={13} strokeWidth={2} /> Aprobar y Congelar
+                                                     </button>
+                                                 )}
                                                  <Link href={`/admin/commercial/quotes/${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                                                      <button style={{ 
                                                          height: '32px',
@@ -525,6 +633,223 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                     )}
                 </div>
             </div>
+            {/* MODAL DE APROBACIÓN Y CONGELAMIENTO RÁPIDO DE ACUERDO (CANAL 2 SDD) */}
+            {quoteToApprove && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        maxWidth: '540px',
+                        width: '100%',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #E2E8F0',
+                        overflow: 'hidden'
+                    }}>
+                        {/* Cabecera */}
+                        <div style={{
+                            padding: '1.25rem 1.5rem',
+                            borderBottom: '1px solid #E2E8F0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            backgroundColor: '#F8FAFC'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    backgroundColor: '#ECFDF5',
+                                    color: '#0D7A57',
+                                    width: '38px',
+                                    height: '38px',
+                                    borderRadius: '10px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <Handshake size={20} strokeWidth={2.2} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
+                                        Aprobar y Congelar Acuerdo de Precios
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748B' }}>
+                                        Cotización {quoteToApprove.quote_number ? formatQuoteNumber(quoteToApprove.quote_number, quoteToApprove.status, quoteToApprove.created_at) : '---'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setQuoteToApprove(null)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '4px' }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Contenido */}
+                        <div style={{ padding: '1.5rem' }}>
+                            {/* Tarjeta de Cliente */}
+                            <div style={{
+                                backgroundColor: quoteToApprove.client_id ? '#F0FDF4' : '#FFFBEB',
+                                border: `1px solid ${quoteToApprove.client_id ? '#86EFAC' : '#FCD34D'}`,
+                                borderRadius: '10px',
+                                padding: '1rem',
+                                marginBottom: '1.25rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px'
+                            }}>
+                                <Building2 size={22} color={quoteToApprove.client_id ? '#166534' : '#B45309'} />
+                                <div>
+                                    <div style={{ fontSize: '0.92rem', fontWeight: 800, color: quoteToApprove.client_id ? '#166534' : '#92400E' }}>
+                                        {quoteToApprove.client_name || quoteToApprove.profiles?.company_name || 'Cliente B2B'}
+                                    </div>
+                                    <div style={{ fontSize: '0.74rem', color: quoteToApprove.client_id ? '#15803D' : '#B45309', marginTop: '2px' }}>
+                                        {quoteToApprove.client_id
+                                            ? 'Cliente institucional formalizado. Se congelarán las tarifas vigentes.'
+                                            : 'Prospecto comercial. Si requiere registrar RUT o dirección completa, ingresa a Ver Detalle.'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Fechas de Vigencia */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                                        Presets de Vigencia Rápida
+                                    </label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                                        {[15, 30, 60, 90].map(days => (
+                                            <button
+                                                key={days}
+                                                type="button"
+                                                onClick={() => handleApplyPreset(days)}
+                                                style={{
+                                                    padding: '6px 8px',
+                                                    borderRadius: '8px',
+                                                    border: presetDays === days ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                                    backgroundColor: presetDays === days ? '#ECFDF5' : '#FFFFFF',
+                                                    color: presetDays === days ? '#065F46' : '#64748B',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '700',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                            >
+                                                {days === 30 ? '1 mes' : days === 60 ? '2 meses' : days === 90 ? '3 meses' : `${days} días`}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px' }}>
+                                            Fecha de Inicio
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={approvalStartDate}
+                                            onChange={e => setApprovalStartDate(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px 10px',
+                                                borderRadius: '8px',
+                                                border: '1px solid #CBD5E1',
+                                                fontSize: '0.8rem',
+                                                color: '#1E293B',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px' }}>
+                                            Fecha de Vencimiento
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={approvalValidUntil}
+                                            onChange={e => {
+                                                setApprovalValidUntil(e.target.value);
+                                                setPresetDays(0);
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px 10px',
+                                                borderRadius: '8px',
+                                                border: '1px solid #CBD5E1',
+                                                fontSize: '0.8rem',
+                                                color: '#1E293B',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Botonera de Acciones */}
+                        <div style={{
+                            padding: '1rem 1.5rem',
+                            borderTop: '1px solid #E2E8F0',
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '8px'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setQuoteToApprove(null)}
+                                style={{
+                                    padding: '8px 14px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: 'white',
+                                    color: '#475569',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '600',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmApprove}
+                                disabled={approving}
+                                style={{
+                                    padding: '8px 18px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: '#0D7A57',
+                                    color: 'white',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '700',
+                                    cursor: approving ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                                }}
+                            >
+                                {approving ? <Loader2 size={14} className="animate-spin" /> : <Handshake size={14} />}
+                                Confirmar y Congelar Acuerdo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }

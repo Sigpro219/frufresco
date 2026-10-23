@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -881,7 +881,7 @@ export default function QuoteDetailPage() {
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0D7A57'}
                                     >
                                         <Handshake size={16} strokeWidth={2} />
-                                        <span>Cerrar Negociación: Alta de Cliente B2B y Cargar Acuerdo</span>
+                                        <span>{clientProfile ? 'Aprobar y Congelar Acuerdo de Precios' : 'Cerrar Negociación: Alta de Cliente B2B y Cargar Acuerdo'}</span>
                                     </button>
 
                                     {/* 2. AJUSTAR PRECIOS (NEGOCIACIÓN V2, V3...) */}
@@ -1178,10 +1178,10 @@ export default function QuoteDetailPage() {
                                 </div>
                                 <div>
                                     <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0F172A' }}>
-                                        Cierre de Negociación: Alta de Cliente B2B y Carga de Acuerdo
+                                        {clientProfile ? 'Aprobar y Congelar Acuerdo de Precios Institucional' : 'Cierre de Negociación: Alta de Cliente B2B y Carga de Acuerdo'}
                                     </h2>
                                     <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#64748B' }}>
-                                        El cliente ha aceptado la propuesta comercial. Ingresa los datos del kit de vinculación (Copia del RUT, dirección física y restricciones de entrega) para dar de alta al nuevo cliente institucional y asignarle este acuerdo comercial.
+                                        {clientProfile ? 'El cliente institucional ha aceptado la propuesta. Selecciona la vigencia del contrato para congelar los precios pactados.' : 'El cliente ha aceptado la propuesta comercial. Ingresa los datos del kit de vinculación (Copia del RUT, dirección física y restricciones de entrega) para dar de alta al nuevo cliente institucional y asignarle este acuerdo comercial.'}
                                     </p>
                                 </div>
                             </div>
