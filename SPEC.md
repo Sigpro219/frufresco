@@ -11616,7 +11616,7 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 
 ---
 
-### Escenario 279: Arquitectura de Doble Ámbito para PQRS Internas (Planta, Proceso & RRHH) vs. Externas (Cliente & Pedido) y Poda Radical SpaceX Raptor 3 en `PQRFloatingWidget.tsx` (SDD v1.9.255)
+### Escenario 279: Arquitectura de Doble Ámbito para PQRS Internas (Planta, Proceso & RRHH) vs. Externas (Cliente & Pedido) y Poda Radical SpaceX Raptor 3 en `PQRFloatingWidget.tsx` (SDD v1.9.256)
 - **Given** que el widget global de registro de novedades (`src/components/PQRFloatingWidget.tsx`) y la consola de Gestión de Calidad (`/admin/customer-service`) son operados transversalmente por todo el personal de planta, logística, abastecimiento y administración de FruFresco,
 - **When** un operario, líder de turno o supervisor necesita reportar tanto reclamaciones comerciales de clientes externos como novedades internas de operación, disciplina o sincronización de planta (ej. llegada tarde a turno, falta de respeto/convivencia, lanzamiento tardío de la operación que retrasó la salida de flota, o falla de básculas/equipos),
 - **Then** el sistema implementa una **Arquitectura de Doble Ámbito (Externo vs. Interno)** y moderniza el modal flotante bajo el estándar **Skin 1 (Swiss Precision Slate)** y el **Algoritmo SpaceX Raptor 3 (*"The best part is NO part"*)**:
@@ -11626,7 +11626,7 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - **Fusión de Asunto + Descripción en 1 Sola Caja (`¿Qué sucedió? *`) con Chips de 1 Clic (100% Lucide):**
        * Se elimina el doble campo de texto (*Asunto* separado de *Descripción*). El operario elige un chip con ícono Lucide y redacta en una sola caja; el sistema sintetiza automáticamente el `subject` combinando el chip activo y la primera línea del relato.
        * **Chips de Ámbito Cliente / Pedido:** `Calidad / Avería` (`AlertTriangle`), `Faltante en entrega` (`PackageX`), `Retraso en ruta` (`Truck`), `Diferencia en factura` (`FileText`).
-       * **Chips de Ámbito Interna / Planta & RRHH:** `Llegada tarde a turno` (`Clock`), `Falta de respeto / Convivencia` (`Users`), `Lanzamiento tardío de operación` (`AlertTriangle`), `Retraso salida de flota` (`Truck`), `Falla de báscula / equipo` (`Wrench`), `Incumplimiento EPP / 5S` (`ShieldAlert`).
+       * **Chips de Ámbito Interna / Planta & RRHH:** `Llegada tarde a turno` (`Clock`), `Falta de respeto / Convivencia` (`Users`), `Lanzamiento tardío de operación` (`AlertTriangle`), `Retraso salida de flota` (`Truck`), `Falla de báscula / equipo` (`Wrench`), `Incumplimiento EPP / 5S` (`ShieldAlert`), y `Otra causa / Hallazgo` (`Edit3` ? despliega un input abierto con auto-foco para escribir libremente cualquier causa o hallazgo de personal/planta no listado en las opciones predefinidas, persistiendo el texto tanto en el asunto como en `subtypeL2` de `PqrAuditModal.tsx`).
      - **Zona de Evidencia Compacta:** Dropzone horizontal estilizada con previsualización instantánea de miniatura y contador de archivos.
   2. **Conmutador de Doble Ámbito en Radicación (`scopeMode: 'client' | 'internal'`):**
      - **`[ Cliente / Pedido ]` (Ámbito Externo Comercial):** Exige seleccionar una **Sucursal Operativa** (`deliverableClients`, excluyendo Casas Matrices puras) y permite vincular el **Pedido Asociado** reciente de la sede.

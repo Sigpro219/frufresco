@@ -4352,25 +4352,65 @@ export default function PqrAuditModal({
 
                                     <div>
                                         <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
-                                            Subtipo Específico (Nivel 2)
+                                            Subtipo Específico / Hallazgo (Nivel 2)
                                         </label>
-                                        <SearchableSelect
-                                            value={rcaSubtypeL2}
-                                            onChange={subCode => {
-                                                setRcaSubtypeL2(subCode);
-                                                const subObj = availableSubtypes.find(s => s.code === subCode);
-                                                if (subObj) {
-                                                    handleResponsibleAreaChange(subObj.typicalResponsible);
-                                                }
-                                            }}
-                                            placeholder="Seleccionar Subtipo (L2)..."
-                                            searchPlaceholder="Buscar subtipo o falla específica..."
-                                            options={availableSubtypes.map(sub => ({
-                                                value: sub.code,
-                                                label: sub.label,
-                                                badge: sub.typicalResponsible ? `Área: ${sub.typicalResponsible}` : undefined
-                                            }))}
-                                        />
+                                        {(() => {
+                                            const isPredefinedSubtype = availableSubtypes.some(s => s.code === rcaSubtypeL2);
+                                            const isOpenSubtypeCode = rcaSubtypeL2 === 'otra_causa_rrhh_abierta' || rcaSubtypeL2 === 'otra_causa_proceso_abierta';
+                                            const isCustomWrittenCause = Boolean(rcaSubtypeL2 && !isPredefinedSubtype) || isOpenSubtypeCode;
+                                            const selectOptions = [
+                                                ...availableSubtypes.map(sub => ({
+                                                    value: sub.code,
+                                                    label: sub.label,
+                                                    badge: sub.typicalResponsible ? `Área: ${sub.typicalResponsible}` : undefined
+                                                })),
+                                                ...(!availableSubtypes.some(s => s.code.includes('otra_causa')) ? [{
+                                                    value: 'otra_causa_proceso_abierta',
+                                                    label: 'Otra causa o hallazgo específico (Escribir manualmente)'
+                                                }] : []),
+                                                ...(rcaSubtypeL2 && !isPredefinedSubtype && !isOpenSubtypeCode ? [{
+                                                    value: rcaSubtypeL2,
+                                                    label: `Hallazgo específico: ${rcaSubtypeL2}`,
+                                                    badge: 'Personalizado'
+                                                }] : [])
+                                            ];
+                                            return (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <SearchableSelect
+                                                        value={rcaSubtypeL2}
+                                                        onChange={subCode => {
+                                                            setRcaSubtypeL2(subCode);
+                                                            const subObj = availableSubtypes.find(s => s.code === subCode);
+                                                            if (subObj) {
+                                                                handleResponsibleAreaChange(subObj.typicalResponsible);
+                                                            }
+                                                        }}
+                                                        placeholder="Seleccionar Subtipo o escribir hallazgo..."
+                                                        searchPlaceholder="Buscar subtipo o elegir 'Otra causa'..."
+                                                        options={selectOptions}
+                                                    />
+                                                    {isCustomWrittenCause && (
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Escribe aquí la causa o hallazgo específico..."
+                                                            value={isOpenSubtypeCode ? '' : rcaSubtypeL2}
+                                                            onChange={e => setRcaSubtypeL2(e.target.value || 'otra_causa_rrhh_abierta')}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '7px 10px',
+                                                                borderRadius: '8px',
+                                                                border: '1.5px solid #0284C7',
+                                                                backgroundColor: '#F0F9FF',
+                                                                color: '#0F172A',
+                                                                fontSize: '0.76rem',
+                                                                fontWeight: 700,
+                                                                outline: 'none'
+                                                            }}
+                                                        />
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             </div>

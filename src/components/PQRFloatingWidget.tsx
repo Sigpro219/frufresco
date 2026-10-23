@@ -6,7 +6,7 @@ import {
     MessageSquarePlus, X, Send, CheckCircle2,
     UploadCloud, Loader2, Search, Building2, UserCheck,
     ShieldAlert, Settings, Users, Wrench, Clock,
-    AlertTriangle, PackageX, Truck, FileText
+    AlertTriangle, PackageX, Truck, FileText, Edit3
 } from 'lucide-react';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
@@ -47,6 +47,7 @@ interface QuickChip {
     // Shared
     defaultType: 'queja' | 'reclamo' | 'peticion' | 'sugerencia';
     defaultPriority: 'low' | 'normal' | 'high' | 'urgent';
+    isCustomCause?: boolean;
 }
 
 const QUICK_CHIPS: QuickChip[] = [
@@ -86,6 +87,16 @@ const QUICK_CHIPS: QuickChip[] = [
         category: 'facturacion',
         defaultType: 'reclamo',
         defaultPriority: 'normal'
+    },
+    {
+        id: 'client_otra_causa',
+        label: 'Otra causa / Hallazgo',
+        icon: Edit3,
+        scope: 'client',
+        category: 'otro',
+        defaultType: 'peticion',
+        defaultPriority: 'normal',
+        isCustomCause: true
     },
     // Ámbito Interno / Planta & RRHH
     {
@@ -159,6 +170,19 @@ const QUICK_CHIPS: QuickChip[] = [
         defaultArea: 'Bodega / Recepción',
         defaultType: 'queja',
         defaultPriority: 'normal'
+    },
+    {
+        id: 'internal_otra_causa',
+        label: 'Otra causa / Hallazgo',
+        icon: Edit3,
+        scope: 'internal',
+        subscope: 'rrhh_convivencia',
+        categoryL1: 'talento_humano_disciplina',
+        subtypeL2: 'otra_causa_rrhh_abierta',
+        defaultArea: 'Bodega / Recepción',
+        defaultType: 'queja',
+        defaultPriority: 'normal',
+        isCustomCause: true
     }
 ];
 
@@ -201,6 +225,7 @@ export default function PQRFloatingWidget() {
 
     // 3. Quick Chip & Unified Description state (Raptor 3: 1 single text field)
     const [selectedChipId, setSelectedChipId] = useState<string>('client_calidad');
+    const [customCauseText, setCustomCauseText] = useState<string>('');
     const [type, setType] = useState<'queja' | 'reclamo' | 'peticion' | 'sugerencia'>('reclamo');
     const [category, setCategory] = useState<'producto' | 'entrega' | 'facturacion' | 'otro'>('producto');
     const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('high');
@@ -215,6 +240,7 @@ export default function PQRFloatingWidget() {
 
     const dropdownRef = useRef<HTMLDivElement>(null);
     const involvedCollabRef = useRef<HTMLDivElement>(null);
+    const customCauseInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -400,6 +426,9 @@ export default function PQRFloatingWidget() {
             if (chip.defaultArea) setInternalArea(chip.defaultArea);
         }
         setErrorMsg(null);
+        if (chip.isCustomCause) {
+            setTimeout(() => customCauseInputRef.current?.focus(), 40);
+        }
     };
 
     const handleSwitchScope = (nextScope: ScopeMode) => {
@@ -415,6 +444,12 @@ export default function PQRFloatingWidget() {
 
         if (scopeMode === 'client' && !selectedClient) {
             setErrorMsg('Selecciona la sucursal o cliente del reporte.');
+            return;
+        }
+        const activeChipObj = QUICK_CHIPS.find(c => c.id === selectedChipId);
+        if (activeChipObj?.isCustomCause && !customCauseText.trim()) {
+            setErrorMsg('Escribe la causa o el hallazgo específico.');
+            customCauseInputRef.current?.focus();
             return;
         }
         if (!description.trim()) {
@@ -453,8 +488,11 @@ export default function PQRFloatingWidget() {
             const activeChip = QUICK_CHIPS.find(c => c.id === selectedChipId);
             const cleanFirstLine = description.trim().split('\n')[0].trim();
             const shortSnippet = cleanFirstLine.length > 62 ? `${cleanFirstLine.substring(0, 62)}...` : cleanFirstLine;
-            const synthesizedSubject = activeChip
-                ? `${activeChip.label}: ${shortSnippet}`
+            const causeLabel = activeChip?.isCustomCause
+                ? customCauseText.trim()
+                : (activeChip?.label || '');
+            const synthesizedSubject = causeLabel
+                ? `${causeLabel}: ${shortSnippet}`
                 : shortSnippet;
 
             const reporterHeader = selectedCollaborator
@@ -474,7 +512,7 @@ export default function PQRFloatingWidget() {
 
                 const rcaTag = buildRcaMetadataTag({
                     categoryL1: internalCategoryL1,
-                    subtypeL2: internalSubtypeL2,
+                    subtypeL2: activeChip?.isCustomCause ? customCauseText.trim() : internalSubtypeL2,
                     responsible: responsibleCode,
                     notes: description.trim(),
                     imputedTargetType: involvedCollaborator ? 'employee' : 'none',
@@ -535,6 +573,7 @@ export default function PQRFloatingWidget() {
                 setSubmitted(false);
                 setIsOpen(false);
                 setDescription('');
+                setCustomCauseText('');
                 setFiles(null);
                 setSelectedClient(null);
                 setSearchQuery('');
@@ -1214,6 +1253,36 @@ export default function PQRFloatingWidget() {
                                 );
                             })}
                         </div>
+
+                        {QUICK_CHIPS.find(c => c.id === selectedChipId)?.isCustomCause && (
+                            <div style={{ marginBottom: '8px' }}>
+                                <input
+                                    ref={customCauseInputRef}
+                                    type="text"
+                                    placeholder={
+                                        scopeMode === 'internal'
+                                            ? 'Escribe la causa o hallazgo específico (ej. Error en planilla, llaves, descuido)...'
+                                            : 'Escribe la causa o motivo específico del reporte...'
+                                    }
+                                    value={customCauseText}
+                                    onChange={(e) => {
+                                        setCustomCauseText(e.target.value);
+                                        setErrorMsg(null);
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 11px',
+                                        borderRadius: '9px',
+                                        border: '1.5px solid #0284C7',
+                                        fontSize: '0.79rem',
+                                        fontWeight: 700,
+                                        color: '#0F172A',
+                                        backgroundColor: '#F0F9FF',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+                        )}
 
                         <textarea
                             required

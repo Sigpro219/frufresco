@@ -104,7 +104,8 @@ export const RCA_CATEGORIES_L1: DefectCategoryL1[] = [
             { code: 'llegada_tarde_turno', label: 'Llegada tarde a turno / Incumplimiento de horario laboral', typicalResponsible: 'picking', description: 'Retraso en la hora de ingreso al turno programado de planta, bodega o ruta.' },
             { code: 'falta_respeto_convivencia', label: 'Falta de respeto / Conflicto interpersonal o mal trato', typicalResponsible: 'bodega', description: 'Conducta inapropiada, agresión verbal o falta de respeto entre compañeros o hacia líderes.' },
             { code: 'desacato_instruccion_operativa', label: 'Desacato de instrucción operativa o abandono de puesto', typicalResponsible: 'bodega', description: 'Omisión deliberada de directrices del supervisor o ausencia no autorizada del área.' },
-            { code: 'incumplimiento_epp_bpm', label: 'Incumplimiento de dotación, EPP o normas BPM/SST', typicalResponsible: 'bodega', description: 'Falta de uso de elementos de protección personal o protocolos de inocuidad en planta.' }
+            { code: 'incumplimiento_epp_bpm', label: 'Incumplimiento de dotación, EPP o normas BPM/SST', typicalResponsible: 'bodega', description: 'Falta de uso de elementos de protección personal o protocolos de inocuidad en planta.' },
+            { code: 'otra_causa_rrhh_abierta', label: 'Otra causa o hallazgo de personal (Escribir manualmente)', typicalResponsible: 'bodega', description: 'Causa o hallazgo específico de personal no listado en las categorías estándar.' }
         ]
     },
     {
@@ -115,7 +116,8 @@ export const RCA_CATEGORIES_L1: DefectCategoryL1[] = [
             { code: 'lanzamiento_tardio_operacion', label: 'Lanzamiento tardío de operación / Liberación demorada de órdenes', typicalResponsible: 'comercial', description: 'Liberación tardía del corte de pedidos hacia alistamiento, comprimiendo la ventana operativa.' },
             { code: 'retraso_salida_flota_muelle', label: 'Atraso en cargue o salida de flota por cuello de botella en planta', typicalResponsible: 'bodega', description: 'Demora en el despacho de vehículos por congestión en picking, pesaje o muelle.' },
             { code: 'demora_recepcion_abastecimiento', label: 'Entrada tardía de mercancía de plaza a muelle de recepción', typicalResponsible: 'proveedor', description: 'Retraso en el ingreso de insumos desde Corabastos que retrasa el inicio del alistamiento.' },
-            { code: 'falla_equipos_bascula_sistema', label: 'Falla de básculas, impresoras térmicas, cava o sistema', typicalResponsible: 'bodega', description: 'Indisponibilidad técnica de herramientas de pesaje, etiquetado, cuarto frío o red.' }
+            { code: 'falla_equipos_bascula_sistema', label: 'Falla de básculas, impresoras térmicas, cava o sistema', typicalResponsible: 'bodega', description: 'Indisponibilidad técnica de herramientas de pesaje, etiquetado, cuarto frío o red.' },
+            { code: 'otra_causa_proceso_abierta', label: 'Otra causa o hallazgo operativo (Escribir manualmente)', typicalResponsible: 'bodega', description: 'Causa o hallazgo operativo específico redactado libremente.' }
         ]
     }
 ];
