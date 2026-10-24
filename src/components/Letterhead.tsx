@@ -53,7 +53,7 @@ export default function Letterhead({
         badgeVariant,
         operationalTag: espacioNum !== undefined && espacioNum !== null && espacioNum !== '' ? {
             label: 'Bahía de Piso',
-            value: `ESPACIO ${espacioNum}`
+            value: String(espacioNum).toUpperCase() === 'S/A' ? 'S/A' : `ESPACIO ${espacioNum}`
         } : undefined
     };
 

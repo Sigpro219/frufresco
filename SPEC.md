@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.261 (Modo Limpio de Lista Operativa Interna `internalList` en `UniversalLetterhead` y `Letterhead`: Supresión de NIT, Línea de Negocio, Bloque Comercial `Contáctanos` y Pie de Página Institucional en Listas de Planta/Plaza — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.262 (Prohibición de Fallback a `sequence_id` en `BAHÍA DE PISO` de Remisiones: Homologación Estricta con `warehouse_spaces` o `S/A` — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 284 Escenarios BDD Ininterrumpidos (1..284)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 285 Escenarios BDD Ininterrumpidos (1..285)
 
 ---
 
@@ -11708,3 +11708,12 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 - **Then** `UniversalLetterhead.tsx` y `Letterhead.tsx` aplican una poda visual limpia:
   1. **Encabezado Minimalista Operativo:** Conserva únicamente el logo corporativo y el título `INVESTMENTS CORTES S.A.S.`, suprimiendo las sub-líneas fiscales/comerciales (`NIT 901.393.217-5 • Régimen Común`, `Operador Agro-Logístico • FruFresco Institucional`) y el bloque derecho de contacto comercial (`Contáctanos / 30154217612 / pedidos@frufresco.com / www.frufresco.com`).
   2. **Supresión de Pie de Página Institucional:** Oculta por completo el pie de página comercial (`Investments Cortes S.A.S. • Documento Oficial de Operación y Control Logístico • Sistema Integrado FruFresco / Gestión Pedidos: 30154217612 • pedidos@frufresco.com • www.frufresco.com`), liberando espacio vertical efectivo para las tablas de trabajo.
+
+---
+
+### Escenario 285: Prohibición de Fallback a `sequence_id` en el Indicador `BAHÍA DE PISO` de las Remisiones y Homologación Estricta con `warehouse_spaces` (SDD v1.9.262)
+- **Given** una Remisión de Entrega impresa desde `/admin/orders/contingency-print` (`src/app/admin/orders/contingency-print/page.tsx`) cuyo encabezado presenta el recuadro `BAHÍA DE PISO` (`espacioNum`),
+- **When** el sistema resuelve la etiqueta de ubicación física en suelo para el pedido (`order.warehouse_spaces`),
+- **Then** queda **estrictamente prohibido** hacer fallback al consecutivo documental del pedido (`order.sequence_id`, lo que generaba el falso rótulo `ESPACIO 1116` en `REMISIÓN #2110_1116`):
+  1. Si `order.warehouse_spaces` tiene bahías asignadas (`length > 0`), proyecta `ESPACIO {formatSpaceLabel(order.warehouse_spaces)}` (ej. `ESPACIO 14` o `ESPACIO 4-5`), en paridad 1:1 con la columna `LUGAR` de la Sábana de Alistamiento.
+  2. Si `order.warehouse_spaces` está vacío, proyecta **`S/A`** (*Sin Asignar*) en el recuadro `BAHÍA DE PISO`, evidenciando de inmediato bajo el estándar Poka-Yoke que el pedido aún no ha pasado por la asignación de muelle del Paso 1.

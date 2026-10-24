@@ -1331,7 +1331,7 @@ function ContingencyPrintContent() {
                     const remissionPrefix = isReposicion ? 'REPOSICIÓN' : isObsequio ? 'REMISIÓN DE OBSEQUIO' : 'REMISIÓN';
                     const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
                         ? formatSpaceLabel(order.warehouse_spaces)
-                        : (order.sequence_id ? `${order.sequence_id}` : `${orderIdx + 1}`);
+                        : 'S/A';
                     const items = order.order_items || [];
                     const itemsCount = items.length;
                     const crateBalance = typeof order.profiles?.crate_balance === 'number' ? order.profiles.crate_balance : 0;
