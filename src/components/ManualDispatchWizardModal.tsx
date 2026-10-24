@@ -525,8 +525,11 @@ export default function ManualDispatchWizardModal({
                     }
 
                     const rec = productMap.get(key)!;
+                    const prodBaseUnit = (prod.unit_of_measure || 'Kg').toLowerCase();
                     if (unit.includes('kg') || unit.includes('kilo')) {
                         rec.kg += qty;
+                    } else if (prod.weight_kg && prod.weight_kg > 0 && prod.weight_kg !== 1 && (prodBaseUnit.includes('kg') || prodBaseUnit.includes('kilo'))) {
+                        rec.kg += qty * prod.weight_kg;
                     } else if (unit.includes('un') || unit.includes('und') || unit.includes('paq') || unit.includes('frasco') || unit.includes('bolsa') || unit.includes('bandeja')) {
                         rec.un += qty;
                     } else {

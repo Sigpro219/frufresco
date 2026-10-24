@@ -37,8 +37,7 @@ export default function PurchasesPrintPage() {
 
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         if (paramDate) return paramDate;
-        const now = new Date();
-        return now.toISOString().split('T')[0];
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     });
 
     const [selectedSublist, setSelectedSublist] = useState<string>('ALL');
@@ -83,7 +82,7 @@ export default function PurchasesPrintPage() {
                     ordersQuery = ordersQuery.eq('delivery_date', selectedDate).neq('status', 'cancelled');
                 }
             } else {
-                const OPERATIONAL_STATUSES = ['pending_approval', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+                const OPERATIONAL_STATUSES = ['pending_approval', 'pending', 'recibido', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
                 ordersQuery = ordersQuery.eq('delivery_date', selectedDate).in('status', OPERATIONAL_STATUSES);
             }
 

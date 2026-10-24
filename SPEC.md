@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.263 (Anclaje Inferior Unificado `marginTop: 'auto'` de Control de Canastillas, Liquidación de Totales y Bloque de Firmas/Sello/QR en Remisiones de Entrega — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.264 (Homologación de Estados Operativos, Zona Horaria Bogotá post-19:00 y Conversión de Peso en Excel de Compras del Paso 2 — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 286 Escenarios BDD Ininterrumpidos (1..286)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 287 Escenarios BDD Ininterrumpidos (1..287)
 
 ---
 
@@ -11724,3 +11724,13 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 - **Given** una Remisión de Entrega tamaño Carta (`/admin/orders/contingency-print`) con un número reducido o medio de ítems (ej. 1 a 10 productos),
 - **When** se renderiza la última página de la remisión dentro del contenedor Flexbox vertical (`<main style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>`),
 - **Then** el bloque de **Control de Canastillas Plásticas + Liquidación de Totales (`Subtotal / IVA / TOTAL`)** y el bloque de **Firmas de Conformidad, Sello Húmedo y Código QR de Garantía** se agrupan dentro de un único contenedor inferior con `marginTop: 'auto'`, impidiendo que los totales queden flotando a media página debajo de la tabla de productos separados de las firmas por un espacio blanco intermedio.
+
+---
+
+### Escenario 287: Homologación de Estados Operativos, Zona Horaria Bogotá post-19:00 y Conversión de Peso en Excel de Compras del Paso 2 (SDD v1.9.264)
+- **Given** las vistas del ecosistema de impresión manual (`purchases-print`, `receiving-print`, `StagingSpacesManagement` y el exportador Excel del Paso 2 en `ManualDispatchWizardModal`),
+- **When** se operan durante el turno nocturno después de las 7:00 PM (19:00 Hora Colombia, `00:00 UTC` del día siguiente) o se consultan pedidos por fecha antes de sellar el Paso 4,
+- **Then** el sistema preserva la coherencia inter-documental sin alterar el diseño ni las columnas de los reportes:
+  1. **Zona Horaria Bogotá (`America/Bogota`):** `purchases-print`, `receiving-print` y `StagingSpacesManagement` inicializan sus fechas con hora local de Colombia y nunca con `new Date().toISOString().split('T')[0]` (UTC).
+  2. **Homologación de `OPERATIONAL_STATUSES`:** `purchases-print` y `receiving-print` incluyen `['pending_approval', 'pending', 'recibido', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed']` en paridad 1:1 con `PrintDocumentSwitcher` y `alistamiento-print`.
+  3. **Normalización de Peso en Excel del Paso 2:** En `handleExportMasterPurchasesExcel` (`ManualDispatchWizardModal.tsx`), los ítems cuya unidad en `order_items` ya es `'Kg'` suman `qty` directamente a `rec.kg` sin doble multiplicación, mientras que los ítems pedidos en unidades de un producto cuyo maestro se compra en `Kg` con `weight_kg` distinto de `1` convierten `qty * prod.weight_kg` hacia `rec.kg`.

@@ -46,11 +46,11 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
     const getTomorrowDateStr = () => {
         const d = new Date();
         d.setDate(d.getDate() + 1);
-        return d.toISOString().split('T')[0];
+        return d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     };
 
     const getTodayDateStr = () => {
-        return new Date().toISOString().split('T')[0];
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     };
 
     const [orders, setOrders] = useState<any[]>([]);
