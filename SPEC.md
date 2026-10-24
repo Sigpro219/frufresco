@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.262 (Prohibición de Fallback a `sequence_id` en `BAHÍA DE PISO` de Remisiones: Homologación Estricta con `warehouse_spaces` o `S/A` — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.263 (Anclaje Inferior Unificado `marginTop: 'auto'` de Control de Canastillas, Liquidación de Totales y Bloque de Firmas/Sello/QR en Remisiones de Entrega — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 285 Escenarios BDD Ininterrumpidos (1..285)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 286 Escenarios BDD Ininterrumpidos (1..286)
 
 ---
 
@@ -11717,3 +11717,10 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 - **Then** queda **estrictamente prohibido** hacer fallback al consecutivo documental del pedido (`order.sequence_id`, lo que generaba el falso rótulo `ESPACIO 1116` en `REMISIÓN #2110_1116`):
   1. Si `order.warehouse_spaces` tiene bahías asignadas (`length > 0`), proyecta `ESPACIO {formatSpaceLabel(order.warehouse_spaces)}` (ej. `ESPACIO 14` o `ESPACIO 4-5`), en paridad 1:1 con la columna `LUGAR` de la Sábana de Alistamiento.
   2. Si `order.warehouse_spaces` está vacío, proyecta **`S/A`** (*Sin Asignar*) en el recuadro `BAHÍA DE PISO`, evidenciando de inmediato bajo el estándar Poka-Yoke que el pedido aún no ha pasado por la asignación de muelle del Paso 1.
+
+---
+
+### Escenario 286: Anclaje Inferior Unificado (`marginTop: 'auto'`) de Control de Canastillas, Liquidación de Totales y Bloque de Firmas/Sello/QR en Remisiones de Entrega (SDD v1.9.263)
+- **Given** una Remisión de Entrega tamaño Carta (`/admin/orders/contingency-print`) con un número reducido o medio de ítems (ej. 1 a 10 productos),
+- **When** se renderiza la última página de la remisión dentro del contenedor Flexbox vertical (`<main style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>`),
+- **Then** el bloque de **Control de Canastillas Plásticas + Liquidación de Totales (`Subtotal / IVA / TOTAL`)** y el bloque de **Firmas de Conformidad, Sello Húmedo y Código QR de Garantía** se agrupan dentro de un único contenedor inferior con `marginTop: 'auto'`, impidiendo que los totales queden flotando a media página debajo de la tabla de productos separados de las firmas por un espacio blanco intermedio.

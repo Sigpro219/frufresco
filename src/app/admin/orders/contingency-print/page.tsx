@@ -1594,9 +1594,9 @@ function ContingencyPrintContent() {
                                     ) : (() => {
                                         const isDense = pageItems.length > 20;
                                         return (
-                                            <>
+                                            <div style={{ marginTop: 'auto', paddingTop: isDense ? '3px' : '6px' }}>
                                                 {/* Summary & Canastillas Control Compact */}
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: isDense ? '3px' : '5px', gap: '8px', marginTop: isDense ? '3px' : '6px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: isDense ? '3px' : '5px', gap: '8px' }}>
                                                     <div style={{ flex: 1, fontSize: isDense ? '6.4pt' : '6.8pt', color: '#334155', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                                         <div>
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1px', gap: '6px', flexWrap: 'wrap' }}>
@@ -1657,7 +1657,7 @@ function ContingencyPrintContent() {
                                                 </div>
 
                                                 {/* Signatures Block Compact at Bottom con QR Vectorial de Radicación */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.95fr auto', gap: '8px', border: '1px solid #CBD5E1', padding: isDense ? '3px 6px' : '4px 8px', borderRadius: '4px', fontSize: isDense ? '6.2pt' : '6.6pt', marginTop: 'auto', alignItems: 'center' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.95fr auto', gap: '8px', border: '1px solid #CBD5E1', padding: isDense ? '3px 6px' : '4px 8px', borderRadius: '4px', fontSize: isDense ? '6.2pt' : '6.6pt', alignItems: 'center' }}>
                                                     <div>
                                                         <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isDense ? '6.4pt' : '6.8pt' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
                                                         <div style={{ marginTop: isDense ? '8px' : '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
@@ -1686,7 +1686,7 @@ function ContingencyPrintContent() {
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </>
+                                            </div>
                                         );
                                     })()}
                                 </Letterhead>
