@@ -117,6 +117,17 @@ export default function ManualDispatchWizardModal({
             autoAssigned.forEach(a => {
                 initialMap[a.order_id] = a.assigned_spaces;
             });
+            // Persistir inmediatamente en Supabase para que cualquier documento impreso en Paso 1 ya tenga LUGAR asignado
+            Promise.all(
+                Object.entries(initialMap).map(([orderId, spaces]) =>
+                    supabase.from('orders').update({ warehouse_spaces: spaces }).eq('id', orderId)
+                )
+            ).then(() => {
+                selectedOrdersList.forEach(o => {
+                    if (initialMap[o.id]) o.warehouse_spaces = initialMap[o.id];
+                });
+                setSpacesSavedSuccess(true);
+            }).catch(err => console.error('Error auto-persistiendo bahías iniciales:', err));
         }
 
         setManualSpacesMap(initialMap);
@@ -161,8 +172,8 @@ export default function ManualDispatchWizardModal({
         });
     }, [preparedOrders]);
 
-    // Aplicar asignación automática
-    const handleApplyAutoClustering = () => {
+    // Aplicar asignación automática y persistir inmediatamente en base de datos
+    const handleApplyAutoClustering = async () => {
         const newMap: Record<string, number[]> = {};
         const newTextMap: Record<string, string> = {};
         autoAllocations.forEach(a => {
@@ -173,7 +184,7 @@ export default function ManualDispatchWizardModal({
         });
         setManualSpacesMap(newMap);
         setSpaceInputTexts(newTextMap);
-        setSpacesSavedSuccess(false);
+        await handleSaveSpacesToDatabase(newMap);
     };
 
     // Parser ultra-resiliente que soporta:
@@ -220,8 +231,8 @@ export default function ManualDispatchWizardModal({
         setSpacesSavedSuccess(false);
     };
 
-    // Al perder el foco (onBlur), formatear amigablemente como lista limpia ("4, 5, 6")
-    const handleManualSpaceBlur = (orderId: string) => {
+    // Al perder el foco (onBlur), formatear amigablemente como lista limpia ("4, 5, 6") y sincronizar en DB
+    const handleManualSpaceBlur = async (orderId: string) => {
         const raw = spaceInputTexts[orderId];
         if (raw !== undefined) {
             const parsed = parseSpacesInput(raw);
@@ -230,15 +241,20 @@ export default function ManualDispatchWizardModal({
                 ...prev,
                 [orderId]: formatted
             }));
+            await supabase.from('orders').update({ warehouse_spaces: parsed }).eq('id', orderId);
+            const targetOrder = selectedOrdersList.find(o => o.id === orderId);
+            if (targetOrder) targetOrder.warehouse_spaces = parsed;
+            setSpacesSavedSuccess(true);
         }
     };
 
     // Guardar asignación en base de datos
-    const handleSaveSpacesToDatabase = async (): Promise<boolean> => {
+    const handleSaveSpacesToDatabase = async (overrideMap?: Record<string, number[]>): Promise<boolean> => {
+        const mapToSave = overrideMap || manualSpacesMap;
         setSavingSpaces(true);
         setSpacesSavedSuccess(false);
         try {
-            const updates = Object.entries(manualSpacesMap).map(([orderId, spaces]) => {
+            const updates = Object.entries(mapToSave).map(([orderId, spaces]) => {
                 return supabase
                     .from('orders')
                     .update({ warehouse_spaces: spaces })
@@ -251,8 +267,8 @@ export default function ManualDispatchWizardModal({
 
             // Mantener coherencia en el objeto de órdenes en memoria
             selectedOrdersList.forEach(o => {
-                if (manualSpacesMap[o.id]) {
-                    o.warehouse_spaces = manualSpacesMap[o.id];
+                if (mapToSave[o.id]) {
+                    o.warehouse_spaces = mapToSave[o.id];
                 }
             });
 
@@ -265,6 +281,17 @@ export default function ManualDispatchWizardModal({
             return false;
         } finally {
             setSavingSpaces(false);
+        }
+    };
+
+    // Guardado atómico antes de abrir cualquier documento de impresión del Paso 1 (Poka-Yoke anti S/A)
+    const handleOpenStep1Print = async (targetUrl: string) => {
+        const printWin = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
+        await handleSaveSpacesToDatabase();
+        if (printWin) {
+            printWin.location.href = targetUrl;
+        } else if (typeof window !== 'undefined') {
+            window.open(targetUrl, '_blank');
         }
     };
 
@@ -763,6 +790,23 @@ export default function ManualDispatchWizardModal({
                                 </button>
 
                                 <button
+                                    onClick={() => handleSaveSpacesToDatabase()}
+                                    disabled={savingSpaces}
+                                    style={{
+                                        padding: '7px 12px', borderRadius: '8px',
+                                        border: spacesSavedSuccess ? '1px solid #86EFAC' : '1px solid #CBD5E1',
+                                        backgroundColor: spacesSavedSuccess ? '#DCFCE7' : '#0F172A',
+                                        color: spacesSavedSuccess ? '#166534' : '#FFFFFF',
+                                        fontWeight: '800', fontSize: '0.74rem', cursor: savingSpaces ? 'wait' : 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                    }}
+                                    title="Guardar asignación de bahías en base de datos"
+                                >
+                                    {spacesSavedSuccess ? <CheckCircle2 size={13} color="#16A34A" /> : <Save size={13} />}
+                                    {savingSpaces ? 'Guardando...' : spacesSavedSuccess ? 'Bahías Guardadas' : 'Guardar Bahías'}
+                                </button>
+
+                                <button
                                     onClick={handleRefreshSpacesFromDB}
                                     style={{
                                         padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1',
@@ -1008,40 +1052,40 @@ export default function ManualDispatchWizardModal({
                             </div>
 
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                <Link
-                                    href={`/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`}
-                                    target="_blank"
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenStep1Print(`/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`)}
                                     style={{
                                         padding: '7px 12px', backgroundColor: '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
-                                        borderRadius: '8px', fontSize: '0.74rem', fontWeight: '900', textDecoration: 'none',
+                                        borderRadius: '8px', fontSize: '0.74rem', fontWeight: '900', cursor: 'pointer',
                                         display: 'inline-flex', alignItems: 'center', gap: '4px'
                                     }}
-                                    title="Descargar Sábana de Alistamiento en formato PDF (Oficio)"
+                                    title="Guarda bahías y abre Sábana de Alistamiento en formato PDF (Oficio)"
                                 >
                                     <Download size={13} /> Descargar PDF
-                                </Link>
-                                <Link
-                                    href={`/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`}
-                                    target="_blank"
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenStep1Print(`/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`)}
                                     style={{
-                                        padding: '7px 14px', backgroundColor: '#0D7A57', color: '#FFFFFF',
-                                        borderRadius: '8px', fontSize: '0.74rem', fontWeight: '900', textDecoration: 'none',
+                                        padding: '7px 14px', backgroundColor: '#0D7A57', color: '#FFFFFF', border: 'none',
+                                        borderRadius: '8px', fontSize: '0.74rem', fontWeight: '900', cursor: 'pointer',
                                         display: 'inline-flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
                                     }}
                                 >
                                     <Printer size={13} /> Imprimir Sábana (Oficio) <ExternalLink size={11} />
-                                </Link>
-                                <Link
-                                    href={`/admin/logistics/staging-spaces?date=${deliveryDate}`}
-                                    target="_blank"
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenStep1Print(`/admin/logistics/staging-spaces?date=${deliveryDate}`)}
                                     style={{
                                         padding: '7px 12px', backgroundColor: '#FFFFFF', color: '#0F172A',
                                         border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.74rem', fontWeight: '800',
-                                        textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px'
                                     }}
                                 >
                                     Plano de Muelle
-                                </Link>
+                                </button>
                             </div>
                         </div>
 

@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.259 (Blindaje Anti-Doble-Conversión Dual-Unit en Sábana de Alistamiento y Motor de Neteo de Compras cuando `order_items.unit === 'Kg'` + Soporte de Presentaciones `und de X gr/kg` — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.260 (Persistencia Atómica Pre-Impresión de Bahías de Muelle (`warehouse_spaces`) en Paso 1 del Asistente Poka-Yoke antes de abrir Sábana de Alistamiento — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 282 Escenarios BDD Ininterrumpidos (1..282)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 283 Escenarios BDD Ininterrumpidos (1..283)
 
 ---
 
@@ -11690,3 +11690,12 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 - **Then** el sistema aplica las siguientes salvaguardas matemáticas:
   1. **Prohibición de Re-Multiplicación cuando `unit` ya es `Kg`:** Si `cleanRaw` es `'kg'`, `'kilo'`, `'kilos'` o `'kilogramo'` (`isRawAlreadyKg === true`), `quantity` ya representa la masa neta en kilogramos (`3.68 KG`). Queda estrictamente prohibido volver a multiplicar `quantity * kgPerUnit` (lo cual generaba el falso valor `3.68 * 0.160 = 0,59 KG`). La multiplicación `quantity * kgPerUnit` se ejecuta únicamente cuando `rawUnit` expresa conteo de unidades (`Unidad`, `Und`, `Unidad 160 gr`, etc.).
   2. **Inferencia Inversa de Conteo Discreto en `formatStructuredSpecification` (`src/lib/orderUtils.ts`):** Soporta tanto el patrón `"Unidad 160 gr"` como `"und de 160 gr"` y `"und de 2 kg"` (con preposición opcional `de`), calculando `Math.round(currentQty / kgPerUnit)` cuando `currentUnit` es `Kg` para proyectar en la Fila 2 la instrucción exacta (`23 und de 160 gr`) en perfecta coherencia con la Fila 1 (`3,68 KG`).
+
+---
+
+### Escenario 283: Persistencia Atómica Pre-Impresión de Bahías de Muelle (`warehouse_spaces`) en el Paso 1 del Asistente Poka-Yoke antes de abrir la Sábana de Alistamiento (SDD v1.9.260)
+- **Given** el flujo secuencial de 4 pasos del **Asistente Guiado de Despacho Manual (BCP)** (`src/components/ManualDispatchWizardModal.tsx`), donde el **Paso 1 (`1. Muelle & Bahías`)** auto-asigna las bahías `1..150` en memoria y solicita al operario imprimir la **Sábana de Alistamiento (Oficio)** y marcar el checkbox *"He verificado las bahías de muelle y tengo la Sábana de Alistamiento impresa"* antes de avanzar al Paso 2,
+- **When** el operario abre el Paso 1, recalcula el clúster LIFO, edita una bahía manualmente o pulsa cualquiera de los botones de documentos físicos del Paso 1 (**`Descargar PDF`**, **`Imprimir Sábana (Oficio)`** o **`Plano de Muelle`**),
+- **Then** el sistema garantiza que las bahías nunca queden sólo en memoria local mientras la pestaña de impresión consulta Supabase:
+  1. **Auto-Persistencia Inicial e Instantánea en Paso 1:** Cuando el Paso 1 detecta que los pedidos seleccionados no tienen `warehouse_spaces` en base de datos y ejecuta la auto-asignación inicial (`allocateStagingSpacesGeographically`), persiste inmediatamente dicho mapa en `orders.warehouse_spaces` en Supabase. Del mismo modo, al pulsar `Auto-Asignar (LIFO + Clúster)` o editar un campo (`onBlur`), o mediante el botón explícito `Guardar Bahías`, se sincroniza `orders.warehouse_spaces` en base de datos.
+  2. **Guardado Atómico Pre-Impresión (`handleOpenStep1Print`):** Los botones `Descargar PDF`, `Imprimir Sábana (Oficio)` y `Plano de Muelle` dentro del Paso 1 ejecutan primero `await handleSaveSpacesToDatabase()` antes de abrir la ruta `/admin/orders/alistamiento-print` o `/admin/logistics/staging-spaces`, garantizando que la columna **`LUGAR`** de la Sábana de Alistamiento proyecte siempre el número de espacio asignado (`1`, `2`, `3`...) y nunca `S/A`.
