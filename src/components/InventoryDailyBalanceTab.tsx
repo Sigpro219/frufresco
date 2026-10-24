@@ -2518,8 +2518,8 @@ export default function InventoryDailyBalanceTab({
                                         whiteSpace: 'nowrap'
                                     }}>
                                         {renderCellLucideIcon(cellInfo, 10)}
-                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {cellInfo.short_name || cellInfo.name}
+                                        <span title={cellInfo.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {getCompactCellLabel(cellInfo.name, cellInfo.short_name)}
                                         </span>
                                     </span>
                                 ) : (
@@ -2537,6 +2537,11 @@ export default function InventoryDailyBalanceTab({
                             key={`cell-${key}-A`}
                             style={{ 
                             padding: '6px 8px', 
+                            width: '85px',
+                            minWidth: '85px',
+                            maxWidth: '85px',
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
                             color: isParent ? '#854D0E' : (isChild ? '#94A3B8' : '#64748B'), 
                             fontSize: '0.72rem',
                             fontWeight: isParent ? '800' : 'normal',
@@ -2554,6 +2559,11 @@ export default function InventoryDailyBalanceTab({
                             key={`cell-${key}-B`}
                             style={{ 
                             padding: '6px 8px', 
+                            width: '70px',
+                            minWidth: '70px',
+                            maxWidth: '70px',
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
                             textAlign: 'center', 
                             fontWeight: '800', 
                             color: isParent ? '#854D0E' : '#1E293B',
@@ -2578,7 +2588,7 @@ export default function InventoryDailyBalanceTab({
                         {/* C: Célula / Lista (Sticky - Colapsable a Icono + Inicial) */}
                         <td 
                             key={`cell-${key}-C`}
-                            title={isCellCollapsed ? (cellInfo ? `Célula: ${cellInfo.name || cellInfo.short_name}` : `Célula: ${row.colC_inventoryGroup}`) : undefined}
+                            title={cellInfo ? `Célula: ${cellInfo.name || cellInfo.short_name}` : `Célula: ${row.colC_inventoryGroup}`}
                             style={{ 
                                 padding: isCellCollapsed ? '6px 4px' : '6px 8px', 
                                 textAlign: isCellCollapsed ? 'center' : 'left', 
@@ -2590,6 +2600,8 @@ export default function InventoryDailyBalanceTab({
                                 width: isCellCollapsed ? '44px' : '130px', 
                                 minWidth: isCellCollapsed ? '44px' : '130px', 
                                 maxWidth: isCellCollapsed ? '44px' : '130px', 
+                                boxSizing: 'border-box',
+                                overflow: 'hidden',
                                 transition: 'width 0.2s ease, min-width 0.2s ease, padding 0.2s ease'
                             }}
                         >
@@ -2605,15 +2617,21 @@ export default function InventoryDailyBalanceTab({
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: isCellCollapsed ? '3px' : '4px',
+                                    maxWidth: '100%',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
                                     boxShadow: isCellCollapsed ? '0 1px 2px rgba(0,0,0,0.04)' : undefined
                                 }}>
                                     {renderCellLucideIcon(cellInfo, 11)}
                                     {isCellCollapsed ? (
                                         <span style={{ fontSize: '0.66rem', fontWeight: '900' }}>
-                                            {(cellInfo.short_name || cellInfo.name || 'G').charAt(0).toUpperCase()}
+                                            {getCompactCellLabel(cellInfo.name, cellInfo.short_name).charAt(0).toUpperCase()}
                                         </span>
                                     ) : (
-                                        <span>{cellInfo.short_name || cellInfo.name}</span>
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {getCompactCellLabel(cellInfo.name, cellInfo.short_name)}
+                                        </span>
                                     )}
                                 </span>
                             ) : (
@@ -2624,11 +2642,15 @@ export default function InventoryDailyBalanceTab({
                                     backgroundColor: isCellCollapsed ? 'rgba(0,0,0,0.04)' : undefined,
                                     padding: isCellCollapsed ? '2px 4px' : undefined,
                                     borderRadius: isCellCollapsed ? '4px' : undefined,
-                                    display: isCellCollapsed ? 'inline-block' : undefined
+                                    display: 'inline-block',
+                                    maxWidth: '100%',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
                                 }}>
                                     {isCellCollapsed 
-                                        ? (row.colC_inventoryGroup || 'G').charAt(0).toUpperCase()
-                                        : row.colC_inventoryGroup
+                                        ? getCompactCellLabel(row.colC_inventoryGroup || 'G').charAt(0).toUpperCase()
+                                        : getCompactCellLabel(row.colC_inventoryGroup || 'General')
                                     }
                                 </span>
                             )}
@@ -2645,7 +2667,7 @@ export default function InventoryDailyBalanceTab({
                             borderBottom: cellBorderBottom,
                             position: isPanesFrozen ? 'sticky' : 'static', 
                             left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, 
-                            zIndex: isPanesFrozen ? 10 : undefined, 
+                            zIndex: isPanesFrozen ? 11 : undefined, 
                             backgroundColor: rowBg, 
                             boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.06)' : undefined, 
                             transition: 'left 0.2s ease'

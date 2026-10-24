@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.264 (Homologación de Estados Operativos, Zona Horaria Bogotá post-19:00 y Conversión de Peso en Excel de Compras del Paso 2 — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.265 (Contención Hermética y Etiqueta Compacta `Papas` en Columna C Sticky de la Sábana de Balance Diario — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 287 Escenarios BDD Ininterrumpidos (1..287)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 288 Escenarios BDD Ininterrumpidos (1..288)
 
 ---
 
@@ -11734,3 +11734,10 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   1. **Zona Horaria Bogotá (`America/Bogota`):** `purchases-print`, `receiving-print` y `StagingSpacesManagement` inicializan sus fechas con hora local de Colombia y nunca con `new Date().toISOString().split('T')[0]` (UTC).
   2. **Homologación de `OPERATIONAL_STATUSES`:** `purchases-print` y `receiving-print` incluyen `['pending_approval', 'pending', 'recibido', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed']` en paridad 1:1 con `PrintDocumentSwitcher` y `alistamiento-print`.
   3. **Normalización de Peso en Excel del Paso 2:** En `handleExportMasterPurchasesExcel` (`ManualDispatchWizardModal.tsx`), los ítems cuya unidad en `order_items` ya es `'Kg'` suman `qty` directamente a `rec.kg` sin doble multiplicación, mientras que los ítems pedidos en unidades de un producto cuyo maestro se compra en `Kg` con `weight_kg` distinto de `1` convierten `qty * prod.weight_kg` hacia `rec.kg`.
+
+---
+
+### Escenario 288: Contención Hermética (`overflow: 'hidden'`) y Etiqueta Compacta (`Papas`) en Columna C Sticky de la Sábana de Balance Diario (SDD v1.9.265)
+- **Given** la tabla de 24 columnas de la Sábana de Balance Diario (`src/components/InventoryDailyBalanceTab.tsx`) con columnas fijas `A` (`85px`), `B` (`70px`), `C` (`130px`) y `D` (`190px`),
+- **When** se renderiza una fila perteneciente a la célula `Papas, Plátano, Tomate` (como `#115 Chuguas Kg`, `#129 Tomate chonto` o `#130 Tomate larga vida`),
+- **Then** la columna `C` aplica `boxSizing: 'border-box'`, `overflow: 'hidden'` y proyecta la etiqueta compacta `getCompactCellLabel` (**`Papas`**, homologada con el chip superior `Papas 20` y mostrando el nombre largo en el tooltip `title`), mientras la columna `D` tiene `zIndex: 11` sobre `zIndex: 10`, erradicando cualquier traslape horizontal sobre el nombre del producto.
