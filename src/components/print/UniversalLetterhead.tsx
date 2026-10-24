@@ -12,10 +12,12 @@ export default function UniversalLetterhead({
     showWatermark = true,
     showHeader = true,
     showFooter = true,
+    internalList = false,
     footerCustomText,
     className = '',
     hideTopAccent = false
 }: UniversalLetterheadProps) {
+    const effectiveShowFooter = internalList ? false : showFooter;
     const isCopy = meta?.badge && meta.badge.toLowerCase().includes('copia');
 
     const getBadgeStyle = () => {
@@ -80,13 +82,17 @@ export default function UniversalLetterhead({
                         />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <div className="letterhead-company-name">{brand.companyName}</div>
-                            <div className="letterhead-company-nit">
-                                {brand.legalId} {brand.taxRegime ? `• ${brand.taxRegime}` : ''}
-                            </div>
-                            {brand.businessLine && (
-                                <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                    {brand.businessLine}
-                                </div>
+                            {!internalList && (
+                                <>
+                                    <div className="letterhead-company-nit">
+                                        {brand.legalId} {brand.taxRegime ? `• ${brand.taxRegime}` : ''}
+                                    </div>
+                                    {brand.businessLine && (
+                                        <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                            {brand.businessLine}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
@@ -112,7 +118,7 @@ export default function UniversalLetterhead({
                             </div>
                         )}
 
-                        {brand.headquarters && (
+                        {!internalList && brand.headquarters && (
                             <div className="letterhead-company-info" suppressHydrationWarning>
                                 {brand.headquarters.label && (
                                     <div style={{ fontWeight: 800, color: '#1E293B' }}>{brand.headquarters.label}</div>
@@ -193,7 +199,7 @@ export default function UniversalLetterhead({
             </main>
 
             {/* Executive Legal & Verification Footer */}
-            {showFooter && (
+            {effectiveShowFooter && (
                 <footer className="letterhead-footer">
                     <div>
                         {footerCustomText || (

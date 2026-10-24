@@ -47,6 +47,7 @@ export interface UniversalLetterheadProps {
     showWatermark?: boolean;        // Default: true
     showHeader?: boolean;           // Default: true
     showFooter?: boolean;           // Default: true
+    internalList?: boolean;         // Default: false (oculta NIT, línea comercial, bloque Contáctanos y footer)
     footerCustomText?: React.ReactNode;
     className?: string;
     hideTopAccent?: boolean;

@@ -15,6 +15,7 @@ interface LetterheadProps {
     showWatermark?: boolean;
     showHeader?: boolean;
     showFooter?: boolean;
+    internalList?: boolean;
     footerText?: React.ReactNode;
     className?: string;
     hideTopAccent?: boolean;
@@ -37,6 +38,7 @@ export default function Letterhead({
     showWatermark = true,
     showHeader = true,
     showFooter = true,
+    internalList = false,
     footerText,
     className = '',
     hideTopAccent = false,
@@ -63,6 +65,7 @@ export default function Letterhead({
             showWatermark={showWatermark}
             showHeader={showHeader}
             showFooter={showFooter}
+            internalList={internalList}
             footerCustomText={footerText}
             className={className}
             hideTopAccent={hideTopAccent}

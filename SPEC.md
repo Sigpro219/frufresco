@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.260 (Persistencia Atómica Pre-Impresión de Bahías de Muelle (`warehouse_spaces`) en Paso 1 del Asistente Poka-Yoke antes de abrir Sábana de Alistamiento — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.261 (Modo Limpio de Lista Operativa Interna `internalList` en `UniversalLetterhead` y `Letterhead`: Supresión de NIT, Línea de Negocio, Bloque Comercial `Contáctanos` y Pie de Página Institucional en Listas de Planta/Plaza — 76/76 Pantallas Certificadas)
 > **Fecha:** 23 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 283 Escenarios BDD Ininterrumpidos (1..283)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 284 Escenarios BDD Ininterrumpidos (1..284)
 
 ---
 
@@ -11699,3 +11699,12 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 - **Then** el sistema garantiza que las bahías nunca queden sólo en memoria local mientras la pestaña de impresión consulta Supabase:
   1. **Auto-Persistencia Inicial e Instantánea en Paso 1:** Cuando el Paso 1 detecta que los pedidos seleccionados no tienen `warehouse_spaces` en base de datos y ejecuta la auto-asignación inicial (`allocateStagingSpacesGeographically`), persiste inmediatamente dicho mapa en `orders.warehouse_spaces` en Supabase. Del mismo modo, al pulsar `Auto-Asignar (LIFO + Clúster)` o editar un campo (`onBlur`), o mediante el botón explícito `Guardar Bahías`, se sincroniza `orders.warehouse_spaces` en base de datos.
   2. **Guardado Atómico Pre-Impresión (`handleOpenStep1Print`):** Los botones `Descargar PDF`, `Imprimir Sábana (Oficio)` y `Plano de Muelle` dentro del Paso 1 ejecutan primero `await handleSaveSpacesToDatabase()` antes de abrir la ruta `/admin/orders/alistamiento-print` o `/admin/logistics/staging-spaces`, garantizando que la columna **`LUGAR`** de la Sábana de Alistamiento proyecte siempre el número de espacio asignado (`1`, `2`, `3`...) y nunca `S/A`.
+
+---
+
+### Escenario 284: Modo Limpio de Lista Operativa Interna (`internalList`) en `UniversalLetterhead` y `Letterhead` sin Ruido Comercial ni Pie de Página Institucional (SDD v1.9.261)
+- **Given** las listas operativas internas de planta, plaza y ruta (Planilla Maestra de Compras en `/admin/orders/contingency-print`, Planillas de Compra por Sublista en `/admin/procurement/purchases-print`, Manifiesto de Ruta y Toma Física de Inventario en `/admin/inventory/physical-count-print`), las cuales son de uso exclusivo interno y no documentos comerciales dirigidos al cliente final,
+- **When** se renderiza cualquiera de estas listas operativas internas con `internalList={true}`,
+- **Then** `UniversalLetterhead.tsx` y `Letterhead.tsx` aplican una poda visual limpia:
+  1. **Encabezado Minimalista Operativo:** Conserva únicamente el logo corporativo y el título `INVESTMENTS CORTES S.A.S.`, suprimiendo las sub-líneas fiscales/comerciales (`NIT 901.393.217-5 • Régimen Común`, `Operador Agro-Logístico • FruFresco Institucional`) y el bloque derecho de contacto comercial (`Contáctanos / 30154217612 / pedidos@frufresco.com / www.frufresco.com`).
+  2. **Supresión de Pie de Página Institucional:** Oculta por completo el pie de página comercial (`Investments Cortes S.A.S. • Documento Oficial de Operación y Control Logístico • Sistema Integrado FruFresco / Gestión Pedidos: 30154217612 • pedidos@frufresco.com • www.frufresco.com`), liberando espacio vertical efectivo para las tablas de trabajo.

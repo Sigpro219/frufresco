@@ -499,19 +499,11 @@ export default function PhysicalCountPrintPage() {
                                 <div style={{
                                     marginTop: 'auto',
                                     paddingTop: '6px',
-                                    borderTop: '1px solid #000000',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    fontSize: '6.2pt',
+                                    textAlign: 'center',
+                                    fontSize: '6.5pt',
                                     color: '#64748B'
                                 }}>
-                                    <div>
-                                        <strong>FRUFRESCO OPERACIONES</strong> &bull; Sistema de Gestión Logística &bull; {groupName}
-                                    </div>
-                                    <div style={{ fontWeight: 'bold', color: '#000000', fontSize: '6.8pt' }}>
-                                        Pág. {gIdx + 1}/{totalVisiblePages}
-                                    </div>
+                                    Pág. {gIdx + 1}/{totalVisiblePages}
                                 </div>
                             </div>
                         );

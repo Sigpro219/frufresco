@@ -1165,6 +1165,7 @@ function ContingencyPrintContent() {
                                         badgeVariant="dark"
                                         className="page-break"
                                         showWatermark={false}
+                                        internalList={true}
                                     >
                                         {/* Banner superior con resumen */}
                                         <div style={{
