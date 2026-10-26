@@ -32,6 +32,53 @@ interface CollaboratorItem {
 type ScopeMode = 'client' | 'internal';
 type InternalSubscope = 'rrhh_convivencia' | 'proceso_planta' | 'equipos_sst';
 
+
+function parseClientBranchInfo(client: ClientProfile, parent?: ClientProfile | null): {
+    branchName: string;
+    parentName: string | null;
+    isBranch: boolean;
+} {
+    const rawName = (client.company_name || client.contact_name || '').trim();
+    const hasParent = Boolean(client.parent_id || parent);
+    
+    if (parent && parent.company_name) {
+        const parentComp = parent.company_name.trim();
+        if (rawName.toLowerCase().startsWith(parentComp.toLowerCase())) {
+            const stripped = rawName.slice(parentComp.length).replace(/^[\s\-–—:]+/, '').trim();
+            if (stripped) {
+                return {
+                    branchName: stripped,
+                    parentName: parentComp,
+                    isBranch: true
+                };
+            }
+        }
+    }
+
+    const hyphenMatch = rawName.match(/^(.*?)\s*[-–—]\s*(.+)$/);
+    if (hyphenMatch) {
+        return {
+            branchName: hyphenMatch[2].trim(),
+            parentName: hyphenMatch[1].trim(),
+            isBranch: true
+        };
+    }
+
+    if (parent && parent.company_name) {
+        return {
+            branchName: rawName,
+            parentName: parent.company_name,
+            isBranch: true
+        };
+    }
+
+    return {
+        branchName: rawName || 'Sin Razón Social',
+        parentName: null,
+        isBranch: hasParent
+    };
+}
+
 interface QuickChip {
     id: string;
     label: string;
@@ -653,62 +700,83 @@ export default function PQRFloatingWidget() {
 
     if (!isOpen) {
         return (
-            <button
-                type="button"
-                onClick={() => setIsOpen(true)}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
+            <div
                 style={{
                     position: 'fixed',
                     top: '52%',
                     right: 0,
                     transform: 'translateY(-50%)',
                     zIndex: 40,
-                    backgroundColor: isHovered ? '#064E3B' : '#0F172A',
-                    color: '#FFFFFF',
-                    borderTopLeftRadius: '14px',
-                    borderBottomLeftRadius: '14px',
-                    borderTopRightRadius: 0,
-                    borderBottomRightRadius: 0,
-                    border: '1px solid #1E293B',
-                    borderRight: 'none',
-                    padding: isHovered ? '10px 18px 10px 14px' : '10px 12px 10px 12px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: isHovered ? '10px' : '8px',
-                    boxShadow: isHovered 
-                        ? '-6px 12px 28px rgba(13, 122, 87, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15)' 
-                        : '-3px 6px 16px rgba(15, 23, 42, 0.35)',
-                    cursor: 'pointer',
-                    transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                    fontFamily: 'var(--font-inter), sans-serif',
-                    outline: 'none'
+                    fontFamily: 'var(--font-inter), sans-serif'
                 }}
-                title="Radicar PQR Comercial o Novedad Interna de Planta"
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
             >
-                {/* Indicador pulsante de servicio activo */}
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {/* Tooltip flotante hacia la izquierda en hover */}
+                {isHovered && (
                     <div style={{
-                        width: '28px',
-                        height: '28px',
+                        position: 'absolute',
+                        right: '30px',
+                        backgroundColor: '#0F172A',
+                        color: '#FFFFFF',
+                        padding: '6px 12px',
                         borderRadius: '8px',
-                        backgroundColor: isHovered ? '#0D7A57' : '#1E293B',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                        border: '1px solid #334155',
+                        whiteSpace: 'nowrap',
                         display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 0 10px rgba(16, 185, 129, 0.3)'
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        pointerEvents: 'none'
                     }}>
-                        <MessageSquarePlus size={16} color="#FFFFFF" />
+                        <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#FFFFFF' }}>
+                            Radicar PQR / Novedad
+                        </span>
+                        <span style={{ fontSize: '0.62rem', color: '#34D399', fontWeight: 600 }}>
+                            Clientes • Planta • RRHH (Clic para abrir)
+                        </span>
                     </div>
+                )}
+
+                {/* Tirador Vertical Ultra-Delgado */}
+                <button
+                    type="button"
+                    onClick={() => setIsOpen(true)}
+                    style={{
+                        width: '24px',
+                        minHeight: '88px',
+                        backgroundColor: isHovered ? '#064E3B' : '#0F172A',
+                        color: '#FFFFFF',
+                        borderTopLeftRadius: '8px',
+                        borderBottomLeftRadius: '8px',
+                        borderTopRightRadius: 0,
+                        borderBottomRightRadius: 0,
+                        border: '1px solid #1E293B',
+                        borderRight: 'none',
+                        padding: '8px 2px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        boxShadow: isHovered 
+                            ? '-4px 8px 20px rgba(13, 122, 87, 0.4)' 
+                            : '-2px 4px 10px rgba(15, 23, 42, 0.3)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                        transform: isHovered ? 'translateX(-3px)' : 'translateX(0)',
+                        outline: 'none'
+                    }}
+                    title="Radicar PQR Comercial o Novedad Interna de Planta"
+                >
                     {/* Pulsing Beacon Dot */}
                     <span style={{
-                        position: 'absolute',
-                        top: '-3px',
-                        right: '-3px',
                         display: 'flex',
-                        height: '9px',
-                        width: '9px'
+                        position: 'relative',
+                        height: '7px',
+                        width: '7px',
+                        marginTop: '2px'
                     }}>
                         <span className="animate-ping" style={{
                             position: 'absolute',
@@ -723,41 +791,41 @@ export default function PQRFloatingWidget() {
                             position: 'relative',
                             display: 'inline-flex',
                             borderRadius: '50%',
-                            height: '9px',
-                            width: '9px',
+                            height: '7px',
+                            width: '7px',
                             backgroundColor: '#10B981',
                             boxShadow: '0 0 6px #10B981'
                         }} />
                     </span>
-                </div>
 
-                {/* Contenido expandible al hover */}
-                {isHovered ? (
-                    <div style={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'flex-start', 
-                        lineHeight: 1.15
+                    {/* Icon */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '4px 0'
                     }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 800, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-                            Radicar PQR / Novedad
-                        </span>
-                        <span style={{ fontSize: '0.63rem', color: '#A7F3D0', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                            Clientes • Planta • RRHH
-                        </span>
+                        <MessageSquarePlus size={13} color={isHovered ? '#34D399' : '#CBD5E1'} />
                     </div>
-                ) : (
-                    <span style={{ 
-                        fontSize: '0.72rem', 
-                        fontWeight: 900, 
-                        letterSpacing: '0.05em', 
-                        color: '#F8FAFC',
-                        textTransform: 'uppercase'
+
+                    {/* Vertical Letters: P - Q - R */}
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        fontSize: '0.62rem',
+                        fontWeight: 900,
+                        letterSpacing: '0.04em',
+                        color: isHovered ? '#FFFFFF' : '#94A3B8',
+                        lineHeight: 1.05,
+                        marginBottom: '2px'
                     }}>
-                        PQR
-                    </span>
-                )}
-            </button>
+                        <span>P</span>
+                        <span>Q</span>
+                        <span>R</span>
+                    </div>
+                </button>
+            </div>
         );
     }
 
@@ -766,7 +834,7 @@ export default function PQRFloatingWidget() {
             position: 'fixed',
             bottom: '20px',
             right: '20px',
-            width: '430px',
+            width: '540px',
             maxWidth: 'calc(100vw - 24px)',
             maxHeight: 'calc(100vh - 40px)',
             backgroundColor: '#FFFFFF',
@@ -999,31 +1067,60 @@ export default function PQRFloatingWidget() {
                                 {selectedClient ? (
                                     <div style={{
                                         display: 'flex',
-                                        alignItems: 'center',
+                                        alignItems: 'flex-start',
                                         justifyContent: 'space-between',
-                                        padding: '8px 11px',
+                                        gap: '10px',
+                                        padding: '9px 12px',
                                         backgroundColor: '#F0FDF4',
                                         border: '1px solid #86EFAC',
-                                        borderRadius: '10px',
+                                        borderRadius: '11px',
                                         fontSize: '0.8rem',
                                         color: '#065F46'
                                     }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                                            <Building2 size={15} color="#0D7A57" style={{ flexShrink: 0 }} />
-                                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <strong style={{ color: '#0F172A' }}>{selectedClient.company_name || selectedClient.contact_name}</strong>
-                                                    {selectedClient.parent_id && (
-                                                        <span style={{ fontSize: '0.58rem', fontWeight: 800, backgroundColor: '#DCFCE7', color: '#166534', padding: '1px 5px', borderRadius: '4px' }}>
-                                                            SUCURSAL
-                                                        </span>
-                                                    )}
+                                        {(() => {
+                                            const parent = selectedClient.parent_id ? parentMap.get(selectedClient.parent_id) : null;
+                                            const info = parseClientBranchInfo(selectedClient, parent);
+                                            return (
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', minWidth: 0, flex: 1 }}>
+                                                    <div style={{
+                                                        width: '32px',
+                                                        height: '32px',
+                                                        borderRadius: '8px',
+                                                        backgroundColor: '#DCFCE7',
+                                                        border: '1px solid #86EFAC',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        flexShrink: 0,
+                                                        marginTop: '2px'
+                                                    }}>
+                                                        <Building2 size={17} color="#0D7A57" />
+                                                    </div>
+                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '2px' }}>
+                                                            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#064E3B', lineHeight: 1.25, wordBreak: 'break-word' }}>
+                                                                {info.branchName}
+                                                            </span>
+                                                            {info.isBranch && (
+                                                                <span style={{ fontSize: '0.62rem', fontWeight: 800, backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '4px', letterSpacing: '0.04em' }}>
+                                                                    SUCURSAL
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {info.parentName && info.parentName.toLowerCase() !== info.branchName.toLowerCase() && (
+                                                            <div style={{ fontSize: '0.72rem', color: '#065F46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                                <span style={{ opacity: 0.75 }}>Matriz:</span>
+                                                                <strong style={{ color: '#064E3B' }}>{info.parentName}</strong>
+                                                            </div>
+                                                        )}
+                                                        <div style={{ fontSize: '0.68rem', color: '#047857', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                            {selectedClient.address && <span>📍 {selectedClient.address}</span>}
+                                                            {selectedClient.nit && <span>• NIT: {selectedClient.nit}</span>}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div style={{ fontSize: '0.68rem', color: '#047857' }}>
-                                                    {selectedClient.address || (selectedClient.nit ? `NIT: ${selectedClient.nit}` : 'Sede Operativa')}
-                                                </div>
-                                            </div>
-                                        </div>
+                                            );
+                                        })()}
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -1035,18 +1132,19 @@ export default function PQRFloatingWidget() {
                                                 background: '#FFFFFF',
                                                 border: '1px solid #A7F3D0',
                                                 borderRadius: '6px',
-                                                width: '24px',
-                                                height: '24px',
+                                                width: '26px',
+                                                height: '26px',
                                                 cursor: 'pointer',
                                                 color: '#047857',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                flexShrink: 0
+                                                flexShrink: 0,
+                                                marginTop: '2px'
                                             }}
                                             title="Cambiar sucursal"
                                         >
-                                            <X size={13} />
+                                            <X size={14} />
                                         </button>
                                     </div>
                                 ) : (
@@ -1106,7 +1204,7 @@ export default function PQRFloatingWidget() {
                                                 border: '1px solid #CBD5E1',
                                                 borderRadius: '10px',
                                                 marginTop: '4px',
-                                                maxHeight: '200px',
+                                                maxHeight: '260px',
                                                 overflowY: 'auto',
                                                 zIndex: 30,
                                                 boxShadow: '0 12px 24px -4px rgba(15, 23, 42, 0.16)'
@@ -1115,6 +1213,7 @@ export default function PQRFloatingWidget() {
                                                     filteredClients.map((client, idx) => {
                                                         const parent = client.parent_id ? parentMap.get(client.parent_id) : null;
                                                         const isHighlighted = idx === highlightedClientIndex;
+                                                        const info = parseClientBranchInfo(client, parent);
                                                         return (
                                                             <div
                                                                 key={client.id}
@@ -1126,26 +1225,51 @@ export default function PQRFloatingWidget() {
                                                                 }}
                                                                 onMouseEnter={() => setHighlightedClientIndex(idx)}
                                                                 style={{
-                                                                    padding: '8px 12px',
+                                                                    padding: '9px 12px',
                                                                     cursor: 'pointer',
                                                                     borderBottom: '1px solid #F1F5F9',
                                                                     fontSize: '0.78rem',
-                                                                    backgroundColor: isHighlighted ? '#F1F5F9' : '#FFFFFF'
+                                                                    backgroundColor: isHighlighted ? '#F0FDF4' : '#FFFFFF',
+                                                                    transition: 'background-color 0.1s ease'
                                                                 }}
                                                             >
-                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                                                                    <div style={{ fontWeight: 800, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                        {client.company_name || 'Sin Razón Social'}
+                                                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                            <span style={{
+                                                                                fontWeight: 800,
+                                                                                color: isHighlighted ? '#065F46' : '#0F172A',
+                                                                                fontSize: '0.84rem',
+                                                                                lineHeight: 1.25,
+                                                                                wordBreak: 'break-word'
+                                                                            }}>
+                                                                                {info.branchName}
+                                                                            </span>
+                                                                            {info.isBranch && (
+                                                                                <span style={{
+                                                                                    fontSize: '0.6rem',
+                                                                                    fontWeight: 800,
+                                                                                    padding: '1px 5px',
+                                                                                    borderRadius: '4px',
+                                                                                    backgroundColor: '#ECFDF5',
+                                                                                    color: '#0D7A57',
+                                                                                    border: '1px solid #A7F3D0',
+                                                                                    flexShrink: 0
+                                                                                }}>
+                                                                                    Sucursal
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        {info.parentName && info.parentName.toLowerCase() !== info.branchName.toLowerCase() && (
+                                                                            <div style={{ fontSize: '0.71rem', color: '#475569', marginTop: '2px', fontWeight: 500 }}>
+                                                                                <span style={{ color: '#0D7A57', fontWeight: 700 }}>Matriz:</span> {info.parentName}
+                                                                            </div>
+                                                                        )}
+                                                                        <div style={{ fontSize: '0.67rem', color: '#64748B', display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '2px' }}>
+                                                                            {client.address && <span>📍 {client.address}</span>}
+                                                                            {client.nit && <span>• NIT: {client.nit}</span>}
+                                                                        </div>
                                                                     </div>
-                                                                    {parent && (
-                                                                        <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', backgroundColor: '#ECFDF5', color: '#0D7A57', border: '1px solid #A7F3D0', flexShrink: 0 }}>
-                                                                            Sucursal
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <div style={{ fontSize: '0.68rem', color: '#64748B', display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '2px' }}>
-                                                                    {parent && <span style={{ color: '#0D7A57', fontWeight: 700 }}>Matriz: {parent.company_name}</span>}
-                                                                    {client.address && <span>• {client.address}</span>}
                                                                 </div>
                                                             </div>
                                                         );

@@ -11842,11 +11842,22 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 
 ---
 
-### Escenario 295: Erradicación de Colisión Visual de PQR Flotante Mediante Pestaña Lateral Retráctil Pulsante (Gemba Hallazgo #3 Operación) (SDD v1.9.272)
+### Escenario 295: Erradicación de Colisión Visual de PQR Flotante Mediante Tirador Lateral Vertical Retráctil Pulsante (Gemba Hallazgo #3 Operación) (SDD v1.9.272)
 - **Given** el componente global de radicación de incidencias (`src/components/PQRFloatingWidget.tsx`), que anteriormente ocupaba la coordenada fija inferior derecha (`bottom: 24px, right: 24px`) con `zIndex: 9999`, colisionando físicamente con los botones de cierre, confirmación de despacho y modales del sistema,
 - **When** el usuario navega por cualquier módulo operativo o interactúa con modales y procesos de cierre,
-- **Then** el disparador adopta una arquitectura ergonómica no invasiva de grado industrial:
-  1. **Reubicación Lateral ("Docked Tab"):** Se ancla al borde derecho de la pantalla a media altura (`top: 52%, right: 0, transform: translateY(-50%)`), liberando al 100% la esquina inferior derecha para las acciones primarias del sistema.
+- **Then** el disparador adopta una arquitectura ergonómica ultra-delgada no invasiva de grado industrial:
+  1. **Tirador Vertical Lateral ("Vertical Ribbon"):** Se ancla al borde derecho de la pantalla a media altura (`top: 52%, right: 0, transform: translateY(-50%)`), con un perfil vertical ultra-esbelto de solo **24px de ancho** por 88px de alto con tipografía apilada `[P-Q-R]` y micro-ícono, dejando 100% despejadas las columnas de datos, checkboxes de tabla y márgenes de pantalla.
   2. **Subordinación de Capas (`zIndex: 40`):** Se reduce su z-index a 40 para garantizar que cualquier modal, cajón lateral o menú desplegable (z-index 50+) quede naturalmente superpuesto, impidiendo que el botón se anteponga al cierre de procesos.
-  3. **Modo Reposo Pulsante:** En estado pasivo se repliega como una pestaña delgada de 55px con un punto baliza verde esmeralda animado (`animate-ping`), indicando que el canal de novedades está vivo y disponible sin generar ruido visual.
-  4. **Expansión Reactiva en Hover:** Al aproximar el cursor, la pestaña se expande suavemente hacia la izquierda con micro-animación fluida revelando la etiqueta completa: `[ 📝 Radicar PQR / Novedad • Clientes • Planta • RRHH ]`, permitiendo desplegar el formulario al hacer clic.
+  3. **Baliza de Servicio Activo:** Integra un micro-punto baliza superior verde esmeralda con halo animado (`animate-ping`), comunicando sutilmente la disponibilidad del canal sin invadir el campo visual.
+  4. **Tooltip Flotante en Hover:** Al aproximar el cursor, el tirador se desliza apenas 3px y proyecta un tooltip flotante hacia la izquierda (`[ 📝 Radicar PQR / Novedad • Clientes • Planta • RRHH ]`) sin alterar el ancho del botón ni desplazar ningún elemento del diseño.
+
+---
+
+### Escenario 294: Desglose Inteligente de Sucursales y Ampliación Dimensional del Widget de PQR (Gemba Hallazgo #5) (SDD v1.9.271)
+- **Given** el widget flotante de radicación de PQR (PQRFloatingWidget.tsx), donde los nombres corporativos de clientes con múltiples sedes siguen el patrón [MATRIZ] - [SUCURSAL] (ej: *CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - BELLAVISTA*, *INVERLEOKA S A - RESTAURANTE WATAKUSHI 93*) y estaban truncados con elipsis (...) debido a contenedores rígidos de 430px y whiteSpace: 'nowrap',
+- **When** el analista de calidad o comercial busca o selecciona una sede para registrar una reclamación,
+- **Then** el sistema proporciona visibilidad total e inmediata sin recortes de texto:
+  1. **Ampliación Dimensional del Widget:** El ancho del modal pasa de 430px a **540px** (maxWidth: calc(100vw - 24px)), y la altura del menú desplegable de resultados sube a 260px para mayor ergonomía visual.
+  2. **Parser Inteligente de Sucursales (parseClientBranchInfo):** Analiza en tiempo real la razón social y la relación con la matriz (parent_id), extrayendo el nombre operativo exacto de la sede (ej. *BELLAVISTA*, *RESTAURANTE WATAKUSHI 93*, *CATERING*) y destacándolo en negrita tipográfica de alta legibilidad (wordBreak: 'break-word') acompañado de la píldora [SUCURSAL].
+  3. **Jerarquía Visual de Matriz Desacoplada:** La razón social matriz se proyecta en una línea secundaria claramente identificada (Matriz: [Nombre Matriz]), omitiendo duplicidades si la sede y la matriz comparten el mismo nombre legal.
+  4. **Paridad Total en Tarjeta y Dropdown:** Tanto en los resultados del menú desplegable del buscador como en la tarjeta verde de confirmación de sucursal seleccionada, el operario visualiza con precisión la sede exacta, dirección física y NIT sin puntos suspensivos.
