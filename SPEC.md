@@ -12107,6 +12107,10 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
        - Se incorporan controles de ordenamiento (`ChevronUp`, `ChevronDown`, `ChevronsUpDown`) en todos los encabezados de columnas:
          - *Vista de Clientes:* Consecutivo & Zona (`sequenceId`), Cliente & Sucursal (alfabético), Documento & Pago, Facturación & Carga (`total`), Rentabilidad BI (`grossProfit`).
          - *Vista de Productos:* Nombre, Categoría, Cantidad Total (`totalQuantity`), Pedidos (`ordersCount`), Precio Promedio, Costo Base, Total Venta (`totalSales`), Utilidad (`grossProfit`), Margen Ponderado (`marginPct`).
+  6. **Paginación PostgREST >1000 Filas, Erradicación de "Producto Agro", Prevalencia de Accounting ID y Categorías Completas (Hallazgo 7 - SDD v1.9.287):**
+     - **Causa Raíz de "Producto Agro":** La tabla `products` cuenta con 1.362 registros. Supabase PostgREST trunca a 1.000 filas por llamada HTTP. Consultas directas sin paginación truncaban los productos 1.001 a 1.362 (entre ellos *Cebolla cabezona blanca cero sin pelar*, `accounting_id = 1502`), provocando que las órdenes del día cayeran en el fallback defensivo `'Producto Agro'`. Se implementó la utilidad `fetchAll` con paginación secuencial en bloques de 1.000 para `products`, `profiles` y `commercial_cost_matrix`, asegurando el 100% de match de catálogo con datos reales en vivo.
+     - **Prevalencia de Código Contable World Office:** Se consagra la visualización de `accounting_id` contable sobre el SKU interno: `{p.accountingId ? `Cód: #${p.accountingId}` : `SKU: ${p.sku}`}`.
+     - **Categorías Completas:** Se sustituyen las abreviaturas crípticas (`HO`, `VE`, `FR`, etc.) por nombres institucionales canónicos (`Hortalizas`, `Verduras`, `Frutas`, etc.) mediante `CATEGORY_MAP`.
 
 
 ---

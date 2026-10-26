@@ -192,14 +192,33 @@ export default function CommercialDailyMonitorModule() {
     useEffect(() => {
         async function loadCatalogs() {
             try {
-                const [matrixRes, productsRes, profilesRes] = await Promise.all([
-                    supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true).range(0, 4999),
-                    supabase.from('products').select('id, name, sku, category, unit_of_measure, accounting_id').range(0, 4999),
-                    supabase.from('profiles').select('id, company_name, contact_name, nit, address, role, document_type, razon_social, branch_id').range(0, 4999)
+                // Función auxiliar para traer TODOS los registros paginando en bloques de 1000 (Supabase max_rows clamp)
+                async function fetchAll(table: string, selectCols: string, filter?: { col: string; val: any }) {
+                    const allRows: any[] = [];
+                    let from = 0;
+                    const step = 1000;
+                    while (true) {
+                        let query = supabase.from(table).select(selectCols).range(from, from + step - 1);
+                        if (filter) {
+                            query = query.eq(filter.col, filter.val);
+                        }
+                        const { data, error } = await query;
+                        if (error || !data || data.length === 0) break;
+                        allRows.push(...data);
+                        if (data.length < step) break;
+                        from += step;
+                    }
+                    return allRows;
+                }
+
+                const [matrixRows, productsRows, profilesRows] = await Promise.all([
+                    fetchAll('commercial_cost_matrix', 'product_id, manual_cost', { col: 'is_active', val: true }),
+                    fetchAll('products', 'id, name, sku, category, unit_of_measure, accounting_id'),
+                    fetchAll('profiles', 'id, company_name, contact_name, nit, address, role, document_type, razon_social, branch_id')
                 ]);
 
                 const cMap = new Map<string, number>();
-                (matrixRes.data || []).forEach((m: any) => {
+                matrixRows.forEach((m: any) => {
                     if (m.manual_cost && Number(m.manual_cost) > 0) {
                         cMap.set(m.product_id, Number(m.manual_cost));
                     }
@@ -207,11 +226,11 @@ export default function CommercialDailyMonitorModule() {
                 setCostMap(cMap);
 
                 const pMap = new Map<string, any>();
-                (productsRes.data || []).forEach((p: any) => pMap.set(p.id, p));
+                productsRows.forEach((p: any) => pMap.set(p.id, p));
                 setProductsMap(pMap);
 
                 const profMap = new Map<string, any>();
-                (profilesRes.data || []).forEach((pr: any) => profMap.set(pr.id, pr));
+                profilesRows.forEach((pr: any) => profMap.set(pr.id, pr));
                 setProfilesMap(profMap);
             } catch (err) {
                 console.error('Error loading catalogs in Daily Monitor:', err);
@@ -340,6 +359,7 @@ export default function CommercialDailyMonitorModule() {
                         productId: it.product_id,
                         productName: prod.name || it.variant_label || 'Producto Agro',
                         sku: prod.sku || 'SKU-00',
+                        accountingId: prod.accounting_id || it.accounting_id || null,
                         category: prod.category || 'General',
                         quantity: qty,
                         unit: it.unit || prod.unit_of_measure || 'Kg',
@@ -426,6 +446,7 @@ export default function CommercialDailyMonitorModule() {
             const prodAggMap = new Map<string, {
                 productName: string;
                 sku: string;
+                accountingId?: string | number | null;
                 category: string;
                 unit: string;
                 totalQty: number;
@@ -440,6 +461,7 @@ export default function CommercialDailyMonitorModule() {
                         prodAggMap.set(it.productId, {
                             productName: it.productName,
                             sku: it.sku,
+                            accountingId: it.accountingId,
                             category: it.category,
                             unit: it.unit,
                             totalQty: 0,
@@ -466,6 +488,7 @@ export default function CommercialDailyMonitorModule() {
                     productId: pId,
                     productName: val.productName,
                     sku: val.sku,
+                    accountingId: val.accountingId,
                     category: val.category,
                     unit: val.unit,
                     totalQuantity: val.totalQty,
