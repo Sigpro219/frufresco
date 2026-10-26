@@ -47,6 +47,7 @@ export default function PqrDailyShiftReport({
     const [selectedDate, setSelectedDate] = useState<string>(getTodayBogota);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'resolved'>('all');
+    const [isExportingExcel, setIsExportingExcel] = useState(false);
 
     // 2. Filter PQRs that occurred on the selected date (in Bogota timezone)
     const dayPqrs = useMemo(() => {
@@ -206,65 +207,69 @@ export default function PqrDailyShiftReport({
         };
     }, [reportRows]);
 
-    // 6. Export to CSV (UTF-8 BOM for Microsoft Excel compatibility)
-    const handleExportCsv = () => {
+    // 6. Export to Native Excel (.xlsx via SheetJS)
+    const handleExportExcel = async () => {
         if (reportRows.length === 0) {
             alert('No hay registros de PQR en la fecha seleccionada para exportar.');
             return;
         }
 
-        const headers = [
-            'Fecha',
-            'Hora',
-            'Folio PQR',
-            'Pedido',
-            'Cliente / Sede',
-            'NIT',
-            'Productos Afectados',
-            'Cantidades y Unidades',
-            'Causales Operativas',
-            'Area Responsable',
-            'Causa Raiz RCA',
-            'Responsables Imputados',
-            'Deducciones ($ COP)',
-            'Solucion Contable',
-            'Estado'
-        ];
+        setIsExportingExcel(true);
+        try {
+            const XLSX = await import('xlsx');
 
-        const csvRows = reportRows.map(r => {
-            const prodsStr = r.productsList.map(p => p.name).join('; ');
-            const qtysStr = r.productsList.map(p => `${p.qty} ${p.unit}`).join('; ');
-            const causalsStr = r.productsList.map(p => p.causal).join('; ');
-            const imputedStr = r.imputedEntities.map(e => `${e.name} (${e.role || 'Resp'} - $${e.deductionAmount || 0})`).join('; ') || 'Sin imputar';
+            const excelRows = reportRows.map(r => {
+                const prodsStr = r.productsList.map(p => `${p.name} (${p.qty} ${p.unit})`).join(', ');
+                const causalsStr = r.productsList.map(p => p.causal).join(', ');
+                const imputedStr = r.imputedEntities.map(e => `${e.name} (${e.role || 'Resp'} - ${Number(e.deductionAmount || 0).toLocaleString('es-CO')})`).join('; ') || 'Sin cobro imputado';
 
-            return [
-                `"${selectedDate}"`,
-                `"${r.timeStr}"`,
-                `"${r.folio}"`,
-                `"${r.orderSeq}"`,
-                `"${r.clientName.replace(/"/g, '""')}"`,
-                `"${r.nit}"`,
-                `"${prodsStr.replace(/"/g, '""')}"`,
-                `"${qtysStr}"`,
-                `"${causalsStr}"`,
-                `"${r.responsibleArea}"`,
-                `"${r.categoryL1} / ${r.subtypeL2}"`,
-                `"${imputedStr.replace(/"/g, '""')}"`,
-                r.totalDeductions,
-                `"${r.solutionConcept}"`,
-                `"${r.status === 'resolved' ? 'Resuelto' : 'Pendiente'}"`
-            ].join(',');
-        });
+                return {
+                    'Fecha': selectedDate,
+                    'Hora': r.timeStr,
+                    'Folio PQR': r.folio,
+                    'Pedido #': r.orderSeq,
+                    'Cliente / Sede': r.clientName,
+                    'NIT': r.nit,
+                    'Productos con Novedad': prodsStr,
+                    'Causales Operativas': causalsStr,
+                    'Área Responsable': r.responsibleArea,
+                    'Causa Raíz RCA': `${r.categoryL1} / ${r.subtypeL2}`,
+                    'Responsables Imputados': imputedStr,
+                    'Deducción Total ($ COP)': r.totalDeductions,
+                    'Solución Contable': r.solutionConcept,
+                    'Estado': r.status === 'resolved' ? 'Resuelto' : 'Pendiente'
+                };
+            });
 
-        const csvContent = '\uFEFF' + [headers.join(','), ...csvRows].join('\r\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `informe_cierre_pqr_${selectedDate}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+            const worksheet = XLSX.utils.json_to_sheet(excelRows);
+            
+            // Auto column widths for clean readability
+            worksheet['!cols'] = [
+                { wch: 12 }, // Fecha
+                { wch: 10 }, // Hora
+                { wch: 12 }, // Folio PQR
+                { wch: 12 }, // Pedido #
+                { wch: 32 }, // Cliente / Sede
+                { wch: 14 }, // NIT
+                { wch: 40 }, // Productos con Novedad
+                { wch: 24 }, // Causales
+                { wch: 20 }, // Area
+                { wch: 30 }, // Causa Raiz
+                { wch: 35 }, // Imputados
+                { wch: 22 }, // Deduccion COP
+                { wch: 28 }, // Solucion Contable
+                { wch: 12 }  // Estado
+            ];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, `Cierre_${selectedDate}`);
+            XLSX.writeFile(workbook, `Informe_Cierre_PQR_${selectedDate}.xlsx`);
+        } catch (err) {
+            console.error('Error al exportar Excel:', err);
+            alert('Error al generar el archivo Excel. Por favor intenta de nuevo.');
+        } finally {
+            setIsExportingExcel(false);
+        }
     };
 
     // 7. Print via Golden Print (FruFresco Isolated New Window Standard)
@@ -506,7 +511,8 @@ export default function PqrDailyShiftReport({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                         type="button"
-                        onClick={handleExportCsv}
+                        onClick={handleExportExcel}
+                        disabled={isExportingExcel}
                         style={{
                             padding: '7px 14px',
                             backgroundColor: '#FFFFFF',
@@ -515,15 +521,15 @@ export default function PqrDailyShiftReport({
                             color: '#1E293B',
                             fontSize: '0.75rem',
                             fontWeight: '700',
-                            cursor: 'pointer',
+                            cursor: isExportingExcel ? 'not-allowed' : 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px',
                             boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
                         }}
                     >
-                        <Download size={14} color="#0D7A57" />
-                        <span>Exportar CSV</span>
+                        <FileSpreadsheet size={15} color="#0D7A57" />
+                        <span>{isExportingExcel ? 'Generando Excel...' : 'Descargar Excel (.xlsx)'}</span>
                     </button>
 
                     <button

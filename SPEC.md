@@ -11900,7 +11900,7 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - **Responsables Imputados:** Colaboradores o clientes responsables con el valor exacto (\$ COP) transferido a nómina o cartera.
      - **Solución Contable:** Mecanismo aplicado (*Ajuste de Factura*, *Nota Crédito*, *Reposición*, *Exonerado*).
      - **Estado de Cierre:** Indicador visual de estado (*Resuelto* o *Pendiente*).
-  3. **Exportación a Excel / CSV:** Permite descargar con un clic el archivo estructurado con codificación UTF-8 BOM para apertura nativa e inmediata en Microsoft Excel.
+  3. **Exportación Nativa a Excel (.xlsx):** Descarga directa de archivo Excel `.xlsx` estructurado mediante SheetJS (`xlsx`) con auto-ajuste de anchos de columna (`!cols`) y tipado de datos para apertura nativa e inmediata en Microsoft Excel, erradicando archivos de texto plano o conversiones manuales de CSV.
   4. **Acta Oficial Golden Print (PDF / Impresión Estandarizada):** Ejecuta la tecnología estándar `printViaNewWindow` en orientación apaisada (`letter landscape`), renderizando el membrete corporativo oficial de FruFresco, resumen ejecutivo, tabla formal con bordes y líneas cebras, y los tres bloques solemnes de firmas y custodia: *Auditor de Calidad (SAC)*, *Jefe de Operaciones & Despachos* y *Líder de Cartera / Facturación*.
 
 ---
