@@ -6,7 +6,7 @@ import {
     AlertTriangle, DollarSign, Clock, Truck, Warehouse, Store, 
     Layers, User, Target, Wrench, Plus, ArrowRight, RefreshCw, 
     Sliders, FileText, Check, HelpCircle, AlertCircle, Activity,
-    Calendar, Filter, ArrowUpRight, ArrowDownRight, Minus, Flag, Sparkles
+    Calendar, Filter, ArrowUpRight, FileSpreadsheet, ArrowDownRight, Minus, Flag, Sparkles
 } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 import { 
@@ -18,6 +18,7 @@ import {
 } from '@/lib/rcaTaxonomy';
 import { PQR, formatDateFriendly } from '../utils';
 import PqrCapaPlanModal, { CapaPlan } from './PqrCapaPlanModal';
+import PqrDailyShiftReport from './PqrDailyShiftReport';
 
 interface PqrLeanDashboardProps {
     pqrs: PQR[];
@@ -27,6 +28,7 @@ interface PqrLeanDashboardProps {
     customTaxonomy: DefectCategoryL1[];
     onRefresh: () => void;
     showToast: (text: string, type?: 'success' | 'error' | 'warning') => void;
+    initialSubTab?: 'analytics' | 'daily_report';
 }
 
 export const CATEGORY_PALETTE: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -53,6 +55,7 @@ interface HistBucket {
 }
 
 export default function PqrLeanDashboard({
+    initialSubTab,
     pqrs,
     novelties,
     totalOrdersCount,
@@ -61,6 +64,13 @@ export default function PqrLeanDashboard({
     onRefresh,
     showToast
 }: PqrLeanDashboardProps) {
+    // 0. Subtab State (Lean Analytics vs Daily Shift Closing Report)
+    const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'daily_report'>(initialSubTab || 'analytics');
+
+    useEffect(() => {
+        if (initialSubTab) setActiveSubTab(initialSubTab);
+    }, [initialSubTab]);
+
     // 1. Time Horizon Filter
     const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'year' | 'all'>('30d');
     
@@ -655,7 +665,73 @@ export default function PqrLeanDashboard({
     }, [histogramBuckets, histSelectedCategory, histMetric]);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* SUBTABS: ANALYTICS LEAN & PARETO VS INFORME DE CIERRE DIARIO */}
+            <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#F1F5F9',
+                padding: '4px',
+                borderRadius: '12px',
+                border: '1px solid #CBD5E1',
+                width: 'fit-content'
+            }}>
+                <button
+                    type="button"
+                    onClick={() => setActiveSubTab('analytics')}
+                    style={{
+                        padding: '7px 16px',
+                        fontSize: '0.78rem',
+                        fontWeight: activeSubTab === 'analytics' ? '800' : '600',
+                        color: activeSubTab === 'analytics' ? '#FFFFFF' : '#475569',
+                        backgroundColor: activeSubTab === 'analytics' ? '#0D7A57' : 'transparent',
+                        borderRadius: '9px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: activeSubTab === 'analytics' ? '0 2px 6px rgba(13, 122, 87, 0.3)' : 'none',
+                        transition: 'all 0.15s ease'
+                    }}
+                >
+                    <TrendingUp size={14} />
+                    <span>Análisis Lean & Pareto 80/20</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setActiveSubTab('daily_report')}
+                    style={{
+                        padding: '7px 16px',
+                        fontSize: '0.78rem',
+                        fontWeight: activeSubTab === 'daily_report' ? '800' : '600',
+                        color: activeSubTab === 'daily_report' ? '#FFFFFF' : '#475569',
+                        backgroundColor: activeSubTab === 'daily_report' ? '#0D7A57' : 'transparent',
+                        borderRadius: '9px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: activeSubTab === 'daily_report' ? '0 2px 6px rgba(13, 122, 87, 0.3)' : 'none',
+                        transition: 'all 0.15s ease'
+                    }}
+                >
+                    <FileSpreadsheet size={14} />
+                    <span>Informe Diario de Cierre Operativo</span>
+                </button>
+            </div>
+
+            {activeSubTab === 'daily_report' ? (
+                <PqrDailyShiftReport
+                    pqrs={pqrs}
+                    novelties={novelties}
+                    onRefresh={onRefresh}
+                />
+            ) : (
+                <>
             {/* 1. Header Toolbar with Horizon Switcher */}
             <div style={{
                 backgroundColor: '#FFFFFF',
@@ -1840,6 +1916,9 @@ export default function PqrLeanDashboard({
                     </div>
                 </div>
             </div>
+
+                </>
+            )}
 
             {/* CAPA Plan Creation/Edit Modal */}
             <PqrCapaPlanModal

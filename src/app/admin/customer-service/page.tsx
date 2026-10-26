@@ -9,7 +9,7 @@ import {
     Camera, Truck, BarChart2, Sparkles, HelpCircle, Store, Warehouse,
     Layers, User, Building2, ChevronDown, ChevronUp, RefreshCw,
     Maximize2, MessageCircle, ExternalLink, X, DollarSign, Percent,
-    PackageMinus, Sliders, Settings, Check, Bell
+    PackageMinus, Sliders, Settings, Check, Bell, FileSpreadsheet
 } from 'lucide-react';
 import Link from 'next/link';
 import { GalleryOmnibox } from '@/components/common/GalleryOmnibox';
@@ -59,6 +59,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
     // Navigation & Filtering
     const [mainView, setMainView] = useState<'cases' | 'lean_dashboard' | 'missing_orders'>('cases');
+    const [leanSubTab, setLeanSubTab] = useState<'analytics' | 'daily_report'>('analytics');
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties'>(initialTab || 'pending');
     const [showKpis, setShowKpis] = useState(true);

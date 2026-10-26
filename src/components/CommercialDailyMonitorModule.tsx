@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { getFriendlyOrderId } from '@/lib/orderUtils';
 import {
     Calendar,
     Search,
@@ -37,6 +38,10 @@ interface DateEntry {
 interface OrderDetail {
     id: string;
     sequenceId: number | string;
+    friendlyId?: string;
+    status?: string;
+    subtotal?: number;
+    tax?: number;
     profileId: string;
     clientName: string;
     companyName: string;
@@ -125,7 +130,7 @@ export default function CommercialDailyMonitorModule() {
                 const [matrixRes, productsRes, profilesRes] = await Promise.all([
                     supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true),
                     supabase.from('products').select('id, name, sku, category, unit_of_measure'),
-                    supabase.from('profiles').select('id, company_name, contact_name, nit, shipping_address, role')
+                    supabase.from('profiles').select('id, company_name, contact_name, nit, address, role, document_type, razon_social, branch_id').range(0, 4999)
                 ]);
 
                 const cMap = new Map<string, number>();
@@ -286,17 +291,30 @@ export default function CommercialDailyMonitorModule() {
                 const grossProfit = totalSales - orderEstimatedCost;
                 const marginPct = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
 
+                const friendlyId = getFriendlyOrderId(ord);
+                const clientName = profile.company_name || profile.razon_social || profile.contact_name || ord.customer_name || 'Cliente Institucional';
+                const companyName = profile.razon_social || profile.company_name || 'Sin Razón Social';
+                const nit = profile.nit || ord.customer_nit || 'Sin NIT';
+                const isB2B = profile.role === 'b2b_client' || profile.role === 'corporate' || Boolean(profile.parent_id) || Boolean(profile.nit && profile.nit.length > 5) || ord.type === 'b2b';
+                const clientType: 'b2b' | 'b2c' = isB2B ? 'b2b' : 'b2c';
+                const isInvoice = profile.document_type === 'invoice' || Boolean(ord.invoice_id);
+                const documentType = isInvoice ? 'Factura' : 'Remisión';
+
                 return {
                     id: ord.id,
                     sequenceId: ord.sequence_id || ord.id.slice(0, 8),
+                    friendlyId,
                     profileId: ord.profile_id,
-                    clientName: profile.company_name || profile.contact_name || 'Cliente Institucional',
-                    companyName: profile.company_name || 'Sin Razón Social',
-                    nit: profile.nit || '222222222222',
+                    clientName,
+                    companyName,
+                    nit,
                     zone: ord.logistics_data?.zone_name || ord.shipping_address?.split(',')[1]?.trim() || 'Bogotá Principal',
-                    address: ord.shipping_address || 'Entrega en Sede Principal',
-                    type: ord.type === 'b2c' ? 'b2c' : 'b2b',
-                    documentType: ord.invoice_id ? 'Factura' : 'Remisión',
+                    address: ord.shipping_address || profile.address || 'Entrega en Sede Principal',
+                    type: clientType,
+                    documentType,
+                    status: ord.status || 'Confirmado',
+                    subtotal: Number(ord.subtotal || ord.total || 0),
+                    tax: Number(ord.tax || 0),
                     paymentMethod: ord.payment_method === 'payroll_deduction' ? 'Nómina' : (ord.payment_method === 'wompi' ? 'Wompi' : 'Crédito/Contra Entrega'),
                     paymentStatus: ord.payment_status || 'Pendiente',
                     total: totalSales,
@@ -439,6 +457,7 @@ export default function CommercialDailyMonitorModule() {
             if (searchTerm.trim()) {
                 const s = searchTerm.toLowerCase();
                 return o.clientName.toLowerCase().includes(s) ||
+                    (o.friendlyId && o.friendlyId.toLowerCase().includes(s)) ||
                     o.sequenceId.toString().toLowerCase().includes(s) ||
                     o.zone.toLowerCase().includes(s) ||
                     o.address.toLowerCase().includes(s) ||
@@ -554,22 +573,28 @@ export default function CommercialDailyMonitorModule() {
 
         if (activeView === 'clients') {
             const data = filteredOrders.map(o => ({
-                'No. Pedido': o.sequenceId,
+                'Consecutivo Planta': o.friendlyId || o.sequenceId,
+                'No. Sistema': o.sequenceId,
                 'Cliente / Sucursal': o.clientName,
+                'Razón Social': o.companyName,
                 'NIT': o.nit,
                 'Zona': o.zone,
-                'Tipo': o.type.toUpperCase(),
-                'Documento': o.documentType,
+                'Dirección': o.address,
+                'Canal': o.type === 'b2b' ? 'B2B Institucional' : 'B2C Hogar',
+                'Modalidad Documental': o.documentType,
                 'Medio de Pago': o.paymentMethod,
-                'Total Facturado ($)': Math.round(o.total),
+                'Estado Operativo': o.status || 'Confirmado',
                 'Total Kilos (Kg)': Number(o.totalWeightKg.toFixed(2)),
+                'Total Pedido ($)': Math.round(o.total),
                 'Costo Estimado ($)': Math.round(o.estimatedCost),
                 'Utilidad Bruta ($)': Math.round(o.grossProfit),
                 'Margen (%)': `${o.marginPct.toFixed(1)}%`,
-                'Alerta': o.hasEqualValueAlert ? 'Valor Duplicado' : (o.hasMultipleOrdersAlert ? 'Multipedido' : (o.hasUnderMinimumAlert ? 'Bajo Mínimo' : 'OK'))
+                'Alerta Gemba': o.hasEqualValueAlert ? 'Valor Duplicado' : (o.hasMultipleOrdersAlert ? 'Multipedido' : (o.hasUnderMinimumAlert ? 'Bajo Mínimo' : 'OK'))
             }));
             const ws = XLSX.utils.json_to_sheet(data);
-            XLSX.utils.book_append_sheet(wb, ws, `Ventas_Clientes_${selectedDate}`);
+            XLSX.utils.book_append_sheet(wb, ws, `Relacion_Pedidos_${selectedDate}`);
+            XLSX.writeFile(wb, `Relacion_Diaria_Pedidos_${selectedDate}.xlsx`);
+            return;
         } else if (activeView === 'products') {
             const data = filteredProducts.map(p => ({
                 'Código SKU': p.sku,
@@ -710,7 +735,7 @@ export default function CommercialDailyMonitorModule() {
                         }}
                     >
                         <FileSpreadsheet size={16} />
-                        Descargar Excel (.xlsx)
+                        {activeView === 'clients' ? 'Descargar Relación de Pedidos (.xlsx)' : 'Descargar Excel (.xlsx)'}
                     </button>
                 </div>
             </div>
@@ -1182,7 +1207,7 @@ export default function CommercialDailyMonitorModule() {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
                                 <thead>
                                     <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                        <th style={{ padding: '0.75rem 1rem' }}>No.</th>
+                                        <th style={{ padding: '0.75rem 1rem' }}>Consecutivo</th>
                                         <th style={{ padding: '0.75rem 1rem' }}>Zona</th>
                                         <th style={{ padding: '0.75rem 1rem' }}>Cliente (Sucursal)</th>
                                         <th style={{ padding: '0.75rem 1rem' }}>Tipo</th>
@@ -1205,8 +1230,13 @@ export default function CommercialDailyMonitorModule() {
                                     ) : (
                                         filteredOrders.map((ord, idx) => (
                                             <tr key={ord.id} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: ord.hasEqualValueAlert ? '#FEF2F2' : (ord.hasMultipleOrdersAlert ? '#FAF5FF' : 'white') }}>
-                                                <td style={{ padding: '0.75rem 1rem', fontWeight: '700', color: THEME.colors.textMain }}>
-                                                    {ord.sequenceId}
+                                                <td style={{ padding: '0.75rem 1rem' }}>
+                                                    <div style={{ fontWeight: '800', color: THEME.colors.primary, fontFamily: 'monospace', fontSize: '0.88rem' }}>
+                                                        {ord.friendlyId || ord.sequenceId}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.70rem', color: THEME.colors.textSecondary }}>
+                                                        #{ord.sequenceId}
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary }}>
                                                     <span style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>
@@ -1215,7 +1245,13 @@ export default function CommercialDailyMonitorModule() {
                                                 </td>
                                                 <td style={{ padding: '0.75rem 1rem' }}>
                                                     <div style={{ fontWeight: '700', color: THEME.colors.textMain }}>{ord.clientName}</div>
-                                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary }}>{ord.address}</div>
+                                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                                        {ord.nit && ord.nit !== 'Sin NIT' && (
+                                                            <span style={{ fontWeight: '600', color: '#475569' }}>NIT: {ord.nit}</span>
+                                                        )}
+                                                        <span>•</span>
+                                                        <span>{ord.address}</span>
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: '0.75rem 1rem' }}>
                                                     <span style={{
@@ -1229,8 +1265,18 @@ export default function CommercialDailyMonitorModule() {
                                                         {ord.type.toUpperCase()}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary }}>
-                                                    {ord.documentType}
+                                                <td style={{ padding: '0.75rem 1rem' }}>
+                                                    <span style={{
+                                                        padding: '2px 7px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '700',
+                                                        backgroundColor: ord.documentType === 'Factura' ? '#EFF6FF' : '#ECFDF5',
+                                                        color: ord.documentType === 'Factura' ? '#1D4ED8' : '#047857',
+                                                        border: `1px solid ${ord.documentType === 'Factura' ? '#BFDBFE' : '#A7F3D0'}`
+                                                    }}>
+                                                        {ord.documentType}
+                                                    </span>
                                                 </td>
                                                 <td style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary }}>
                                                     {ord.paymentMethod}

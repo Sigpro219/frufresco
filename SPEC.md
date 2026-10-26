@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.269 (Resolución Forense Hallazgo #3 Gemba: Matriz Operativa de Imputación Multidisciplinaria Novedades por Producto y Consolidación Automática para Nómina — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.274 (Resolución Forense Hallazgo #3 Gemba: Matriz Operativa de Imputación Multidisciplinaria Novedades por Producto y Consolidación Automática para Nómina — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 292 Escenarios BDD Ininterrumpidos (1..292)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 297 Escenarios BDD Ininterrumpidos (1..297)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **291 Escenarios Canónicos (1..291)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **297 Escenarios Canónicos (1..297)** | **🟢 100%** |
 
 ---
 
@@ -11883,3 +11883,35 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   2. **Acceso Prominente al Ajuste Global Manual (\$ COP):** El conmutador para liquidar valores directos en pesos colombianos se rediseña como un botón interactivo de alta visibilidad, permitiendo a la administración aplicar descuentos monetarios específicos sin forzar existencias negativas en productos individuales.
   3. **Aprobación Hermética de Novedades en Ajustes Globales:** Al confirmar un ajuste manual global, las novedades en `billing_returns` asociadas a la orden se actualizan automáticamente de `pending_review` a `approved` con el valor económico correspondiente, evitando registros de auditoría huérfanos.
   4. **Cierre Conforme de Novedad Batea S.A.S. (SAC-0044 / Folio #1241):** Se ejecutó el cierre formal del expediente en base de datos: se ajustó la línea de huevos a 0 unidades en `order_items`, el total del pedido se recalculó con trazabilidad en notas de \$3.176.300 a \$3.046.700 (-\$129.600), el registro de retorno se aprobó en `billing_returns`, y la PQR pasó a estado `resolved`.
+
+
+---
+
+### Escenario 296: Informe Consolidado de Cierre Operativo Diario (PQR & Calidad), Bitácora de Novedades y Generación de Acta Golden Print (Gemba Hallazgo #8) (SDD v1.9.273)
+- **Given** la necesidad de la mesa operativa, jefatura de despachos y gerencia de auditar y certificar el cierre diario de la operación con el consolidado formal de reclamaciones,
+- **When** el analista de calidad o comercial accede a la subpestaña **"Informe Diario de Cierre Operativo"** dentro de **Dashboard Lean & Pareto** (o mediante el acceso directo en la barra de herramientas de la Consola de Casos),
+- **Then** el sistema presenta una bitácora operativa diaria de alta precisión con las siguientes capacidades canónicas:
+  1. **Selector Cronológico Diario y Telemetría:** Permite auditar cualquier jornada mediante botones rápidos (`[Hoy]`, `[Ayer]`) o selector de fecha (`YYYY-MM-DD`), proyectando el consolidado reactivo del día: *Total Casos / PQRs*, *Clientes y Sedes Afectadas*, *Productos con Novedad* y *Costo de Calidad Liquidado (\$ COP)*.
+  2. **Matriz Operativa de Cierre de Jornada:** Proyecta la tabla integral con el desglose exacto solicitado:
+     - **Hora & Folio:** Identificador único (`SAC-XXXX`), hora local Bogotá y pedido asociado (`#Folio`).
+     - **Cliente & Sucursal:** Razón social de la sede operativa y matriz.
+     - **Productos Afectados:** Lista de ítems devueltos o faltantes con sus cantidades, unidades de medida y causales operativas (*Avería / Calidad*, *Faltante en Báscula*, *Sin Cargue*, *Error Digitación*, *No Solicitado*).
+     - **Área y Causa Raíz RCA:** Diagnóstico técnico (*Planta*, *Transporte*, *Alistamiento*, *Comercial*).
+     - **Responsables Imputados:** Colaboradores o clientes responsables con el valor exacto (\$ COP) transferido a nómina o cartera.
+     - **Solución Contable:** Mecanismo aplicado (*Ajuste de Factura*, *Nota Crédito*, *Reposición*, *Exonerado*).
+     - **Estado de Cierre:** Indicador visual de estado (*Resuelto* o *Pendiente*).
+  3. **Exportación a Excel / CSV:** Permite descargar con un clic el archivo estructurado con codificación UTF-8 BOM para apertura nativa e inmediata en Microsoft Excel.
+  4. **Acta Oficial Golden Print (PDF / Impresión Estandarizada):** Ejecuta la tecnología estándar `printViaNewWindow` en orientación apaisada (`letter landscape`), renderizando el membrete corporativo oficial de FruFresco, resumen ejecutivo, tabla formal con bordes y líneas cebras, y los tres bloques solemnes de firmas y custodia: *Auditor de Calidad (SAC)*, *Jefe de Operaciones & Despachos* y *Líder de Cartera / Facturación*.
+
+---
+
+### Escenario 297: Saneamiento Integral del Monitor Diario BI y Exportación Oficial de la Relación Diaria de Pedidos (Gemba Hallazgos #5 y #6 Operación) (SDD v1.9.274)
+- **Given** el módulo de Monitor Diario BI y Auditoría de Ventas (`CommercialDailyMonitorModule.tsx`) en `/admin/commercial?tab=daily-monitor`, donde la mesa de operaciones, logística y contabilidad audita y concilia los despachos diarios,
+- **When** el usuario visualiza los pedidos confirmados del día o descarga el archivo Excel para utilizarlo como la Relación Diaria de Pedidos de planta, logística y contabilidad,
+- **Then** el sistema asegura fidelidad canónica de datos y paridad operacional total:
+  1. **Saneamiento del Catálogo de Clientes:** Se corrige la consulta de perfiles en base de datos (`profiles`), reemplazando el atributo inexistente `shipping_address` por `address, document_type, razon_social, branch_id` con rango extendido de hasta 5.000 registros, erradicando el error silencioso de base de datos que forzaba a todos los clientes a mostrarse como *"Cliente Institucional"* y NIT *"222222222222"*.
+  2. **Consecutivo Operativo Dual (Planta & Sistema):** Se integra `getFriendlyOrderId` para generar el código de planta estándar (`DDMM_XXXX`, ej. `2310_1193`), proyectándolo en la tabla junto con el número de sistema (`#1193`) y haciéndolo 100% indexable en el buscador omnibox en tiempo real.
+  3. **Identificación Completa de Razón Social y Sede:** La celda de cliente y el archivo Excel reflejan la razón social exacta (*IRCC S.A.S*, *CLUB DEL COMERCIO*, *TEQUENDAMA CATERING*, etc.), la sucursal específica, el NIT verificado y la dirección física de entrega.
+  4. **Determinación Fiel de Modalidad Documental:** Se evalúa contractualmente el perfil del cliente (`profile.document_type === 'invoice'` o existencia de `invoice_id`), clasificando con certeza entre **Factura** y **Remisión**, suprimiendo la falsa asignación universal de "Remisión" a clientes institucionales facturables.
+  5. **Segmentación Fiel B2B / B2C:** Se reconoce automáticamente a los clientes corporativos institucionales por su rol (`b2b_client`, `corporate`), NIT o matriz, corrigiendo el falso rotulado de B2C en pedidos institucionales.
+  6. **Exportación Oficial de la Relación Diaria de Pedidos (Excel .xlsx):** El botón de exportación se transforma contextualmente en *"Descargar Relación de Pedidos (.xlsx)"* para la vista de clientes, generando una hoja estructurada de despacho y contabilidad con nombre canónico `Relacion_Diaria_Pedidos_{fecha}.xlsx` con columnas limpias: Consecutivo Planta, No. Sistema, Cliente / Sucursal, Razón Social, NIT, Zona, Dirección, Canal, Modalidad Documental, Medio de Pago, Estado Operativo, Total Kilos (Kg), Total Pedido ($), Costo Estimado ($), Utilidad Bruta ($), Margen (%) y Alerta Gemba.
