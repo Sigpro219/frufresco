@@ -80,6 +80,7 @@ export interface WorldOfficeExportItem {
     digitoVerificacion?: string;
     razonSocial: string;
     sucursal?: string;
+    clasificacion?: string;
     centroCostos?: string;
     cuentaContable?: string;
     codigoProducto: string | number;
@@ -359,9 +360,9 @@ export async function downloadWorldOfficeExcel(
             'Encab: Personalizado 14': '',
             'Encab: Personalizado 15': '',
             'Encab: Sucursal': cleanSucursal,
-            'Encab: Clasificación': '',
+            'Encab: Clasificación': item.clasificacion || 'Facturas de Venta',
             'Detalle: Producto': cleanProducto,
-            'Detalle: Bodega': item.bodega || 'Principal',
+            'Detalle: Bodega': item.bodega || 'BODEGA PRINCIPAL',
             'Detalle: UnidadDeMedida': normalizeWorldOfficeUom(item.unidadMedida),
             'Detalle: Cantidad': Number(item.cantidad) || 0,
             'Detalle: IVA': ivaDecimal,

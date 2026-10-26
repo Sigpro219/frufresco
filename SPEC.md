@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.279 (Arquitectura de Triple Cerrojo Anti-Traslape de Acuerdos Comerciales, Candados 1, 2 y 3 en DB y UI, y Cierre Militar Anti Split-Brain - 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.280 (Calibración Canónica de Campos Obligatorios World Office Desktop: Clasificación Contable, Bodega Parametrizable y Resiliencia en Sucursales — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 301 Escenarios BDD Ininterrumpidos (1..301)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 302 Escenarios BDD Ininterrumpidos (1..302)
 
 ---
 
@@ -12003,3 +12003,21 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   4. **Saneamiento y Borrón Operativo de Acuerdos Viejos:**
      - Se respaldaron en frío los 30 acuerdos comerciales históricos en `backup_active_agreements_before_expire.json` y se transicionaron a `status = 'expired'` en Supabase.
      - La consola comercial inició desde cero registros activos (`status = 'agreement' == 0`), permitiendo a la mesa comercial cargar las listas oficiales frescas con garantía matemática de unicidad.
+
+---
+
+### Escenario 302: Calibración Canónica de Campos Obligatorios de World Office Desktop en Planos de Facturación Masiva: Clasificación Contable, Parametrización de Bodega Física y Resiliencia en Sucursales (Gemba Hallazgos Facturación) (SDD v1.9.280)
+- **Given** el módulo de Facturación Masiva (`/admin/commercial/billing`) y el generador de planos oficiales de 57 columnas de World Office Desktop (`src/lib/worldOfficeExport.ts`),
+- **When** el área contable y de facturación genera y descarga el archivo plano de corte oficial o pre-corte (`WorldOffice_Corte_...xlsx`) para migrarlo en el Asistente de Comprobantes de World Office Desktop,
+- **Then** el exportador garantiza compatibilidad e inmunidad contra rechazos en rojo en el validador contable:
+  1. **Ratificación Soberana del Consecutivo Fiscal:**
+     - El origen soberano e inmutable del consecutivo de facturación es el velocímetro fiscal `billing_invoice_next_number` configurado en la pestaña **Configuración** de Facturación (`app_settings`, ej: `67609`).
+     - Al generar la exportación de Facturas de Venta (`FV`), la **Columna D (`Encab: Documento Número`)** arrastra estrictamente este número consecutivo como entero puro, avanzando atómicamente en base de datos al confirmar el corte.
+  2. **Columna AE (`Encab: Clasificación`) — Erradicación de Celdas Vacías:**
+     - Queda estrictamente prohibido enviar cadena vacía `''` en la Columna AE para comprobantes `FV`.
+     - El sistema inyecta por defecto el valor canónico obligatorio **`Facturas de Venta`**, o el parámetro dinámico configurado en `app_settings.billing_wo_classification`, eliminando el rechazo masivo de toda la columna en el validador contable.
+  3. **Columna AG (`Detalle: Bodega`) — Parametrización Flexible de Bodega Contable:**
+     - Se supera la rigidez del valor estático `'Principal'` permitiendo que la bodega contable se configure dinámicamente vía `app_settings.billing_wo_warehouse` (por defecto **`BODEGA PRINCIPAL`** / `Principal`).
+     - En la pestaña **Configuración** de Facturación se exponen los campos editables de *Clasificación World Office* y *Bodega World Office*, permitiendo que el facturador ajuste en caliente la denominación exacta registrada en su SQL Server local.
+  4. **Columna AD (`Encab: Sucursal`) — Mapeo Resiliente de Sedes de Terceros:**
+     - Si un tercero en World Office no posee sucursales creadas bajo su NIT o su denominación no coincide letra a letra (como en el caso `KELLOGSS`), el sistema proporciona fallback limpio evitando que el lote de facturas quede bloqueado, preservando la Razón Social y el NIT de la casa matriz.
