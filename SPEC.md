@@ -23,12 +23,12 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277, 301 (§7.1 - §7.19) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **298 Escenarios Canónicos (1..298)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **301 Escenarios Canónicos (1..301)** | **🟢 100%** |
 
 ---
 
@@ -613,6 +613,10 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 3. **Conexión Directa al Pipeline de Acuerdos Institucionales:**
    - Al aprobar la cotización formalizada:
      * Se promueve el registro a `status = 'agreement'`.
+     * **Ley Marcial de Unicidad de Acuerdo Comercial Activo (Single Active Agreement Law & Auto-Supersede):**
+       Al promover cualquier cotización a acuerdo activo, el sistema ejecuta obligatoria y atómicamente:
+       `UPDATE quotes SET status = 'superseded' WHERE client_id = target_client_id AND status = 'agreement' AND id != current_quote_id;`
+       Queda terminantemente prohibido que un cliente posea más de un registro con `status = 'agreement'` en cualquier instante de tiempo, erradicando Split-Brain y dualidad de precios en la toma de pedidos.
      * Se congela la vigencia comercial pactada en `valid_until` (presets de 30, 90, 180 días / 6 meses, 365 días o personalizado).
      * Se estampa la nomenclatura canónica en `model_snapshot_name`: `[Cliente] - Acuerdo [DD-MM-AA]`.
      * Se asienta la traza forense inmutable en `audit_logs` con la acción `ACTIVATE_commercial_agreement`.
