@@ -5997,25 +5997,32 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         return;
       }
 
+      // Escenario 221 / 287 Canónico: Cero Split - Siempre Pedido Único
+      // Ordenamiento Canónico: productos con precio > 0 primero, productos fuera de acuerdo a $0 al final
+      const sortedItemsData = [...itemsData].sort((a, b) => {
+        const priceA = Number(a.unit_price || 0);
+        const priceB = Number(b.unit_price || 0);
+        return (priceB > 0 ? 1 : 0) - (priceA > 0 ? 1 : 0);
+      });
       const agreementItemsData = hasActiveAgreementSplit
-        ? itemsData.filter(itm => agreementProductIds.has(itm.product_id))
-        : itemsData;
+        ? sortedItemsData.filter(itm => agreementProductIds.has(itm.product_id))
+        : sortedItemsData;
       const offAgreementItemsData = hasActiveAgreementSplit
-        ? itemsData.filter(itm => !agreementProductIds.has(itm.product_id))
+        ? sortedItemsData.filter(itm => !agreementProductIds.has(itm.product_id))
         : [];
 
-      const isSplitScenario = hasActiveAgreementSplit && agreementItemsData.length > 0 && offAgreementItemsData.length > 0;
+      const hasOffAgreementItems = offAgreementItemsData.length > 0;
       const isOnlyOffAgreement = hasActiveAgreementSplit && agreementItemsData.length === 0 && offAgreementItemsData.length > 0;
 
-      const primaryItemsGroup = isSplitScenario ? agreementItemsData : itemsData;
+      const primaryItemsGroup = sortedItemsData;
       const primaryTotalAmount = isOnlyOffAgreement ? 0 : primaryItemsGroup.reduce((acc, itm) => acc + (Number(itm.unit_price || 0) * Number(itm.quantity || 0)), 0);
       const primaryTotalWeight = primaryItemsGroup.reduce((acc, itm) => acc + Number(itm._weight_kg || 0), 0);
 
       let primaryAdminNotes = finalAdminNotes;
-      if (isOnlyOffAgreement) {
+      if (hasOffAgreementItems) {
         const offNames = offAgreementItemsData.map(u => u._prod_name).join(', ');
         primaryAdminNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}]\n${primaryAdminNotes}`.trim();
-      } else if (!isSplitScenario && unpricedItems.length > 0 && allowZeroPriceDispatch) {
+      } else if (unpricedItems.length > 0 && allowZeroPriceDispatch) {
         const unpricedNames = unpricedItems.map(u => u.prod.name).join(', ');
         primaryAdminNotes = `[DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${unpricedNames}]\n${primaryAdminNotes}`.trim();
       }
@@ -6098,82 +6105,25 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         throw new Error('Error al registrar ítems: ' + itemsError.message);
       }
 
-      // Escenario 221: Si hubo partición mixta (Pedido A Acuerdo + Pedido B Remisión $0 Fuera de Acuerdo)
-      let childSplitOrder: any = null;
-      if (isSplitScenario && order) {
-        const offNames = offAgreementItemsData.map(u => u._prod_name).join(', ');
-        const parentTag = order.sequence_id ? `#PED-${order.sequence_id}` : `#${order.id.slice(0, 6).toUpperCase()}`;
-        const offNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}] [VINCULADO A PEDIDO ACUERDO ${parentTag}]\n${finalAdminNotes}`.trim();
-        const offTotalWeight = offAgreementItemsData.reduce((acc, itm) => acc + Number(itm._weight_kg || 0), 0);
-
-        const splitPayload: any = {
-          profile_id: finalProfileId,
-          total: 0,
-          subtotal: 0,
-          tax: 0,
-          total_weight_kg: offTotalWeight,
-          status: 'pending_approval',
-          payment_status: 'Pendiente',
-          payment_method: paymentMethod,
-          origin: 'Email Ingest',
-          origin_source: 'email',
-          delivery_date: deliveryDate,
-          delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
-          admin_notes: offNotes,
-          shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
-          latitude: draftCoordinates?.lat || metadata?.latitude || null,
-          longitude: draftCoordinates?.lng || metadata?.longitude || null,
-          document_url: draftAttachmentUrl,
-          logistics_data: {
-            parent_order_id: order.id,
-            parent_order_sequence: order.sequence_id || null,
-            document_type_override: 'remission',
-            remission_with_prices_override: false,
-            is_off_agreement_split: true,
-            off_agreement_priced: false
-          }
-        };
-        if (purchaseOrder?.trim()) {
-          splitPayload.purchase_order_number = purchaseOrder.trim();
-        }
-
-        const { data: splitOrd, error: splitErr } = await supabase
-          .from('orders')
-          .insert(splitPayload)
-          .select()
-          .single();
-
-        if (!splitErr && splitOrd) {
-          childSplitOrder = splitOrd;
-          const splitItemsRows = offAgreementItemsData.map(({ _weight_kg, _prod_name, ...itm }) => ({
-            order_id: splitOrd.id,
-            ...itm,
-            unit_price: 0
-          }));
-          await supabase.from('order_items').insert(splitItemsRows);
-        }
-      }
-
-      // Emitir tarea urgente para el Área Comercial cuando hay remisión $0 fuera de acuerdo o ítems despachados sin precio
-      if (order && (isSplitScenario || isOnlyOffAgreement || (unpricedItems.length > 0 && allowZeroPriceDispatch))) {
+      // Escenario 221 / 287 Canónico: Cero Split - Emitir tarea comercial si incluye Fuera de Acuerdo o Sin Precio
+      if (order && (hasOffAgreementItems || (unpricedItems.length > 0 && allowZeroPriceDispatch))) {
         try {
-          const targetOrd = isSplitScenario && childSplitOrder ? childSplitOrder : order;
           const clientName = selectedDraft.client_detected_name || 'Cliente por Correo';
-          const unpricedNames = (isSplitScenario || isOnlyOffAgreement)
+          const unpricedNames = hasOffAgreementItems
             ? offAgreementItemsData.map(u => u._prod_name).join(', ')
             : unpricedItems.map(u => u.prod.name).join(', ');
-          const remSeq = targetOrd.sequence_id ? `REM-${targetOrd.sequence_id}` : `#${targetOrd.id.slice(0, 8)}`;
+          const remSeq = order.sequence_id ? `PED-${order.sequence_id}` : `#${order.id.slice(0, 8)}`;
           await supabase
             .from('admin_tasks')
             .insert([{
               type: 'price_extension_request',
-              title: `ASIGNAR PRECIO URGENTE: Remisión ${remSeq} (${clientName})`,
-              description: `La remisión ${remSeq} del cliente "${clientName}" fue despachada con precio $0 COP en ${isSplitScenario || isOnlyOffAgreement ? offAgreementItemsData.length : unpricedItems.length} producto(s) fuera del acuerdo (${unpricedNames}) para entrega el ${deliveryDate}. Debes asignar el precio comercial antes del cierre del corte de facturación.`,
+              title: `ASIGNAR PRECIO URGENTE: Pedido ${remSeq} (${clientName})`,
+              description: `El pedido ${remSeq} del cliente "${clientName}" fue despachado con precio provisional $0 COP en ${hasOffAgreementItems ? offAgreementItemsData.length : unpricedItems.length} producto(s) fuera del acuerdo (${unpricedNames}) para entrega el ${deliveryDate}. Debes asignar el precio comercial antes del cierre del corte de facturación para liberar la factura.`,
               priority: 'critical',
               status: 'pending',
               client_id: finalProfileId,
               client_name: clientName,
-              related_entity_id: targetOrd.id,
+              related_entity_id: order.id,
               target_role: 'comercial',
               created_by: user?.id || null
             }]);

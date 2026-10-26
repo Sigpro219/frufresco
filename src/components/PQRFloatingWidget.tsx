@@ -213,6 +213,8 @@ export default function PQRFloatingWidget() {
     const [branchOrders, setBranchOrders] = useState<Array<{ id: string; sequence_id: number; total: number; delivery_date?: string; created_at: string; status: string }>>([]);
     const [selectedOrderId, setSelectedOrderId] = useState<string>('');
     const [loadingOrders, setLoadingOrders] = useState(false);
+    const [manualOrderSearch, setManualOrderSearch] = useState('');
+    const [searchingManualOrder, setSearchingManualOrder] = useState(false);
 
     // 2B. Internal Scope state (for 'internal' scope)
     const [internalSubscope, setInternalSubscope] = useState<InternalSubscope>('rrhh_convivencia');
@@ -315,16 +317,29 @@ export default function PQRFloatingWidget() {
         return clients.filter(c => !parentMatrixIds.has(c.id));
     }, [clients, parentMatrixIds]);
 
-    const fetchBranchOrders = async (branchId: string) => {
+    const fetchBranchOrders = async (target: ClientProfile | string, explicitParentId?: string | null) => {
         setLoadingOrders(true);
         try {
+            const branchId = typeof target === 'string' ? target : target.id;
+            const parentId = typeof target === 'string' ? explicitParentId : target.parent_id;
+
+            const targetProfileIds: string[] = [branchId];
+            if (parentId && !targetProfileIds.includes(parentId)) {
+                targetProfileIds.push(parentId);
+            }
+            clients.forEach(c => {
+                if ((c.parent_id === branchId || (parentId && c.parent_id === parentId)) && !targetProfileIds.includes(c.id)) {
+                    targetProfileIds.push(c.id);
+                }
+            });
+
             const { data } = await supabase
                 .from('orders')
                 .select('id, sequence_id, total, delivery_date, created_at, status')
-                .eq('profile_id', branchId)
+                .in('profile_id', targetProfileIds)
                 .neq('status', 'cancelled')
                 .order('created_at', { ascending: false })
-                .limit(12);
+                .limit(20);
             const list = data || [];
             setBranchOrders(list);
             setSelectedOrderId(list.length > 0 ? list[0].id : '');
@@ -333,6 +348,40 @@ export default function PQRFloatingWidget() {
             setBranchOrders([]);
         } finally {
             setLoadingOrders(false);
+        }
+    };
+
+    const handleSearchManualOrder = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        const seq = parseInt(manualOrderSearch.replace(/\D/g, ''), 10);
+        if (!seq) return;
+        setSearchingManualOrder(true);
+        setErrorMsg(null);
+        try {
+            const { data } = await supabase
+                .from('orders')
+                .select('id, sequence_id, total, delivery_date, created_at, status, profile_id')
+                .eq('sequence_id', seq)
+                .maybeSingle();
+
+            if (data) {
+                setBranchOrders(prev => {
+                    const exists = prev.some(o => o.id === data.id);
+                    return exists ? prev : [data, ...prev];
+                });
+                setSelectedOrderId(data.id);
+                setManualOrderSearch('');
+                if (data.profile_id && (!selectedClient || (selectedClient.id !== data.profile_id && selectedClient.parent_id !== data.profile_id))) {
+                    const matchedCl = clients.find(c => c.id === data.profile_id) || null;
+                    if (matchedCl) setSelectedClient(matchedCl);
+                }
+            } else {
+                setErrorMsg(`No se encontró ningún pedido con el número #${seq}.`);
+            }
+        } catch (err: any) {
+            console.error('Error buscando pedido manual:', err);
+        } finally {
+            setSearchingManualOrder(false);
         }
     };
 
@@ -971,7 +1020,7 @@ export default function PQRFloatingWidget() {
                                                             setSelectedClient(chosen);
                                                             setShowDropdown(false);
                                                             setErrorMsg(null);
-                                                            fetchBranchOrders(chosen.id);
+                                                            fetchBranchOrders(chosen);
                                                         }
                                                     }
                                                 }}
@@ -1014,7 +1063,7 @@ export default function PQRFloatingWidget() {
                                                                     setSelectedClient(client);
                                                                     setShowDropdown(false);
                                                                     setErrorMsg(null);
-                                                                    fetchBranchOrders(client.id);
+                                                                    fetchBranchOrders(client);
                                                                 }}
                                                                 onMouseEnter={() => setHighlightedClientIndex(idx)}
                                                                 style={{
@@ -1055,9 +1104,14 @@ export default function PQRFloatingWidget() {
 
                             {selectedClient && (
                                 <div>
-                                    <label style={labelStyle}>
-                                        Pedido Asociado {loadingOrders ? '(Cargando...)' : ''}
-                                    </label>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                                        <label style={labelStyle}>
+                                            Pedido Asociado {loadingOrders ? '(Cargando...)' : ''}
+                                        </label>
+                                        <span style={{ fontSize: '0.65rem', color: '#64748B' }}>
+                                            {branchOrders.length} pedido(s) disponible(s)
+                                        </span>
+                                    </div>
                                     <select
                                         value={selectedOrderId}
                                         onChange={(e) => setSelectedOrderId(e.target.value)}
@@ -1080,6 +1134,48 @@ export default function PQRFloatingWidget() {
                                             </option>
                                         ))}
                                     </select>
+                                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px', alignItems: 'center' }}>
+                                        <input
+                                            type="text"
+                                            placeholder="¿No lo ves? Digita # pedido (ej: 1202)"
+                                            value={manualOrderSearch}
+                                            onChange={(e) => setManualOrderSearch(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleSearchManualOrder();
+                                                }
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '5px 9px',
+                                                borderRadius: '7px',
+                                                border: '1px solid #CBD5E1',
+                                                fontSize: '0.72rem',
+                                                backgroundColor: '#FFFFFF',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSearchManualOrder()}
+                                            disabled={searchingManualOrder || !manualOrderSearch.trim()}
+                                            style={{
+                                                padding: '5px 10px',
+                                                borderRadius: '7px',
+                                                backgroundColor: '#0F172A',
+                                                color: '#FFFFFF',
+                                                fontSize: '0.72rem',
+                                                fontWeight: 700,
+                                                border: 'none',
+                                                cursor: searchingManualOrder || !manualOrderSearch.trim() ? 'not-allowed' : 'pointer',
+                                                opacity: searchingManualOrder || !manualOrderSearch.trim() ? 0.6 : 1,
+                                                flexShrink: 0
+                                            }}
+                                        >
+                                            {searchingManualOrder ? 'Buscando...' : 'Vincular #'}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </>

@@ -215,7 +215,7 @@ export default function PqrAuditModal({
     const [selectedItemId, setSelectedItemId] = useState('');
     const [noveltyQty, setNoveltyQty] = useState(0);
     const [noveltyQtyInput, setNoveltyQtyInput] = useState('');
-    const [noveltyType, setNoveltyType] = useState<'faltante' | 'averia'>('faltante');
+    const [noveltyType, setNoveltyType] = useState<'faltante' | 'averia' | 'producto_escaso' | 'error_digitacion' | 'no_solicitado'>('faltante');
     const [noveltyReason, setNoveltyReason] = useState('');
     const [hasPhysicalReturn, setHasPhysicalReturn] = useState<boolean>(false);
 
@@ -1470,7 +1470,17 @@ export default function PqrAuditModal({
         setActionLoading(true);
         try {
             const compositeNotes = `[RETORNO_FISICO: ${hasPhysicalReturn ? 'SI' : 'NO'}] ${rcaEvidenceNotes || ''}`.trim();
-            const reasonText = `${noveltyType === 'faltante' ? 'Faltante en Báscula' : 'Avería / Calidad'}: ${noveltyReason || pqr.subject || 'Declarado desde PQR'}`;
+            const getNoveltyPrefix = (type: string) => {
+                switch (type) {
+                    case 'faltante': return 'Faltante en Báscula';
+                    case 'averia': return 'Avería / Calidad';
+                    case 'producto_escaso': return 'Producto Escaso (Sin Cargue)';
+                    case 'error_digitacion': return 'Error de Digitación';
+                    case 'no_solicitado': return 'Producto No Solicitado';
+                    default: return 'Novedad de Producto';
+                }
+            };
+            const reasonText = `${getNoveltyPrefix(noveltyType)}: ${noveltyReason || pqr.subject || 'Declarado desde PQR'}`;
 
             // Check if there is already a return for this order and product in pending_review
             const existingReturn = caseReturns.find(r => r.product_id === selItem.product_id && r.status === 'pending_review');

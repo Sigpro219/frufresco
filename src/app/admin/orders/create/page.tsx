@@ -3846,9 +3846,16 @@ function CreateOrderContent() {
                 };
             });
 
-            const agreementItemsData = itemsDataForInsert.filter(it => !it.is_off_agreement);
-            const offAgreementItemsData = itemsDataForInsert.filter(it => it.is_off_agreement);
-            const isMixedSplitOrder = hasActiveB2BAgreement && agreementItemsData.length > 0 && offAgreementItemsData.length > 0;
+            // Escenario 221 / 287 Canónico: Cero Split - Siempre Pedido Único
+            // Ordenamiento Canónico: productos con precio > 0 primero, productos fuera de acuerdo a $0 al final
+            const sortedItemsDataForInsert = [...itemsDataForInsert].sort((a, b) => {
+                const priceA = Number(a.unit_price || 0);
+                const priceB = Number(b.unit_price || 0);
+                return (priceB > 0 ? 1 : 0) - (priceA > 0 ? 1 : 0);
+            });
+            const agreementItemsData = sortedItemsDataForInsert.filter(it => !it.is_off_agreement);
+            const offAgreementItemsData = sortedItemsDataForInsert.filter(it => it.is_off_agreement);
+            const hasOffAgreement = hasActiveB2BAgreement && offAgreementItemsData.length > 0;
             const isOnlyOffAgreementOrder = hasActiveB2BAgreement && agreementItemsData.length === 0 && offAgreementItemsData.length > 0;
 
             // 4. Armar notas de orden y entrega logística
@@ -3866,7 +3873,7 @@ function CreateOrderContent() {
             if (adminNotes) poTokens.push(adminNotes);
             const baseAdminNotes = poTokens.join(' | ');
             const offAgreementNamesList = offAgreementItemsData.map(it => it.product_name).join(', ');
-            const finalAdminNotes = isOnlyOffAgreementOrder
+            const finalAdminNotes = hasOffAgreement
                 ? `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offAgreementNamesList}]${baseAdminNotes ? ` | ${baseAdminNotes}` : ''}`
                 : baseAdminNotes;
 
@@ -3923,9 +3930,9 @@ function CreateOrderContent() {
                 }
             }
 
-            // 5. Inserción atómica en base de datos (Orden Principal o Única)
-            const primaryItemsList = isMixedSplitOrder ? agreementItemsData : itemsDataForInsert;
-            const primaryWeightKg = isOnlyOffAgreementOrder ? offAgreementWeightKg : totalWeightKg;
+            // 5. Inserción atómica en base de datos (Orden Única Canónica - Cero Split)
+            const primaryItemsList = sortedItemsDataForInsert;
+            const primaryWeightKg = totalWeightKg;
 
             const { data: newOrder, error: orderErr } = await supabase
                 .from('orders')
@@ -3991,79 +3998,13 @@ function CreateOrderContent() {
                 throw new Error(itemsErr.message);
             }
 
-            // 5b. SDD Escenario 221: Si el pedido es mixto (Acuerdo + Fuera de Acuerdo), crear Orden B en Remisión a $0 vinculada
+            // 5b. SDD Escenario 221 / 287: Pedido Único Canónico - Tarea Comercial si incluye Fuera de Acuerdo
             const customerName = clientDetails?.company_name || clientDetails?.contact_name || 'Cliente';
-            if (isMixedSplitOrder) {
-                const parentSeqLabel = newOrder.sequence_id || newOrder.id.slice(0, 8);
-                const splitRemissionNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offAgreementNamesList}] | [ANEXO REMISIÓN VINCULADA A FACTURA #${parentSeqLabel}]${baseAdminNotes ? ` | ${baseAdminNotes}` : ''}`;
-
-                const { data: remissionOrder, error: remOrdErr } = await supabase
-                    .from('orders')
-                    .insert({
-                        profile_id: finalProfileId,
-                        purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
-                        type: 'b2b',
-                        total: 0,
-                        total_weight_kg: parseFloat(offAgreementWeightKg.toFixed(3)),
-                        subtotal: 0,
-                        tax: 0,
-                        status: 'pending_approval',
-                        payment_status: 'Pendiente',
-                        payment_method: paymentMethod || 'Crédito B2B',
-                        origin: 'Admin Panel',
-                        origin_source: 'document_upload',
-                        delivery_date: targetDeliveryDate,
-                        delivery_slot: finalDeliverySlot,
-                        admin_notes: splitRemissionNotes,
-                        shipping_address: finalShippingAddress,
-                        latitude: clientDetails?.latitude || latitude || null,
-                        longitude: clientDetails?.longitude || longitude || null,
-                        is_manual_delivery: isManualDelivery,
-                        manual_delivery_time: manualDeliveryTime || null,
-                        manual_delivery_margin: manualDeliveryMargin,
-                        manual_delivery_note: manualDeliveryNote || null,
-                        logistics_data: {
-                            ...(logisticsOverride || {}),
-                            parent_order_id: newOrder.id,
-                            parent_order_sequence: parentSeqLabel,
-                            document_type_override: 'remission',
-                            remission_with_prices_override: false,
-                            is_off_agreement_split: true
-                        },
-                        document_url: finalDocUrl || permanentDocumentUrl || null
-                    })
-                    .select()
-                    .single();
-
-                if (!remOrdErr && remissionOrder) {
-                    const remItemsToInsert = offAgreementItemsData.map(({ product_name, is_off_agreement, ...it }) => ({
-                        ...it,
-                        unit_price: 0,
-                        order_id: remissionOrder.id
-                    }));
-                    const { error: remItemsErr } = await supabase.from('order_items').insert(remItemsToInsert);
-                    if (remItemsErr) {
-                        await supabase.from('orders').delete().eq('id', remissionOrder.id);
-                    } else {
-                        try {
-                            await supabase.from('admin_tasks').insert({
-                                title: `ASIGNAR PRECIO URGENTE: Remisión #${remissionOrder.sequence_id || remissionOrder.id.slice(0, 8)} (${customerName})`,
-                                description: `Se generó remisión anexa fuera de acuerdo con tarifa $0 COP para: ${offAgreementNamesList}. Vinculada al Pedido #${parentSeqLabel}. Asignar precio comercial antes del cierre de corte de facturación.`,
-                                assigned_to: 'Área Comercial',
-                                priority: 'critical',
-                                due_date: targetDeliveryDate || new Date().toISOString().split('T')[0],
-                                status: 'pending'
-                            });
-                        } catch (taskErr) {
-                            console.warn('No se pudo crear admin_task comercial:', taskErr);
-                        }
-                    }
-                }
-            } else if (isOnlyOffAgreementOrder) {
+            if (hasOffAgreement) {
                 try {
                     await supabase.from('admin_tasks').insert({
-                        title: `ASIGNAR PRECIO URGENTE: Remisión #${newOrder.sequence_id || newOrder.id.slice(0, 8)} (${customerName})`,
-                        description: `Se generó remisión fuera de acuerdo con tarifa $0 COP para: ${offAgreementNamesList}. Asignar precio comercial antes del cierre de corte de facturación.`,
+                        title: `ASIGNAR PRECIO URGENTE: Pedido #${newOrder.sequence_id || newOrder.id.slice(0, 8)} (${customerName})`,
+                        description: `El pedido incluye productos fuera de acuerdo comercial con tarifa provisional $0 COP: ${offAgreementNamesList}. Asignar precio comercial antes del cierre de corte de facturación.`,
                         assigned_to: 'Área Comercial',
                         priority: 'critical',
                         due_date: targetDeliveryDate || new Date().toISOString().split('T')[0],
@@ -4877,16 +4818,19 @@ function CreateOrderContent() {
                     : (effectivePo ? 'oc_formalizada' : null)
             };
 
-            // Escenario 221: Partición Automática para clientes con Acuerdo Vigente que piden productos Fuera de Acuerdo a $0 COP
-            const agreementCartItems = (hasActiveAgreementSplit && !isExoneratedZero)
-                ? cart.filter(item => agreementProductIds.has(item.product.id))
-                : cart;
-            const offAgreementCartItems = (hasActiveAgreementSplit && !isExoneratedZero)
-                ? cart.filter(item => !agreementProductIds.has(item.product.id))
-                : [];
+            // Escenario 221 / 287 Canónico: Cero Split - Siempre Pedido Único
+            // Ordenamiento Canónico: productos con precio > 0 primero, productos fuera de acuerdo a $0 al final
+            const sortedCart = [...cart].sort((a, b) => {
+                const rawPriceA = (a.price !== undefined && a.price !== null) ? a.price : (a.product?.id && contractPrices[a.product.id] ? contractPrices[a.product.id] : 0);
+                const rawPriceB = (b.price !== undefined && b.price !== null) ? b.price : (b.product?.id && contractPrices[b.product.id] ? contractPrices[b.product.id] : 0);
+                return (Number(rawPriceB) > 0 ? 1 : 0) - (Number(rawPriceA) > 0 ? 1 : 0);
+            });
 
-            const isSplitScenario = hasActiveAgreementSplit && !isExoneratedZero && agreementCartItems.length > 0 && offAgreementCartItems.length > 0;
-            const isOnlyOffAgreement = hasActiveAgreementSplit && !isExoneratedZero && agreementCartItems.length === 0 && offAgreementCartItems.length > 0;
+            const offAgreementCartItems = (hasActiveAgreementSplit && !isExoneratedZero)
+                ? sortedCart.filter(item => !agreementProductIds.has(item.product.id))
+                : [];
+            const hasOffAgreementItems = offAgreementCartItems.length > 0;
+            const isOnlyOffAgreement = hasActiveAgreementSplit && !isExoneratedZero && offAgreementCartItems.length === sortedCart.length;
 
             const computeCartGroupFinancials = (groupItems: typeof cart, forceZero: boolean) => {
                 let sub = 0;
@@ -4908,7 +4852,7 @@ function CreateOrderContent() {
                 return { subtotal: sub, tax: tx, total: sub + tx, weight: wt };
             };
 
-            const primaryCartItems = isSplitScenario ? agreementCartItems : cart;
+            const primaryCartItems = sortedCart;
             const primaryForceZero = isExoneratedZero || isOnlyOffAgreement;
             const primaryFin = computeCartGroupFinancials(primaryCartItems, primaryForceZero);
 
@@ -4918,7 +4862,7 @@ function CreateOrderContent() {
                 primaryAdminNotes = `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]\n${primaryAdminNotes}`.trim();
             }
 
-            if (isOnlyOffAgreement) {
+            if (hasOffAgreementItems) {
                 const offNames = offAgreementCartItems.map(i => i.product?.name).join(', ');
                 primaryAdminNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}]\n${primaryAdminNotes}`.trim();
             }
@@ -4926,12 +4870,11 @@ function CreateOrderContent() {
             const expressActive = isSameDayExpress || (clientType === 'B2B' && deliveryDate <= minDeliveryDate && isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig).targetDeliveryDate === deliveryDate);
 
             const primaryLogisticsData = {
-                ...(isOnlyOffAgreement
+                ...(hasOffAgreementItems
                     ? {
                         ...baseLogisticsData,
                         document_type_override: 'remission',
                         remission_with_prices_override: false,
-                        is_off_agreement_split: true,
                         off_agreement_priced: false
                     }
                     : baseLogisticsData),
@@ -5075,96 +5018,20 @@ ${primaryAdminNotes}`.trim();
                 }
             }
 
-            // Escenario 221: Si hubo partición mixta (Pedido A Acuerdo + Pedido B Remisión $0 Fuera de Acuerdo), crear Pedido B e insertar tarea urgente
-            let childSplitOrder: any = null;
-            if (isSplitScenario) {
-                const offFin = computeCartGroupFinancials(offAgreementCartItems, true);
+            // Escenario 221 / 287 Canónico: Cero Split - Tarea Urgente si incluye Fuera de Acuerdo
+            if (hasOffAgreementItems) {
                 const offNames = offAgreementCartItems.map(i => i.product?.name).join(', ');
-                const parentTag = order.sequence_id ? `#PED-${order.sequence_id}` : `#${order.id.slice(0, 6).toUpperCase()}`;
-                const offNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}] [VINCULADO A PEDIDO ACUERDO ${parentTag}]\n${finalAdminNotes}`.trim();
-
-                const { data: splitOrd, error: splitErr } = await supabase
-                    .from('orders')
-                    .insert({
-                        profile_id: finalProfileId,
-                        purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
-                        total: 0,
-                        total_weight_kg: offFin.weight,
-                        subtotal: 0,
-                        tax: 0,
-                        status: 'pending_approval',
-                        payment_status: 'Pendiente',
-                        payment_method: paymentMethod,
-                        origin: 'Admin Panel',
-                        origin_source: originSource,
-                        delivery_date: deliveryDate,
-                        delivery_slot: finalDeliverySlot,
-                        admin_notes: offNotes,
-                        shipping_address: shippingAddress,
-                        latitude: latitude,
-                        longitude: longitude,
-                        is_manual_delivery: isManualDelivery,
-                        manual_delivery_time: manualDeliveryTime || null,
-                        manual_delivery_margin: manualDeliveryMargin,
-                        manual_delivery_note: manualDeliveryNote || null,
-                        logistics_data: {
-                            ...baseLogisticsData,
-                            parent_order_id: order.id,
-                            parent_order_sequence: order.sequence_id || null,
-                            document_type_override: 'remission',
-                            remission_with_prices_override: false,
-                            is_off_agreement_split: true,
-                            off_agreement_priced: false
-                        },
-                        document_url: permanentDocumentUrl || documentUrl || null
-                    })
-                    .select()
-                    .single();
-
-                if (splitErr) {
-                    console.error('Split Order B Insert Error Detail:', splitErr);
-                    throw new Error(splitErr.message);
-                }
-                childSplitOrder = splitOrd;
-
-                const splitItemsData = offAgreementCartItems.map(item => {
-                    const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                    return {
-                        order_id: splitOrd.id,
-                        product_id: item.product.id,
-                        quantity: qtyNum,
-                        unit_price: 0,
-                        nickname: item.nickname || item.variant_label || null,
-                        variant_label: item.variant_label || null,
-                        unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
-                        selected_options: item.selected_options || {}
-                    };
-                });
-
-                const { error: splitItemsErr } = await supabase
-                    .from('order_items')
-                    .insert(splitItemsData);
-
-                if (splitItemsErr) {
-                    await supabase.from('orders').delete().eq('id', splitOrd.id);
-                    throw new Error(splitItemsErr.message);
-                }
-            }
-
-            if (isSplitScenario || isOnlyOffAgreement) {
-                const targetRemissionOrder = isSplitScenario ? childSplitOrder : order;
-                const offNames = offAgreementCartItems.map(i => i.product?.name).join(', ');
-                const remSeq = targetRemissionOrder?.sequence_id ? `REM-${targetRemissionOrder.sequence_id}` : `#${(targetRemissionOrder?.id || order.id).slice(0, 6).toUpperCase()}`;
+                const remSeq = order?.sequence_id ? `PED-${order.sequence_id}` : `#${order.id.slice(0, 6).toUpperCase()}`;
                 const b2bClientName = getSelectedClientDetails()?.company_name || 'Cliente Institucional';
                 await supabase.from('admin_tasks').insert({
                     type: 'price_extension_request',
                     status: 'pending',
                     priority: 'critical',
-                    title: `ASIGNAR PRECIO URGENTE: Remisión ${remSeq} (${b2bClientName})`,
-                    description: `Se despacharon ${offAgreementCartItems.length} producto(s) fuera del acuerdo comercial a precio $0 COP (${offNames}) para entrega el ${deliveryDate}. Debes asignar el precio comercial antes del cierre del corte de facturación.`,
+                    title: `ASIGNAR PRECIO URGENTE: Pedido ${remSeq} (${b2bClientName})`,
+                    description: `Se despacharon ${offAgreementCartItems.length} producto(s) fuera del acuerdo comercial a precio provisional $0 COP (${offNames}) para entrega el ${deliveryDate}. Debes asignar el precio comercial para liberar la facturación.`,
                     client_id: finalProfileId,
                     client_name: b2bClientName,
-                    related_entity_id: targetRemissionOrder?.id || order.id
+                    related_entity_id: order.id
                 });
             }
 
@@ -5225,10 +5092,8 @@ ${primaryAdminNotes}`.trim();
                 });
             }
 
-            if (isSplitScenario) {
-                showToast(`Pedido particionado automáticamente: 1 Factura (${agreementCartItems.length} SKUs acuerdo) + 1 Remisión a $0 (${offAgreementCartItems.length} SKUs fuera de acuerdo).`, 'success');
-            } else if (isOnlyOffAgreement) {
-                showToast(`Remisión a $0 creada exitosamente (${offAgreementCartItems.length} SKUs fuera de acuerdo pendientes por asignar precio).`, 'success');
+            if (hasOffAgreementItems) {
+                showToast(`Pedido creado exitosamente con ${offAgreementCartItems.length} SKU(s) fuera de acuerdo a $0 COP. Tarea comercial generada.`, 'success');
             } else {
                 showToast('Pedido creado exitosamente', 'success');
             }

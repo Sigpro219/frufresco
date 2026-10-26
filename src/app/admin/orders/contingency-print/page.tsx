@@ -1332,7 +1332,12 @@ function ContingencyPrintContent() {
                     const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
                         ? formatSpaceLabel(order.warehouse_spaces)
                         : 'S/A';
-                    const items = order.order_items || [];
+                    // Ordenamiento Canónico: productos con precio > 0 arriba, productos a $0 COP al final
+                    const items = [...(order.order_items || [])].sort((a: any, b: any) => {
+                        const priceA = Number(a.unit_price || 0);
+                        const priceB = Number(b.unit_price || 0);
+                        return (priceB > 0 ? 1 : 0) - (priceA > 0 ? 1 : 0);
+                    });
                     const itemsCount = items.length;
                     const crateBalance = typeof order.profiles?.crate_balance === 'number' ? order.profiles.crate_balance : 0;
 

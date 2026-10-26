@@ -122,6 +122,18 @@ export function getOrderDocumentSignature(order: any): { filename: string | null
  * Determina si dos pedidos de la misma sede y fecha son duplicados reales entre sí.
  */
 export function areOrdersDuplicate(orderA: any, orderB: any): boolean {
+    // Inmunidad Canónica SDD: Si uno es hijo del otro o provienen de una relación split de fuera de acuerdo, jamás son duplicados
+    if (
+        orderA.id === orderB.logistics_data?.parent_order_id ||
+        orderB.id === orderA.logistics_data?.parent_order_id ||
+        orderA.logistics_data?.parent_order_id === orderB.id ||
+        orderB.logistics_data?.parent_order_id === orderA.id ||
+        (orderA.logistics_data?.is_off_agreement_split && orderB.id === orderA.logistics_data?.parent_order_id) ||
+        (orderB.logistics_data?.is_off_agreement_split && orderA.id === orderB.logistics_data?.parent_order_id)
+    ) {
+        return false;
+    }
+
     const docA = getOrderDocumentSignature(orderA);
     const docB = getOrderDocumentSignature(orderB);
 

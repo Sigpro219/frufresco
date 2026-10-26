@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.265 (Contención Hermética y Etiqueta Compacta `Papas` en Columna C Sticky de la Sábana de Balance Diario — 76/76 Pantallas Certificadas)
-> **Fecha:** 23 de Octubre, 2026  
+> **Versión:** 1.9.267 (Resolución Forense Hallazgo #1 Gemba Operación: Derogación de Split de Pedidos, Consolidación en Pedido Único con Ítems $0 al Final, Retención en Facturación e Inmunidad Anti-Duplicados — 76/76 Pantallas Certificadas)
+> **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 288 Escenarios BDD Ininterrumpidos (1..288)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 290 Escenarios BDD Ininterrumpidos (1..290)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **276 Escenarios Canónicos (1..275)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **290 Escenarios Canónicos (1..290)** | **🟢 100%** |
 
 ---
 
@@ -11741,3 +11741,25 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 - **Given** la tabla de 24 columnas de la Sábana de Balance Diario (`src/components/InventoryDailyBalanceTab.tsx`) con columnas fijas `A` (`85px`), `B` (`70px`), `C` (`130px`) y `D` (`190px`),
 - **When** se renderiza una fila perteneciente a la célula `Papas, Plátano, Tomate` (como `#115 Chuguas Kg`, `#129 Tomate chonto` o `#130 Tomate larga vida`),
 - **Then** la columna `C` aplica `boxSizing: 'border-box'`, `overflow: 'hidden'` y proyecta la etiqueta compacta `getCompactCellLabel` (**`Papas`**, homologada con el chip superior `Papas 20` y mostrando el nombre largo en el tooltip `title`), mientras la columna `D` tiene `zIndex: 11` sobre `zIndex: 10`, erradicando cualquier traslape horizontal sobre el nombre del producto.
+
+---
+
+### Escenario 289: Vinculación Canónica de Pedidos Matriz-Sucursales y Búsqueda por Folio en Widget Flotante PQR (SDD v1.9.266)
+- **Given** el formulario de radicación de incidencias de cliente en el Widget Flotante PQR (`src/components/PQRFloatingWidget.tsx`),
+- **When** el usuario selecciona una sucursal operativa (ej. `TEQUENDAMA CATERING SAS - CASINO CAN`) cuyos pedidos en la tabla `orders` están registrados bajo el `profile_id` de la Casa Matriz (`TEQUENDAMA CATERING SAS`) o de entidades corporativas hermanas,
+- **Then** el sistema asegura la vinculación integral y transparente del pedido:
+  1. **Consulta Relacional Multi-Perfil (`fetchBranchOrders`):** Resuelve el conjunto ampliado de perfiles corporativos (`targetProfileIds = [branchId, parentId, ...hermanas]`), de modo que pedidos activos como `#1202` y `#1203` aparecen automáticamente en el selector `Pedido Asociado`.
+  2. **Buscador Directo por Consecutivo (`# Folio`):** Dispone un campo de entrada ágil (`¿No lo ves? Digita # pedido`) con botón `Vincular #`, permitiendo al usuario ingresar directamente el folio (ej. `1202`) para consultar y seleccionar cualquier pedido del sistema al instante, sincronizando automáticamente el cliente si no estaba seleccionado.
+  3. **Persistencia Garantizada:** Al radicar el caso comercial, `customer_service_pqrs.order_id` almacena el UUID del pedido vinculado para la cadena de custodia y auditoría SAC.
+
+---
+
+### Escenario 290: Derogación Canónica de Pedidos Split Fuera de Acuerdo (Gemba Hallazgo #1 Operación), Consolidación en Pedido Único con Ítems a $0 al Final, Retención Poka-Yoke en Facturación e Inmunidad en Detección de Duplicados (SDD v1.9.267)
+- **Given** un cliente institucional B2B con acuerdo comercial vigente (`quotes.status = 'agreement'`) que solicita productos pactados en convenio junto con insumos adicionales fuera del acuerdo a precio provisional $0 COP (tanto bajo modalidad de despacho Remisión como Factura),
+- **When** se crea o aprueba el pedido desde cualquiera de las compuertas del sistema (`/admin/orders/create` vía `handleSubmit` o `handleDirectConfirmAndCreateOrder`, y `EmailDraftsModule`),
+- **Then** el sistema aplica la doctrina unificada Zero-Split erradicando la sobre-ingeniería de partición artificial:
+  1. **Consolidación en Pedido Único Invariante:** Queda estrictamente derogada la bifurcación en 2 órdenes separadas (Pedido A Factura + Pedido B Remisión $0). El pedido físico y digital se registra como una sola orden integral para la sede y fecha, eliminando la duplicación de órdenes en muelle de cargue (`/admin/orders/loading`) y previniendo que los choferes lleven remisiones fragmentadas para la misma entrega.
+  2. **Ordenamiento Canónico de Productos en Remisión y Base de Datos:** En la inserción de `order_items` y en la emisión física duplex de la Remisión Oficial (`/admin/orders/contingency-print`), los insumos se ordenan deterministamente: primero todos los productos con precio comercial pactado (`unit_price > 0`), y al final los productos fuera de acuerdo despachados provisionalmente a $0 COP (`unit_price === 0`), facilitando la conciliación rápida en cocina/recepción.
+  3. **Estampilla de Auditoría y Tarea Comercial Automática:** El pedido único estampa en `admin_notes`: `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ...]`, insertando atómicamente una tarea urgente en `admin_tasks` dirigida al Área Comercial para la fijación de tarifa antes del cierre del corte.
+  4. **Retención Poka-Yoke en Mesa de Facturación:** En `/admin/commercial/billing`, el pedido se clasifica en estado `Retenido / Con Novedad` (`isUnpricedNovelty = true`), bloqueando su facturación DIAN o exportación contable a World Office hasta que el Área Comercial asigne los precios unitarios vía `/api/commercial/billing/assign-off-agreement-prices`, recalculando subtotal, IVA y total neto para liberar la orden automáticamente.
+  5. **Inmunidad contra Falsas Alarmas de Pedido Duplicado (`orderDuplicates.ts`):** El motor `areOrdersDuplicate` reconoce relaciones de subordinación (`parent_order_id`) y marcas de split (`is_off_agreement_split`), garantizando que órdenes vinculadas o preexistentes jamás se resalten falsamente con borde rojo ni etiqueta `@duplicado`.
