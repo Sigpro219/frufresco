@@ -11814,3 +11814,28 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - **Mesa Operativa & B2B (Admin / Empresas):** Explica con precisión que gobierna la toma manual de operadoras, edición de pedidos institucionales (restaurantes, casinos) e ingesta por correos AI, con su hora de corte recomendada (08:00 PM).
      - **Tienda Web Pública (B2C / Hogares):** Explica con claridad que gobierna el checkout y carrito de compras de la tienda online para consumidores finales, con su hora de corte recomendada (05:00 PM).
   4. **Notas de Efecto en Gemba:** Cada canal detalla su impacto directo en la plaza de mercado (Corabastos) y en el calendario del cliente final, erradicando cualquier duda o ambigüedad conceptual.
+
+---
+
+### Escenario 293: Sincronización Canónica y Acceso Operativo al Módulo de Talento Humano para Autogestión de Colaboradores en Calidad/PQR (Gemba Hallazgo #4) (SDD v1.9.270)
+- **Given** el flujo de auditoría de PQR en el Paso 3 (Imputación y Responsabilidades de Novedades), donde el listado de colaboradores disponibles se alimenta en tiempo real desde la tabla canónica collaborators,
+- **When** se incorporan nuevos trabajadores al equipo operativo (alistadores, pesadores, conductores, etc.) que aún no figuran en el selector de responsables de PQR,
+- **Then** el sistema garantiza el principio de autogestión descentralizada y continuidad operativa sin requerir intervenciones técnicas:
+  1. **Acceso Granular Habilitado para Gestión:** Se parametrizaron los permisos explícitos de Talento Humano (dmin.hr, +admin.hr, hr) en el perfil administrativo de Angied Rivas (ngidailed94@gmail.com).
+  2. **Navegación Intuitiva en Navbar:** La ruta /admin/hr queda visible y accesible desde el menú principal superior en la sección **Operaciones -> Gestión & Administración -> Talento Humano**.
+  3. **Ingreso Inmediato de Nuevos Colaboradores:** A través de la interfaz de /admin/hr, el equipo puede registrar nuevos colaboradores pulsando el botón [+ Nuevo Colaborador], asignando nombre, documento de identidad, cargo operativo y estado activo.
+  4. **Impacto en Vivo en PQR:** Al guardar el registro con is_active = true, el nuevo colaborador queda disponible al instante en el componente SearchableSelect de imputación de novedades del módulo de PQR y Servicio al Cliente.
+
+---
+
+### Escenario 294: Countdown Reactivo en Vivo y Telemetría Sticky de Corte Operativo en Mesa de Pedidos (SDD v1.9.271)
+- **Given** la mesa operativa de despacho y alistamiento en `/admin/orders/loading`,
+- **When** las operadoras, analistas de compras o supervisores monitorean las tandas de pedidos y bandejas de correo institucional,
+- **Then** el encabezado sticky superior ancla en la franja derecha de la barra de pestañas un widget de telemetría y cuenta regresiva en tiempo real conectado dinámicamente con `app_settings`:
+  1. **Modo Reglas de Corte Desactivadas (Horario Flexible):** Proyecta una pastilla informativa esmeralda: `[ 🟢 HORARIO FLEXIBLE ACTIVO • Sin Límite de Corte (Sugerido {cutoffLabel}) ]`, comunicando con transparencia que no hay bloqueos de calendario para despachos de mañana.
+  2. **Modo Reglas de Corte Activas (Cuenta Regresiva con Segundero):** Proyecta un cronómetro en vivo `[ ⏱️ Cierre de Operación: HH:MM:SS ({cutoffLabel}) ]` con semaforización cromática reactiva:
+     - **Verde / Esmeralda:** Si faltan más de 60 minutos para el cierre.
+     - **Ámbar:** Si faltan menos de 60 minutos (*"Última hora para radicar pedidos de mañana"*).
+     - **Rojo con halo:** Si faltan menos de 15 minutos (*"⚠️ Cierre Inminente"*).
+     - **Gris Bloqueado con Candado:** Al superar la hora límite `[ 🔒 Corte Finalizado ({cutoffLabel}) • Nuevos pedidos pasan a D+2 ]`.
+  3. **Comportamiento Fijo No Invasivo:** El indicador permanece fijo en la barra superior sticky (`top: 85px`), acompañando el desplazamiento vertical del operario sin tapar botones de acción, tablas de datos ni modales de despacho.
