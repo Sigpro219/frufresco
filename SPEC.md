@@ -11862,6 +11862,16 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   3. **Jerarquía Visual de Matriz Desacoplada:** La razón social matriz se proyecta en una línea secundaria claramente identificada (Matriz: [Nombre Matriz]), omitiendo duplicidades si la sede y la matriz comparten el mismo nombre legal.
   4. **Paridad Total en Tarjeta y Dropdown:** Tanto en los resultados del menú desplegable del buscador como en la tarjeta verde de confirmación de sucursal seleccionada, el operario visualiza con precisión la sede exacta, dirección física y NIT sin puntos suspensivos.
 
+---
+
+### Escenario 296: Paridad Total y Selección Masiva Exhaustiva de Pedidos por Procesar (Gemba Hallazgo #4 Operación) (SDD v1.9.273)
+- **Given** la mesa operativa de despacho y alistamiento en `/admin/orders/loading`, donde se consolidan los pedidos del día para cierre y compra en plaza,
+- **When** el operador activa el checkbox maestro del encabezado de la tabla para seleccionar en masa todos los pedidos listos de la tanda activa,
+- **Then** el sistema garantiza paridad y cobertura total del 100% sin exclusiones silenciosas:
+  1. **Erradicación de Filtro Oculto `!isSameDay`:** Se elimina la exclusión de metadatos extemporáneos en `toggleSelectAll`, asegurando que pedidos radicados con excepción de corte o notas `[SAME-DAY]` para la fecha de despacho se incluyan automáticamente en la selección masiva de compra y logística.
+  2. **Unificación Canónica de Estados:** Tanto el checkbox del encabezado (`th`), como la función de selección masiva (`toggleSelectAll`) y los selectores de fila individual (tabla de escritorio, fila móvil y tarjeta de galería) evalúan la misma regla canónica exhaustiva: `['pending_approval', 'pending', 'recibido'].includes(order.status) && order.isComplete`.
+  3. **Sincronización Total de Indicadores:** El contador proyectado en el encabezado (`th`) coincide exactamente con el número de pedidos seleccionados en la pastilla flotante inferior (`X Seleccionados`), erradicando la necesidad de que el operador complete la selección de manera manual uno a uno.
+
 
 ---
 

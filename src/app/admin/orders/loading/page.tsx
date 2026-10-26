@@ -1938,11 +1938,8 @@ useEffect(() => {
     }, [filteredOrders]);
 
     const toggleSelectAll = () => {
-        // Excluir pedidos express extemporáneos de la selección masiva de cadena logística estándar
-        const launchableOrders = filteredOrders.filter(o => {
-            const isSameDay = o.is_same_day || o.logistics_data?.is_same_day || o.admin_notes?.includes('SAME-DAY');
-            return o.isComplete && o.status === 'pending_approval' && !isSameDay;
-        });
+        // Seleccionar el 100% de los pedidos pendientes por procesar de la vista activa (incluyendo extemporáneos y excepciones B2B)
+        const launchableOrders = filteredOrders.filter(o => o.isComplete && ['pending_approval', 'pending', 'recibido'].includes(o.status));
         if (launchableOrders.length === 0) return;
         if (selectedOrders.size === launchableOrders.length) {
             setSelectedOrders(new Set());
@@ -1954,7 +1951,7 @@ useEffect(() => {
     const toggleSelectOrder = (id: string) => {
         const order = orders.find(o => o.id === id);
         // Prevent selecting orders already processed into logistics
-        if (order && order.status !== 'pending_approval') return;
+        if (order && !['pending_approval', 'pending', 'recibido'].includes(order.status)) return;
         
         const newSet = new Set(selectedOrders);
         if (newSet.has(id)) {
@@ -4252,7 +4249,7 @@ useEffect(() => {
                                             </th>
                                             <th style={{ padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F8FAFB' }}>
                                                 {(() => {
-                                                    const launchableOrders = filteredOrders.filter(o => o.isComplete && o.status === 'pending_approval');
+                                                    const launchableOrders = filteredOrders.filter(o => o.isComplete && ['pending_approval', 'pending', 'recibido'].includes(o.status));
                                                     const isAllSelected = launchableOrders.length > 0 && selectedOrders.size === launchableOrders.length;
                                                     return (
                                                         <input 
@@ -4556,7 +4553,7 @@ useEffect(() => {
 
 
                                                     <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                                                        {order.status === 'pending_approval' ? (
+                                                        {['pending_approval', 'pending', 'recibido'].includes(order.status) ? (
                                                             <input 
                                                                 type="checkbox" 
                                                                 checked={selectedOrders.has(order.id)}
@@ -8764,7 +8761,7 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                 </div>
             </div>
 
-            {order.status === 'pending_approval' ? (
+            {['pending_approval', 'pending', 'recibido'].includes(order.status) ? (
                 <div 
                     onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
                     style={{
