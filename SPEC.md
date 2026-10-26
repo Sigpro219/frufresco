@@ -11839,3 +11839,14 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - **Rojo con halo:** Si faltan menos de 15 minutos (*"⚠️ Cierre Inminente"*).
      - **Gris Bloqueado con Candado:** Al superar la hora límite `[ 🔒 Corte Finalizado ({cutoffLabel}) • Nuevos pedidos pasan a D+2 ]`.
   3. **Comportamiento Fijo No Invasivo:** El indicador permanece fijo en la barra superior sticky (`top: 85px`), acompañando el desplazamiento vertical del operario sin tapar botones de acción, tablas de datos ni modales de despacho.
+
+---
+
+### Escenario 295: Erradicación de Colisión Visual de PQR Flotante Mediante Pestaña Lateral Retráctil Pulsante (Gemba Hallazgo #3 Operación) (SDD v1.9.272)
+- **Given** el componente global de radicación de incidencias (`src/components/PQRFloatingWidget.tsx`), que anteriormente ocupaba la coordenada fija inferior derecha (`bottom: 24px, right: 24px`) con `zIndex: 9999`, colisionando físicamente con los botones de cierre, confirmación de despacho y modales del sistema,
+- **When** el usuario navega por cualquier módulo operativo o interactúa con modales y procesos de cierre,
+- **Then** el disparador adopta una arquitectura ergonómica no invasiva de grado industrial:
+  1. **Reubicación Lateral ("Docked Tab"):** Se ancla al borde derecho de la pantalla a media altura (`top: 52%, right: 0, transform: translateY(-50%)`), liberando al 100% la esquina inferior derecha para las acciones primarias del sistema.
+  2. **Subordinación de Capas (`zIndex: 40`):** Se reduce su z-index a 40 para garantizar que cualquier modal, cajón lateral o menú desplegable (z-index 50+) quede naturalmente superpuesto, impidiendo que el botón se anteponga al cierre de procesos.
+  3. **Modo Reposo Pulsante:** En estado pasivo se repliega como una pestaña delgada de 55px con un punto baliza verde esmeralda animado (`animate-ping`), indicando que el canal de novedades está vivo y disponible sin generar ruido visual.
+  4. **Expansión Reactiva en Hover:** Al aproximar el cursor, la pestaña se expande suavemente hacia la izquierda con micro-animación fluida revelando la etiqueta completa: `[ 📝 Radicar PQR / Novedad • Clientes • Planta • RRHH ]`, permitiendo desplegar el formulario al hacer clic.
