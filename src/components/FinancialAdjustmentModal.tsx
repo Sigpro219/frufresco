@@ -6,7 +6,7 @@ import { THEME, formatMoney } from '@/lib/adminTheme';
 import { 
     X, Receipt, Scale, AlertTriangle, CheckCircle2, 
     ArrowRight, CornerDownRight, Sparkles, Building2, 
-    PackageCheck, PackageMinus, Info, Check, RefreshCw, Loader2
+    PackageCheck, PackageMinus, Info, SlidersHorizontal, Check, RefreshCw, Loader2
 } from 'lucide-react';
 import { 
     RCA_CATEGORIES_L1, 
@@ -24,6 +24,7 @@ export interface FinancialAdjustmentItem {
     unit_price: number;
     affected_quantity: number;
     affected_quantity_input?: string;
+    requested_return_quantity?: number;
     novelty_type: 'averia' | 'faltante' | 'precio' | 'devolucion';
     selected: boolean;
     notes?: string;
@@ -241,7 +242,8 @@ export default function FinancialAdjustmentModal({
                             affected_quantity: initialAffQty,
                             novelty_type: 'averia',
                             selected: initialSelected,
-                            notes: matchedReturn?.reason || ''
+                            notes: matchedReturn?.reason || '',
+                            requested_return_quantity: matchedReturn ? (Number(matchedReturn.quantity_returned) || 0) : 0
                         };
                     });
 
@@ -508,15 +510,29 @@ export default function FinancialAdjustmentModal({
                 }
 
                 // 1. Update order_items quantities and approve billing_returns
-                for (const item of selectedItems) {
-                    const newQty = Math.max(0, Number(item.original_quantity) - Number(item.affected_quantity));
+                if (useManualGlobal) {
                     await supabase
-                        .from('order_items')
-                        .update({ quantity: newQty })
+                        .from('billing_returns')
+                        .update({
+                            status: 'approved',
+                            resolved_at: nowIso,
+                            reviewed_by: pqr.resolved_by || null,
+                            reason: `[AJUSTE GLOBAL MANUAL PQR #${shortPqrId}]: ${notes || pqr.subject || 'Ajuste financiero autorizado'}`,
+                            calculated_amount: calculatedCreditAmount
+                        })
                         .eq('order_id', orderId)
-                        .eq('product_id', item.product_id);
+                        .eq('status', 'pending_review');
+                } else {
+                    for (const item of selectedItems) {
+                        const newQty = Math.max(0, Number(item.original_quantity) - Number(item.affected_quantity));
+                        await supabase
+                            .from('order_items')
+                            .update({ quantity: newQty })
+                            .eq('order_id', orderId)
+                            .eq('product_id', item.product_id);
 
-                    await upsertApprovedReturn(item, 'AJUSTE FACTURA');
+                        await upsertApprovedReturn(item, 'AJUSTE FACTURA');
+                    }
                 }
 
                 // 2. Update orders total
@@ -899,16 +915,22 @@ export default function FinancialAdjustmentModal({
                                                     type="button"
                                                     onClick={() => setUseManualGlobal(!useManualGlobal)}
                                                     style={{
-                                                        background: 'none',
-                                                        border: 'none',
-                                                        color: '#0D7A57',
+                                                        background: useManualGlobal ? '#ECFDF5' : '#F1F5F9',
+                                                        border: useManualGlobal ? '1.5px solid #10B981' : '1px solid #CBD5E1',
+                                                        borderRadius: '7px',
+                                                        padding: '4px 11px',
+                                                        color: useManualGlobal ? '#065F46' : '#0D7A57',
                                                         fontSize: '0.72rem',
-                                                        fontWeight: '700',
+                                                        fontWeight: '800',
                                                         cursor: 'pointer',
-                                                        textDecoration: 'underline'
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        boxShadow: useManualGlobal ? '0 1px 3px rgba(16, 185, 129, 0.2)' : 'none'
                                                     }}
                                                 >
-                                                    {useManualGlobal ? 'Usar desglose por producto' : 'Ajustar valor global manual'}
+                                                    <SlidersHorizontal size={13} />
+                                                    {useManualGlobal ? '← Volver al desglose por producto' : 'Ajustar valor global manual ($ COP)'}
                                                 </button>
                                             )}
                                         </div>
