@@ -26,7 +26,9 @@ import {
     ExternalLink,
     Filter,
     Check,
-    X
+    X,
+    CalendarRange,
+    ChevronDown
 } from 'lucide-react';
 
 interface DateEntry {
@@ -143,6 +145,11 @@ export default function CommercialDailyMonitorModule() {
     // 3. Estado de Vistas y Filtros
     const [activeView, setActiveView] = useState<ActiveView>('clients');
     const [selectedDrilldownProductId, setSelectedDrilldownProductId] = useState<string>('');
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const [exportScope, setExportScope] = useState<'day' | 'month' | 'custom'>('day');
+    const [customStartDate, setCustomStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [customEndDate, setCustomEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [isExporting, setIsExporting] = useState(false);
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [activePokaYoke, setActivePokaYoke] = useState<PokaYokeFilter>('all');
 
@@ -597,72 +604,151 @@ export default function CommercialDailyMonitorModule() {
         return availableDates.filter(d => d.date.startsWith(targetYm));
     }, [availableDates, monthOptions, selectedMonthOffset]);
 
-    // Exportar a Excel (.xlsx) Dinámico de la Vista Activa
-    const handleExportExcel = async () => {
-        const XLSX = await import('xlsx');
-        const wb = XLSX.utils.book_new();
+        // Exportar a Excel (.xlsx) con Selector de Período (Día, Mes Completo o Rango Personalizado)
+    const handleExportExcel = async (scope: 'day' | 'month' | 'custom' = exportScope) => {
+        setIsExporting(true);
+        try {
+            const XLSX = await import('xlsx');
+            const wb = XLSX.utils.book_new();
 
-        if (activeView === 'clients') {
-            const data = filteredOrders.map(o => ({
-                'Consecutivo Planta': o.friendlyId || o.sequenceId,
-                'No. Sistema': o.sequenceId,
-                'Cliente / Sucursal': o.clientName,
-                'Razón Social': o.companyName,
-                'NIT': o.nit,
-                'Zona': o.zone,
-                'Dirección': o.address,
-                'Canal': o.type === 'b2b' ? 'B2B Institucional' : 'B2C Hogar',
-                'Modalidad Documental': o.documentType,
-                'Medio de Pago': o.paymentMethod,
-                'Estado Operativo': o.status || 'Confirmado',
-                'Total Kilos (Kg)': Number(o.totalWeightKg.toFixed(2)),
-                'Total Pedido ($)': Math.round(o.total),
-                'Costo Estimado ($)': Math.round(o.estimatedCost),
-                'Utilidad Bruta ($)': Math.round(o.grossProfit),
-                'Margen (%)': `${o.marginPct.toFixed(1)}%`,
-                'Alerta Gemba': o.hasEqualValueAlert ? 'Valor Duplicado' : (o.hasMultipleOrdersAlert ? 'Multipedido' : (o.hasUnderMinimumAlert ? 'Bajo Mínimo' : 'OK'))
-            }));
+            if (scope === 'day') {
+                if (activeView === 'clients') {
+                    const data = filteredOrders.map(o => ({
+                        'Consecutivo Planta': o.friendlyId || o.sequenceId,
+                        'No. Sistema': o.sequenceId,
+                        'Cliente / Sucursal': o.clientName,
+                        'Razón Social': o.companyName,
+                        'NIT': o.nit,
+                        'Zona': o.zone,
+                        'Dirección': o.address,
+                        'Canal': o.type === 'b2b' ? 'B2B Institucional' : 'B2C Hogar',
+                        'Modalidad Documental': o.documentType,
+                        'Medio de Pago': o.paymentMethod,
+                        'Estado Operativo': o.status || 'Confirmado',
+                        'Total Kilos (Kg)': Number(o.totalWeightKg.toFixed(2)),
+                        'Total Pedido ($)': Math.round(o.total),
+                        'Costo Estimado ($)': Math.round(o.estimatedCost),
+                        'Utilidad Bruta ($)': Math.round(o.grossProfit),
+                        'Margen (%)': `${o.marginPct.toFixed(1)}%`,
+                        'Alerta Gemba': o.hasEqualValueAlert ? 'Valor Duplicado' : (o.hasMultipleOrdersAlert ? 'Multipedido' : (o.hasUnderMinimumAlert ? 'Bajo Mínimo' : 'OK'))
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    XLSX.utils.book_append_sheet(wb, ws, `Relacion_Pedidos_${selectedDate}`);
+                    XLSX.writeFile(wb, `Relacion_Diaria_Pedidos_${selectedDate}.xlsx`);
+                    setIsExportModalOpen(false);
+                    return;
+                } else if (activeView === 'products') {
+                    const data = filteredProducts.map(p => ({
+                        'Código SKU': p.sku,
+                        'Producto': p.productName,
+                        'Categoría': p.category,
+                        'Unidad': p.unit,
+                        'Cantidad Pedida': Number(p.totalQuantity.toFixed(2)),
+                        'No. Pedidos': p.ordersCount,
+                        'Precio Prom. Facturado ($)': Math.round(p.avgSellingPrice),
+                        'Costo Base Matriz ($)': Math.round(p.avgUnitCost),
+                        'Total Venta ($)': Math.round(p.totalSales),
+                        'Total Costo ($)': Math.round(p.totalCost),
+                        'Utilidad Bruta ($)': Math.round(p.grossProfit),
+                        'Margen Ponderado (%)': `${p.marginPct.toFixed(1)}%`
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    XLSX.utils.book_append_sheet(wb, ws, `Ventas_Productos_${selectedDate}`);
+                    XLSX.writeFile(wb, `Reporte_Comercial_BI_${selectedDate}_products.xlsx`);
+                    setIsExportModalOpen(false);
+                    return;
+                } else {
+                    const selProd = productsMap.get(selectedDrilldownProductId);
+                    const data = drilldownData.map(d => ({
+                        'No. Pedido': d.orderSequenceId,
+                        'Cliente / Sucursal': d.clientName,
+                        'Zona': d.zone,
+                        'Producto': selProd?.name || 'Producto Seleccionado',
+                        'Cantidad': d.quantity,
+                        'Unidad': d.unit,
+                        'Precio Facturado ($)': Math.round(d.unitPrice),
+                        'Costo Base ($)': Math.round(d.unitCost),
+                        'Total Facturado ($)': Math.round(d.totalSales),
+                        'Utilidad Bruta ($)': Math.round(d.profit),
+                        'Margen (%)': `${d.marginPct.toFixed(1)}%`
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    XLSX.utils.book_append_sheet(wb, ws, `Drilldown_${selectedDate}`);
+                    XLSX.writeFile(wb, `Reporte_Comercial_BI_${selectedDate}_drilldown.xlsx`);
+                    setIsExportModalOpen(false);
+                    return;
+                }
+            }
+
+            // Exportación Multi-Día (Mes Completo o Rango Personalizado)
+            let startIso = '';
+            let endIso = '';
+            let filenameScope = '';
+
+            if (scope === 'month') {
+                const currentYm = monthOptions[selectedMonthOffset]?.yearMonth || (selectedDate ? selectedDate.slice(0, 7) : new Date().toISOString().slice(0, 7));
+                const [y, m] = currentYm.split('-').map(Number);
+                const lastDay = new Date(y, m, 0).getDate();
+                startIso = `${currentYm}-01`;
+                endIso = `${currentYm}-${String(lastDay).padStart(2, '0')}`;
+                filenameScope = `Mes_${currentYm}`;
+            } else {
+                startIso = customStartDate;
+                endIso = customEndDate;
+                filenameScope = `${customStartDate}_a_${customEndDate}`;
+            }
+
+            const { data: rangeOrders, error: rangeErr } = await supabase
+                .from('orders')
+                .select('*')
+                .gte('delivery_date', startIso)
+                .lte('delivery_date', endIso)
+                .neq('status', 'cancelled')
+                .order('delivery_date', { ascending: true })
+                .order('sequence_id', { ascending: true })
+                .range(0, 4999);
+
+            if (rangeErr) throw rangeErr;
+
+            const data = (rangeOrders || []).map((ord: any) => {
+                const profile = profilesMap.get(ord.profile_id) || {};
+                const friendlyId = getFriendlyOrderId(ord);
+                const clientName = profile.company_name || profile.razon_social || profile.contact_name || ord.customer_name || 'Cliente Institucional';
+                const companyName = profile.razon_social || profile.company_name || 'Sin Razón Social';
+                const nit = profile.nit || ord.customer_nit || 'Sin NIT';
+                const isB2B = profile.role === 'b2b_client' || profile.role === 'corporate' || Boolean(profile.parent_id) || Boolean(profile.nit && profile.nit.length > 5) || ord.type === 'b2b';
+                const clientType = isB2B ? 'B2B Institucional' : 'B2C Hogar';
+                const isInvoice = profile.document_type === 'invoice' || Boolean(ord.invoice_id);
+                const documentType = isInvoice ? 'Factura' : 'Remisión';
+
+                return {
+                    'Fecha Entrega': ord.delivery_date,
+                    'Consecutivo Planta': friendlyId,
+                    'No. Sistema': ord.sequence_id,
+                    'Cliente / Sucursal': clientName,
+                    'Razón Social': companyName,
+                    'NIT': nit,
+                    'Zona': ord.logistics_data?.zone_name || ord.shipping_address?.split(',')[1]?.trim() || 'Bogotá Principal',
+                    'Dirección': ord.shipping_address || profile.address || 'Entrega en Sede Principal',
+                    'Canal': clientType,
+                    'Modalidad Documental': documentType,
+                    'Medio de Pago': ord.payment_method === 'payroll_deduction' ? 'Nómina' : (ord.payment_method === 'wompi' ? 'Wompi' : 'Crédito/Contra Entrega'),
+                    'Estado Operativo': ord.status || 'Confirmado',
+                    'Total Kilos (Kg)': Number((ord.total_weight_kg || 0).toFixed(2)),
+                    'Total Pedido ($)': Math.round(ord.total || 0)
+                };
+            });
+
             const ws = XLSX.utils.json_to_sheet(data);
-            XLSX.utils.book_append_sheet(wb, ws, `Relacion_Pedidos_${selectedDate}`);
-            XLSX.writeFile(wb, `Relacion_Diaria_Pedidos_${selectedDate}.xlsx`);
-            return;
-        } else if (activeView === 'products') {
-            const data = filteredProducts.map(p => ({
-                'Código SKU': p.sku,
-                'Producto': p.productName,
-                'Categoría': p.category,
-                'Unidad': p.unit,
-                'Cantidad Pedida': Number(p.totalQuantity.toFixed(2)),
-                'No. Pedidos': p.ordersCount,
-                'Precio Prom. Facturado ($)': Math.round(p.avgSellingPrice),
-                'Costo Base Matriz ($)': Math.round(p.avgUnitCost),
-                'Total Venta ($)': Math.round(p.totalSales),
-                'Total Costo ($)': Math.round(p.totalCost),
-                'Utilidad Bruta ($)': Math.round(p.grossProfit),
-                'Margen Ponderado (%)': `${p.marginPct.toFixed(1)}%`
-            }));
-            const ws = XLSX.utils.json_to_sheet(data);
-            XLSX.utils.book_append_sheet(wb, ws, `Ventas_Productos_${selectedDate}`);
-        } else {
-            const selProd = productsMap.get(selectedDrilldownProductId);
-            const data = drilldownData.map(d => ({
-                'No. Pedido': d.orderSequenceId,
-                'Cliente / Sucursal': d.clientName,
-                'Zona': d.zone,
-                'Producto': selProd?.name || 'Producto Seleccionado',
-                'Cantidad': d.quantity,
-                'Unidad': d.unit,
-                'Precio Facturado ($)': Math.round(d.unitPrice),
-                'Costo Base ($)': Math.round(d.unitCost),
-                'Total Facturado ($)': Math.round(d.totalSales),
-                'Utilidad Bruta ($)': Math.round(d.profit),
-                'Margen (%)': `${d.marginPct.toFixed(1)}%`
-            }));
-            const ws = XLSX.utils.json_to_sheet(data);
-            XLSX.utils.book_append_sheet(wb, ws, `Drilldown_${selectedDate}`);
+            XLSX.utils.book_append_sheet(wb, ws, `Relacion_${filenameScope.slice(0, 20)}`);
+            XLSX.writeFile(wb, `Relacion_Pedidos_${filenameScope}.xlsx`);
+            setIsExportModalOpen(false);
+        } catch (err) {
+            console.error('Error exporting range orders:', err);
+            alert('Ocurrió un error al generar la exportación consolidada.');
+        } finally {
+            setIsExporting(false);
         }
-
-        XLSX.writeFile(wb, `Reporte_Comercial_BI_${selectedDate}_${activeView}.xlsx`);
     };
 
     return (
@@ -748,26 +834,60 @@ export default function CommercialDailyMonitorModule() {
                         Actualizar
                     </button>
 
-                    <button
-                        onClick={handleExportExcel}
-                        style={{
-                            padding: '0.55rem 1.15rem',
-                            borderRadius: THEME.radius.md,
-                            backgroundColor: '#0D7A57',
-                            border: 'none',
-                            color: 'white',
-                            fontWeight: '700',
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
-                        }}
-                    >
-                        <FileSpreadsheet size={16} />
-                        {activeView === 'clients' ? 'Descargar Relación de Pedidos (.xlsx)' : 'Descargar Excel (.xlsx)'}
-                    </button>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'stretch',
+                        borderRadius: THEME.radius.md,
+                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)',
+                        overflow: 'hidden'
+                    }}>
+                        <button
+                            type="button"
+                            onClick={() => handleExportExcel('day')}
+                            disabled={isExporting}
+                            style={{
+                                padding: '0.55rem 1rem',
+                                backgroundColor: '#0D7A57',
+                                border: 'none',
+                                borderRight: '1px solid rgba(255,255,255,0.25)',
+                                color: 'white',
+                                fontWeight: '700',
+                                fontSize: '0.85rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'background-color 0.15s ease'
+                            }}
+                            title="Descargar de inmediato la jornada seleccionada en pantalla"
+                        >
+                            <FileSpreadsheet size={16} />
+                            {isExporting ? 'Generando...' : (activeView === 'clients' ? 'Descargar Relación (.xlsx)' : 'Descargar Excel (.xlsx)')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsExportModalOpen(true)}
+                            disabled={isExporting}
+                            style={{
+                                padding: '0.55rem 0.75rem',
+                                backgroundColor: '#0A6346',
+                                border: 'none',
+                                color: 'white',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.78rem',
+                                fontWeight: '700',
+                                transition: 'background-color 0.15s ease'
+                            }}
+                            title="Seleccionar período: Día, Mes Completo o Rango Personalizado"
+                        >
+                            <CalendarRange size={14} />
+                            <span>Período</span>
+                            <ChevronDown size={13} />
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1621,6 +1741,258 @@ export default function CommercialDailyMonitorModule() {
                     )}
                 </div>
             </div>
+            {/* MODAL DE SELECCIÓN DE PERÍODO PARA EXPORTACIÓN EXCEL */}
+            {isExportModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 99999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: THEME.radius.lg,
+                        maxWidth: '520px',
+                        width: '100%',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                        border: `1px solid ${THEME.colors.border}`,
+                        overflow: 'hidden'
+                    }}>
+                        {/* Cabecera del Modal */}
+                        <div style={{
+                            padding: '1.25rem 1.5rem',
+                            borderBottom: `1px solid ${THEME.colors.border}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#F8FAFC'
+                        }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <FileSpreadsheet size={18} color="#0D7A57" />
+                                    Exportar Relación de Pedidos (.xlsx)
+                                </h3>
+                                <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary }}>
+                                    Selecciona el período de tiempo que deseas consolidar en el archivo Excel
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsExportModalOpen(false)}
+                                disabled={isExporting}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    color: THEME.colors.textSecondary,
+                                    padding: '4px',
+                                    borderRadius: '6px'
+                                }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Opciones de Período */}
+                        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {/* 1. Día Activo */}
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '12px',
+                                padding: '1rem',
+                                borderRadius: THEME.radius.md,
+                                border: `2px solid ${exportScope === 'day' ? '#0D7A57' : '#E2E8F0'}`,
+                                backgroundColor: exportScope === 'day' ? '#F0FDF4' : 'white',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                            }}>
+                                <input
+                                    type="radio"
+                                    name="exportScope"
+                                    checked={exportScope === 'day'}
+                                    onChange={() => setExportScope('day')}
+                                    style={{ marginTop: '3px', accentColor: '#0D7A57' }}
+                                />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: '800', fontSize: '0.90rem', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span>📅 Jornada Activa Seleccionada</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '6px' }}>
+                                            {selectedDate}
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.76rem', color: THEME.colors.textSecondary }}>
+                                        Descarga los {filteredOrders.length} pedidos confirmados de la fecha activa en pantalla, incluyendo costos, márgenes e indicadores.
+                                    </p>
+                                </div>
+                            </label>
+
+                            {/* 2. Mes Completo */}
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '12px',
+                                padding: '1rem',
+                                borderRadius: THEME.radius.md,
+                                border: `2px solid ${exportScope === 'month' ? '#0D7A57' : '#E2E8F0'}`,
+                                backgroundColor: exportScope === 'month' ? '#F0FDF4' : 'white',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                            }}>
+                                <input
+                                    type="radio"
+                                    name="exportScope"
+                                    checked={exportScope === 'month'}
+                                    onChange={() => setExportScope('month')}
+                                    style={{ marginTop: '3px', accentColor: '#0D7A57' }}
+                                />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: '800', fontSize: '0.90rem', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span>🗓️ Mes Completo ({monthOptions[selectedMonthOffset]?.label || 'Mes Activo'})</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '6px' }}>
+                                            Acumulado Mensual
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.76rem', color: THEME.colors.textSecondary }}>
+                                        Consolida todos los despachos realizados durante todo el mes seleccionado, ordenados por fecha de entrega y consecutivo.
+                                    </p>
+                                </div>
+                            </label>
+
+                            {/* 3. Rango Personalizado */}
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '12px',
+                                padding: '1rem',
+                                borderRadius: THEME.radius.md,
+                                border: `2px solid ${exportScope === 'custom' ? '#0D7A57' : '#E2E8F0'}`,
+                                backgroundColor: exportScope === 'custom' ? '#F0FDF4' : 'white',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                            }}>
+                                <input
+                                    type="radio"
+                                    name="exportScope"
+                                    checked={exportScope === 'custom'}
+                                    onChange={() => setExportScope('custom')}
+                                    style={{ marginTop: '3px', accentColor: '#0D7A57' }}
+                                />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: '800', fontSize: '0.90rem', color: THEME.colors.textMain }}>
+                                        📆 Rango Personalizado de Fechas
+                                    </div>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.76rem', color: THEME.colors.textSecondary }}>
+                                        Define un intervalo libre de fechas para liquidaciones de quincena, semanas específicas o auditorías.
+                                    </p>
+
+                                    {exportScope === 'custom' && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }} onClick={e => e.stopPropagation()}>
+                                            <div>
+                                                <label style={{ fontSize: '0.72rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '3px' }}>
+                                                    Fecha Inicial:
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={customStartDate}
+                                                    onChange={e => setCustomStartDate(e.target.value)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.45rem 0.6rem',
+                                                        borderRadius: THEME.radius.sm,
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.82rem',
+                                                        fontWeight: '600'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.72rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '3px' }}>
+                                                    Fecha Final:
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={customEndDate}
+                                                    onChange={e => setCustomEndDate(e.target.value)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.45rem 0.6rem',
+                                                        borderRadius: THEME.radius.sm,
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.82rem',
+                                                        fontWeight: '600'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </label>
+                        </div>
+
+                        {/* Pie del Modal con Acciones */}
+                        <div style={{
+                            padding: '1rem 1.5rem',
+                            borderTop: `1px solid ${THEME.colors.border}`,
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            gap: '10px'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsExportModalOpen(false)}
+                                disabled={isExporting}
+                                style={{
+                                    padding: '0.55rem 1.1rem',
+                                    borderRadius: THEME.radius.md,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    backgroundColor: 'white',
+                                    color: THEME.colors.textSecondary,
+                                    fontWeight: '700',
+                                    fontSize: '0.82rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => handleExportExcel(exportScope)}
+                                disabled={isExporting}
+                                style={{
+                                    padding: '0.55rem 1.35rem',
+                                    borderRadius: THEME.radius.md,
+                                    border: 'none',
+                                    backgroundColor: '#0D7A57',
+                                    color: 'white',
+                                    fontWeight: '800',
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    boxShadow: '0 2px 6px rgba(13, 122, 87, 0.3)'
+                                }}
+                            >
+                                <Download size={15} />
+                                {isExporting ? 'Procesando archivo...' : 'Descargar Excel (.xlsx)'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }

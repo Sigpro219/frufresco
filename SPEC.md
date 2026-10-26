@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.274 (Resolución Forense Hallazgo #3 Gemba: Matriz Operativa de Imputación Multidisciplinaria Novedades por Producto y Consolidación Automática para Nómina — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.275 (Resolución Forense Hallazgo #3 Gemba: Matriz Operativa de Imputación Multidisciplinaria Novedades por Producto y Consolidación Automática para Nómina — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 297 Escenarios BDD Ininterrumpidos (1..297)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 298 Escenarios BDD Ininterrumpidos (1..298)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **297 Escenarios Canónicos (1..297)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **298 Escenarios Canónicos (1..298)** | **🟢 100%** |
 
 ---
 
@@ -11916,3 +11916,19 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   5. **Segmentación Fiel B2B / B2C:** Se reconoce automáticamente a los clientes corporativos institucionales por su rol (`b2b_client`, `corporate`), NIT o matriz, corrigiendo el falso rotulado de B2C en pedidos institucionales.
   6. **Exportación Oficial de la Relación Diaria de Pedidos (Excel .xlsx):** El botón de exportación se transforma contextualmente en *"Descargar Relación de Pedidos (.xlsx)"* para la vista de clientes, generando una hoja estructurada de despacho y contabilidad con nombre canónico `Relacion_Diaria_Pedidos_{fecha}.xlsx` con columnas limpias: Consecutivo Planta, No. Sistema, Cliente / Sucursal, Razón Social, NIT, Zona, Dirección, Canal, Modalidad Documental, Medio de Pago, Estado Operativo, Total Kilos (Kg), Total Pedido ($), Costo Estimado ($), Utilidad Bruta ($), Margen (%) y Alerta Gemba.
   7. **Rediseño Ergonómico Ejecutivo Swiss Precision (De 11 a 6 Macro-Columnas Espaciosas):** Se implementa el parser inteligente de sucursales (`parseClientBranchInfo`), desacoplando el nombre operativo de la sede en titular destacado (*BEER STATION FLORESTA*, *EL CORRAL PLAZA 127*) de la matriz corporativa y el NIT. La tabla se reorganiza en 6 macro-columnas espaciosas (*Consecutivo & Zona*, *Cliente & Sucursal* con 38% del ancho, *Documento & Pago*, *Facturación & Carga*, *Rentabilidad BI* con margen semaforizado y *Acción*), duplicando el espacio disponible para los nombres de los clientes y erradicando el apiñamiento visual.
+
+---
+
+### Escenario 298: Selector de Horizontes Temporales para la Relación de Pedidos en Excel (Día, Mes Completo y Rango Personalizado) (SDD v1.9.275)
+- **Given** el módulo de Monitor Diario BI y Auditoría de Ventas (`CommercialDailyMonitorModule.tsx`) en `/admin/commercial?tab=daily-monitor`,
+- **When** el analista comercial, jefe de compras o contador requiere exportar la información de despachos para liquidaciones quincenales, cierres mensuales o auditorías de planta,
+- **Then** el sistema proporciona un selector dinámico de períodos de exportación mediante una botonera dividida (*Split-Button*) y modal ergonómico de grado industrial:
+  1. **Botonera Dual de Exportación (Split-Button):** 
+     - **Acción Rápida (1 Clic):** Al hacer clic en el botón principal *[ Descargar Relación (.xlsx) ]*, genera y descarga de forma inmediata la jornada operativa activa en pantalla (`Relacion_Diaria_Pedidos_{fecha}.xlsx`), garantizando cero fricción para la operación nocturna de muelle.
+     - **Selector de Período (*[ Período ▼ ]*):** Al pulsar la flecha desplegable, abre el modal interactivo de horizontes temporales.
+  2. **Modal de Selección de Horizontes Temporales:** Proyecta tres opciones mutuamente excluyentes con semaforización y micro-badges informativos:
+     - **📅 Jornada Activa Seleccionada:** Descarga la fecha exacta seleccionada en la barra lateral con sus respectivos filtros de búsqueda y poka-yoke aplicados.
+     - **🗓️ Mes Completo Acumulado:** Detecta automáticamente el mes activo en el selector de boxing (ej: *Octubre de 2026*) y genera una consulta consolidada (`delivery_date` entre el 1 y el último día del mes) con orden cronológico y por consecutivo.
+     - **📆 Rango Personalizado de Fechas:** Despliega dos selectores nativos de fecha (*Desde* y *Hasta*), permitiendo auditar quincenas, semanas epidemiológicas o períodos de corte contable específicos.
+  3. **Generación Dinámica de Archivos Multi-Día:** En exportaciones de mes o rango personalizado, el pipeline inyecta automáticamente la columna `Fecha Entrega` al inicio de la hoja de cálculo, asegurando trazabilidad temporal nítida con nomenclatura canónica (`Relacion_Pedidos_Mes_YYYY-MM.xlsx` o `Relacion_Pedidos_YYYY-MM-DD_a_YYYY-MM-DD.xlsx`).
+  4. **Telemetría y Estado Asíncrono de Procesamiento:** Durante la extracción masiva de pedidos y perfiles en base de datos, los botones proyectan un estado activo *[ Procesando archivo... ]* para prevenir dobles descargas o bloqueos en la interfaz.
