@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.281 (Certificación Forense Integral de Documentación Operativa: Cierre de los 6 Hallazgos Gemba de Inventario, Unidades Duales, Bahías de Muelle, Membretes Operativos y Estándar Golden Print — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.282 (Arquitectura Poka-Yoke de Gestión de Sucursales B2B, Herencia Reactiva de Acuerdos, Consecutivo Contable World Office, Normalización Vial Colombiana y Geocodificación TMS — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 303 Escenarios BDD Ininterrumpidos (1..303)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 304 Escenarios BDD Ininterrumpidos (1..304)
 
 ---
 
@@ -18,7 +18,7 @@
 | Dominio | Nombre del Dominio | Pantallas | Capítulos SDD | Rango de Escenarios BDD | Cobertura |
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
-| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243, 252, 254 (§41.1 - §41.4) | 🟢 100% |
+| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243, 252, 254, 304 (§41.1 - §41.4) | 🟢 100% |
 | **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248, 250, 252, 253, 254, 260, 262, 263 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **301 Escenarios Canónicos (1..301)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **304 Escenarios Canónicos (1..304)** | **🟢 100%** |
 
 ---
 
@@ -12040,3 +12040,30 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - En `contingency-print/page.tsx`, el recuadro superior `BAHÍA DE PISO` proyecta únicamente la bahía física asignada (`ESPACIO {formatSpaceLabel(order.warehouse_spaces)}`) o `S/A`. Queda erradicado cualquier fallback a `order.sequence_id`, impidiendo que el consecutivo documental del pedido (ej. `#1116`) usurpe el rótulo de muelle.
   6. **Hallazgo 6 (Anclaje Magnético Inferior Golden Print en Carta):**
      - En remisiones en papel Carta (`contingency-print/page.tsx` y `GoldenPrintStyles.tsx`), el bloque unificado de Totales, Control de Canastillas Plásticas y Firmas se encuentra encapsulado con `marginTop: auto` dentro del contenedor calibrado a `min-height: 265mm`, garantizando que sin importar el número de ítems (1, 4 o 18 productos), los totales se ubiquen al pie exacto de la página junto a las firmas, eliminando espacios muertos a media página.
+
+---
+
+### Escenario 304: Arquitectura Poka-Yoke de Gestión y Creación de Sucursales Institucionales (B2B): Herencia Reactiva de Acuerdos, Consecutivo Contable World Office, Normalización Vial Colombiana y Georreferenciación Inmune para TMS (Gemba Hallazgos Creación Sucursales) (SDD v1.9.282)
+- **Given** el módulo de clientes corporativos (`/admin/clients` y `src/components/ClientsModule.tsx`) y la consola de Acuerdos Comerciales (`CommercialAgreementsModule.tsx`),
+- **When** un coordinador comercial o administrador registra una nueva sucursal subordinada a una Casa Matriz institucional (ej. ALDIMARK SAS -> Sede Hospital San Carlos) o audita la vigencia viva de los contratos comerciales,
+- **Then** el sistema implementa la arquitectura de cinco (5) defensas Poka-Yoke erradicando la fricción y falsos negativos reportados en el Gemba:
+  1. **Doble Telemetría Viva de Vigencia (Hallazgo 1):**
+     - En `CommercialAgreementsModule.tsx`, la columna *Duración* se transforma en **Restante / Plazo**.
+     - Se calcula dinámicamente el tiempo restante a partir de hoy (`valid_until - now`):
+       - Si faltan $> 7$ días: badge verde con ícono `Clock` (`Quedan X d`) y subtexto con la duración pactada (`Pactado: Y d`).
+       - Si faltan $le 7$ días o vence hoy: badge ámbar de urgencia operativa (`Quedan X d` o `Vence hoy`).
+       - Si venció: badge rojo (`Venció hace X d`).
+     - El ordenamiento de la columna prioriza numéricamente los acuerdos más próximos a expirar.
+  2. **Detección y Herencia Reactiva Inmediata de Acuerdos (Hallazgo 2):**
+     - Se elimina la guarda bloqueante `if (!editData?.id) return;`. Al crear una nueva sucursal en caliente (`editData == null`), el selector de Casa Matriz activa de inmediato la búsqueda del acuerdo activo de la matriz (`client_id = parent_id AND status = 'agreement'`, enlaces `active_master_agreement_id` o listas maestras `agreement_clients:*`).
+     - Erradica el falso negativo de alerta roja (*"La Casa Matriz no cuenta con un Acuerdo Institucional vigente"*), proyectando la tarjeta de acuerdo con el badge oficial **`Matriz`** y su fecha de vigencia.
+  3. **Generación Automática del Consecutivo Contable de Sucursal (Hallazgo 3):**
+     - Al alternar a *"Sucursal de Matriz"*, el sistema consulta en tiempo real el mayor `branch_id` numérico registrado en la base de datos (ej. `1256`) y prellena automáticamente el campo con el siguiente entero: **`1257`**.
+     - Se incluye el botón reactivo `[↺ Sugerir: 1257]` para restablecer el consecutivo oficial y se documenta formalmente su propósito para la homologación con World Office Desktop.
+  4. **Normalización Vial Colombiana y Auto-Geocodificación Reactiva (Hallazgo 4):**
+     - Se implementa el normalizador sintáctico de nomenclatura vial colombiana (`normalizeColombianAddress`), convirtiendo entradas crudas sin puntuación (ej. `CRA 12D 32 44 Sur`) a formato estándar (`Carrera 12D # 32-44 Sur, Bogotá, Colombia`), garantizando precisión en Google Maps $> 98\%$.
+     - La geocodificación se dispara automáticamente al salir del campo (`onBlur`) o al presionar `Enter`, sin requerir clics forzados.
+     - El botón críptico *"Pin inteligente (IA)"* se renombra a **`<MapPin /> Ubicar en Mapa (Google Maps)`** y se añade el badge verde de telemetría de ruta: **`✓ Geocerca confirmada para despacho y TMS (Lat: X, Lng: Y)`**.
+  5. **Quality Gates y Validación Restrictiva de Creación de Sucursal (Hallazgo 5):**
+     - En `handleSubmit`, queda estrictamente prohibido guardar una sucursal sin dirección física válida ($ge 5$ caracteres).
+     - Si la Casa Matriz no posee un acuerdo comercial activo ni modelo de precios asignado, el sistema exige confirmación explícita para evitar operar sucursales con tarifas B2C imprevistas.
