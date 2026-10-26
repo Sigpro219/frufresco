@@ -11847,9 +11847,9 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 - **When** el usuario navega por cualquier módulo operativo o interactúa con modales y procesos de cierre,
 - **Then** el disparador adopta una arquitectura ergonómica ultra-delgada no invasiva de grado industrial:
   1. **Tirador Vertical Lateral ("Vertical Ribbon"):** Se ancla al borde derecho de la pantalla a media altura (`top: 52%, right: 0, transform: translateY(-50%)`), con un perfil vertical ultra-esbelto de solo **24px de ancho** por 88px de alto con tipografía apilada `[P-Q-R]` y micro-ícono, dejando 100% despejadas las columnas de datos, checkboxes de tabla y márgenes de pantalla.
-  2. **Subordinación de Capas (`zIndex: 40`):** Se reduce su z-index a 40 para garantizar que cualquier modal, cajón lateral o menú desplegable (z-index 50+) quede naturalmente superpuesto, impidiendo que el botón se anteponga al cierre de procesos.
+  2. **Subordinación de Capas Calibrada (`zIndex: 90`):** Se calibra su z-index a 90, situándolo de forma nítida por encima de barras de herramientas sticky y filtros (`zIndex: 70`) para erradicar cualquier recorte visual en el eje Z, pero rigurosamente por debajo de modales y asistentes de auditoría (`zIndex: 9999+`).
   3. **Baliza de Servicio Activo:** Integra un micro-punto baliza superior verde esmeralda con halo animado (`animate-ping`), comunicando sutilmente la disponibilidad del canal sin invadir el campo visual.
-  4. **Tooltip Flotante en Hover:** Al aproximar el cursor, el tirador se desliza apenas 3px y proyecta un tooltip flotante hacia la izquierda (`[ 📝 Radicar PQR / Novedad • Clientes • Planta • RRHH ]`) sin alterar el ancho del botón ni desplazar ningún elemento del diseño.
+  4. **Tooltip Flotante en Hover:** Al aproximar el cursor, el tirador se desliza apenas 3px y proyecta un tooltip flotante hacia la izquierda (`[ 📝 Radicar PQR / Novedad • Clientes • Planta • RRHH ]`) sin alterar el ancho del botón ni desplazar ningún elemento del diseño, suprimiendo tooltips nativos redundantes del navegador.
 
 ---
 

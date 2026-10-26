@@ -706,7 +706,7 @@ export default function PQRFloatingWidget() {
                     top: '52%',
                     right: 0,
                     transform: 'translateY(-50%)',
-                    zIndex: 40,
+                    zIndex: 90,
                     display: 'flex',
                     alignItems: 'center',
                     fontFamily: 'var(--font-inter), sans-serif'
@@ -768,7 +768,7 @@ export default function PQRFloatingWidget() {
                         transform: isHovered ? 'translateX(-3px)' : 'translateX(0)',
                         outline: 'none'
                     }}
-                    title="Radicar PQR Comercial o Novedad Interna de Planta"
+                    aria-label="Radicar PQR Comercial o Novedad Interna de Planta"
                 >
                     {/* Pulsing Beacon Dot */}
                     <span style={{
