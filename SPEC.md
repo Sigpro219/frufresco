@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.287 (Poka-Yoke Anti-Colisión de Clientes en Acuerdos, Consecutivo Numérico World Office y Ley Marcial Anti-Legacy — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.288 (Certificación Plena de Acuerdos Comerciales B2B — Revisión Acuerdo 1: 8/8 Hallazgos Certificados, Poka-Yoke Anti-Colisión, Higiene de BD y Consecutivo World Office — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -12115,10 +12115,10 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 
 ---
 
-### Escenario 306: Blindaje de Acuerdos Comerciales B2B: Control de Cobertura, Revocación Quirúrgica con Liberación de Unicidad y Resolución Fluida de Ingesta Excel (Gemba Hallazgos Acuerdos: Items 1 al 3) (SDD v1.9.284)
+### Escenario 306: Blindaje Integral de Acuerdos Comerciales B2B: Control de Cobertura, Revocación Quirúrgica con Liberación de Unicidad, Poka-Yoke Anti-Colisión, Ley Marcial Anti-Legacy, Creación Rápida con Consecutivo Determinístico World Office y Saneamiento de Base de Datos (Gemba Hallazgos Revisión Acuerdo 1: Items 1 al 8) (SDD v1.9.288)
 - **Given** el módulo de Acuerdos Comerciales Institucionales (`CommercialAgreementsModule.tsx`) en `/admin/commercial?tab=clients&clientTab=agreements`,
 - **When** la mesa comercial audita la cobertura de contratos tarifarios, revoca acuerdos caducos o carga listas masivas de precios desde archivos Excel,
-- **Then** el sistema ratifica los siguientes cuatro (4) estándares arquitectónicos:
+- **Then** el sistema ratifica los siguientes ocho (8) estándares arquitectónicos e integrales de Acuerdos Comerciales B2B (`RevisiB3n_Acuerdo1.docx`):
   1. **Ordenamiento Multicolumna en Drawer de Detalle Tarifario (Hallazgo 1):**
      - Los encabezados de la tabla de precios acordados (`Producto`, `Precio Acordado`, `Margen %`, `Fecha Vigencia`, `ID Contable`) disponen de flechas interactivas de ordenamiento bidireccional (`ChevronUp`, `ChevronDown`, `ChevronsUpDown`) con ordenamiento tipado (alfabético, numérico y cronológico).
   2. **Tarjeta de Control de Clientes Sin Acuerdo Activo (Hallazgo 2 - Parte A):**
@@ -12144,3 +12144,6 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - En el Paso 1 de creación de Acuerdos Comerciales (`CommercialAgreementsModule.tsx`), se incorpora el selector de estado: `[Disponibles Sin Acuerdo (N)]` (activo por defecto) y `[Ver Todos]`.
      - Si un cliente institucional (directo, sucursal o vinculado) ya posee un acuerdo comercial activo (`status = 'agreement'`), queda estrictamente bloqueada su selección redundante.
      - En la vista general, el registro despliega el badge de advertencia: `[Acuerdo Activo #ACI...]` con cursor deshabilitado. Al intentar interactuar, el sistema emite notificación Poka-Yoke explicativa impidiendo la colisión con el índice único `idx_single_active_agreement_per_client` y eliminando la falsa expectativa de creación.
+  8. **Saneamiento e Higiene de Acuerdos Históricos en Producción (Hallazgo 8 - SDD v1.9.288):**
+     - Se ejecuta la depuración y blindaje de acuerdos obsoletos y pruebas piloto residuales en la tabla `quotes`, asegurando que únicamente existan acuerdos en estado `agreement` para clientes activos de operación real.
+     - Todo acuerdo superado o de prueba transiciona formalmente a `superseded` o `cancelled`, preservando la integridad referencial histórica para auditoría contable y garantizando que los tableros de control y selectores reflejen exactamente la realidad operativa sin confusión para el equipo comercial.
