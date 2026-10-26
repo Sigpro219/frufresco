@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.285 (Ley Marcial Global: Prohibición Estricta de 'base_price' y 'sku' en Desarrollo, y Erradicación de Costo Base en Ingesta Comercial — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.286 (Asignación Inmune de SKUs en Acuerdos, Consecutivo Numérico World Office y Ley Marcial Anti-Legacy — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -12133,3 +12133,6 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   5. **Erradicación de Costo Base en Creación Rápida de SKUs (Hallazgo 4 - SDD v1.9.285):**
      - En el modal de creación de productos al vuelo (`QuickProductModal` en `CommercialAgreementsModule.tsx`), se elimina definitivamente el campo de "Costo Base Estimado (COP)".
      - El comercial pacta el precio de venta acordado con el cliente institucional; la creación del SKU nace con costo pasivo $0 y margen `—`, transfiriendo la calibración del costo real a la Dirección de Compras y Abastecimiento en la Matriz de Costos (`/admin/pricing`), sin detener ni burocratizar la formalización del contrato comercial.
+  6. **Asignación Inmune de Nuevos SKUs y Consecutivo Numérico Estricto World Office (Hallazgos 5 y 6 - SDD v1.9.286):**
+     - En el creador de productos al vuelo (`handleSaveQuickProduct`), el consecutivo `accounting_id` se calcula obligatoriamente mediante escaneo numérico exhaustivo: $\text{nextAccId} = \max(\text{parseInt}(accounting\_id)) + 1$, garantizando que nunca se produzcan saltos por ordenamiento de texto en Supabase (`'999' > '1700'`).
+     - Al presionar *"Crear y Asignar a Fila"*, el sistema ejecuta una resolución de índice con doble verificación (por `originalIndex` persistido y por nombre de ítem). La fila recién creada muta atómicamente a `matched_product`, recalculando de inmediato los contadores `matchedCount` y `unmatchedCount`, desapareciendo de la pestaña `Sin Coincidencia` y asegurando que jamás se sobrescriba otra fila del Excel ni se apliquen precios con criterio imprevisto.

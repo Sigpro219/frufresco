@@ -2811,6 +2811,29 @@ export default function CommercialAgreementsModule() {
         showToast('Fila descartada de la lista', 'info');
     };
 
+    const fetchNumericNextAccId = async (): Promise<number> => {
+        try {
+            const { data } = await supabase
+                .from('products')
+                .select('accounting_id')
+                .not('accounting_id', 'is', null)
+                .range(0, 4999);
+            let maxId = 0;
+            if (data && data.length > 0) {
+                data.forEach((p: any) => {
+                    const num = parseInt(String(p.accounting_id).trim(), 10);
+                    if (!isNaN(num) && num > maxId) {
+                        maxId = num;
+                    }
+                });
+            }
+            return maxId > 0 ? maxId + 1 : 1701;
+        } catch (err) {
+            console.warn('Error fetching numeric nextAccId:', err);
+            return 1701;
+        }
+    };
+
     const handleOpenQuickProductModal = async (rowIdx: number) => {
         if (!excelPreviewData) return;
         const item = excelPreviewData.items[rowIdx];
@@ -2857,14 +2880,7 @@ export default function CommercialAgreementsModule() {
         setIsQuickProductModalOpen(true);
 
         try {
-            const { data: maxIdData } = await supabase
-                .from('products')
-                .select('accounting_id')
-                .not('accounting_id', 'is', null)
-                .order('accounting_id', { ascending: false })
-                .limit(1);
-
-            const nextAccId = maxIdData && maxIdData[0]?.accounting_id ? Number(maxIdData[0].accounting_id) + 1 : 1701;
+            const nextAccId = await fetchNumericNextAccId();
             setQuickProductNextAccId(nextAccId);
         } catch (e) {
             console.warn('Error fetching next accounting_id:', e);
@@ -2881,14 +2897,7 @@ export default function CommercialAgreementsModule() {
         }
         setIsCreatingQuickProduct(true);
         try {
-            const { data: maxIdData } = await supabase
-                .from('products')
-                .select('accounting_id')
-                .not('accounting_id', 'is', null)
-                .order('accounting_id', { ascending: false })
-                .limit(1);
-
-            const nextAccId = maxIdData && maxIdData[0]?.accounting_id ? Number(maxIdData[0].accounting_id) + 1 : (quickProductNextAccId || 1701);
+            const nextAccId = await fetchNumericNextAccId();
             const cleanSku = quickProductCategory + '-' + String(nextAccId).padStart(5, '0');
 
             const { data: newProd, error: createErr } = await supabase
@@ -2916,12 +2925,25 @@ export default function CommercialAgreementsModule() {
             newProd.cost_basis = 0;
             setCatalogProducts(prev => [newProd, ...prev]);
 
-            if (quickProductRowIdx !== null) {
-                handleAssignProductToRow(quickProductRowIdx, newProd);
+            // Asignación ultra-robusta a la fila correspondiente (doble verificación por índice o nombre)
+            let targetIdx = quickProductRowIdx;
+            if (excelPreviewData && (targetIdx === null || targetIdx < 0 || targetIdx >= excelPreviewData.items.length)) {
+                targetIdx = excelPreviewData.items.findIndex(it => 
+                    !it.matched_product && (
+                        (it.client_product_name || '').toLowerCase() === quickProductName.toLowerCase() ||
+                        (it.product_name || '').toLowerCase() === quickProductName.toLowerCase()
+                    )
+                );
+            }
+
+            if (targetIdx !== null && targetIdx >= 0) {
+                handleAssignProductToRow(targetIdx, newProd);
             }
 
             setIsQuickProductModalOpen(false);
-            showToast('Producto "' + newProd.name + '" (ID #' + newProd.accounting_id + ') creado y vinculado exitosamente', 'success');
+            setQuickProductRowIdx(null);
+            setActiveCellSearchRowIdx(null);
+            showToast('Producto "' + newProd.name + '" (ID #' + newProd.accounting_id + ') creado y asignado exitosamente a la fila', 'success');
         } catch (err: any) {
             console.error('Error creating quick product:', err);
             showToast('Error al crear producto: ' + err.message, 'error');
