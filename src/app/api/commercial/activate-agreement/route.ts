@@ -19,6 +19,20 @@ export async function POST(req: Request) {
 
     let activeQuoteId = quoteId;
 
+    // Candado 2: Auto-Supersede acuerdos previos del cliente para garantizar Fuente Única de Verdad (SPEC.md §7.5.6 & Escenario 301)
+    if (clientId) {
+      try {
+        await supabaseAdmin
+          .from('quotes')
+          .update({ status: 'superseded', updated_at: new Date().toISOString() })
+          .eq('client_id', clientId)
+          .eq('status', 'agreement')
+          .neq('id', activeQuoteId || '00000000-0000-0000-0000-000000000000');
+      } catch (supErr) {
+        console.warn('[Activate Agreement API] Notice degrading prior agreements:', supErr);
+      }
+    }
+
     // 1. If no quoteId provided, create a finalized quote record
     if (!activeQuoteId) {
       let subtotalAmount = 0;

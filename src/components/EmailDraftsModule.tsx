@@ -3385,44 +3385,49 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     return `ACI ${day}${month} ${paddedSeq}`;
   };
 
-  // Helper Canónico de Resolución de Acuerdos (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra Compartida)
+  // Candado 3: Cortocircuito Jerárquico Estricto de Resolución de Acuerdos (SPEC.md §7.5.6 & Escenario 301)
+  // Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra Compartida
+  // Si un nivel posee un acuerdo asignado, se suprime por completo cualquier evaluación de niveles inferiores.
   const resolveActiveAgreementForClient = (
     branchId: string | null | undefined, 
     parentId: string | null | undefined,
     profileObj?: any
   ) => {
-    const checkDate = (deliveryDate || new Date().toISOString()).split('T')[0];
-    const isNotExpired = (ag: any) => {
-      if (!ag) return false;
-      const start = ag.start_date?.split('T')[0];
-      const end = ag.valid_until?.split('T')[0];
-      if (start && start > checkDate) return false;
-      if (end && end < checkDate) return false;
-      return true;
-    };
-
-    const candidates: any[] = [];
+    // Nivel 1: Sucursal directa (Cortocircuito Estricto)
     if (branchId) {
-      const bAgrs = agreements.filter(q => q.client_id === branchId).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-      if (bAgrs.length > 0) candidates.push(bAgrs[0]);
+      const bAgrs = agreements
+        .filter(q => q.client_id === branchId)
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      if (bAgrs.length > 0) {
+        return bAgrs[0];
+      }
     }
+
+    // Nivel 2: Matriz / Padre corporativo (Solo si Nivel 1 no posee acuerdo)
     if (parentId) {
-      const mAgrs = agreements.filter(q => q.client_id === parentId).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-      if (mAgrs.length > 0) candidates.push(mAgrs[0]);
+      const mAgrs = agreements
+        .filter(q => q.client_id === parentId)
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      if (mAgrs.length > 0) {
+        return mAgrs[0];
+      }
     }
+
+    // Nivel 3: Lista Maestra Compartida (Solo si Nivel 1 y 2 no poseen acuerdo)
     const masterId = profileObj?.logistics_data?.active_master_agreement_id;
     if (masterId) {
       const sAgr = agreements.find(q => q.id === masterId);
-      if (sAgr) candidates.push(sAgr);
+      if (sAgr) return sAgr;
     }
     const targetIds = [branchId, parentId].filter(Boolean) as string[];
     for (const [quoteId, clientIds] of Object.entries(sharedAgreementLinks)) {
       if (targetIds.some(id => clientIds.includes(id))) {
         const sAgr = agreements.find(q => q.id === quoteId);
-        if (sAgr) candidates.push(sAgr);
+        if (sAgr) return sAgr;
       }
     }
-    return candidates.find(isNotExpired) || candidates[0] || null;
+
+    return null;
   };
 
   const [contractPrices, setContractPrices] = useState<Record<string, number>>({});

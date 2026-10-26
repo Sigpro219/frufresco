@@ -3005,6 +3005,17 @@ export default function CommercialAgreementsModule() {
                         : (agreementName.trim() || `${client.company_name || client.contact_name} - ${dateSuffix}`);
                     const clientAgreementName = `${rawClientName}${dtoTag}`;
 
+                    // Candado 2: Auto-Supersede acuerdos previos del cliente para garantizar Fuente Única de Verdad (SPEC.md §7.5.6 & Escenario 301)
+                    try {
+                        await supabase
+                            .from('quotes')
+                            .update({ status: 'superseded', updated_at: new Date().toISOString() })
+                            .eq('client_id', client.id)
+                            .eq('status', 'agreement');
+                    } catch (supErr) {
+                        console.warn('Error al degradar acuerdos previos en creación individual:', supErr);
+                    }
+
                     const { data: newQuote, error: insertQErr } = await supabase
                         .from('quotes')
                         .insert({

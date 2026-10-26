@@ -179,23 +179,13 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             return false;
         };
 
+        // Candado 3: Cortocircuito Jerárquico Estricto (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra)
+        // SPEC.md §7.5.6 & Escenario 301 (SDD v1.9.279): Si un nivel tiene acuerdo, se suprime por completo
+        // cualquier nivel inferior para erradicar split-brain tarifario.
         let candidateAgreement: any = null;
-        let firstExpiredCandidate: any = null;
+        let isCandidateExpired = false;
 
-        const considerCandidate = (rawAg: any) => {
-            const ag = enrichAgreementDates(rawAg);
-            if (!ag) return false;
-            if (!isAgreementExpired(ag)) {
-                candidateAgreement = ag;
-                return true;
-            }
-            if (!firstExpiredCandidate) {
-                firstExpiredCandidate = ag;
-            }
-            return false;
-        };
-
-        // Level 1: Branch assigned agreement
+        // Level 1: Branch assigned agreement (Cortocircuito Estricto)
         if (branchId) {
             const { data: bAg } = await supabase
                 .from('quotes')
@@ -205,10 +195,16 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
-            if (bAg) considerCandidate(bAg);
+            if (bAg) {
+                const ag = enrichAgreementDates(bAg);
+                if (ag) {
+                    candidateAgreement = ag;
+                    isCandidateExpired = isAgreementExpired(ag);
+                }
+            }
         }
 
-        // Level 2: Matrix parent assigned agreement
+        // Level 2: Matrix parent assigned agreement (Solo si Nivel 1 no existe)
         if (!candidateAgreement && parentId) {
             const { data: mAg } = await supabase
                 .from('quotes')
@@ -218,10 +214,16 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
-            if (mAg) considerCandidate(mAg);
+            if (mAg) {
+                const ag = enrichAgreementDates(mAg);
+                if (ag) {
+                    candidateAgreement = ag;
+                    isCandidateExpired = isAgreementExpired(ag);
+                }
+            }
         }
 
-        // Level 3: Master shared agreement
+        // Level 3: Master shared agreement (Solo si Nivel 1 y 2 no existen)
         if (!candidateAgreement) {
             const masterId = currentProfile?.logistics_data?.active_master_agreement_id 
                           || parentProfile?.logistics_data?.active_master_agreement_id;
@@ -232,7 +234,13 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                     .eq('id', masterId)
                     .eq('status', 'agreement')
                     .maybeSingle();
-                if (sm) considerCandidate(sm);
+                if (sm) {
+                    const ag = enrichAgreementDates(sm);
+                    if (ag) {
+                        candidateAgreement = ag;
+                        isCandidateExpired = isAgreementExpired(ag);
+                    }
+                }
             }
 
             if (!candidateAgreement && (branchId || parentId)) {
@@ -253,8 +261,13 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                                     .eq('id', quoteId)
                                     .eq('status', 'agreement')
                                     .maybeSingle();
-                                if (sm && considerCandidate(sm)) {
-                                    break;
+                                if (sm) {
+                                    const ag = enrichAgreementDates(sm);
+                                    if (ag) {
+                                        candidateAgreement = ag;
+                                        isCandidateExpired = isAgreementExpired(ag);
+                                        break;
+                                    }
                                 }
                             }
                         } catch {
@@ -265,12 +278,8 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             }
         }
 
-        if (!candidateAgreement && firstExpiredCandidate) {
-            candidateAgreement = firstExpiredCandidate;
-        }
-
         // 4. Validity check against delivery date
-        let expired = candidateAgreement ? isAgreementExpired(candidateAgreement) : false;
+        let expired = candidateAgreement ? isCandidateExpired : false;
         const activeAgreement = (candidateAgreement && !expired) ? candidateAgreement : null;
 
         // 5. Model Resolution
