@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { THEME } from '@/lib/adminTheme';
 import ClientsModule from '@/components/ClientsModule';
-import CommercialInboxModule from '@/components/CommercialInboxModule';
 import CommercialUnifiedDashboard from '@/components/CommercialUnifiedDashboard';
 import { 
     LayoutDashboard, 

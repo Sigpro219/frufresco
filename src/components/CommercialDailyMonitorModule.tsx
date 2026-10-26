@@ -6,6 +6,8 @@ import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import {
     Calendar,
+    ChevronUp,
+    ChevronsUpDown,
     Search,
     Download,
     TrendingUp,
@@ -152,6 +154,31 @@ export default function CommercialDailyMonitorModule() {
     const [isExporting, setIsExporting] = useState(false);
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [activePokaYoke, setActivePokaYoke] = useState<PokaYokeFilter>('all');
+
+    // 3.1 Estados de Ordenamiento de Columnas
+    const [orderSortColumn, setOrderSortColumn] = useState<'consecutivo' | 'client' | 'document' | 'total' | 'margin'>('consecutivo');
+    const [orderSortDirection, setOrderSortDirection] = useState<'asc' | 'desc'>('asc');
+
+    const handleOrderSort = (col: 'consecutivo' | 'client' | 'document' | 'total' | 'margin') => {
+        if (orderSortColumn === col) {
+            setOrderSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setOrderSortColumn(col);
+            setOrderSortDirection(col === 'total' || col === 'margin' ? 'desc' : 'asc');
+        }
+    };
+
+    const [productSortColumn, setProductSortColumn] = useState<'name' | 'category' | 'quantity' | 'orders' | 'avg_price' | 'cost' | 'sales' | 'profit' | 'margin'>('quantity');
+    const [productSortDirection, setProductSortDirection] = useState<'asc' | 'desc'>('desc');
+
+    const handleProductSort = (col: 'name' | 'category' | 'quantity' | 'orders' | 'avg_price' | 'cost' | 'sales' | 'profit' | 'margin') => {
+        if (productSortColumn === col) {
+            setProductSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setProductSortColumn(col);
+            setProductSortDirection(col === 'name' || col === 'category' ? 'asc' : 'desc');
+        }
+    };
 
     // 4. Catálogos auxiliares de costos y productos
     const [costMap, setCostMap] = useState<Map<string, number>>(new Map());
@@ -515,6 +542,92 @@ export default function CommercialDailyMonitorModule() {
             p.category.toLowerCase().includes(s)
         );
     }, [productConsolidated, searchTerm]);
+
+        // Ordenamiento dinámico de pedidos filtrados (Vista 1)
+    const sortedFilteredOrders = useMemo(() => {
+        const list = [...filteredOrders];
+        list.sort((a, b) => {
+            let valA: any;
+            let valB: any;
+
+            if (orderSortColumn === 'consecutivo') {
+                valA = Number(a.sequenceId) || 0;
+                valB = Number(b.sequenceId) || 0;
+            } else if (orderSortColumn === 'client') {
+                valA = (a.branchName || a.clientName || '').toLowerCase();
+                valB = (b.branchName || b.clientName || '').toLowerCase();
+                const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+                return orderSortDirection === 'asc' ? cmp : -cmp;
+            } else if (orderSortColumn === 'document') {
+                valA = `${a.documentType || ''}_${a.paymentMethod || ''}`.toLowerCase();
+                valB = `${b.documentType || ''}_${b.paymentMethod || ''}`.toLowerCase();
+                const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+                return orderSortDirection === 'asc' ? cmp : -cmp;
+            } else if (orderSortColumn === 'total') {
+                valA = Number(a.total) || 0;
+                valB = Number(b.total) || 0;
+            } else if (orderSortColumn === 'margin') {
+                valA = Number(a.grossProfit) || 0;
+                valB = Number(b.grossProfit) || 0;
+            } else {
+                return 0;
+            }
+
+            if (valA < valB) return orderSortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return orderSortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return list;
+    }, [filteredOrders, orderSortColumn, orderSortDirection]);
+
+    // Ordenamiento dinámico de productos filtrados (Vista 2)
+    const sortedFilteredProducts = useMemo(() => {
+        const list = [...filteredProducts];
+        list.sort((a, b) => {
+            let valA: any;
+            let valB: any;
+
+            if (productSortColumn === 'name') {
+                valA = (a.productName || '').toLowerCase();
+                valB = (b.productName || '').toLowerCase();
+                const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+                return productSortDirection === 'asc' ? cmp : -cmp;
+            } else if (productSortColumn === 'category') {
+                valA = (a.category || '').toLowerCase();
+                valB = (b.category || '').toLowerCase();
+                const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+                return productSortDirection === 'asc' ? cmp : -cmp;
+            } else if (productSortColumn === 'quantity') {
+                valA = Number(a.totalQuantity) || 0;
+                valB = Number(b.totalQuantity) || 0;
+            } else if (productSortColumn === 'orders') {
+                valA = Number(a.ordersCount) || 0;
+                valB = Number(b.ordersCount) || 0;
+            } else if (productSortColumn === 'avg_price') {
+                valA = Number(a.avgSellingPrice) || 0;
+                valB = Number(b.avgSellingPrice) || 0;
+            } else if (productSortColumn === 'cost') {
+                valA = Number(a.avgUnitCost) || 0;
+                valB = Number(b.avgUnitCost) || 0;
+            } else if (productSortColumn === 'sales') {
+                valA = Number(a.totalSales) || 0;
+                valB = Number(b.totalSales) || 0;
+            } else if (productSortColumn === 'profit') {
+                valA = Number(a.grossProfit) || 0;
+                valB = Number(b.grossProfit) || 0;
+            } else if (productSortColumn === 'margin') {
+                valA = Number(a.marginPct) || 0;
+                valB = Number(b.marginPct) || 0;
+            } else {
+                return 0;
+            }
+
+            if (valA < valB) return productSortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return productSortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return list;
+    }, [filteredProducts, productSortColumn, productSortDirection]);
 
     // Detalle Drill-Down: Quién pidió el producto seleccionado hoy
     const drilldownData = useMemo(() => {
@@ -1223,90 +1336,95 @@ export default function CommercialDailyMonitorModule() {
                         </div>
                     </div>
 
-                    {/* SELECTOR DE LAS 3 VISTAS ANALÍTICAS + BUSCADOR OMNIBOX */}
+                                        {/* SELECTOR DE LAS 3 VISTAS ANALÍTICAS + BUSCADOR OMNIBOX (LÍNEA 1 STICKY DOCKED) */}
                     <div style={{
-                        backgroundColor: 'white',
+                        backgroundColor: '#FFFFFF',
                         borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
                         border: `1px solid ${THEME.colors.border}`,
-                        borderBottom: 'none',
-                        padding: '1rem 1.25rem',
+                        borderBottom: `1px solid ${THEME.colors.border}`,
+                        padding: '0.55rem 1rem',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: '1rem'
+                        flexWrap: 'nowrap',
+                        gap: '0.75rem',
+                        position: 'sticky',
+                        top: '85px',
+                        zIndex: 40,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                     }}>
-                        {/* Selector de Píldoras de Vistas */}
+                        {/* Selector de Píldoras de Vistas (Compacto en 1 sola línea) */}
                         <div style={{
                             display: 'inline-flex',
                             backgroundColor: '#F1F5F9',
-                            padding: '4px',
-                            borderRadius: '10px',
-                            gap: '4px'
+                            padding: '3px',
+                            borderRadius: '9px',
+                            gap: '3px',
+                            flexShrink: 0
                         }}>
                             <button
                                 onClick={() => setActiveView('clients')}
                                 style={{
-                                    padding: '0.45rem 1rem',
+                                    padding: '0.4rem 0.85rem',
                                     border: 'none',
-                                    borderRadius: '7px',
+                                    borderRadius: '6px',
                                     backgroundColor: activeView === 'clients' ? 'white' : 'transparent',
                                     color: activeView === 'clients' ? THEME.colors.primary : THEME.colors.textSecondary,
                                     fontWeight: activeView === 'clients' ? '800' : '600',
-                                    fontSize: '0.85rem',
+                                    fontSize: '0.80rem',
                                     cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '6px',
+                                    gap: '5px',
                                     boxShadow: activeView === 'clients' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                                 }}
                             >
-                                <Users size={15} /> 1. Ventas por Cliente ({dayOrders.length})
+                                <Users size={14} /> 1. Ventas por Cliente ({dayOrders.length})
                             </button>
 
                             <button
                                 onClick={() => setActiveView('products')}
                                 style={{
-                                    padding: '0.45rem 1rem',
+                                    padding: '0.4rem 0.85rem',
                                     border: 'none',
-                                    borderRadius: '7px',
+                                    borderRadius: '6px',
                                     backgroundColor: activeView === 'products' ? 'white' : 'transparent',
                                     color: activeView === 'products' ? THEME.colors.primary : THEME.colors.textSecondary,
                                     fontWeight: activeView === 'products' ? '800' : '600',
-                                    fontSize: '0.85rem',
+                                    fontSize: '0.80rem',
                                     cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '6px',
+                                    gap: '5px',
                                     boxShadow: activeView === 'products' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                                 }}
                             >
-                                <Package size={15} /> 2. Ventas por Producto ({productConsolidated.length})
+                                <Package size={14} /> 2. Ventas por Producto ({productConsolidated.length})
                             </button>
 
                             <button
                                 onClick={() => setActiveView('product_drilldown')}
                                 style={{
-                                    padding: '0.45rem 1rem',
+                                    padding: '0.4rem 0.85rem',
                                     border: 'none',
-                                    borderRadius: '7px',
+                                    borderRadius: '6px',
                                     backgroundColor: activeView === 'product_drilldown' ? 'white' : 'transparent',
                                     color: activeView === 'product_drilldown' ? '#0369A1' : THEME.colors.textSecondary,
                                     fontWeight: activeView === 'product_drilldown' ? '800' : '600',
-                                    fontSize: '0.85rem',
+                                    fontSize: '0.80rem',
                                     cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '6px',
+                                    gap: '5px',
                                     boxShadow: activeView === 'product_drilldown' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                                 }}
                             >
-                                <Search size={15} /> 3. ¿Quién pidió este producto? (Drill-down)
+                                <Search size={14} /> 3. ¿Quién pidió este producto? (Drill-down)
                             </button>
                         </div>
 
-                        {/* Buscador Omnibox */}
-                        <div style={{ position: 'relative', width: '320px' }}>
+                        {/* Buscador Omnibox Alineado a la Derecha en la Misma Fila */}
+                        <div style={{ position: 'relative', width: '290px', maxWidth: '320px', flexShrink: 1 }}>
                             <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                             <input
                                 type="text"
@@ -1353,201 +1471,150 @@ export default function CommercialDailyMonitorModule() {
                             backgroundColor: 'white',
                             borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}`,
                             border: `1px solid ${THEME.colors.border}`,
-                            overflowX: 'auto'
+                            borderTop: 'none',
+                            overflow: 'visible'
                         }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                                <thead>
-                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                        <th style={{ padding: '0.85rem 1.25rem', width: '14%' }}>Consecutivo & Zona</th>
-                                        <th style={{ padding: '0.85rem 1.25rem', width: '38%' }}>Cliente & Sucursal</th>
-                                        <th style={{ padding: '0.85rem 1.25rem', width: '15%' }}>Documento & Pago</th>
-                                        <th style={{ padding: '0.85rem 1.25rem', width: '14%', textAlign: 'right' }}>Facturación & Carga</th>
-                                        <th style={{ padding: '0.85rem 1.25rem', width: '12%', textAlign: 'right' }}>Rentabilidad BI</th>
-                                        <th style={{ padding: '0.85rem 1.25rem', width: '7%', textAlign: 'center' }}>Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredOrders.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} style={{ padding: '3.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
-                                                No se encontraron pedidos para los filtros aplicados.
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        filteredOrders.map((ord) => (
-                                            <tr
-                                                key={ord.id}
-                                                style={{
-                                                    borderBottom: '1px solid #F1F5F9',
-                                                    backgroundColor: ord.hasEqualValueAlert ? '#FEF2F2' : (ord.hasMultipleOrdersAlert ? '#FAF5FF' : 'white'),
-                                                    transition: 'background-color 0.15s ease'
-                                                }}
-                                            >
-                                                {/* 1. Consecutivo & Zona */}
-                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
-                                                    <div style={{ fontWeight: '800', color: THEME.colors.primary, fontFamily: 'monospace', fontSize: '0.90rem', letterSpacing: '0.02em' }}>
-                                                        {ord.friendlyId || ord.sequenceId}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                        <span style={{ fontWeight: '600' }}>#{ord.sequenceId}</span>
-                                                        <span>•</span>
-                                                        <span style={{ backgroundColor: '#F1F5F9', color: '#475569', padding: '1px 5px', borderRadius: '4px', fontWeight: '600', fontSize: '0.70rem' }}>
-                                                            {ord.zone}
-                                                        </span>
-                                                    </div>
-                                                </td>
+                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.85rem', textAlign: 'left' }}>
+                                <thead style={{ position: 'sticky', top: '137px', zIndex: 35 }}>
+                                    <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                        <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>No.</th>
+                                        
+                                        <th 
+                                            onClick={() => handleProductSort('name')}
+                                            title="Ordenar por Nombre de Producto"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span>Producto</span>
+                                                {productSortColumn === 'name' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
 
-                                                {/* 2. Cliente & Sucursal (Desacople Limpio Sede vs Matriz) */}
-                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                            <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.92rem', letterSpacing: '-0.01em' }}>
-                                                                {ord.branchName || ord.clientName}
-                                                            </span>
-                                                            <span style={{
-                                                                padding: '1px 6px',
-                                                                borderRadius: '4px',
-                                                                fontSize: '0.68rem',
-                                                                fontWeight: '800',
-                                                                backgroundColor: ord.type === 'b2b' ? '#EFF6FF' : '#F0FDF4',
-                                                                color: ord.type === 'b2b' ? '#1D4ED8' : '#15803D',
-                                                                border: `1px solid ${ord.type === 'b2b' ? '#BFDBFE' : '#BBF7D0'}`
-                                                            }}>
-                                                                {ord.type === 'b2b' ? 'B2B INSTITUCIONAL' : 'B2C HOGAR'}
-                                                            </span>
-                                                        </div>
-                                                        {ord.parentName && (
-                                                            <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: '500' }}>
-                                                                Matriz: <span style={{ color: '#334155', fontWeight: '700' }}>{ord.parentName}</span>
-                                                            </div>
-                                                        )}
-                                                        <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '1px' }}>
-                                                            {ord.nit && ord.nit !== 'Sin NIT' && (
-                                                                <span style={{ fontWeight: '600', color: '#475569' }}>NIT: {ord.nit}</span>
-                                                            )}
-                                                            <span>•</span>
-                                                            <span style={{ color: '#64748B' }}>{ord.address}</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
+                                        <th 
+                                            onClick={() => handleProductSort('category')}
+                                            title="Ordenar por Categoría"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span>Categoría</span>
+                                                {productSortColumn === 'category' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
 
-                                                {/* 3. Documento & Pago */}
-                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                        <div>
-                                                            <span style={{
-                                                                padding: '2px 8px',
-                                                                borderRadius: '6px',
-                                                                fontSize: '0.72rem',
-                                                                fontWeight: '800',
-                                                                backgroundColor: ord.documentType === 'Factura' ? '#EFF6FF' : '#ECFDF5',
-                                                                color: ord.documentType === 'Factura' ? '#1D4ED8' : '#047857',
-                                                                border: `1px solid ${ord.documentType === 'Factura' ? '#BFDBFE' : '#A7F3D0'}`
-                                                            }}>
-                                                                {ord.documentType}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ fontSize: '0.74rem', color: '#475569', fontWeight: '600' }}>
-                                                            {ord.paymentMethod}
-                                                        </div>
-                                                    </div>
-                                                </td>
+                                        <th 
+                                            onClick={() => handleProductSort('quantity')}
+                                            title="Ordenar por Cantidad Total Demandada"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Cantidad Total</span>
+                                                {productSortColumn === 'quantity' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
 
-                                                {/* 4. Facturación & Carga */}
-                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'right', verticalAlign: 'top' }}>
-                                                    <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain }}>
-                                                        {formatMoney(ord.total)}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.73rem', color: THEME.colors.textSecondary, marginTop: '3px' }}>
-                                                        <strong style={{ color: '#0369A1' }}>{formatNumber(ord.totalWeightKg, 1)} Kg</strong> • {ord.itemsCount} {ord.itemsCount === 1 ? 'ítem' : 'ítems'}
-                                                    </div>
-                                                </td>
+                                        <th 
+                                            onClick={() => handleProductSort('orders')}
+                                            title="Ordenar por Cantidad de Pedidos"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'center', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                <span>Pedidos</span>
+                                                {productSortColumn === 'orders' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
 
-                                                {/* 5. Rentabilidad BI */}
-                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'right', verticalAlign: 'top' }}>
-                                                    <div style={{ fontWeight: '800', fontSize: '0.88rem', color: ord.grossProfit >= 0 ? '#0D7A57' : '#DC2626' }}>
-                                                        {formatMoney(ord.grossProfit)}
-                                                    </div>
-                                                    <div style={{ marginTop: '4px' }}>
-                                                        <span style={{
-                                                            padding: '2px 7px',
-                                                            borderRadius: '999px',
-                                                            fontSize: '0.72rem',
-                                                            fontWeight: '800',
-                                                            backgroundColor: ord.marginPct >= 20 ? '#DCFCE7' : (ord.marginPct >= 10 ? '#FEF3C7' : '#FEE2E2'),
-                                                            color: ord.marginPct >= 20 ? '#15803D' : (ord.marginPct >= 10 ? '#B45309' : '#B91C1C'),
-                                                            border: `1px solid ${ord.marginPct >= 20 ? '#86EFAC' : (ord.marginPct >= 10 ? '#FDE68A' : '#FECACA')}`
-                                                        }}>
-                                                            {ord.marginPct.toFixed(1)}% margen
-                                                        </span>
-                                                    </div>
-                                                </td>
+                                        <th 
+                                            onClick={() => handleProductSort('avg_price')}
+                                            title="Ordenar por Precio Promedio Facturado"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Precio Prom.</span>
+                                                {productSortColumn === 'avg_price' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
 
-                                                {/* 6. Acción */}
-                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'center', verticalAlign: 'middle' }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                                        {ord.hasEqualValueAlert && (
-                                                            <span style={{ padding: '1px 5px', borderRadius: '4px', fontSize: '0.64rem', fontWeight: '800', backgroundColor: '#FEE2E2', color: '#B91C1C' }}>
-                                                                Duplicado
-                                                            </span>
-                                                        )}
-                                                        {ord.hasMultipleOrdersAlert && !ord.hasEqualValueAlert && (
-                                                            <span style={{ padding: '1px 5px', borderRadius: '4px', fontSize: '0.64rem', fontWeight: '800', backgroundColor: '#F3E8FF', color: '#7E22CE' }}>
-                                                                Multipedido
-                                                            </span>
-                                                        )}
-                                                        <a
-                                                            href={`/admin/orders/contingency-print?mode=remissions&orderId=${ord.id}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            style={{
-                                                                color: THEME.colors.primary,
-                                                                padding: '5px 10px',
-                                                                borderRadius: '6px',
-                                                                backgroundColor: THEME.colors.primaryLight,
-                                                                fontSize: '0.74rem',
-                                                                fontWeight: '700',
-                                                                textDecoration: 'none',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '3px',
-                                                                transition: 'all 0.15s ease'
-                                                            }}
-                                                        >
-                                                            Verificar <ChevronRight size={13} />
-                                                        </a>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                        <th 
+                                            onClick={() => handleProductSort('cost')}
+                                            title="Ordenar por Costo Base Matriz"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Costo Base</span>
+                                                {productSortColumn === 'cost' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
 
-                    {/* VISTA 2: VENTAS POR PRODUCTO */}
-                    {activeView === 'products' && (
-                        <div style={{
-                            backgroundColor: 'white',
-                            borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}`,
-                            border: `1px solid ${THEME.colors.border}`,
-                            overflowX: 'auto'
-                        }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                                <thead>
-                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                        <th style={{ padding: '0.75rem 1rem' }}>No.</th>
-                                        <th style={{ padding: '0.75rem 1rem' }}>Producto Demandado</th>
-                                        <th style={{ padding: '0.75rem 1rem' }}>Categoría</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Cantidad Total</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Pedidos</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Promedio</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Costo Base</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Total Venta</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Utilidad</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Margen (%)</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Drill-Down</th>
+                                        <th 
+                                            onClick={() => handleProductSort('sales')}
+                                            title="Ordenar por Total Venta ($)"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Total Venta</span>
+                                                {productSortColumn === 'sales' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th 
+                                            onClick={() => handleProductSort('profit')}
+                                            title="Ordenar por Utilidad Bruta ($)"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Utilidad</span>
+                                                {productSortColumn === 'profit' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th 
+                                            onClick={() => handleProductSort('margin')}
+                                            title="Ordenar por Margen Ponderado (%)"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Margen (%)</span>
+                                                {productSortColumn === 'margin' ? (
+                                                    productSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'center', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Drill-Down</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1558,7 +1625,7 @@ export default function CommercialDailyMonitorModule() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredProducts.map((p, idx) => (
+                                        sortedFilteredProducts.map((p, idx) => (
                                             <tr key={p.productId} style={{ borderBottom: '1px solid #F1F5F9' }}>
                                                 <td style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
                                                     {idx + 1}
@@ -1676,20 +1743,21 @@ export default function CommercialDailyMonitorModule() {
                                 backgroundColor: 'white',
                                 borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}`,
                                 border: `1px solid ${THEME.colors.border}`,
-                                overflowX: 'auto'
+                                borderTop: 'none',
+                                overflow: 'visible'
                             }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                                    <thead>
-                                        <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                            <th style={{ padding: '0.75rem 1rem' }}>No. Pedido</th>
-                                            <th style={{ padding: '0.75rem 1rem' }}>Cliente (Sucursal Receptora)</th>
-                                            <th style={{ padding: '0.75rem 1rem' }}>Zona Logística</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Cantidad Pedida</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Facturado</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Costo Base</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Total Facturado</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Utilidad</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Margen (%)</th>
+                                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.85rem', textAlign: 'left' }}>
+                                    <thead style={{ position: 'sticky', top: '137px', zIndex: 35 }}>
+                                        <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>No. Pedido</th>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Cliente (Sucursal Receptora)</th>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Zona Logística</th>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Cantidad Pedida</th>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Precio Facturado</th>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Costo Base</th>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Total Facturado</th>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Utilidad</th>
+                                            <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 0.85rem', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>Margen (%)</th>
                                         </tr>
                                     </thead>
                                     <tbody>

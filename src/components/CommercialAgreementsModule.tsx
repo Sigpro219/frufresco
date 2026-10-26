@@ -323,6 +323,17 @@ export default function CommercialAgreementsModule() {
     const [loadingItems, setLoadingItems] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerSearchTerm, setDrawerSearchTerm] = useState('');
+    const [drawerSortColumn, setDrawerSortColumn] = useState<'accounting_id' | 'product_name' | 'unit_price' | 'margin' | 'date'>('product_name');
+    const [drawerSortDirection, setDrawerSortDirection] = useState<'asc' | 'desc'>('asc');
+
+    const handleDrawerSort = (col: 'accounting_id' | 'product_name' | 'unit_price' | 'margin' | 'date') => {
+        if (drawerSortColumn === col) {
+            setDrawerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setDrawerSortColumn(col);
+            setDrawerSortDirection(col === 'unit_price' || col === 'margin' || col === 'date' ? 'desc' : 'asc');
+        }
+    };
 
     const filteredAgreementItems = useMemo(() => {
         if (!drawerSearchTerm.trim()) return agreementItems;
@@ -536,6 +547,69 @@ export default function CommercialAgreementsModule() {
 
     // Notification State
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
+
+    // Revoke / Delete Agreement State (Poka-Yoke Modal)
+    const [revokeTarget, setRevokeTarget] = useState<Agreement | null>(null);
+    const [revoking, setRevoking] = useState(false);
+
+    // Clients without Agreement Modal State
+    const [isClientsWithoutAgreementModalOpen, setIsClientsWithoutAgreementModalOpen] = useState(false);
+    const [isUnmatchedResolutionModalOpen, setIsUnmatchedResolutionModalOpen] = useState(false);
+    const [clientsWithoutAgreementSearch, setClientsWithoutAgreementSearch] = useState('');
+
+    const clientsWithoutAgreement = useMemo(() => {
+        return b2bClients.filter(c => {
+            const hasDirect = agreements.some(a => a.client_id === c.id);
+            if (hasDirect) return false;
+            const hasParent = c.parent_id ? agreements.some(a => a.client_id === c.parent_id) : false;
+            if (hasParent) return false;
+            const hasShared = Object.values(sharedLinks).some(ids => ids.includes(c.id));
+            if (hasShared) return false;
+            const hasParentShared = c.parent_id ? Object.values(sharedLinks).some(ids => ids.includes(c.parent_id)) : false;
+            if (hasParentShared) return false;
+            return true;
+        });
+    }, [b2bClients, agreements, sharedLinks]);
+
+    const handleOpenCreateWithClient = (clientId: string) => {
+        handleOpenCreateModal();
+        setSelectedClientId(clientId);
+        setIsClientsWithoutAgreementModalOpen(false);
+    };
+
+    const handleRevokeSubmit = async () => {
+        if (!revokeTarget) return;
+        setRevoking(true);
+        try {
+            // Cancelar el acuerdo en BD (libera el índice parcial único sin eliminar historial contable)
+            const { error } = await supabase
+                .from('quotes')
+                .update({ 
+                    status: 'cancelled', 
+                    updated_at: new Date().toISOString() 
+                })
+                .eq('id', revokeTarget.id);
+            if (error) throw error;
+
+            try {
+                await supabase
+                    .from('app_settings')
+                    .delete()
+                    .eq('key', `agreement_clients:${revokeTarget.id}`);
+            } catch (e) {
+                console.warn('Error clearing agreement_clients on revoke:', e);
+            }
+
+            showToast(`Acuerdo #${revokeTarget.quote_number} revocado exitosamente. Cliente liberado.`, 'success');
+            setRevokeTarget(null);
+            fetchAgreements();
+        } catch (err: any) {
+            console.error('Error revoking agreement:', err);
+            showToast('Error al revocar acuerdo: ' + (err.message || err), 'error');
+        } finally {
+            setRevoking(false);
+        }
+    };
 
     const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
         setToast({ message, type });
@@ -934,6 +1008,42 @@ export default function CommercialAgreementsModule() {
             rawDate: dateStr
         };
     };
+
+    const sortedFilteredAgreementItems = useMemo(() => {
+        const list = [...filteredAgreementItems];
+        list.sort((a, b) => {
+            let valA: any;
+            let valB: any;
+
+            if (drawerSortColumn === 'product_name') {
+                valA = (a.product_name || '').trim().toLowerCase();
+                valB = (b.product_name || '').trim().toLowerCase();
+                const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+                return drawerSortDirection === 'asc' ? cmp : -cmp;
+            } else if (drawerSortColumn === 'unit_price') {
+                valA = Number(a.unit_price) || 0;
+                valB = Number(b.unit_price) || 0;
+            } else if (drawerSortColumn === 'margin') {
+                valA = Number(a.margin_percent) || 0;
+                valB = Number(b.margin_percent) || 0;
+            } else if (drawerSortColumn === 'accounting_id') {
+                valA = parseInt(String(a.products?.accounting_id || '0'), 10) || 0;
+                valB = parseInt(String(b.products?.accounting_id || '0'), 10) || 0;
+            } else if (drawerSortColumn === 'date') {
+                const auditA = getItemAuditInfo(a);
+                const auditB = getItemAuditInfo(b);
+                valA = auditA.rawDate ? new Date(auditA.rawDate).getTime() : 0;
+                valB = auditB.rawDate ? new Date(auditB.rawDate).getTime() : 0;
+            } else {
+                return 0;
+            }
+
+            if (valA < valB) return drawerSortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return drawerSortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return list;
+    }, [filteredAgreementItems, drawerSortColumn, drawerSortDirection, agreementAuditLogs, selectedAgreement]);
 
     const getLastUpdateInfo = () => {
         if (!selectedAgreement) return { author: 'Julissa Arévalo Ramirez', formatted: '---' };
@@ -2639,8 +2749,42 @@ export default function CommercialAgreementsModule() {
         showToast(`Asignado: ${product.name}`, 'success');
     };
 
-    const handleDiscardRow = (rowIdx: number) => {
+    const handleDiscardAllUnmatched = () => {
         if (!excelPreviewData) return;
+        const newItems = excelPreviewData.items.filter(it => Boolean(it.matched_product));
+        const matchedCount = newItems.length;
+        const unmatchedCount = 0;
+        const inactiveCount = newItems.filter(it => it.is_inactive).length;
+        const totalMarginSum = newItems.reduce((acc, it) => acc + (it.margin_percent || 0), 0);
+        const avgMargin = matchedCount > 0 ? Math.round((totalMarginSum / matchedCount) * 10) / 10 : 0;
+        const totalSubtotal = newItems.reduce((acc, it) => acc + (it.unit_price || 0), 0);
+
+        setExcelPreviewData({
+            items: newItems,
+            matchedCount,
+            unmatchedCount,
+            inactiveCount,
+            avgMargin,
+            totalSubtotal
+        });
+
+        setUploadedItems(newItems.map(it => ({
+            accounting_id: it.accounting_id,
+            product_name: it.product_name,
+            unit_price: it.unit_price
+        })));
+
+        setActiveCellSearchRowIdx(null);
+        setExcelPreviewFilter('all');
+        showToast('Se descartaron todos los ítems sin coincidencia. Listo para activar.', 'success');
+    };
+
+    const handleDiscardRow = (rowIdx: number, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        if (!excelPreviewData) return;
+        if (activeCellSearchRowIdx === rowIdx) {
+            setActiveCellSearchRowIdx(null);
+        }
         const newItems = excelPreviewData.items.filter((_, idx) => idx !== rowIdx);
         const matchedCount = newItems.filter(it => Boolean(it.matched_product)).length;
         const unmatchedCount = newItems.length - matchedCount;
@@ -3699,7 +3843,7 @@ export default function CommercialAgreementsModule() {
                 </div>
 
                 {!isMainKpiCollapsed ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                         <LocalKPICard 
                             title="Acuerdos Vigentes" 
                             value={activeCount} 
@@ -3707,6 +3851,7 @@ export default function CommercialAgreementsModule() {
                             color="#EAEFEA" 
                             textColor="#0D7A57" 
                             subtitle="Contratos con precios congelados" 
+                            onClick={() => setStatusFilter('active')}
                         />
                         <LocalKPICard 
                             title="Próximos a Vencer" 
@@ -3715,6 +3860,7 @@ export default function CommercialAgreementsModule() {
                             color="#FFF9E6" 
                             textColor="#D97706" 
                             subtitle="Expira en 5 días o menos" 
+                            onClick={() => setStatusFilter('warning')}
                         />
                         <LocalKPICard 
                             title="Acuerdos Vencidos" 
@@ -3723,6 +3869,16 @@ export default function CommercialAgreementsModule() {
                             color="#FEE2E2" 
                             textColor="#EF4444" 
                             subtitle="Precios inactivos" 
+                            onClick={() => setStatusFilter('expired')}
+                        />
+                        <LocalKPICard 
+                            title="Sin Acuerdo" 
+                            value={clientsWithoutAgreement.length} 
+                            icon={<Users size={18} strokeWidth={1.5} />} 
+                            color="#EFF6FF" 
+                            textColor="#1D4ED8" 
+                            subtitle="Clientes B2B por asignar (clic)" 
+                            onClick={() => setIsClientsWithoutAgreementModalOpen(true)}
                         />
                     </div>
                 ) : (
@@ -3735,17 +3891,22 @@ export default function CommercialAgreementsModule() {
                         borderRadius: '8px', 
                         border: '1px solid #E2E8F0',
                         fontSize: '0.8rem',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                        flexWrap: 'wrap',
+                        gap: '10px'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                            <span style={{ color: '#0D7A57', fontWeight: 'bold' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                            <span onClick={() => setStatusFilter('active')} style={{ color: '#0D7A57', fontWeight: 'bold', cursor: 'pointer' }}>
                                 <CircleDot size={12} color="#10B981" /> <strong>{activeCount}</strong> Acuerdos Vigentes
                             </span>
-                            <span style={{ color: '#D97706', fontWeight: 'bold' }}>
+                            <span onClick={() => setStatusFilter('warning')} style={{ color: '#D97706', fontWeight: 'bold', cursor: 'pointer' }}>
                                 <CircleDot size={12} color="#F59E0B" /> <strong>{warningCount}</strong> Próximos a Vencer
                             </span>
-                            <span style={{ color: expiredCount > 0 ? '#EF4444' : '#64748B', fontWeight: 'bold' }}>
+                            <span onClick={() => setStatusFilter('expired')} style={{ color: expiredCount > 0 ? '#EF4444' : '#64748B', fontWeight: 'bold', cursor: 'pointer' }}>
                                 <CircleDot size={12} color="#EF4444" /> <strong>{expiredCount}</strong> Vencidos
+                            </span>
+                            <span onClick={() => setIsClientsWithoutAgreementModalOpen(true)} style={{ color: clientsWithoutAgreement.length > 0 ? '#1D4ED8' : '#64748B', fontWeight: 'bold', cursor: 'pointer' }}>
+                                <CircleDot size={12} color="#2563EB" /> <strong>{clientsWithoutAgreement.length}</strong> Sin Acuerdo
                             </span>
                         </div>
                         <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
@@ -4507,6 +4668,35 @@ export default function CommercialAgreementsModule() {
                                                     >
                                                         <Clock size={14} strokeWidth={1.8} />
                                                     </button>
+
+                                                    <button
+                                                        onClick={() => setRevokeTarget(agreement)}
+                                                        title="Revocar o eliminar acuerdo comercial"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: 'transparent',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: '#94A3B8',
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                                            e.currentTarget.style.color = '#DC2626';
+                                                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(220,38,38,0.2)';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                                            e.currentTarget.style.color = '#94A3B8';
+                                                            e.currentTarget.style.boxShadow = 'none';
+                                                        }}
+                                                    >
+                                                        <Trash2 size={14} strokeWidth={1.8} />
+                                                    </button>
                                                 </div>
                                             </div>
                                         </td>
@@ -4909,7 +5099,7 @@ export default function CommercialAgreementsModule() {
                                 <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay ítems registrados en este acuerdo comercial.</div>
                             ) : (
                                 (() => {
-                                    const filtered = filteredAgreementItems;
+                                    const filtered = sortedFilteredAgreementItems;
 
                                     if (filtered.length === 0) {
                                         return (
@@ -4925,14 +5115,79 @@ export default function CommercialAgreementsModule() {
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                                             <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Cod. Contable</th>
-                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Producto</th>
+                                                    <th 
+                                                        onClick={() => handleDrawerSort('accounting_id')}
+                                                        title="Ordenar por Código Contable (#ID)"
+                                                        style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer', userSelect: 'none' }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>Cod. Contable</span>
+                                                            {drawerSortColumn === 'accounting_id' ? (
+                                                                drawerSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                            ) : (
+                                                                <ChevronsUpDown size={11} color="#94A3B8" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleDrawerSort('product_name')}
+                                                        title="Ordenar alfabéticamente por Producto"
+                                                        style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer', userSelect: 'none' }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>Producto</span>
+                                                            {drawerSortColumn === 'product_name' ? (
+                                                                drawerSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                            ) : (
+                                                                <ChevronsUpDown size={11} color="#94A3B8" />
+                                                            )}
+                                                        </div>
+                                                    </th>
                                                     <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>U.M.</th>
                                                     <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Costo Base</th>
-                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Precio Acordado</th>
+                                                    <th 
+                                                        onClick={() => handleDrawerSort('unit_price')}
+                                                        title="Ordenar por Precio Acordado"
+                                                        style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer', userSelect: 'none' }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                            <span>Precio Acordado</span>
+                                                            {drawerSortColumn === 'unit_price' ? (
+                                                                drawerSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                            ) : (
+                                                                <ChevronsUpDown size={11} color="#94A3B8" />
+                                                            )}
+                                                        </div>
+                                                    </th>
                                                     <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>IVA</th>
-                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Margen</th>
-                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Fecha / Hora</th>
+                                                    <th 
+                                                        onClick={() => handleDrawerSort('margin')}
+                                                        title="Ordenar por Margen Porcentual"
+                                                        style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer', userSelect: 'none' }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                            <span>Margen</span>
+                                                            {drawerSortColumn === 'margin' ? (
+                                                                drawerSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                            ) : (
+                                                                <ChevronsUpDown size={11} color="#94A3B8" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleDrawerSort('date')}
+                                                        title="Ordenar por Fecha / Hora de modificación o creación"
+                                                        style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer', userSelect: 'none' }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                            <span>Fecha / Hora</span>
+                                                            {drawerSortColumn === 'date' ? (
+                                                                drawerSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                            ) : (
+                                                                <ChevronsUpDown size={11} color="#94A3B8" />
+                                                            )}
+                                                        </div>
+                                                    </th>
                                                     <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Usuario</th>
                                                     <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Acciones</th>
                                                 </tr>
@@ -7583,23 +7838,49 @@ export default function CommercialAgreementsModule() {
                                                             <strong>Poka-Yoke Activo ({excelPreviewData.unmatchedCount} productos sin coincidencia):</strong> Para activar este acuerdo comercial es obligatorio asignar cada ítem con el buscador, crearlo con <em>[+ Crear]</em> o descartar la fila si no corresponde a un producto.
                                                         </div>
                                                     </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setExcelPreviewFilter('unmatched')}
-                                                        style={{
-                                                            padding: '4px 10px',
-                                                            backgroundColor: '#DC2626',
-                                                            color: 'white',
-                                                            border: 'none',
-                                                            borderRadius: '6px',
-                                                            fontSize: '0.72rem',
-                                                            fontWeight: 'bold',
-                                                            cursor: 'pointer',
-                                                            whiteSpace: 'nowrap'
-                                                        }}
-                                                    >
-                                                        Ver Pendientes ({excelPreviewData.unmatchedCount})
-                                                    </button>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setExcelPreviewFilter('unmatched')}
+                                                            style={{
+                                                                padding: '5px 12px',
+                                                                backgroundColor: '#DC2626',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '6px',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                whiteSpace: 'nowrap',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px'
+                                                            }}
+                                                        >
+                                                            <Search size={12} /> Ver Pendientes ({excelPreviewData.unmatchedCount})
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleDiscardAllUnmatched}
+                                                            title="Omitir todas las filas que no coincidan con el catálogo para poder activar el acuerdo ya"
+                                                            style={{
+                                                                padding: '5px 12px',
+                                                                backgroundColor: '#991B1B',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '6px',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                whiteSpace: 'nowrap',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px'
+                                                            }}
+                                                        >
+                                                            <Trash2 size={12} /> Descartar todos los sin coincidencia ({excelPreviewData.unmatchedCount})
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             )}
 
@@ -8097,21 +8378,24 @@ export default function CommercialAgreementsModule() {
                                                                         <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                                                                             <button
                                                                                 type="button"
-                                                                                onClick={() => handleDiscardRow(originalIndex)}
-                                                                                title="Descartar fila (no comercial)"
+                                                                                onClick={(e) => handleDiscardRow(originalIndex, e)}
+                                                                                title="Descartar fila de la lista de precios"
                                                                                 style={{
-                                                                                    backgroundColor: 'transparent',
-                                                                                    border: 'none',
+                                                                                    backgroundColor: '#FEE2E2',
+                                                                                    border: '1px solid #FECACA',
                                                                                     cursor: 'pointer',
-                                                                                    color: '#EF4444',
-                                                                                    padding: '4px',
-                                                                                    borderRadius: '4px',
+                                                                                    color: '#DC2626',
+                                                                                    padding: '6px 8px',
+                                                                                    borderRadius: '6px',
                                                                                     display: 'inline-flex',
                                                                                     alignItems: 'center',
-                                                                                    justifyContent: 'center'
+                                                                                    justifyContent: 'center',
+                                                                                    transition: 'all 0.15s ease'
                                                                                 }}
+                                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FCA5A5'}
+                                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
                                                                             >
-                                                                                <Trash2 size={14} />
+                                                                                <Trash2 size={15} />
                                                                             </button>
                                                                         </td>
                                                                     </tr>
@@ -8237,23 +8521,46 @@ export default function CommercialAgreementsModule() {
                                 {createStep === 3 && (() => {
                                     const hasItems = Boolean(excelPreviewData && excelPreviewData.items.length > 0);
                                     const hasUnmatched = Boolean(excelPreviewData && excelPreviewData.unmatchedCount > 0);
-                                    const isSubmitDisabled = savingAgreement || parsing || isDigestingWithAI || !hasItems || hasUnmatched;
+                                    const isSubmitDisabled = savingAgreement || parsing || isDigestingWithAI || !hasItems;
+
+                                    if (hasUnmatched) {
+                                        return (
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setIsUnmatchedResolutionModalOpen(true)}
+                                                title="Haz clic para resolver o descartar los productos sin coincidencia y activar el acuerdo"
+                                                style={{ 
+                                                    padding: '10px 24px', 
+                                                    borderRadius: THEME.radius.md, 
+                                                    border: 'none', 
+                                                    backgroundColor: '#DC2626',
+                                                    backgroundImage: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                                                    color: 'white', 
+                                                    fontWeight: 'bold', 
+                                                    fontSize: '0.85rem', 
+                                                    cursor: 'pointer',
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '8px', 
+                                                    boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                            >
+                                                <AlertCircle size={16} /> {excelPreviewData?.unmatchedCount} Sin Coincidencia — Resolver para Activar
+                                            </button>
+                                        );
+                                    }
 
                                     return (
                                         <button 
                                             type="submit" 
                                             disabled={isSubmitDisabled}
-                                            title={hasUnmatched ? `Hay ${excelPreviewData?.unmatchedCount} ítems sin coincidencia pendientes.` : undefined}
                                             style={{ 
                                                 padding: '10px 24px', 
                                                 borderRadius: THEME.radius.md, 
                                                 border: 'none', 
-                                                backgroundColor: isSubmitDisabled 
-                                                    ? (hasUnmatched ? '#F87171' : '#CBD5E1') 
-                                                    : '#0D7A57',
-                                                backgroundImage: isSubmitDisabled 
-                                                    ? 'none' 
-                                                    : 'linear-gradient(135deg, #0D7A57 0%, #059669 100%)',
+                                                backgroundColor: isSubmitDisabled ? '#CBD5E1' : '#0D7A57',
+                                                backgroundImage: isSubmitDisabled ? 'none' : 'linear-gradient(135deg, #0D7A57 0%, #059669 100%)',
                                                 color: 'white', 
                                                 fontWeight: 'bold', 
                                                 fontSize: '0.85rem', 
@@ -8262,14 +8569,12 @@ export default function CommercialAgreementsModule() {
                                                 alignItems: 'center', 
                                                 gap: '8px', 
                                                 boxShadow: isSubmitDisabled ? 'none' : '0 4px 14px rgba(13, 122, 87, 0.35)',
-                                                opacity: isSubmitDisabled && !hasUnmatched ? 0.7 : 1,
+                                                opacity: isSubmitDisabled ? 0.7 : 1,
                                                 transition: 'all 0.2s ease'
                                             }}
                                         >
                                             {savingAgreement ? (
                                                 <><Loader2 size={16} className="animate-spin" /> Guardando Acuerdo...</>
-                                            ) : hasUnmatched ? (
-                                                <><AlertCircle size={16} /> {excelPreviewData?.unmatchedCount} Sin Coincidencia — Resuelve para Activar</>
                                             ) : !hasItems ? (
                                                 <>Carga un archivo de precios para continuar</>
                                             ) : (
@@ -10924,6 +11229,569 @@ export default function CommercialAgreementsModule() {
                 </div>
             )}
 
+            {/* MODAL REVOCAR / ELIMINAR ACUERDO COMERCIAL (POKA-YOKE) */}
+            {revokeTarget && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 2500,
+                    padding: '16px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        maxWidth: '520px',
+                        width: '100%',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #E2E8F0',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '20px 24px',
+                            borderBottom: '1px solid #F1F5F9',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#FEF2F2'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    backgroundColor: '#FEE2E2',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#DC2626'
+                                }}>
+                                    <Trash2 size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#991B1B' }}>
+                                        Revocar Acuerdo Comercial
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#B91C1C' }}>
+                                        Acuerdo #{revokeTarget.quote_number} &bull; {revokeTarget.client_name}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => !revoking && setRevokeTarget(null)}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    color: '#94A3B8',
+                                    padding: '4px'
+                                }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '24px' }}>
+                            <div style={{
+                                backgroundColor: '#FFFBEB',
+                                border: '1px solid #FDE68A',
+                                borderRadius: '10px',
+                                padding: '14px',
+                                marginBottom: '20px',
+                                display: 'flex',
+                                gap: '12px'
+                            }}>
+                                <AlertTriangle size={22} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                <div style={{ fontSize: '0.85rem', color: '#92400E', lineHeight: '1.45' }}>
+                                    <strong>¿Confirmas la revocación de este acuerdo?</strong>
+                                    <p style={{ margin: '6px 0 0 0' }}>
+                                        El estado pasará a <strong>Cancelado</strong>, liberando inmediatamente al cliente en la base de datos para que pueda crearse o asignarse un nuevo acuerdo comercial sin conflicto de unicidad. Los pedidos históricos no serán alterados.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div style={{
+                                backgroundColor: '#F8FAFC',
+                                borderRadius: '8px',
+                                padding: '12px 16px',
+                                border: '1px solid #E2E8F0',
+                                fontSize: '0.85rem',
+                                color: '#475569'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                    <span style={{ color: '#64748B' }}>Cliente:</span>
+                                    <span style={{ fontWeight: 600, color: '#0F172A' }}>{revokeTarget.client_name}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                    <span style={{ color: '#64748B' }}>NIT / Identificación:</span>
+                                    <span style={{ fontWeight: 600, color: '#0F172A' }}>{revokeTarget.profiles?.nit || 'Sin NIT'}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#64748B' }}>Modelo Base:</span>
+                                    <span style={{ fontWeight: 600, color: '#0F172A' }}>{revokeTarget.model_snapshot_name || 'Personalizado'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            padding: '16px 24px',
+                            borderTop: '1px solid #F1F5F9',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '12px',
+                            backgroundColor: '#FAFAFA'
+                        }}>
+                            <button
+                                onClick={() => setRevokeTarget(null)}
+                                disabled={revoking}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#475569',
+                                    fontWeight: 600,
+                                    fontSize: '0.85rem',
+                                    cursor: revoking ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleRevokeSubmit}
+                                disabled={revoking}
+                                style={{
+                                    padding: '8px 18px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: '#DC2626',
+                                    color: '#FFFFFF',
+                                    fontWeight: 700,
+                                    fontSize: '0.85rem',
+                                    cursor: revoking ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)'
+                                }}
+                            >
+                                {revoking ? (
+                                    <><Loader2 size={16} className="animate-spin" /> Revocando...</>
+                                ) : (
+                                    <><Trash2 size={16} /> Confirmar y Revocar</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL CONTROL DE CLIENTES SIN ACUERDO COMERCIAL */}
+            {isClientsWithoutAgreementModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 2500,
+                    padding: '16px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        maxWidth: '720px',
+                        width: '100%',
+                        maxHeight: '85vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #E2E8F0',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #F1F5F9',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#F8FAFC'
+                        }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>
+                                        Clientes B2B Institucionales Sin Acuerdo Activo
+                                    </h3>
+                                    <span style={{
+                                        backgroundColor: clientsWithoutAgreement.length > 0 ? '#DBEAFE' : '#D1FAE5',
+                                        color: clientsWithoutAgreement.length > 0 ? '#1D4ED8' : '#065F46',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        padding: '2px 8px',
+                                        borderRadius: '12px'
+                                    }}>
+                                        {clientsWithoutAgreement.length} clientes
+                                    </span>
+                                </div>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#64748B' }}>
+                                    Clientes institucionales registrados que no poseen lista de precios activa ni vinculación compartida.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsClientsWithoutAgreementModalOpen(false)}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    color: '#94A3B8',
+                                    padding: '4px'
+                                }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Search in modal */}
+                        <div style={{ padding: '14px 24px', borderBottom: '1px solid #F1F5F9', backgroundColor: '#FFFFFF' }}>
+                            <div style={{ position: 'relative' }}>
+                                <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '10px' }} />
+                                <input
+                                    type="text"
+                                    placeholder="Filtrar por razón social o NIT..."
+                                    value={clientsWithoutAgreementSearch}
+                                    onChange={(e) => setClientsWithoutAgreementSearch(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px 8px 36px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.85rem',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Clients list */}
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+                            {clientsWithoutAgreement.filter(c => {
+                                const term = clientsWithoutAgreementSearch.toLowerCase();
+                                return (c.company_name || '').toLowerCase().includes(term) || (c.vat_number || '').includes(term);
+                            }).length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B' }}>
+                                    <Check size={36} color="#0D7A57" style={{ margin: '0 auto 12px' }} />
+                                    <p style={{ margin: 0, fontWeight: 600, color: '#0F172A' }}>
+                                        {clientsWithoutAgreement.length === 0 
+                                            ? '¡Excelente control! Todos los clientes institucionales tienen acuerdo comercial activo.'
+                                            : 'No se encontraron clientes con el filtro ingresado.'}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {clientsWithoutAgreement
+                                        .filter(c => {
+                                            const term = clientsWithoutAgreementSearch.toLowerCase();
+                                            return (c.company_name || '').toLowerCase().includes(term) || (c.vat_number || '').includes(term);
+                                        })
+                                        .map(client => (
+                                            <div
+                                                key={client.id}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    padding: '12px 16px',
+                                                    borderRadius: '10px',
+                                                    border: '1px solid #E2E8F0',
+                                                    backgroundColor: '#FFFFFF',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A' }}>
+                                                            {client.company_name}
+                                                        </span>
+                                                        {client.parent_id && (
+                                                            <span style={{
+                                                                fontSize: '0.7rem',
+                                                                backgroundColor: '#F1F5F9',
+                                                                color: '#475569',
+                                                                padding: '1px 6px',
+                                                                borderRadius: '4px'
+                                                            }}>
+                                                                Sede
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '2px' }}>
+                                                        NIT: <strong style={{ color: '#334155' }}>{client.vat_number || 'Sin NIT'}</strong> &bull; Contacto: {client.contact_name || client.phone || 'N/A'}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleOpenCreateWithClient(client.id)}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        padding: '7px 14px',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        backgroundColor: '#0D7A57',
+                                                        color: '#FFFFFF',
+                                                        fontWeight: 600,
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)'
+                                                    }}
+                                                >
+                                                    <Plus size={14} strokeWidth={2.5} /> Crear Acuerdo
+                                                </button>
+                                            </div>
+                                        ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{
+                            padding: '14px 24px',
+                            borderTop: '1px solid #F1F5F9',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            backgroundColor: '#FAFAFA'
+                        }}>
+                            <button
+                                onClick={() => setIsClientsWithoutAgreementModalOpen(false)}
+                                style={{
+                                    padding: '8px 18px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#475569',
+                                    fontWeight: 600,
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE RESOLUCIÓN RÁPIDA POKA-YOKE SIN COINCIDENCIA */}
+            {isUnmatchedResolutionModalOpen && excelPreviewData && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 2600,
+                    padding: '16px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        maxWidth: '560px',
+                        width: '100%',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #E2E8F0',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #F1F5F9',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#FEF2F2'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    backgroundColor: '#FEE2E2',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#DC2626'
+                                }}>
+                                    <AlertCircle size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#991B1B' }}>
+                                        Resolver {excelPreviewData.unmatchedCount} Productos Sin Coincidencia
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#B91C1C' }}>
+                                        {excelPreviewData.matchedCount} productos reconocidos de {excelPreviewData.items.length} totales
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsUnmatchedResolutionModalOpen(false)}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    color: '#94A3B8',
+                                    padding: '4px'
+                                }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <p style={{ margin: 0, fontSize: '0.88rem', color: '#475569', lineHeight: '1.5' }}>
+                                El archivo cargado contiene <strong>{excelPreviewData.unmatchedCount} filas</strong> que no coinciden con ningún SKU del catálogo maestro. Elige cómo deseas proceder:
+                            </p>
+
+                            {/* Option 1: Discard unmatched and activate immediately */}
+                            <div 
+                                onClick={() => {
+                                    handleDiscardAllUnmatched();
+                                    setIsUnmatchedResolutionModalOpen(false);
+                                }}
+                                style={{
+                                    padding: '16px',
+                                    borderRadius: '12px',
+                                    border: '2px solid #BBF7D0',
+                                    backgroundColor: '#F0FDF4',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '12px'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = '#16A34A';
+                                    e.currentTarget.style.backgroundColor = '#DCFCE7';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = '#BBF7D0';
+                                    e.currentTarget.style.backgroundColor = '#F0FDF4';
+                                }}
+                            >
+                                <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#DCFCE7',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#15803D',
+                                    flexShrink: 0
+                                }}>
+                                    <Check size={18} strokeWidth={2.5} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#166534', marginBottom: '2px' }}>
+                                        Descartar las {excelPreviewData.unmatchedCount} filas no coincidentes y Activar
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: '#15803D' }}>
+                                        Omite los ítems no reconocidos (útil para notas, encabezados o productos descontinuados) y deja el acuerdo listo con los <strong>{excelPreviewData.matchedCount} productos válidos</strong>.
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Option 2: Go to table to resolve one by one */}
+                            <div 
+                                onClick={() => {
+                                    setExcelPreviewFilter('unmatched');
+                                    setIsUnmatchedResolutionModalOpen(false);
+                                }}
+                                style={{
+                                    padding: '16px',
+                                    borderRadius: '12px',
+                                    border: '1px solid #E2E8F0',
+                                    backgroundColor: '#F8FAFC',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '12px'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = '#94A3B8';
+                                    e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = '#E2E8F0';
+                                    e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                }}
+                            >
+                                <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#E0F2FE',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#0284C7',
+                                    flexShrink: 0
+                                }}>
+                                    <Search size={18} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#0F172A', marginBottom: '2px' }}>
+                                        Revisar y asociar en la tabla fila por fila
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                                        Filtra la lista de precios en los ítems sin coincidencia para que puedas buscarlos en el catálogo o crearlos individualmente.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            padding: '14px 24px',
+                            borderTop: '1px solid #F1F5F9',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            backgroundColor: '#FAFAFA'
+                        }}>
+                            <button
+                                onClick={() => setIsUnmatchedResolutionModalOpen(false)}
+                                style={{
+                                    padding: '8px 18px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#475569',
+                                    fontWeight: 600,
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* TOAST NOTIFICATION */}
             {toast && (
                 <div style={{ 
@@ -10963,9 +11831,11 @@ export default function CommercialAgreementsModule() {
     );
 }
 
-function LocalKPICard({ title, value, icon, color, textColor, subtitle }: { title: string, value: number | string, icon: React.ReactNode, color: string, textColor: string, subtitle: string }) {
+function LocalKPICard({ title, value, icon, color, textColor, subtitle, onClick }: { title: string, value: number | string, icon: React.ReactNode, color: string, textColor: string, subtitle: string, onClick?: () => void }) {
     return (
-        <div style={{
+        <div 
+            onClick={onClick}
+            style={{
             backgroundColor: 'white',
             padding: '1.5rem',
             borderRadius: THEME.radius.lg,
@@ -10975,7 +11845,7 @@ function LocalKPICard({ title, value, icon, color, textColor, subtitle }: { titl
             gap: '1.5rem',
             border: `1px solid ${THEME.colors.border}`,
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            cursor: 'default',
+            cursor: onClick ? 'pointer' : 'default',
             fontFamily: THEME.typography.fontFamilySecondary
         }} onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'translateY(-1px)';

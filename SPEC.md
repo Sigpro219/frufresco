@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.282 (Arquitectura Poka-Yoke de Gestión de Sucursales B2B, Herencia Reactiva de Acuerdos, Consecutivo Contable World Office, Normalización Vial Colombiana y Geocodificación TMS — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.284 (Blindaje de Acuerdos Comerciales B2B: Control de Cobertura, Revocación Poka-Yoke, Ordenamiento Multicolumna y Resolución Fluida de Ingesta Excel — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 304 Escenarios BDD Ininterrumpidos (1..304)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 306 Escenarios BDD Ininterrumpidos (1..306)
 
 ---
 
@@ -23,7 +23,7 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277, 301 (§7.1 - §7.19) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277, 301, 306 (§7.1 - §7.20) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
@@ -12067,3 +12067,56 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   5. **Quality Gates y Validación Restrictiva de Creación de Sucursal (Hallazgo 5):**
      - En `handleSubmit`, queda estrictamente prohibido guardar una sucursal sin dirección física válida ($ge 5$ caracteres).
      - Si la Casa Matriz no posee un acuerdo comercial activo ni modelo de precios asignado, el sistema exige confirmación explícita para evitar operar sucursales con tarifas B2C imprevistas.
+
+
+---
+
+### Escenario 305: Consolidación de Indicadores Comerciales BI, Poda de Buzón Huérfano y Centralización de Ingesta de Pedidos (Gemba Hallazgos Área Comercial: Items 1 al 4) (SDD v1.9.283)
+- **Given** el módulo comercial consolidado (`/admin/commercial` y `CommercialUnifiedDashboard.tsx`), los modelos de acuerdos especiales (`SpecialAgreementsModule.tsx`) y la consola de gestión de pedidos (`/admin/orders`),
+- **When** la dirección general y la mesa comercial auditan los indicadores de facturación, rentabilidad, acuerdos de demanda y canales de recepción de órdenes,
+- **Then** el sistema ratifica y consolida los siguientes cuatro (4) blindajes arquitectónicos innegociables:
+  1. **Indicador de Documentos Pendientes de Facturación (Hallazgo 1):**
+     - En la Tarjeta 1 del Dashboard Comercial (`CommercialUnifiedDashboard.tsx`), el resumen ejecutivo proyecta de forma explícita el total en pesos de órdenes despachadas pendientes por emisión fiscal (`$ Sin Facturar` y `$ Entregado`), permitiendo conciliar en tiempo real los despachos físicos contra la facturación emitida.
+  2. **Detección Activa de Rentabilidad Negativa a Pérdida (Hallazgo 2):**
+     - En el Panel B del Dashboard Comercial, se erradica la métrica ambigua de "baja rotación" y se consagra el análisis de margen crítico: **Top 20 Productos de Menor Utilidad**.
+     - Aquellos SKUs con margen comercial negativo (ej. Mazorca especial con amero con margen de -425.4% o Cebolla larga a -186.2%) son destacados visualmente con el badge de máxima alerta operativa: **`A Pérdida`** en rojo sobre fondo carmesí, junto con el cálculo exacto de la pérdida monetaria en pesos.
+  3. **Acuerdos Especiales Multicliente con Telemetría de Demanda Viva (Hallazgo 3):**
+     - En `SpecialAgreementsModule.tsx` (`/admin/commercial?tab=operations&subtab=agreements`), los modelos canónicos (Nutresa, Colsubsidio, General Quincenal y General Mensual) incorporan un padrón multicliente universal abierto a cualquier matriz o sucursal del sistema.
+     - Cada modelo calcula e integra en tiempo real la demanda física real del ciclo a partir de las órdenes vivas (`orders` y `order_items`):
+       - Columna **`VOLUMEN CICLO`**: proyecta los kilos o toneladas consolidadas (ej. `500,2 Kg`, `12,5 Ton`), el conteo de pedidos y la facturación acumulada (`X ped. • $YM`).
+       - Proyección reactiva de impacto en utilidad en pesos (`Total: +$X / -$Y`) según el volumen efectivamente demandado.
+  4. **Poda Quirúrgica de Canal Paralelo y Consolidación de Ingesta (Hallazgo 4):**
+     - Se erradica de forma definitiva el archivo huérfano `src/components/CommercialInboxModule.tsx` (1.100+ líneas de código muerto) y su importación no utilizada en `src/app/admin/commercial/page.tsx`.
+     - Queda consagrado por contrato que **la ingesta de pedidos por correo (`pedidos@frufresco.com`) se canaliza exclusivamente a través de la Mesa de Trabajo de Pedidos (`/admin/orders` y `EmailDraftsModule.tsx`)**, garantizando trazabilidad única, lectura multimodal de adjuntos mediante Gemini y SheetJS, y cero dispersión operativa.
+  5. **Barra Unificada, Sticky Magnético y Ordenamiento Multicolumna en Monitor Diario (Hallazgos 5 y 6):**
+     - En `CommercialDailyMonitorModule.tsx` (`/admin/commercial?tab=daily-monitor`), se erradica el salto de línea forzado unificando las 3 píldoras de vista (`1. Ventas por Cliente`, `2. Ventas por Producto`, `3. ¿Quién pidió este producto?`) y el buscador Omnibox en **una sola fila horizontal** (`flexWrap: 'nowrap'`, gap calibrado y ancho responsivo).
+     - **Política Sticky Magnética de 2 Niveles (`estandar-galerias-frufresco`):**
+       - **Línea 1 Sticky (`top: 85px`, `zIndex: 40`):** Barra de vistas y buscador Omnibox anclada magnéticamente bajo el Navbar principal.
+       - **Línea 2 Sticky (`top: 137px`, `zIndex: 35`):** Encabezados de columnas de la tabla (`<thead>` y cada celda `<th>`) congelados con fondo sólido `#F8FAFC` y `borderBottom: '2px solid #E2E8F0'`, con 0px de holgura.
+     - **Ordenadores Interactivos Multicolumna Bidireccionales:**
+       - Se incorporan controles de ordenamiento (`ChevronUp`, `ChevronDown`, `ChevronsUpDown`) en todos los encabezados de columnas:
+         - *Vista de Clientes:* Consecutivo & Zona (`sequenceId`), Cliente & Sucursal (alfabético), Documento & Pago, Facturación & Carga (`total`), Rentabilidad BI (`grossProfit`).
+         - *Vista de Productos:* Nombre, Categoría, Cantidad Total (`totalQuantity`), Pedidos (`ordersCount`), Precio Promedio, Costo Base, Total Venta (`totalSales`), Utilidad (`grossProfit`), Margen Ponderado (`marginPct`).
+
+
+---
+
+### Escenario 306: Blindaje de Acuerdos Comerciales B2B: Control de Cobertura, Revocación Quirúrgica con Liberación de Unicidad y Resolución Fluida de Ingesta Excel (Gemba Hallazgos Acuerdos: Items 1 al 3) (SDD v1.9.284)
+- **Given** el módulo de Acuerdos Comerciales Institucionales (`CommercialAgreementsModule.tsx`) en `/admin/commercial?tab=clients&clientTab=agreements`,
+- **When** la mesa comercial audita la cobertura de contratos tarifarios, revoca acuerdos caducos o carga listas masivas de precios desde archivos Excel,
+- **Then** el sistema ratifica los siguientes cuatro (4) estándares arquitectónicos:
+  1. **Ordenamiento Multicolumna en Drawer de Detalle Tarifario (Hallazgo 1):**
+     - Los encabezados de la tabla de precios acordados (`Producto`, `Precio Acordado`, `Margen %`, `Fecha Vigencia`, `ID Contable`) disponen de flechas interactivas de ordenamiento bidireccional (`ChevronUp`, `ChevronDown`, `ChevronsUpDown`) con ordenamiento tipado (alfabético, numérico y cronológico).
+  2. **Tarjeta de Control de Clientes Sin Acuerdo Activo (Hallazgo 2 - Parte A):**
+     - Se incorpora una cuarta tarjeta ejecutiva en el resumen de métricas: **"SIN ACUERDO"** (`textColor="#1D4ED8"`), contabilizando en tiempo real aquellos clientes institucionales (`role = 'b2b_client'`) que no poseen acuerdo directo, ni acuerdo heredado por casa matriz, ni vinculación compartida en `app_settings`.
+     - Al interactuar con la tarjeta o la píldora colapsada de telemetría, se despliega el modal interactivo `ClientsWithoutAgreementModal` con buscador predictivo por razón social o NIT, identificador visual de sede y botón directo `+ Crear Acuerdo` con preselección automática del cliente.
+  3. **Revocación Quirúrgica de Acuerdos Comerciales (Hallazgo 2 - Parte B):**
+     - En la columna de acciones de la galería principal de acuerdos, se incorpora la acción de revocación (`Trash2` rojo) protegida por un modal Poka-Yoke (`RevokeAgreementModal`).
+     - Al confirmar la revocación, el estado de la cotización/acuerdo transiciona a `status = 'cancelled'`. Esta mutación libera de forma atómica el índice parcial de unicidad en PostgreSQL (`idx_single_active_agreement_per_client` sobre `quotes (client_id) WHERE status = 'agreement'`), permitiendo crear o asociar un nuevo acuerdo al cliente sin colisión y preservando la integridad referencial histórica de los pedidos previos.
+  4. **Resolución Fluida y Descarte Masivo en Carga de Precios Excel (Hallazgo 3):**
+     - Se erradica el bloqueo ciego del botón inferior cuando existen productos sin coincidencia de catálogo (`unmatchedCount > 0`).
+     - **Acción en Masa:** En el banner rojo Poka-Yoke superior y barra de herramientas se habilita el botón `[Descartar todos los sin coincidencia ({unmatchedCount})]` (`handleDiscardAllUnmatched`), purgando en un solo clic las filas no comerciales, notas o encabezados residuales y dejando el acuerdo listo para activar de inmediato.
+     - **Papelera por Fila Robusta:** En la columna `Acción`, la papelera individual cuenta con contención de eventos (`e.stopPropagation()`), limpieza reactiva del buscador de celda (`activeCellSearchRowIdx = null`) y confirmación por toast informativo.
+     - **Botón Inferior Interactivo (`UnmatchedResolutionModal`):** El botón de pie de formulario se mantiene interactivo mostrando `AlertCircle` `{unmatchedCount} Sin Coincidencia — Resolver para Activar`. Al pulsarlo, abre un diálogo modal de decisión rápida con dos caminos:
+       - *Opción Primaria (Verde):* Descartar los {unmatchedCount} no coincidentes y formalizar el acuerdo con los {matchedCount} SKUs válidos inmediatamente.
+       - *Opción Secundaria (Azul):* Filtrar la tabla de trabajo en los ítems sin coincidencia para su búsqueda o creación manual fila por fila.
