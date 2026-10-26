@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUtils';
-import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
+import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
 import { Printer, ArrowLeft, Filter, Layers, CheckSquare, Download, Columns } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
@@ -446,6 +446,9 @@ export default function AlistamientoSabanaPrintPage() {
 
             const { data: rawOrders, error: oErr } = await orderQuery.order('created_at', { ascending: true });
             if (oErr) throw oErr;
+
+            // Escenario 299: Garantía universal de asignación de bahías por cubicaje y clúster geográfico
+            await ensureUniversalStagingSpaces(rawOrders, supabase);
 
             // Evaluar Atención Especial por Ciclo de Vida para los clientes de la tanda
             const clientProfileIds = Array.from(new Set(

@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.275 (Resolución Forense Hallazgo #3 Gemba: Matriz Operativa de Imputación Multidisciplinaria Novedades por Producto y Consolidación Automática para Nómina — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.276 (Asignación Algorítmica Universal de Muelle por Cubicaje y Clúster Geográfico, Anclaje Inferior Golden Print en Carta y Ordenamiento Alfabético Dual en Remisiones — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 298 Escenarios BDD Ininterrumpidos (1..298)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 299 Escenarios BDD Ininterrumpidos (1..299)
 
 ---
 
@@ -11932,3 +11932,25 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - **📆 Rango Personalizado de Fechas:** Despliega dos selectores nativos de fecha (*Desde* y *Hasta*), permitiendo auditar quincenas, semanas epidemiológicas o períodos de corte contable específicos.
   3. **Generación Dinámica de Archivos Multi-Día:** En exportaciones de mes o rango personalizado, el pipeline inyecta automáticamente la columna `Fecha Entrega` al inicio de la hoja de cálculo, asegurando trazabilidad temporal nítida con nomenclatura canónica (`Relacion_Pedidos_Mes_YYYY-MM.xlsx` o `Relacion_Pedidos_YYYY-MM-DD_a_YYYY-MM-DD.xlsx`).
   4. **Telemetría y Estado Asíncrono de Procesamiento:** Durante la extracción masiva de pedidos y perfiles en base de datos, los botones proyectan un estado activo *[ Procesando archivo... ]* para prevenir dobles descargas o bloqueos en la interfaz.
+
+---
+
+### Escenario 299: Asignación Algorítmica Universal de Muelle por Cubicaje y Clúster Geográfico, Anclaje Inferior Golden Print en Carta y Ordenamiento Alfabético Dual en Remisiones (Gemba Hallazgos Documentos Operación) (SDD v1.9.276)
+- **Given** los documentos físicos y digitales de la operación logística y comercial de FruFresco: la Sábana de Alistamiento (`/admin/orders/alistamiento-print`), el Kit de Contingencia y Remisiones Oficiales (`/admin/orders/contingency-print`),
+- **When** se generan e imprimen los documentos de despacho (bien sea ejecutando el tutorial paso a paso del Asistente BCP o mediante la emisión directa "de golpe" desde Torre de Control),
+- **Then** el sistema asegura la integridad física, geométrica y operativa bajo el estándar de máxima simplicidad y cero sobre-ingeniería (/spacex):
+  1. **Asignación Canónica Universal de Bahías por Cubicaje y Clúster Geográfico:**
+     - Queda terminantemente prohibida la asignación al azar o correlativa ciega (`1, 2, 3...`) de bahías de piso.
+     - Cada orden se evalúa con el algoritmo canónico `allocateStagingSpacesGeographically` (§38, Escenarios 177 y 178):
+       - Cubicaje en canastillas: $$\text{Canastillas} = \operatorname{ceil}(\text{total\_weight\_kg} / 12.5)$$.
+       - Bahías requeridas: $$\text{Bahías} = \max(1, \operatorname{ceil}(\text{Canastillas} / 36))$$. Si un cliente institucional demanda 1.200 kg (~96 canastillas), se le reservan de forma contigua las bahías requeridas (ej: Bahías 4, 5 y 6). Si pide 40 kg, se le reserva 1 bahía.
+       - Clúster geográfico y ventana LIFO: se agrupa por los 7 corredores viales prioritarios y ventana horaria de entrega.
+     - **Garantía Universal de Ejecución:** Tanto si el operario utiliza el Asistente Manual (Paso 1) como si imprime los documentos de golpe desde `/admin/orders/alistamiento-print` o `/admin/orders/contingency-print`, el sistema detecta si existen órdenes sin bahía asignada, invoca atómicamente el motor de asignación, persiste el resultado en `orders.warehouse_spaces` en Supabase y proyecta las bahías en la columna `LUGAR` y en el recuadro `BAHÍA DE PISO`, erradicando definitivamente el rótulo `S/A` en cualquier flujo de impresión.
+  2. **Estructura Golden Print en Hoja Carta con Anclaje Inferior de Totales y Firmas:**
+     - Prohibición absoluta de medias cartas (`statement` / 140x216mm). Todas las remisiones se emiten invariablemente en formato oficial **Carta** (`letter portrait`).
+     - En `GoldenPrintStyles.tsx`, la regla de impresión `@media print` para formato Carta impone una altura mínima equivalente a la página física útil (`min-height: 265mm !important; display: flex !important; flex-direction: column !important; justify-content: space-between !important;`).
+     - Gracias a la estructura Flexbox de `UniversalLetterhead.tsx` y el contenedor inferior con `marginTop: 'auto'`, el bloque consolidado de Control de Canastillas Plásticas, Liquidación de Totales DIAN y Firmas de Conformidad / QR se ancla de forma natural en el pie inferior de la hoja física, eliminando el espacio blanco huérfano intermedio y preservando una presentación ejecutiva impecable.
+  3. **Ordenamiento Alfabético Dual Canónico en Remisiones:**
+     - En la generación de remisiones (`contingency-print/page.tsx`), los renglones de producto se ordenan determinísticamente en dos niveles alfabéticos mediante `localeCompare`:
+       - **Nivel 1 (Productos con Precio Comercial Pactado `unit_price > 0`):** Se listan primero, ordenados estrictamente de la **A a la Z**.
+       - **Nivel 2 (Productos sin Precio / Fuera de Acuerdo `unit_price === 0`):** Se listan al final del documento, también ordenados estrictamente de la **A a la Z**.

@@ -230,3 +230,129 @@ export function allocateStagingSpacesGeographically(
 
     return results;
 }
+
+/**
+ * Garantiza que cada orden en una tanda tenga asignadas bahías físicas de muelle (1..150)
+ * según su cubicaje real de carga (12.5 kg/canastilla, 36 canastillas/bahía) y clúster geográfico.
+ * - Si una orden ya tiene bahías válidas asignadas en DB, las respeta.
+ * - Para las órdenes sin bahías asignadas, busca los slots contiguos libres evitando colisiones
+ *   con las bahías ya ocupadas.
+ * - Si se suministra supabaseClient, persiste inmediatamente los cambios en Supabase.
+ * - Muta el campo `warehouse_spaces` de los objetos rawOrders para que la vista renderice al instante.
+ */
+export async function ensureUniversalStagingSpaces(
+    rawOrders: any[],
+    supabaseClient?: any
+): Promise<Record<string, number[]>> {
+    if (!rawOrders || rawOrders.length === 0) return {};
+
+    const spacesMap: Record<string, number[]> = {};
+    const occupiedSlots = new Set<number>();
+    const unallocatedOrders: any[] = [];
+
+    // 1. Identificar bahías ya ocupadas y separar órdenes sin bahía
+    rawOrders.forEach(o => {
+        if (Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0) {
+            spacesMap[o.id] = o.warehouse_spaces;
+            o.warehouse_spaces.forEach((slot: number) => occupiedSlots.add(slot));
+        } else {
+            unallocatedOrders.push(o);
+        }
+    });
+
+    if (unallocatedOrders.length === 0) {
+        return spacesMap;
+    }
+
+    // 2. Preparar inputs para las órdenes no asignadas
+    const rawInputs: OrderStagingInput[] = unallocatedOrders.map(o => {
+        const totalKg = Number(o.total_weight_kg) || 
+            (o.order_items || []).reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0) * (Number(it.products?.weight_kg) || 1), 0);
+        return {
+            id: o.id,
+            sequence_id: o.sequence_id,
+            client_id: o.profile_id || o.profiles?.id,
+            customer_name: o.customer_name || o.profiles?.contact_name,
+            company_name: o.profiles?.company_name || o.customer_name || 'Cliente sin nombre',
+            shipping_address: o.shipping_address || o.profiles?.address || '',
+            neighborhood: o.profiles?.neighborhood || '',
+            delivery_slot: o.delivery_slot || '',
+            manual_delivery_time: o.manual_delivery_time || '',
+            is_manual_delivery: o.is_manual_delivery || false,
+            total_weight_kg: totalKg > 0 ? totalKg : 15,
+            existing_spaces: []
+        };
+    });
+
+    // 3. Enriquecer con zona geográfica, ventana LIFO y cálculo volumétrico
+    const enriched = rawInputs.map(input => {
+        const zone = deduceGeographicZone(input);
+        const { crates, spaces } = calculateCratesAndSpaces(input.total_weight_kg, 12.5, 36);
+        const customerName = input.company_name || input.customer_name || 'Cliente sin nombre';
+        const deliveryInfo = parseDeliveryWindowMinutes(input);
+        return {
+            raw: input,
+            zone,
+            customerName,
+            deliveryInfo,
+            crates,
+            spacesNeeded: spaces
+        };
+    });
+
+    enriched.sort((a, b) => {
+        if (a.zone !== b.zone) return a.zone.localeCompare(b.zone);
+        if (a.deliveryInfo.minutes !== b.deliveryInfo.minutes) return a.deliveryInfo.minutes - b.deliveryInfo.minutes;
+        return b.raw.total_weight_kg - a.raw.total_weight_kg;
+    });
+
+    // 4. Asignar slots libres contiguos evitando colisión con occupiedSlots
+    let currentCandidate = 1;
+    const updatesToPersist: { id: string; spaces: number[] }[] = [];
+
+    for (const item of enriched) {
+        let assigned: number[] = [];
+        
+        while (assigned.length < item.spacesNeeded) {
+            let allFree = true;
+            for (let offset = 0; offset < item.spacesNeeded; offset++) {
+                if (occupiedSlots.has(currentCandidate + offset)) {
+                    allFree = false;
+                    currentCandidate = currentCandidate + offset + 1;
+                    break;
+                }
+            }
+
+            if (allFree) {
+                for (let offset = 0; offset < item.spacesNeeded; offset++) {
+                    const slot = currentCandidate + offset;
+                    assigned.push(slot);
+                    occupiedSlots.add(slot);
+                }
+                currentCandidate += item.spacesNeeded;
+            }
+        }
+
+        spacesMap[item.raw.id] = assigned;
+        updatesToPersist.push({ id: item.raw.id, spaces: assigned });
+
+        // Mutar en memoria para visualización reactiva inmediata
+        const foundOrder = rawOrders.find(o => o.id === item.raw.id);
+        if (foundOrder) {
+            foundOrder.warehouse_spaces = assigned;
+        }
+    }
+
+    // 5. Persistir atómicamente en Supabase si se suministra el cliente
+    if (supabaseClient && updatesToPersist.length > 0) {
+        Promise.all(
+            updatesToPersist.map(u => 
+                supabaseClient.from('orders').update({ warehouse_spaces: u.spaces }).eq('id', u.id)
+            )
+        ).catch(err => {
+            console.error('Error persistiendo auto-asignación universal de bahías:', err);
+        });
+    }
+
+    return spacesMap;
+}

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruction, getOrderProcurementReferences } from '@/lib/orderUtils';
 import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, Gift, CheckSquare } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
-import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
+import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
 import { formatTimeWindow } from '@/lib/logistics-parser';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
@@ -644,6 +644,8 @@ function ContingencyPrintContent() {
                     console.error('Error cargando pedidos para contingencia:', ordersRes.error);
                 } else {
                     const rawOrders = (ordersRes.data as any[]) || [];
+                    // Escenario 299: Garantía universal de asignación de bahías por cubicaje y clúster
+                    await ensureUniversalStagingSpaces(rawOrders, supabase);
                     const profileIds = Array.from(new Set(rawOrders.map(o => o.profile_id || o.profiles?.id).filter(Boolean)));
                     const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -1332,11 +1334,15 @@ function ContingencyPrintContent() {
                     const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
                         ? formatSpaceLabel(order.warehouse_spaces)
                         : 'S/A';
-                    // Ordenamiento Canónico: productos con precio > 0 arriba, productos a $0 COP al final
+                    // Ordenamiento Canónico Escenario 299: productos con precio comercial > 0 arriba (A-Z), productos a $0 COP al final (A-Z)
                     const items = [...(order.order_items || [])].sort((a: any, b: any) => {
                         const priceA = Number(a.unit_price || 0);
                         const priceB = Number(b.unit_price || 0);
-                        return (priceB > 0 ? 1 : 0) - (priceA > 0 ? 1 : 0);
+                        const priceDiff = (priceB > 0 ? 1 : 0) - (priceA > 0 ? 1 : 0);
+                        if (priceDiff !== 0) return priceDiff;
+                        const nameA = (a.products?.name || a.nickname || a.variant_label || '').trim();
+                        const nameB = (b.products?.name || b.nickname || b.variant_label || '').trim();
+                        return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
                     });
                     const itemsCount = items.length;
                     const crateBalance = typeof order.profiles?.crate_balance === 'number' ? order.profiles.crate_balance : 0;
