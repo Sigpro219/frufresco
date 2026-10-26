@@ -5892,40 +5892,70 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         }
     }, [formData.latitude, formData.longitude, formData.geocoding_status, editData?.latitude, editData?.longitude, isReadOnly, isLead]);
 
-    const handleGeocode = async () => {
-        if (!formData.address) {
+    const normalizeColombianAddress = (address: string, municipality: string = 'Bogotá'): string => {
+        let clean = (address || '').trim();
+        if (!clean) return '';
+
+        // Estandarización de vías principales colombianas
+        clean = clean.replace(/\b(CRA|CRRA|KRA|KR|CR)\b\.?/gi, 'Carrera');
+        clean = clean.replace(/\b(CLL|CL)\b\.?/gi, 'Calle');
+        clean = clean.replace(/\b(DG|DIAG)\b\.?/gi, 'Diagonal');
+        clean = clean.replace(/\b(TV|TRANS|TRV)\b\.?/gi, 'Transversal');
+        clean = clean.replace(/\b(AV|AVENIDA)\b\.?/gi, 'Avenida');
+        clean = clean.replace(/\b(AUTO|AUTOPISTA)\b\.?/gi, 'Autopista');
+
+        // Si no tiene '#' y tiene números separados por espacios (ej: "Carrera 12D 32 44 Sur")
+        if (!clean.includes('#')) {
+            const match = clean.match(/^([A-Za-z]+(?:\s+[A-Za-z0-9]+)?)\s+(\d+[A-Za-z]?)\s+(\d+)\s*(.*)$/i);
+            if (match) {
+                const via = match[1].trim();
+                const num1 = match[2].trim();
+                const num2 = match[3].trim();
+                const suffix = match[4].trim();
+                clean = `${via} # ${num1}-${num2}${suffix ? ' ' + suffix : ''}`;
+            }
+        }
+
+        return `${clean}, ${municipality || 'Bogotá'}, Colombia`;
+    };
+
+    const handleGeocode = async (overrideAddress?: string): Promise<boolean> => {
+        const rawAddr = (overrideAddress !== undefined ? overrideAddress : formData.address || '').trim();
+        if (!rawAddr) {
             window.showToast?.('Ingresa una dirección primero', 'info');
-            return;
+            return false;
         }
         
         setGeocoding(true);
         try {
-            const addressQuery = `${formData.address}, ${formData.municipality || 'Bogotá'}, Colombia`;
+            const normalizedQuery = normalizeColombianAddress(rawAddr, formData.municipality || 'Bogotá');
 
-            console.log('--- INICIANDO GEOCODING VÍA PROXY ---');
-            console.log('Query:', addressQuery);
+            console.log('--- INICIANDO GEOCODING NORMALIZADO VÍA PROXY ---');
+            console.log('Query original:', rawAddr);
+            console.log('Query normalizada:', normalizedQuery);
 
-            const response = await fetch(`/api/geocode?address=${encodeURIComponent(addressQuery)}`);
-            const data = await response.json();
+            let response = await fetch(`/api/geocode?address=${encodeURIComponent(normalizedQuery)}`);
+            let data = await response.json();
 
-            console.log('Resultado Proxy:', data.status);
-            
+            // Si falla normalizada, reintentar con query literal
+            if (data.status !== 'OK' || !data.results || !data.results[0]) {
+                const rawQuery = `${rawAddr}, ${formData.municipality || 'Bogotá'}, Colombia`;
+                response = await fetch(`/api/geocode?address=${encodeURIComponent(rawQuery)}`);
+                data = await response.json();
+            }
+
             if (data.status === 'OK' && data.results && data.results[0]) {
                 const { lat, lng } = data.results[0].geometry.location;
-                
-                console.log('Coordenadas encontradas:', lat, lng);
-                
                 setFormData(prev => ({
                     ...prev,
                     latitude: lat.toFixed(7),
                     longitude: lng.toFixed(7),
                     geocoding_status: 'verified'
                 }));
-                
-                window.showToast?.('¡Ubicación detectada con éxito!', 'success');
+                window.showToast?.('¡Ubicación detectada con éxito en mapa!', 'success');
+                return true;
             } else if (data.status === 'ZERO_RESULTS') {
-                // Fallback simplificado
-                const simplerAddress = `${formData.address.split('#')[0].trim()}, ${formData.municipality || 'Bogotá'}, Colombia`;
+                const simplerAddress = `${rawAddr.split('#')[0].trim()}, ${formData.municipality || 'Bogotá'}, Colombia`;
                 const r2 = await fetch(`/api/geocode?address=${encodeURIComponent(simplerAddress)}`);
                 const d2 = await r2.json();
 
@@ -5937,17 +5967,19 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         longitude: lng.toFixed(7),
                         geocoding_status: 'verified'
                     }));
-                    window.showToast?.('Ubicación aproximada detectada', 'info');
+                    window.showToast?.('Ubicación aproximada detectada en mapa', 'info');
+                    return true;
                 } else {
-                    window.showToast?.('No se encontró la dirección.', 'info');
+                    window.showToast?.('No se encontró la dirección exacta. Puedes mover el pin rojo en el mapa manualmente.', 'info');
+                    return false;
                 }
             } else {
                 console.error('Error Proxy status:', data.status, data.error_message);
-                window.showToast?.(`Error de Google: ${data.status}`, 'error');
+                return false;
             }
         } catch (err) {
             console.error('Error crítico en Geocoding Proxy:', err);
-            window.showToast?.('Error al conectar con el servicio de mapas', 'error');
+            return false;
         } finally {
             setGeocoding(false);
         }
@@ -6005,6 +6037,18 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         setSaving(false);
                         window.showToast?.('Por favor selecciona una Casa Matriz para vincular la sucursal, o elige Cuenta Individual.', 'info');
                         return;
+                    }
+                    if (!formData.address || formData.address.trim().length < 5) {
+                        setSaving(false);
+                        window.showToast?.('La dirección de entrega es obligatoria para registrar la sucursal.', 'error');
+                        return;
+                    }
+                    if (!agreement && !formData.pricing_model_id) {
+                        const proceed = window.confirm('Atención: La Casa Matriz seleccionada no cuenta con un Acuerdo Institucional vigente. ¿Deseas crear la sucursal de todas formas sin precios negociados asignados?');
+                        if (!proceed) {
+                            setSaving(false);
+                            return;
+                        }
                     }
                     payload.is_corporate_parent = false;
                     payload.parent_id = formData.parent_id;
@@ -8517,7 +8561,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         {!isReadOnly && (
                                             <button 
                                                 type="button" 
-                                                onClick={handleGeocode} 
+                                                onClick={() => handleGeocode()} 
                                                 disabled={geocoding} 
                                                 style={{ 
                                                     backgroundColor: THEME.colors.primary, 
@@ -8536,14 +8580,15 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 }}
                                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
                                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                                title="Hacer clic para georreferenciar en Google Maps"
                                             >
                                                 {geocoding ? (
                                                     <>
-                                                        <Loader2 size={14} className="animate-spin" /> Buscando...
+                                                        <Loader2 size={14} className="animate-spin" /> Localizando en mapa...
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Sparkles size={14} /> Pin inteligente (IA)
+                                                        <MapPin size={14} /> Ubicar en Mapa (Google Maps)
                                                     </>
                                                 )}
                                             </button>
@@ -8559,7 +8604,19 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                         type="text" 
                                                         value={formData.address} 
                                                         onChange={(e) => setFormData({...formData, address: e.target.value})}
-                                                        placeholder="Ej: AV CRA 68 # 90-88"
+                                                        onBlur={(e) => {
+                                                            const val = e.target.value.trim();
+                                                            if (val.length >= 6 && (!formData.latitude || formData.geocoding_status !== 'verified')) {
+                                                                handleGeocode(val);
+                                                            }
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                handleGeocode();
+                                                            }
+                                                        }}
+                                                        placeholder="Ej: AV CRA 68 # 90-88 o CRA 12D 32 44 Sur"
                                                         readOnly={isReadOnly}
                                                         style={{ width: '100%', height: '34px', padding: '0 0.6rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'text', fontFamily: THEME.typography.fontFamilySecondary, outline: 'none' }}
                                                     />
@@ -8603,13 +8660,19 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 {!formData.latitude && (
                                                     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)', zIndex: 10 }}>
                                                         <div style={{ fontSize: '1rem', fontWeight: '600', color: THEME.colors.textMain, marginBottom: '4px', fontFamily: THEME.typography.fontFamilyMain }}>Esperando dirección...</div>
-                                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>Usa el pin inteligente o arrastra el mapa</div>
+                                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>Escribe la dirección para ubicarla en el mapa o haz clic en "Ubicar en Mapa"</div>
                                                     </div>
                                                 )}
                                             </div>
+                                            {formData.latitude && formData.longitude && (
+                                                <div style={{ backgroundColor: '#ECFDF5', padding: '0.65rem 0.85rem', borderRadius: THEME.radius.md, fontSize: '0.72rem', color: '#047857', fontWeight: '700', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                    <CheckCircle2 size={14} style={{ color: '#059669', flexShrink: 0 }} />
+                                                    <span>Geocerca confirmada para despacho y TMS (Lat: {formData.latitude}, Lng: {formData.longitude})</span>
+                                                </div>
+                                            )}
                                             {!isReadOnly && (
                                                 <div style={{ backgroundColor: THEME.colors.primaryLight, padding: '0.8rem', borderRadius: THEME.radius.md, fontSize: '0.7rem', color: THEME.colors.primary, fontWeight: '600', border: `1px solid ${THEME.colors.primary}33`, display: 'flex', alignItems: 'center', gap: '6px', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                    <Sparkles size={12} /> Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.
+                                                    <Sparkles size={12} /> Tip: Puedes arrastrar el marcador rojo en el mapa para ajustar el punto de entrega exacto si la dirección es ambigua.
                                                 </div>
                                             )}
                                         </div>
