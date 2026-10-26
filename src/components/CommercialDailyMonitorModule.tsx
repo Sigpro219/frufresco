@@ -37,6 +37,8 @@ interface DateEntry {
 
 interface OrderDetail {
     id: string;
+    branchName?: string;
+    parentName?: string | null;
     sequenceId: number | string;
     friendlyId?: string;
     status?: string;
@@ -99,6 +101,32 @@ interface ProductConsolidated {
 
 type ActiveView = 'clients' | 'products' | 'product_drilldown';
 type PokaYokeFilter = 'all' | 'equal_value' | 'multiple_orders' | 'under_minimum';
+
+function parseClientBranchInfo(clientName: string, razonSocial?: string): {
+    branchName: string;
+    parentName: string | null;
+} {
+    const raw = (clientName || '').trim();
+    if (!raw) return { branchName: 'Cliente Institucional', parentName: null };
+
+    // Check for " - " split (e.g., "IRCC S.A.S... - BEER STATION FLORESTA")
+    const parts = raw.split(/\s+[-–—]\s+/);
+    if (parts.length >= 2) {
+        const parent = parts[0].trim();
+        const branch = parts.slice(1).join(' - ').trim();
+        if (parent.toLowerCase() === branch.toLowerCase()) {
+            return { branchName: branch, parentName: null };
+        }
+        return { branchName: branch, parentName: parent };
+    }
+
+    // If there is a distinct legal razon_social
+    if (razonSocial && razonSocial.trim().toLowerCase() !== raw.toLowerCase()) {
+        return { branchName: raw, parentName: razonSocial.trim() };
+    }
+
+    return { branchName: raw, parentName: null };
+}
 
 export default function CommercialDailyMonitorModule() {
     // 1. Selector de fechas (Sidebar con Boxing de 6 meses)
@@ -299,6 +327,7 @@ export default function CommercialDailyMonitorModule() {
                 const clientType: 'b2b' | 'b2c' = isB2B ? 'b2b' : 'b2c';
                 const isInvoice = profile.document_type === 'invoice' || Boolean(ord.invoice_id);
                 const documentType = isInvoice ? 'Factura' : 'Remisión';
+                const { branchName, parentName } = parseClientBranchInfo(clientName, profile.razon_social);
 
                 return {
                     id: ord.id,
@@ -306,6 +335,8 @@ export default function CommercialDailyMonitorModule() {
                     friendlyId,
                     profileId: ord.profile_id,
                     clientName,
+                    branchName,
+                    parentName,
                     companyName,
                     nit,
                     zone: ord.logistics_data?.zone_name || ord.shipping_address?.split(',')[1]?.trim() || 'Bogotá Principal',
@@ -1207,112 +1238,165 @@ export default function CommercialDailyMonitorModule() {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
                                 <thead>
                                     <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                        <th style={{ padding: '0.75rem 1rem' }}>Consecutivo</th>
-                                        <th style={{ padding: '0.75rem 1rem' }}>Zona</th>
-                                        <th style={{ padding: '0.75rem 1rem' }}>Cliente (Sucursal)</th>
-                                        <th style={{ padding: '0.75rem 1rem' }}>Tipo</th>
-                                        <th style={{ padding: '0.75rem 1rem' }}>Doc.</th>
-                                        <th style={{ padding: '0.75rem 1rem' }}>Pago</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Total Venta</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>KG</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Utilidad</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Margen</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Acción</th>
+                                        <th style={{ padding: '0.85rem 1.25rem', width: '14%' }}>Consecutivo & Zona</th>
+                                        <th style={{ padding: '0.85rem 1.25rem', width: '38%' }}>Cliente & Sucursal</th>
+                                        <th style={{ padding: '0.85rem 1.25rem', width: '15%' }}>Documento & Pago</th>
+                                        <th style={{ padding: '0.85rem 1.25rem', width: '14%', textAlign: 'right' }}>Facturación & Carga</th>
+                                        <th style={{ padding: '0.85rem 1.25rem', width: '12%', textAlign: 'right' }}>Rentabilidad BI</th>
+                                        <th style={{ padding: '0.85rem 1.25rem', width: '7%', textAlign: 'center' }}>Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredOrders.length === 0 ? (
                                         <tr>
-                                            <td colSpan={11} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                            <td colSpan={6} style={{ padding: '3.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
                                                 No se encontraron pedidos para los filtros aplicados.
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredOrders.map((ord, idx) => (
-                                            <tr key={ord.id} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: ord.hasEqualValueAlert ? '#FEF2F2' : (ord.hasMultipleOrdersAlert ? '#FAF5FF' : 'white') }}>
-                                                <td style={{ padding: '0.75rem 1rem' }}>
-                                                    <div style={{ fontWeight: '800', color: THEME.colors.primary, fontFamily: 'monospace', fontSize: '0.88rem' }}>
+                                        filteredOrders.map((ord) => (
+                                            <tr
+                                                key={ord.id}
+                                                style={{
+                                                    borderBottom: '1px solid #F1F5F9',
+                                                    backgroundColor: ord.hasEqualValueAlert ? '#FEF2F2' : (ord.hasMultipleOrdersAlert ? '#FAF5FF' : 'white'),
+                                                    transition: 'background-color 0.15s ease'
+                                                }}
+                                            >
+                                                {/* 1. Consecutivo & Zona */}
+                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
+                                                    <div style={{ fontWeight: '800', color: THEME.colors.primary, fontFamily: 'monospace', fontSize: '0.90rem', letterSpacing: '0.02em' }}>
                                                         {ord.friendlyId || ord.sequenceId}
                                                     </div>
-                                                    <div style={{ fontSize: '0.70rem', color: THEME.colors.textSecondary }}>
-                                                        #{ord.sequenceId}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary }}>
-                                                    <span style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>
-                                                        {ord.zone}
-                                                    </span>
-                                                </td>
-                                                <td style={{ padding: '0.75rem 1rem' }}>
-                                                    <div style={{ fontWeight: '700', color: THEME.colors.textMain }}>{ord.clientName}</div>
-                                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
-                                                        {ord.nit && ord.nit !== 'Sin NIT' && (
-                                                            <span style={{ fontWeight: '600', color: '#475569' }}>NIT: {ord.nit}</span>
-                                                        )}
+                                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                        <span style={{ fontWeight: '600' }}>#{ord.sequenceId}</span>
                                                         <span>•</span>
-                                                        <span>{ord.address}</span>
+                                                        <span style={{ backgroundColor: '#F1F5F9', color: '#475569', padding: '1px 5px', borderRadius: '4px', fontWeight: '600', fontSize: '0.70rem' }}>
+                                                            {ord.zone}
+                                                        </span>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 1rem' }}>
-                                                    <span style={{
-                                                        padding: '2px 6px',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '700',
-                                                        backgroundColor: ord.type === 'b2b' ? '#EFF6FF' : '#F0FDF4',
-                                                        color: ord.type === 'b2b' ? '#1D4ED8' : '#15803D'
-                                                    }}>
-                                                        {ord.type.toUpperCase()}
-                                                    </span>
+
+                                                {/* 2. Cliente & Sucursal (Desacople Limpio Sede vs Matriz) */}
+                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.92rem', letterSpacing: '-0.01em' }}>
+                                                                {ord.branchName || ord.clientName}
+                                                            </span>
+                                                            <span style={{
+                                                                padding: '1px 6px',
+                                                                borderRadius: '4px',
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: ord.type === 'b2b' ? '#EFF6FF' : '#F0FDF4',
+                                                                color: ord.type === 'b2b' ? '#1D4ED8' : '#15803D',
+                                                                border: `1px solid ${ord.type === 'b2b' ? '#BFDBFE' : '#BBF7D0'}`
+                                                            }}>
+                                                                {ord.type === 'b2b' ? 'B2B INSTITUCIONAL' : 'B2C HOGAR'}
+                                                            </span>
+                                                        </div>
+                                                        {ord.parentName && (
+                                                            <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: '500' }}>
+                                                                Matriz: <span style={{ color: '#334155', fontWeight: '700' }}>{ord.parentName}</span>
+                                                            </div>
+                                                        )}
+                                                        <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '1px' }}>
+                                                            {ord.nit && ord.nit !== 'Sin NIT' && (
+                                                                <span style={{ fontWeight: '600', color: '#475569' }}>NIT: {ord.nit}</span>
+                                                            )}
+                                                            <span>•</span>
+                                                            <span style={{ color: '#64748B' }}>{ord.address}</span>
+                                                        </div>
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 1rem' }}>
-                                                    <span style={{
-                                                        padding: '2px 7px',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '700',
-                                                        backgroundColor: ord.documentType === 'Factura' ? '#EFF6FF' : '#ECFDF5',
-                                                        color: ord.documentType === 'Factura' ? '#1D4ED8' : '#047857',
-                                                        border: `1px solid ${ord.documentType === 'Factura' ? '#BFDBFE' : '#A7F3D0'}`
-                                                    }}>
-                                                        {ord.documentType}
-                                                    </span>
+
+                                                {/* 3. Documento & Pago */}
+                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                        <div>
+                                                            <span style={{
+                                                                padding: '2px 8px',
+                                                                borderRadius: '6px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: ord.documentType === 'Factura' ? '#EFF6FF' : '#ECFDF5',
+                                                                color: ord.documentType === 'Factura' ? '#1D4ED8' : '#047857',
+                                                                border: `1px solid ${ord.documentType === 'Factura' ? '#BFDBFE' : '#A7F3D0'}`
+                                                            }}>
+                                                                {ord.documentType}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.74rem', color: '#475569', fontWeight: '600' }}>
+                                                            {ord.paymentMethod}
+                                                        </div>
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary }}>
-                                                    {ord.paymentMethod}
+
+                                                {/* 4. Facturación & Carga */}
+                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'right', verticalAlign: 'top' }}>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain }}>
+                                                        {formatMoney(ord.total)}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.73rem', color: THEME.colors.textSecondary, marginTop: '3px' }}>
+                                                        <strong style={{ color: '#0369A1' }}>{formatNumber(ord.totalWeightKg, 1)} Kg</strong> • {ord.itemsCount} {ord.itemsCount === 1 ? 'ítem' : 'ítems'}
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: THEME.colors.textMain }}>
-                                                    {formatMoney(ord.total)}
+
+                                                {/* 5. Rentabilidad BI */}
+                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'right', verticalAlign: 'top' }}>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.88rem', color: ord.grossProfit >= 0 ? '#0D7A57' : '#DC2626' }}>
+                                                        {formatMoney(ord.grossProfit)}
+                                                    </div>
+                                                    <div style={{ marginTop: '4px' }}>
+                                                        <span style={{
+                                                            padding: '2px 7px',
+                                                            borderRadius: '999px',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '800',
+                                                            backgroundColor: ord.marginPct >= 20 ? '#DCFCE7' : (ord.marginPct >= 10 ? '#FEF3C7' : '#FEE2E2'),
+                                                            color: ord.marginPct >= 20 ? '#15803D' : (ord.marginPct >= 10 ? '#B45309' : '#B91C1C'),
+                                                            border: `1px solid ${ord.marginPct >= 20 ? '#86EFAC' : (ord.marginPct >= 10 ? '#FDE68A' : '#FECACA')}`
+                                                        }}>
+                                                            {ord.marginPct.toFixed(1)}% margen
+                                                        </span>
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '600', color: THEME.colors.textSecondary }}>
-                                                    {formatNumber(ord.totalWeightKg, 1)} Kg
-                                                </td>
-                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', color: ord.grossProfit >= 0 ? '#0D7A57' : '#DC2626' }}>
-                                                    {formatMoney(ord.grossProfit)}
-                                                </td>
-                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: ord.marginPct >= 20 ? '#0D7A57' : '#D97706' }}>
-                                                    {ord.marginPct.toFixed(1)}%
-                                                </td>
-                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                                                    <a
-                                                        href={`/admin/orders/contingency-print?mode=remissions&orderId=${ord.id}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        style={{
-                                                            color: THEME.colors.primary,
-                                                            padding: '4px 8px',
-                                                            borderRadius: '6px',
-                                                            backgroundColor: THEME.colors.primaryLight,
-                                                            fontSize: '0.75rem',
-                                                            fontWeight: '700',
-                                                            textDecoration: 'none',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '4px'
-                                                        }}
-                                                    >
-                                                        Verificar <ChevronRight size={13} />
-                                                    </a>
+
+                                                {/* 6. Acción */}
+                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                        {ord.hasEqualValueAlert && (
+                                                            <span style={{ padding: '1px 5px', borderRadius: '4px', fontSize: '0.64rem', fontWeight: '800', backgroundColor: '#FEE2E2', color: '#B91C1C' }}>
+                                                                Duplicado
+                                                            </span>
+                                                        )}
+                                                        {ord.hasMultipleOrdersAlert && !ord.hasEqualValueAlert && (
+                                                            <span style={{ padding: '1px 5px', borderRadius: '4px', fontSize: '0.64rem', fontWeight: '800', backgroundColor: '#F3E8FF', color: '#7E22CE' }}>
+                                                                Multipedido
+                                                            </span>
+                                                        )}
+                                                        <a
+                                                            href={`/admin/orders/contingency-print?mode=remissions&orderId=${ord.id}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            style={{
+                                                                color: THEME.colors.primary,
+                                                                padding: '5px 10px',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: THEME.colors.primaryLight,
+                                                                fontSize: '0.74rem',
+                                                                fontWeight: '700',
+                                                                textDecoration: 'none',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                transition: 'all 0.15s ease'
+                                                            }}
+                                                        >
+                                                            Verificar <ChevronRight size={13} />
+                                                        </a>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))
