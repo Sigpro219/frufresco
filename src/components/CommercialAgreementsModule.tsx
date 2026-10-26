@@ -3464,6 +3464,71 @@ export default function CommercialAgreementsModule() {
         }
     };
 
+    const getAgreementRemainingInfo = (validUntil?: string, startDate?: string) => {
+        if (!validUntil) return { label: 'Indefinida', sublabel: null, color: '#64748B', bgColor: '#F1F5F9', border: '#CBD5E1', diffDays: 0 };
+        
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const end = new Date(validUntil);
+        end.setHours(0, 0, 0, 0);
+        
+        const diffMs = end.getTime() - now.getTime();
+        const remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        
+        let totalPactadoText: string | null = null;
+        if (startDate) {
+            const s = new Date(startDate);
+            s.setHours(0, 0, 0, 0);
+            const totalDays = Math.round((end.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
+            if (totalDays > 0) {
+                totalPactadoText = `Pactado: ${totalDays} d`;
+            }
+        }
+        
+        if (remainingDays < 0) {
+            const absDays = Math.abs(remainingDays);
+            return {
+                label: `Venció hace ${absDays} d`,
+                sublabel: totalPactadoText,
+                color: '#991B1B',
+                bgColor: '#FEF2F2',
+                border: '#FCA5A5',
+                remainingDays,
+                isExpired: true
+            };
+        } else if (remainingDays === 0) {
+            return {
+                label: 'Vence hoy',
+                sublabel: totalPactadoText,
+                color: '#B45309',
+                bgColor: '#FFFBEB',
+                border: '#FDE68A',
+                remainingDays: 0,
+                isUrgent: true
+            };
+        } else if (remainingDays <= 7) {
+            return {
+                label: `Quedan ${remainingDays} d`,
+                sublabel: totalPactadoText,
+                color: '#B45309',
+                bgColor: '#FFFBEB',
+                border: '#FDE68A',
+                remainingDays,
+                isUrgent: true
+            };
+        } else {
+            return {
+                label: `Quedan ${remainingDays} d`,
+                sublabel: totalPactadoText,
+                color: '#047857',
+                bgColor: '#ECFDF5',
+                border: '#A7F3D0',
+                remainingDays,
+                isUrgent: false
+            };
+        }
+    };
+
     const getDurationText = (start: string, end: string) => {
         if (!start || !end) return 'Indefinida';
         const s = new Date(start);
@@ -3558,8 +3623,8 @@ export default function CommercialAgreementsModule() {
                 valA = new Date(a.valid_until || 0).getTime();
                 valB = new Date(b.valid_until || 0).getTime();
             } else if (sortColumn === 'duration') {
-                valA = new Date(a.valid_until || 0).getTime() - new Date(a.start_date || a.created_at).getTime();
-                valB = new Date(b.valid_until || 0).getTime() - new Date(b.start_date || b.created_at).getTime();
+                valA = new Date(a.valid_until || 0).getTime() - Date.now();
+                valB = new Date(b.valid_until || 0).getTime() - Date.now();
             } else if (sortColumn === 'status') {
                 valA = getAgreementStatus(a.valid_until).label;
                 valB = getAgreementStatus(b.valid_until).label;
@@ -3968,7 +4033,7 @@ export default function CommercialAgreementsModule() {
                                         onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <span>Duración</span>
+                                            <span>Restante / Plazo</span>
                                             {sortColumn === 'duration' ? (
                                                 sortDirection === 'asc' ? <ChevronUp size={14} color={THEME.colors.primary} /> : <ChevronDown size={14} color={THEME.colors.primary} />
                                             ) : (
@@ -4274,16 +4339,33 @@ export default function CommercialAgreementsModule() {
                                             </div>
                                         </td>
                                         <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap' }}>
-                                            <span style={{ 
-                                                fontSize: '0.75rem', 
-                                                backgroundColor: '#F3F4F6', 
-                                                padding: '3px 8px', 
-                                                borderRadius: '12px', 
-                                                color: '#374151',
-                                                fontWeight: '500'
-                                            }}>
-                                                {getDurationText(agreement.start_date, agreement.valid_until)}
-                                            </span>
+                                            {(() => {
+                                                const rem = getAgreementRemainingInfo(agreement.valid_until, agreement.start_date);
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+                                                        <span style={{ 
+                                                            fontSize: '0.72rem', 
+                                                            backgroundColor: rem.bgColor, 
+                                                            color: rem.color,
+                                                            border: `1px solid ${rem.border}`,
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '12px', 
+                                                            fontWeight: '700',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}>
+                                                            <Clock size={11} />
+                                                            {rem.label}
+                                                        </span>
+                                                        {rem.sublabel && (
+                                                            <span style={{ fontSize: '0.67rem', color: '#94A3B8', fontWeight: '500', paddingLeft: '2px' }}>
+                                                                {rem.sublabel}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
                                         <td style={{ padding: '0.75rem 1.25rem' }}>
                                             <span style={{ 

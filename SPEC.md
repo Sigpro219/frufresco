@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.280 (Calibración Canónica de Campos Obligatorios World Office Desktop: Clasificación Contable, Bodega Parametrizable y Resiliencia en Sucursales — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.281 (Certificación Forense Integral de Documentación Operativa: Cierre de los 6 Hallazgos Gemba de Inventario, Unidades Duales, Bahías de Muelle, Membretes Operativos y Estándar Golden Print — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 302 Escenarios BDD Ininterrumpidos (1..302)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 303 Escenarios BDD Ininterrumpidos (1..303)
 
 ---
 
@@ -12021,3 +12021,22 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - En la pestaña **Configuración** de Facturación se exponen los campos editables de *Clasificación World Office* y *Bodega World Office*, permitiendo que el facturador ajuste en caliente la denominación exacta registrada en su SQL Server local.
   4. **Columna AD (`Encab: Sucursal`) — Mapeo Resiliente de Sedes de Terceros:**
      - Si un tercero en World Office no posee sucursales creadas bajo su NIT o su denominación no coincide letra a letra (como en el caso `KELLOGSS`), el sistema proporciona fallback limpio evitando que el lote de facturas quede bloqueado, preservando la Razón Social y el NIT de la casa matriz.
+
+---
+
+### Escenario 303: Certificación Forense Integral de Documentación Operativa: Cierre de los 6 Hallazgos Gemba de Inventario, Unidades Duales, Bahías de Muelle, Membretes Operativos y Estándar Golden Print (SDD v1.9.281)
+- **Given** el expediente de auditoría forense del Gemba (`Hallazgos_documentación.docx`) contentivo de 6 hallazgos operativos y 8 evidencias gráficas reportadas por los equipos de bodega, compras y despacho,
+- **When** se ejecuta la auditoría forense y contrastación contra el código de producción y el contrato canónico de arquitectura,
+- **Then** el sistema ratifica y consolida los siguientes 6 blindajes innegociables:
+  1. **Hallazgo 1 (Inventario Inicial Estricto en Sábana de Alistamiento):**
+     - En `src/app/admin/orders/alistamiento-print/page.tsx`, la proyección `INV[...]` del encabezado prioriza el conteo físico real (`bodegaPost10am ?? physicalCount ?? 0`) del último cierre oficial de inventario (`daily_inventory_closings`) previo a la fecha consultada. Si un SKU no fue contado físicamente o quedó en cero al cierre, se renderiza estrictamente `INV[0]` en rojo `#B91C1C`, prohibiendo cualquier fallback al remanente teórico calculado (`Col S: calculatedStock`).
+  2. **Hallazgo 2 (Protección Anti-Doble-Conversión en Unidades Duales):**
+     - En `normalizeToKg` y `normalizeDemandToKg`, si la unidad del ítem en base de datos ya está en kilogramos (`unit === 'Kg'` o `kilos`), `quantity` representa la masa neta exacta (ej. 3.68 KG). Queda prohibido re-multiplicar por el peso unitario de presentación (`3.68 * 0.160 = 0.59 KG`). En Fila 2, `orderUtils.ts` ejecuta inferencia inversa (`Math.round(quantity / weightKg)`) para proyectar las unidades discretas (`23 und de 160 gr`) en perfecta armonía con los kilogramos netos de Fila 1.
+  3. **Hallazgo 3 (Garantía Universal de Muelle sin `S/A`):**
+     - En `ensureUniversalStagingSpaces` (`src/lib/stagingSpaceAllocator.ts`), la Sábana de Alistamiento y las vistas de contingencia auto-asignan y persisten en Supabase las bahías de muelle (`1..150`) agrupadas por cliente y cubicadas por canastillas, garantizando que la columna `LUGAR` proyecte siempre bahías físicas y jamás quede congelada en `S/A`.
+  4. **Hallazgo 4 (Modo Limpio de Listas Operativas Internas `internalList`):**
+     - En `UniversalLetterhead.tsx` y `Letterhead.tsx`, cuando se imprime una lista operativa de planta o plaza (Planilla Maestra de Compras, Planillas por Sublista o Manifiesto de Ruta), la bandera `internalList={true}` o `showHeader={false}` suprime el NIT, el régimen común, el bloque comercial `Contáctanos` y el pie de página comercial, otorgando el 100% de la superficie útil al contenido operativo.
+  5. **Hallazgo 5 (Prohibición de Fallback a Consecutivo de Pedido en `BAHÍA DE PISO`):**
+     - En `contingency-print/page.tsx`, el recuadro superior `BAHÍA DE PISO` proyecta únicamente la bahía física asignada (`ESPACIO {formatSpaceLabel(order.warehouse_spaces)}`) o `S/A`. Queda erradicado cualquier fallback a `order.sequence_id`, impidiendo que el consecutivo documental del pedido (ej. `#1116`) usurpe el rótulo de muelle.
+  6. **Hallazgo 6 (Anclaje Magnético Inferior Golden Print en Carta):**
+     - En remisiones en papel Carta (`contingency-print/page.tsx` y `GoldenPrintStyles.tsx`), el bloque unificado de Totales, Control de Canastillas Plásticas y Firmas se encuentra encapsulado con `marginTop: auto` dentro del contenedor calibrado a `min-height: 265mm`, garantizando que sin importar el número de ítems (1, 4 o 18 productos), los totales se ubiquen al pie exacto de la página junto a las firmas, eliminando espacios muertos a media página.

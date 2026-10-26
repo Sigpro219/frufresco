@@ -5136,6 +5136,38 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const [contactFirstName, setContactFirstName] = useState(initialContact.firstName);
     const [contactLastName, setContactLastName] = useState(initialContact.lastName);
 
+    const [suggestedBranchId, setSuggestedBranchId] = useState<string>('');
+    const [loadingBranchId, setLoadingBranchId] = useState(false);
+
+    const fetchNextBranchId = async () => {
+        setLoadingBranchId(true);
+        try {
+            const { data } = await supabase
+                .from('profiles')
+                .select('branch_id')
+                .not('branch_id', 'is', null);
+
+            let maxNum = 0;
+            if (data) {
+                for (const row of data) {
+                    const raw = (row.branch_id || '').trim();
+                    const num = parseInt(raw, 10);
+                    if (!isNaN(num) && num > maxNum) {
+                        maxNum = num;
+                    }
+                }
+            }
+            const nextId = String(maxNum > 0 ? maxNum + 1 : 1001);
+            setSuggestedBranchId(nextId);
+            return nextId;
+        } catch (err) {
+            console.error('Error fetching next branch_id:', err);
+            return '';
+        } finally {
+            setLoadingBranchId(false);
+        }
+    };
+
     const [formData, setFormData] = useState({
         company_name: editData?.company_name || '',
         razon_social: editData?.razon_social || '',
@@ -5622,29 +5654,96 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const [inheritedFromParent, setInheritedFromParent] = useState(false);
 
     const fetchAgreement = async () => {
-        if (!editData?.id) return;
+        const targetParentId = formData.parent_id;
+        const targetClientId = editData?.id;
+
+        // Si no hay matriz vinculada ni cliente existente, no hay acuerdo por consultar
+        if (!targetParentId && !targetClientId) {
+            setAgreement(null);
+            setInheritedFromParent(false);
+            return;
+        }
+
         setLoadingAgreement(true);
         try {
-            if (formData.parent_id) {
+            if (targetParentId) {
+                // 1. Acuerdo activo directo de la Casa Matriz
                 const { data: parentData } = await supabase
                     .from('quotes')
                     .select('id, quote_number, status, start_date, valid_until, client_id, model_snapshot_name, created_at')
-                    .eq('client_id', formData.parent_id)
+                    .eq('client_id', targetParentId)
                     .eq('status', 'agreement')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
                     .maybeSingle();
 
-                if (parentData) {
-                    setAgreement(parentData);
+                let resolvedAgreement = parentData || null;
+
+                // 2. Si no tiene acuerdo directo, verificar si la Matriz tiene active_master_agreement_id
+                if (!resolvedAgreement) {
+                    const { data: parentProfile } = await supabase
+                        .from('profiles')
+                        .select('logistics_data')
+                        .eq('id', targetParentId)
+                        .maybeSingle();
+                    const masterId = parentProfile?.logistics_data?.active_master_agreement_id;
+                    if (masterId) {
+                        const { data: mQuote } = await supabase
+                            .from('quotes')
+                            .select('id, quote_number, status, start_date, valid_until, client_id, model_snapshot_name, created_at')
+                            .eq('id', masterId)
+                            .eq('status', 'agreement')
+                            .maybeSingle();
+                        if (mQuote) resolvedAgreement = mQuote;
+                    }
+                }
+
+                // 3. Si aún no hay acuerdo, verificar listas maestras compartidas (app_settings: agreement_clients:*)
+                if (!resolvedAgreement) {
+                    const { data: sharedSettings } = await supabase
+                        .from('app_settings')
+                        .select('key, value')
+                        .ilike('key', 'agreement_clients:%');
+                    if (sharedSettings) {
+                        for (const item of sharedSettings) {
+                            try {
+                                const linkedIds: string[] = JSON.parse(item.value || '[]');
+                                if (linkedIds.includes(targetParentId)) {
+                                    const quoteId = item.key.replace('agreement_clients:', '');
+                                    const { data: sm } = await supabase
+                                        .from('quotes')
+                                        .select('id, quote_number, status, start_date, valid_until, client_id, model_snapshot_name, created_at')
+                                        .eq('id', quoteId)
+                                        .eq('status', 'agreement')
+                                        .maybeSingle();
+                                    if (sm) {
+                                        resolvedAgreement = sm;
+                                        break;
+                                    }
+                                }
+                            } catch {
+                                // ignore json error
+                            }
+                        }
+                    }
+                }
+
+                if (resolvedAgreement) {
+                    setAgreement(resolvedAgreement);
                     setInheritedFromParent(true);
                 } else {
                     setAgreement(null);
+                    setInheritedFromParent(false);
                 }
-            } else {
+            } else if (targetClientId) {
+                // Cliente individual existente
                 const { data: ownData } = await supabase
                     .from('quotes')
                     .select('id, quote_number, status, start_date, valid_until, client_id, model_snapshot_name, created_at')
-                    .eq('client_id', editData.id)
+                    .eq('client_id', targetClientId)
                     .eq('status', 'agreement')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
                     .maybeSingle();
 
                 if (ownData) {
@@ -5652,6 +5751,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     setInheritedFromParent(false);
                 } else {
                     setAgreement(null);
+                    setInheritedFromParent(false);
                 }
             }
         } catch (err) {
@@ -5664,6 +5764,21 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     useEffect(() => {
         fetchAgreement();
     }, [editData?.id, formData.parent_id]);
+
+    useEffect(() => {
+        if (b2bStructureType === 'sucursal' && !isEdit && !formData.branch_id) {
+            fetchNextBranchId().then(nextId => {
+                if (nextId) {
+                    setFormData(prev => {
+                        if (!prev.branch_id) {
+                            return { ...prev, branch_id: nextId };
+                        }
+                        return prev;
+                    });
+                }
+            });
+        }
+    }, [b2bStructureType, isEdit]);
 
     useEffect(() => {
         const fetchParents = async () => {
@@ -6721,9 +6836,15 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             type="button"
                                             disabled={isReadOnly || (isEdit && branches.length > 0)}
                                             title={isEdit && branches.length > 0 ? 'No se puede cambiar una matriz con sucursales a sucursal' : 'Punto de entrega o sede física subordinada a una matriz'}
-                                            onClick={() => {
+                                            onClick={async () => {
                                                 setB2bStructureType('sucursal');
                                                 setFormData(prev => ({ ...prev, is_corporate_parent: false }));
+                                                if (!isEdit && !formData.branch_id) {
+                                                    const nextId = await fetchNextBranchId();
+                                                    if (nextId) {
+                                                        setFormData(prev => ({ ...prev, branch_id: nextId }));
+                                                    }
+                                                }
                                             }}
                                             style={{
                                                 padding: '0.4rem 0.85rem',
@@ -6982,7 +7103,64 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         </div>
                                     </div>
                                     <FormField label="Nombre Comercial Sucursal" value={formData.company_name} onChange={(v) => setFormData({...formData, company_name: v})} required readOnly={isReadOnly} placeholder="Ej: Sede Chicó Calle 93" />
-                                    <FormField label="ID Sucursal" value={formData.branch_id} onChange={(v) => setFormData({...formData, branch_id: v})} placeholder="Ej: SUC-01" readOnly={isReadOnly} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                ID SUCURSAL
+                                            </label>
+                                            {suggestedBranchId && !isReadOnly && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData(prev => ({ ...prev, branch_id: suggestedBranchId }))}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: THEME.colors.primary,
+                                                        fontSize: '0.65rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        padding: 0
+                                                    }}
+                                                    title="Restablecer al consecutivo contable sugerido"
+                                                >
+                                                    <RefreshCw size={10} className={loadingBranchId ? 'animate-spin' : ''} /> Sugerir: {suggestedBranchId}
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                type="text"
+                                                value={formData.branch_id || ''}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, branch_id: e.target.value }))}
+                                                placeholder={loadingBranchId ? 'Calculando...' : `Ej: ${suggestedBranchId || '1257'}`}
+                                                readOnly={isReadOnly}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.65rem 0.85rem',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: `1.5px solid ${formData.branch_id ? THEME.colors.primary : '#E2E8F0'}`,
+                                                    backgroundColor: isReadOnly ? '#F8FAFC' : 'white',
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: '700',
+                                                    color: THEME.colors.textMain,
+                                                    outline: 'none',
+                                                    fontFamily: 'monospace'
+                                                }}
+                                            />
+                                            {loadingBranchId && (
+                                                <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                                                    <Loader2 size={14} className="animate-spin text-slate-400" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div style={{ fontSize: '0.62rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Info size={11} color="#3B82F6" style={{ flexShrink: 0 }} />
+                                            <span>Consecutivo sugerido para sincronización contable (World Office)</span>
+                                        </div>
+                                    </div>
                                 </div>
                             ) : (
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
