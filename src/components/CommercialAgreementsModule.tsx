@@ -2881,8 +2881,6 @@ export default function CommercialAgreementsModule() {
         }
         setIsCreatingQuickProduct(true);
         try {
-            const rawCost = parsePriceValue(quickProductCostBasis);
-
             const { data: maxIdData } = await supabase
                 .from('products')
                 .select('accounting_id')
@@ -2915,15 +2913,7 @@ export default function CommercialAgreementsModule() {
 
             if (createErr) throw createErr;
 
-            if (rawCost > 0) {
-                await supabase.from('commercial_cost_matrix').upsert({
-                    product_id: newProd.id,
-                    manual_cost: rawCost,
-                    is_active: true
-                }, { onConflict: 'product_id' } as any).catch((e: any) => console.warn('Cost matrix notice:', e));
-            }
-
-            newProd.cost_basis = rawCost;
+            newProd.cost_basis = 0;
             setCatalogProducts(prev => [newProd, ...prev]);
 
             if (quickProductRowIdx !== null) {
@@ -10770,49 +10760,27 @@ export default function CommercialAgreementsModule() {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
-                                        Costo Base Estimado (COP)
-                                    </label>
-                                    <input 
-                                        type="text"
-                                        value={quickProductCostBasis}
-                                        onChange={(e) => setQuickProductCostBasis(e.target.value)}
-                                        placeholder="Ej. 3500"
-                                        style={{
-                                            width: '100%',
-                                            padding: '8px 12px',
-                                            borderRadius: '8px',
-                                            border: '1.5px solid #CBD5E1',
-                                            fontSize: '0.85rem',
-                                            outline: 'none'
-                                        }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
-                                        Tarifa IVA (%)
-                                    </label>
-                                    <select
-                                        value={quickProductIvaRate}
-                                        onChange={(e) => setQuickProductIvaRate(Number(e.target.value))}
-                                        style={{
-                                            width: '100%',
-                                            padding: '8px 10px',
-                                            borderRadius: '8px',
-                                            border: '1.5px solid #CBD5E1',
-                                            fontSize: '0.82rem',
-                                            backgroundColor: 'white',
-                                            outline: 'none'
-                                        }}
-                                    >
-                                        <option value={0}>0% (Exento / Agropecuario)</option>
-                                        <option value={5}>5% (Bienes Especiales)</option>
-                                        <option value={19}>19% (Tarifa General)</option>
-                                    </select>
-                                </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                                    Tarifa IVA (%)
+                                </label>
+                                <select
+                                    value={quickProductIvaRate}
+                                    onChange={(e) => setQuickProductIvaRate(Number(e.target.value))}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 10px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #CBD5E1',
+                                        fontSize: '0.82rem',
+                                        backgroundColor: 'white',
+                                        outline: 'none'
+                                    }}
+                                >
+                                    <option value={0}>0% (Exento / Agropecuario)</option>
+                                    <option value={5}>5% (Bienes Especiales)</option>
+                                    <option value={19}>19% (Tarifa General)</option>
+                                </select>
                             </div>
 
                             {/* Campos Operativos de Bodega & WMS (Nace 100% Completo) */}

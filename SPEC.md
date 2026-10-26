@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.284 (Blindaje de Acuerdos Comerciales B2B: Control de Cobertura, Revocación Poka-Yoke, Ordenamiento Multicolumna y Resolución Fluida de Ingesta Excel — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.285 (Ley Marcial Global: Prohibición Estricta de 'base_price' y 'sku' en Desarrollo, y Erradicación de Costo Base en Ingesta Comercial — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -425,6 +425,16 @@ En el canal minorista residencial (B2C Hogar) rigen los siguientes contratos de 
 > [!CAUTION]
 > **Prohibición Estricta de Cotización o Facturación a $0 COP (Poka-Yoke Anti-Tarifa Cero):**  
 > Queda terminantemente prohibido cotizar, ingresar o despachar productos comerciales con tarifa \$0 COP o "sin precio". La DIAN prohíbe facturas comerciales con tarifa cero o consumo abierto sin liquidar. Si un cliente institucional solicita un producto fuera de su acuerdo comercial, el sistema **NUNCA debe ingresar el SKU en \$0 para "cotizar en caliente"**, sino que debe liquidar de forma inmediata y automática la tarifa vigente de **General Institucional** (Nivel 5). La única excepción admitida en todo el ecosistema para tarifa \$0 COP es una Reposición de Garantía por PQR (`orderNature === 'replacement'`), la cual requiere obligatoriamente amparo de un Pedido Original (`parentOrderId`).
+
+> [!CAUTION]
+> ### MANDATO ARQUITECTÓNICO MARCIAL: PROHIBICIÓN ESTRICTA DE `products.base_price` Y `products.sku` EN DESARROLLO
+> 1. **Prohibición Total de `products.base_price`:**
+>    - La columna `base_price` en la tabla maestra `products` es un residuo estático de la fase prototipo. Queda **ESTRICTAMENTE PROHIBIDO** en cualquier desarrollo nuevo, endpoint, hook o componente leer, escribir o utilizar `products.base_price` como precio de venta, fallback o costo de insumo.
+>    - **Fuente de Verdad Única:** Los precios provienen exclusivamente de `quote_items` (Acuerdos Comerciales) o de `pricing_model_prices` (Modelos Dinámicos de Precios). Los costos provienen exclusivamente de `commercial_cost_matrix` (Corabastos) o `purchase_history_normalized` (Muelle). En la tabla `products` no existen costos.
+> 2. **Prohibición de `products.sku` en UI y Lógica de Negocio:**
+>    - El `accounting_id` (ID contable numérico oficial de World Office, ej: #1138, #1701) es el **ÚNICO IDENTIFICADOR SOBERANO** del ecosistema para remisiones, báscula, facturación DIAN y alistamiento.
+>    - La columna `sku` (`VE-01701`) en Supabase se degrada a llave técnica muda (Silent Shadow Key) exclusivamente para no violar el constraint `NOT NULL UNIQUE` de PostgreSQL en Supabase.
+>    - Queda terminantemente vetado proyectar `sku` al usuario, ordenar tablas/catálogos por él, o basar filtros de negocio en dicho campo.
 
 > [!IMPORTANT]
 > **Deprecación y Obsolescencia de `products.base_price`:**  
@@ -12120,3 +12130,6 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - **Botón Inferior Interactivo (`UnmatchedResolutionModal`):** El botón de pie de formulario se mantiene interactivo mostrando `AlertCircle` `{unmatchedCount} Sin Coincidencia — Resolver para Activar`. Al pulsarlo, abre un diálogo modal de decisión rápida con dos caminos:
        - *Opción Primaria (Verde):* Descartar los {unmatchedCount} no coincidentes y formalizar el acuerdo con los {matchedCount} SKUs válidos inmediatamente.
        - *Opción Secundaria (Azul):* Filtrar la tabla de trabajo en los ítems sin coincidencia para su búsqueda o creación manual fila por fila.
+  5. **Erradicación de Costo Base en Creación Rápida de SKUs (Hallazgo 4 - SDD v1.9.285):**
+     - En el modal de creación de productos al vuelo (`QuickProductModal` en `CommercialAgreementsModule.tsx`), se elimina definitivamente el campo de "Costo Base Estimado (COP)".
+     - El comercial pacta el precio de venta acordado con el cliente institucional; la creación del SKU nace con costo pasivo $0 y margen `—`, transfiriendo la calibración del costo real a la Dirección de Compras y Abastecimiento en la Matriz de Costos (`/admin/pricing`), sin detener ni burocratizar la formalización del contrato comercial.

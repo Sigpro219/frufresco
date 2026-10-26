@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { CATEGORY_MAP } from '@/lib/constants';
 import {
     Calendar,
     ChevronUp,
@@ -76,6 +77,7 @@ interface OrderItemDetail {
     productId: string;
     productName: string;
     sku: string;
+    accountingId?: string | number | null;
     category: string;
     quantity: number;
     unit: string;
@@ -91,6 +93,7 @@ interface ProductConsolidated {
     productId: string;
     productName: string;
     sku: string;
+    accountingId?: string | number | null;
     category: string;
     unit: string;
     totalQuantity: number;
@@ -190,8 +193,8 @@ export default function CommercialDailyMonitorModule() {
         async function loadCatalogs() {
             try {
                 const [matrixRes, productsRes, profilesRes] = await Promise.all([
-                    supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true),
-                    supabase.from('products').select('id, name, sku, category, unit_of_measure'),
+                    supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true).range(0, 4999),
+                    supabase.from('products').select('id, name, sku, category, unit_of_measure, accounting_id').range(0, 4999),
                     supabase.from('profiles').select('id, company_name, contact_name, nit, address, role, document_type, razon_social, branch_id').range(0, 4999)
                 ]);
 
@@ -752,9 +755,10 @@ export default function CommercialDailyMonitorModule() {
                     return;
                 } else if (activeView === 'products') {
                     const data = filteredProducts.map(p => ({
+                        'Cód. Contable': p.accountingId || p.sku,
                         'Código SKU': p.sku,
                         'Producto': p.productName,
-                        'Categoría': p.category,
+                        'Categoría': CATEGORY_MAP[p.category] || p.category,
                         'Unidad': p.unit,
                         'Cantidad Pedida': Number(p.totalQuantity.toFixed(2)),
                         'No. Pedidos': p.ordersCount,
@@ -1632,11 +1636,13 @@ export default function CommercialDailyMonitorModule() {
                                                 </td>
                                                 <td style={{ padding: '0.75rem 1rem' }}>
                                                     <div style={{ fontWeight: '800', color: THEME.colors.textMain }}>{p.productName}</div>
-                                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary }}>SKU: {p.sku}</div>
+                                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
+                                                        {p.accountingId ? `Cód: ${p.accountingId}` : `SKU: ${p.sku}`}
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary }}>
-                                                    <span style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem' }}>
-                                                        {p.category}
+                                                    <span style={{ backgroundColor: '#F1F5F9', padding: '3px 8px', borderRadius: '5px', fontSize: '0.76rem', fontWeight: '600', color: '#334155' }}>
+                                                        {CATEGORY_MAP[p.category] || p.category}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: '#0369A1' }}>
