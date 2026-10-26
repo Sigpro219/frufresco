@@ -103,26 +103,47 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         fetchMaster();
 
         const fetchNextId = async () => {
-            const { data } = await supabase
-                .from('products')
-                .select('accounting_id')
-                .order('accounting_id', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            
-            if (data && data.accounting_id) {
-                const nextId = (parseInt(data.accounting_id) + 1).toString();
+            try {
+                // Escenario 300: Cálculo numérico real del máximo accounting_id
+                const { data } = await supabase
+                    .from('products')
+                    .select('accounting_id')
+                    .not('accounting_id', 'is', null)
+                    .range(0, 4999);
+                
+                let maxId = 0;
+                if (data && data.length > 0) {
+                    data.forEach((p: any) => {
+                        const num = parseInt(String(p.accounting_id).trim(), 10);
+                        if (!isNaN(num) && num > maxId) {
+                            maxId = num;
+                        }
+                    });
+                }
+                const nextId = (maxId > 0 ? maxId + 1 : 1).toString();
                 setFormData(prev => {
-                    const suggestedSku = generateSKU(prev.category, nextId);
-                    return { ...prev, accounting_id: nextId, sku: suggestedSku };
+                    const silentSku = generateSKU(prev.category, nextId);
+                    return { ...prev, accounting_id: nextId, sku: silentSku };
                 });
+            } catch (err) {
+                console.error('Error calculando consecutivo contable:', err);
             }
         };
         fetchNextId();
 
         const fetchAllProducts = async () => {
-            const { data } = await supabase.from('products').select('*').order('sku');
-            if (data) setAllProducts(data);
+            try {
+                // Escenario 300: Consultar productos maestros (parent_id IS NULL) ordenados por Nombre alfabético
+                const { data } = await supabase
+                    .from('products')
+                    .select('id, name, sku, accounting_id, category, parent_id')
+                    .is('parent_id', null)
+                    .order('name', { ascending: true })
+                    .range(0, 4999);
+                if (data) setAllProducts(data);
+            } catch (err) {
+                console.error('Error cargando maestros para selección de padre:', err);
+            }
         };
         fetchAllProducts();
     }, []);
@@ -486,13 +507,28 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>ID</label>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1E293B' }}>ID Contable</label>
+                                            <span style={{ fontSize: '0.60rem', fontWeight: 800, color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 5px', borderRadius: '4px' }}>Auto</span>
+                                        </div>
                                         <input
-                                            required
-                                            type="number"
-                                            value={formData.accounting_id}
-                                            onChange={(e) => handleMetadataChange('accounting_id', e.target.value)}
-                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '800', textAlign: 'center', backgroundColor: '#F9FAFB' }}
+                                            readOnly
+                                            disabled
+                                            type="text"
+                                            value={formData.accounting_id ? `#${formData.accounting_id}` : 'Generando...'}
+                                            title="Consecutivo oficial generado automáticamente por el sistema para control contable (No modificable)"
+                                            style={{ 
+                                                width: '100%', 
+                                                padding: '0.6rem', 
+                                                borderRadius: '10px', 
+                                                border: '1.5px solid #CBD5E1', 
+                                                fontSize: '0.95rem', 
+                                                fontWeight: '900', 
+                                                textAlign: 'center', 
+                                                backgroundColor: '#F1F5F9', 
+                                                color: '#0F172A',
+                                                cursor: 'not-allowed'
+                                            }}
                                         />
                                     </div>
                                     <div>
@@ -543,25 +579,23 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '0.8rem', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', backgroundColor: '#F8FAFC', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', alignItems: 'center' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#3B82F6', marginBottom: '4px' }}>SKU Código Sugerido</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        value={formData.sku}
-                                        onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #2563EB', fontSize: '1rem', fontWeight: '900', color: '#1E40AF', backgroundColor: '#EFF6FF' }}
-                                    />
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '4px' }}>Control de Stock Mínimo</label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <input 
+                                            type="number"
+                                            value={formData.min_inventory_level}
+                                            onChange={(e) => setFormData({ ...formData, min_inventory_level: parseInt(e.target.value) || 0 })}
+                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.95rem', fontWeight: '800', color: '#0F172A', backgroundColor: '#FFFFFF' }}
+                                            placeholder="0"
+                                        />
+                                        <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700' }}>{formData.unit_of_measure}</span>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Inventario Mínimo</label>
-                                    <input 
-                                        type="number"
-                                        value={formData.min_inventory_level}
-                                        onChange={(e) => setFormData({ ...formData, min_inventory_level: parseInt(e.target.value) || 0 })}
-                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '800', color: '#B91C1C' }}
-                                    />
+                                <div style={{ backgroundColor: '#F1F5F9', padding: '0.5rem 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '0.70rem', color: '#64748B', lineHeight: 1.25 }}>
+                                    <span style={{ fontWeight: 800, color: '#334155', display: 'block', marginBottom: '2px' }}>🔒 Sincronización Contable:</span>
+                                    Asignación automática <strong style={{ color: '#0284C7' }}>ID #{formData.accounting_id || '---'}</strong> para World Office.
                                 </div>
                             </div>
 
@@ -643,53 +677,114 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 </div>
                             </div>
 
-                            {/* VINCULACIÓN A PADRE (NUEVO) */}
+                            {/* VINCULACIÓN A PADRE (ESCENARIO 300) */}
                             <div style={{ position: 'relative' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Vincular a Producto Padre (Opcional)</label>
-                                <input
-                                    type="text"
-                                    placeholder="Buscar padre por nombre o ID contable..."
-                                    value={parentSearch || (formData.parent_id ? (() => {
-                                        const p = allProducts.find(i => i.id === formData.parent_id);
-                                        return p ? `${p.accounting_id || p.sku} - ${p.name}` : '';
-                                    })() : '')}
-                                    onChange={(e) => {
-                                        setParentSearch(e.target.value);
-                                        setShowParentResults(true);
-                                    }}
-                                    onFocus={() => setShowParentResults(true)}
-                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.9rem', fontWeight: 'bold', color: formData.parent_id ? '#2563EB' : 'inherit' }}
-                                />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569' }}>Vincular a Producto Padre (Opcional)</label>
+                                    <span style={{ fontSize: '0.65rem', color: '#64748B' }}>Para sub-cortes o fraccionados</span>
+                                </div>
+                                <div style={{ position: 'relative' }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Escribe para buscar padre por nombre o ID contable..."
+                                        value={parentSearch || (formData.parent_id ? (() => {
+                                            const p = allProducts.find(i => i.id === formData.parent_id);
+                                            return p ? `#${p.accounting_id || '---'} - ${p.name}` : '';
+                                        })() : '')}
+                                        onChange={(e) => {
+                                            setParentSearch(e.target.value);
+                                            setShowParentResults(true);
+                                        }}
+                                        onFocus={() => setShowParentResults(true)}
+                                        style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.9rem', fontWeight: 'bold', color: formData.parent_id ? '#0284C7' : '#0F172A', backgroundColor: '#FFFFFF' }}
+                                    />
+                                    {formData.parent_id && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData({ ...formData, parent_id: null });
+                                                setParentSearch('');
+                                                setShowParentResults(false);
+                                            }}
+                                            style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }}
+                                            title="Desvincular producto padre"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
                                 {showParentResults && (
-                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #D1D5DB', borderRadius: '10px', marginTop: '4px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, maxHeight: '200px', overflowY: 'auto' }}>
+                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1.5px solid #CBD5E1', borderRadius: '12px', marginTop: '6px', boxShadow: '0 12px 30px rgba(0,0,0,0.15)', zIndex: 100, maxHeight: '260px', overflowY: 'auto' }}>
                                         <div 
                                             onClick={() => {
                                                 setFormData({ ...formData, parent_id: null });
                                                 setParentSearch('');
                                                 setShowParentResults(false);
                                             }}
-                                            style={{ padding: '0.6rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', color: '#EF4444', fontWeight: '800', fontSize: '0.8rem' }}
+                                            style={{ padding: '0.6rem 0.8rem', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', color: '#DC2626', fontWeight: '800', fontSize: '0.8rem', backgroundColor: '#FEF2F2' }}
                                         >
-                                            Ninguno (Producto Independiente)
+                                            ✕ Ninguno (Producto Maestro Independiente)
                                         </div>
-                                        {allProducts
-                                            .filter(p => p.name.toLowerCase().includes(parentSearch.toLowerCase()) || (p.accounting_id && p.accounting_id.toString().includes(parentSearch)) || (p.sku && p.sku.toLowerCase().includes(parentSearch.toLowerCase())))
-                                            .slice(0, 10)
-                                            .map(p => (
-                                                <div 
-                                                    key={p.id}
-                                                    onClick={() => {
-                                                        setFormData({ ...formData, parent_id: p.id });
-                                                        setParentSearch(p.accounting_id ? p.accounting_id.toString() : p.name);
-                                                        setShowParentResults(false);
-                                                    }}
-                                                    style={{ padding: '0.6rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
-                                                >
-                                                    <div style={{ fontWeight: '800', color: '#2563EB', fontSize: '0.85rem' }}>{p.name}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>ID Contable: {p.accounting_id || 'N/A'}</div>
-                                                </div>
-                                            ))
-                                        }
+                                        {(() => {
+                                            const searchLower = parentSearch.trim().toLowerCase();
+                                            const filtered = allProducts.filter(p => {
+                                                if (!searchLower) return true;
+                                                const nameMatch = (p.name || '').toLowerCase().includes(searchLower);
+                                                const idMatch = (p.accounting_id ? String(p.accounting_id) : '').includes(searchLower);
+                                                return nameMatch || idMatch;
+                                            });
+
+                                            // Priorizar la categoría activa seleccionada en el formulario
+                                            const prioritized = [...filtered].sort((a, b) => {
+                                                const aIsSameCat = a.category === formData.category ? 1 : 0;
+                                                const bIsSameCat = b.category === formData.category ? 1 : 0;
+                                                if (bIsSameCat !== aIsSameCat) return bIsSameCat - aIsSameCat;
+                                                return (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+                                            });
+
+                                            if (prioritized.length === 0) {
+                                                return (
+                                                    <div style={{ padding: '0.8rem', textAlign: 'center', color: '#64748B', fontSize: '0.8rem' }}>
+                                                        No se encontraron productos maestros que coincidan con &quot;{parentSearch}&quot;
+                                                    </div>
+                                                );
+                                            }
+
+                                            return prioritized.map(p => {
+                                                const isSameCat = p.category === formData.category;
+                                                return (
+                                                    <div 
+                                                        key={p.id}
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, parent_id: p.id });
+                                                            setParentSearch('');
+                                                            setShowParentResults(false);
+                                                        }}
+                                                        style={{ 
+                                                            padding: '0.6rem 0.8rem', 
+                                                            borderBottom: '1px solid #F1F5F9', 
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            backgroundColor: p.id === formData.parent_id ? '#F0F9FF' : '#FFFFFF'
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.86rem' }}>{p.name}</div>
+                                                            <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '1px' }}>
+                                                                ID Contable: <strong style={{ color: '#0284C7' }}>#{p.accounting_id || 'N/A'}</strong>
+                                                            </div>
+                                                        </div>
+                                                        {isSameCat && (
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#0D7A57', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1.5px 6px', borderRadius: '4px' }}>
+                                                                Misma Categoría
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
                                     </div>
                                 )}
                             </div>

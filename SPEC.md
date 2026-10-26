@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.276 (Asignación Algorítmica Universal de Muelle por Cubicaje y Clúster Geográfico, Anclaje Inferior Golden Print en Carta y Ordenamiento Alfabético Dual en Remisiones — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.277 (Soberanía Operativa del ID Contable, Consecutivo Automático No Modificable, Degradación Pasiva del SKU y Desacoplamiento Alfabético del Selector de Padres — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 299 Escenarios BDD Ininterrumpidos (1..299)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 300 Escenarios BDD Ininterrumpidos (1..300)
 
 ---
 
@@ -11954,3 +11954,23 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - En la generación de remisiones (`contingency-print/page.tsx`), los renglones de producto se ordenan determinísticamente en dos niveles alfabéticos mediante `localeCompare`:
        - **Nivel 1 (Productos con Precio Comercial Pactado `unit_price > 0`):** Se listan primero, ordenados estrictamente de la **A a la Z**.
        - **Nivel 2 (Productos sin Precio / Fuera de Acuerdo `unit_price === 0`):** Se listan al final del documento, también ordenados estrictamente de la **A a la Z**.
+
+---
+
+### Escenario 300: Soberanía Operativa del ID Contable (`accounting_id`), Consecutivo Automático No Modificable, Degradación Pasiva del SKU y Desacoplamiento Alfabético del Selector de Padres (Gemba Hallazgos Creación de Productos) (SDD v1.9.277)
+- **Given** el módulo de Creación de Productos y SKUs Maestros (`CreateProductModal.tsx`) en el Catálogo de Inventario,
+- **When** el administrador u operador de compras y catálogo ingresa para registrar un nuevo producto en el sistema,
+- **Then** el sistema asegura la integridad contable, la erradicación del SKU de la experiencia de usuario y la búsqueda fluida de productos padre:
+  1. **Soberanía Operativa y Contable de `accounting_id`:**
+     - El `accounting_id` se consagra como el **único identificador operativo y contable soberano** de FruFresco para el enlace 1:1 con World Office, muelle, remisiones y facturas.
+     - El sistema calcula automáticamente el siguiente consecutivo determinístico mediante la evaluación numérica de los registros existentes: $$\text{nextId} = \max(\text{accounting\_id}_{\text{num}}) + 1$$.
+     - El campo **ID** en la interfaz se bloquea como **estrictamente de sólo lectura (`readOnly` / `disabled`)**, con fondo protegido y distintivo de *"Consecutivo Automático de Control"*, impidiendo que el operario altere, salte o duplique números contables.
+  2. **Degradación del SKU a Llave Técnica Pasiva (Silent Shadow Field):**
+     - Queda formalmente retirado el protagonismo del SKU de la interfaz de usuario:
+       - Se elimina el recuadro visual editable de "SKU Código Sugerido", despojando a la interfaz de complejidad innecesaria (/spacex).
+       - Queda estrictamente prohibido ordenar listas, catálogos o selectores de productos por la columna `sku`.
+       - Para garantizar retrocompatibilidad total con la base de datos y satisfacer el constraint `NOT NULL / UNIQUE` de PostgreSQL en Supabase, el backend asigna silenciosamente en segundo plano `sku = ${category}-${accounting_id.padStart(5, '0')}`, sin que el usuario tenga que interactuar con él.
+  3. **Selector Universal de Padre Alfabético y Priorizado por Categoría:**
+     - En el selector *"Vincular a Producto Padre (Opcional)"*, el sistema consulta la totalidad de los productos maestros (`parent_id IS NULL`, `range(0, 4999)`) ordenados alfabéticamente por su **Nombre (`order('name')`)**, erradicando de raíz el sesgo que forzaba a las "Pulpas" (`C-...`) a aparecer de primeras.
+     - El listado prioriza en la parte superior los productos maestros pertenecientes a la **misma categoría** seleccionada por el usuario (ej: si se crea una Verdura, las verduras aparecen primero), seguidos del resto de categorías en orden alfabético.
+     - La búsqueda omnibox opera en tiempo real sobre el nombre y el ID contable, eliminando el límite artificial de 10 ítems y proporcionando un contenedor con scroll ergonómico.
