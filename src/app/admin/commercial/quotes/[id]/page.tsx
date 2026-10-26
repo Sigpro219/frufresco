@@ -584,6 +584,20 @@ export default function QuoteDetailPage() {
             const formattedDate = `${d}-${m}-${y.slice(-2)}`;
             const canonicalSnapshotName = `${finalClientName} - Acuerdo ${formattedDate}`;
 
+            // 2.1 Auto-Supersede: Degradar acuerdos previos del cliente para garantizar Fuente Única de Verdad (SPEC.md §7.5.6)
+            if (finalClientId) {
+                try {
+                    await supabase
+                        .from('quotes')
+                        .update({ status: 'superseded' })
+                        .eq('client_id', finalClientId)
+                        .eq('status', 'agreement')
+                        .neq('id', quote.id);
+                } catch (supErr) {
+                    console.warn('Error al degradar acuerdos previos:', supErr);
+                }
+            }
+
             const { error: quoteErr } = await supabase
                 .from('quotes')
                 .update({

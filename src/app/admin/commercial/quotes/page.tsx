@@ -63,6 +63,20 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
             const clientName = quoteToApprove.client_name || quoteToApprove.profiles?.company_name || 'Cliente';
             const snapshotName = `${clientName} - Acuerdo ${day}-${month}-${yr}`;
 
+            // Auto-Supersede: Degradar acuerdos previos del cliente para garantizar Fuente Única de Verdad (SPEC.md §7.5.6)
+            if (quoteToApprove.client_id) {
+                try {
+                    await supabase
+                        .from('quotes')
+                        .update({ status: 'superseded' })
+                        .eq('client_id', quoteToApprove.client_id)
+                        .eq('status', 'agreement')
+                        .neq('id', quoteToApprove.id);
+                } catch (supErr) {
+                    console.warn('Error al degradar acuerdos previos en aprobación directa:', supErr);
+                }
+            }
+
             const { error: updErr } = await supabase
                 .from('quotes')
                 .update({

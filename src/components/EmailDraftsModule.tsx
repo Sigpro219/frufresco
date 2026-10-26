@@ -3403,12 +3403,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     const candidates: any[] = [];
     if (branchId) {
-      const bAgr = agreements.find(q => q.client_id === branchId);
-      if (bAgr) candidates.push(bAgr);
+      const bAgrs = agreements.filter(q => q.client_id === branchId).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      if (bAgrs.length > 0) candidates.push(bAgrs[0]);
     }
     if (parentId) {
-      const mAgr = agreements.find(q => q.client_id === parentId);
-      if (mAgr) candidates.push(mAgr);
+      const mAgrs = agreements.filter(q => q.client_id === parentId).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      if (mAgrs.length > 0) candidates.push(mAgrs[0]);
     }
     const masterId = profileObj?.logistics_data?.active_master_agreement_id;
     if (masterId) {

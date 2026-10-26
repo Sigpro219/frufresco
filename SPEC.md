@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.277 (Soberanía Operativa del ID Contable, Consecutivo Automático No Modificable, Degradación Pasiva del SKU y Desacoplamiento Alfabético del Selector de Padres — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.278 (Ley Marcial de Unicidad de Acuerdo Comercial Activo, Auto-Supersede Inmediato y Saneamiento Cero Split-Brain en Supabase — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 300 Escenarios BDD Ininterrumpidos (1..300)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 301 Escenarios BDD Ininterrumpidos (1..301)
 
 ---
 
@@ -11974,3 +11974,19 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - En el selector *"Vincular a Producto Padre (Opcional)"*, el sistema consulta la totalidad de los productos maestros (`parent_id IS NULL`, `range(0, 4999)`) ordenados alfabéticamente por su **Nombre (`order('name')`)**, erradicando de raíz el sesgo que forzaba a las "Pulpas" (`C-...`) a aparecer de primeras.
      - El listado prioriza en la parte superior los productos maestros pertenecientes a la **misma categoría** seleccionada por el usuario (ej: si se crea una Verdura, las verduras aparecen primero), seguidos del resto de categorías en orden alfabético.
      - La búsqueda omnibox opera en tiempo real sobre el nombre y el ID contable, eliminando el límite artificial de 10 ítems y proporcionando un contenedor con scroll ergonómico.
+
+---
+
+### Escenario 301: Ley Marcial de Unicidad de Acuerdo Comercial Activo (Single Active Agreement Law & Auto-Supersede) y Saneamiento Integral de Tarifas Vivas (SDD v1.9.278)
+- **Given** el motor de formalización comercial en `/admin/commercial/quotes/[id]` y la galería de cotizaciones en `/admin/commercial/quotes`, junto con los resolvers de precios en `/api/orders/resolve-agreement-pricing` y `EmailDraftsModule.tsx`,
+- **When** un asesor comercial o administrador aprueba o formaliza una cotización a Acuerdo Comercial vinculante (`status = 'agreement'`),
+- **Then** el sistema asegura inviolabilidad absoluta de la Fuente Única de Verdad (Single Source of Truth) y erradica el Split-Brain tarifario:
+  1. **Ley Marcial de Auto-Supersede Atómico Inmediato:**
+     - En cualquier punto de entrada del sistema donde una cotización se promueva a `status = 'agreement'` (tanto en `quotes/[id]/page.tsx` como en `quotes/page.tsx`), el sistema ejecuta de forma atómica y obligatoria:
+       `UPDATE quotes SET status = 'superseded' WHERE client_id = target_client_id AND status = 'agreement' AND id != current_quote_id;`
+     - Queda terminantemente prohibido que un cliente posea más de un registro con `status = 'agreement'` en cualquier instante de tiempo.
+  2. **Resolución Determinística de Acuerdos por Antigüedad:**
+     - En `EmailDraftsModule.tsx` y el pipeline de ingesta de pedidos, la búsqueda de acuerdos por sucursal (`branchId`) o matriz (`parentId`) se blinda contra ordenamientos aleatorios mediante ordenamiento determinístico por fecha de creación descendente (`sort((a, b) => b.created_at - a.created_at)`), garantizando paridad exacta de precios entre sedes.
+  3. **Saneamiento y Borrón Operativo de Acuerdos Viejos:**
+     - Se respaldan en frío los 30 acuerdos comerciales históricos en `backup_active_agreements_before_expire.json` y se transicionan atómicamente a `status = 'expired'` en Supabase.
+     - La consola comercial queda en cero registros activos (`status = 'agreement' == 0`), permitiendo al equipo comercial cargar las listas oficiales frescas de cada cliente corporativo desde cero, con cero ruido y sin colisiones de versiones anteriores.
