@@ -737,6 +737,7 @@ function CreateOrderContent() {
     const [allowSundaysDelivery, setAllowSundaysDelivery] = useState(false);
     const [allowHolidaysDelivery, setAllowHolidaysDelivery] = useState(false);
     const [storeVacationConfig, setStoreVacationConfig] = useState<StoreVacationConfig | null>(null);
+    const [cutoffRulesEnabled, setCutoffRulesEnabled] = useState(true);
     const [minDeliveryDate, setMinDeliveryDate] = useState(() => {
         return calculateStandardMinDeliveryDate(true, 20, false, false);
     });
@@ -765,6 +766,7 @@ function CreateOrderContent() {
                 setAllowSundaysDelivery(allowSundays);
                 setAllowHolidaysDelivery(allowHolidays);
                 setStoreVacationConfig(parsedVac);
+                setCutoffRulesEnabled(cutoffEnabled);
 
                 const dateStr = calculateStandardMinDeliveryDate(cutoffEnabled, cutoffHourAdmin, allowSundays, allowHolidays, parsedVac);
 
@@ -4537,8 +4539,8 @@ function CreateOrderContent() {
             return showToast('Debe seleccionar una fecha de entrega válida.', 'error');
         }
         const deliveryOnly = deliveryDate.split('T')[0];
-        if (deliveryOnly < minDeliveryDate) {
-            return showToast(`Fecha no permitida: La fecha de despacho (${deliveryOnly}) no puede ser anterior a la ventana mínima operativa (${minDeliveryDate}).`, 'error');
+        if (deliveryOnly < minDeliveryDate && cutoffRulesEnabled) {
+            return showToast(`Fecha no permitida: La fecha de despacho (${deliveryOnly}) no puede ser anterior a la ventana mínima operativa (${minDeliveryDate}). Si requieres procesarla de emergencia, desactiva las reglas de corte en Configuración o marca entrega Express.`, 'error');
         }
         const dateCheck = isValidDeliveryDate(deliveryOnly, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig);
         if (!dateCheck.valid) {
@@ -9631,12 +9633,12 @@ ${primaryAdminNotes}`.trim();
                                         </div>
                                         <input
                                             type="date"
-                                            min={isSameDayExpress ? isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig).targetDeliveryDate : minDeliveryDate}
+                                            min={isSameDayExpress ? isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig).targetDeliveryDate : (cutoffRulesEnabled ? minDeliveryDate : undefined)}
                                             value={deliveryDate}
                                             onChange={e => {
                                                 const newDate = e.target.value;
                                                 if (newDate) {
-                                                    if (newDate < minDeliveryDate) {
+                                                    if (newDate < minDeliveryDate && cutoffRulesEnabled) {
                                                         showToast(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
                                                         setDeliveryDate(minDeliveryDate);
                                                         return;

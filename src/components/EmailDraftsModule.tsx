@@ -19,7 +19,7 @@ import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/
 import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges, isRedundantAttribute } from '@/lib/orderUtils';
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 import { useAuth } from '@/lib/authContext';
-import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD } from '@/lib/colombianHolidays';
+import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, parseStoreVacationConfig } from '@/lib/colombianHolidays';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -1767,7 +1767,59 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     showToast(`¡Se dividió el documento en ${newVirtualAttachments.length} adjuntos virtuales según sus fechas de entrega!`, 'success');
   };
 
-  const minDeliveryDate = useMemo(() => calculateStandardMinDeliveryDate(true, 20, false, false), []);
+  // Carga dinámica de gobernanza de corte desde app_settings (SDD Escenario 122 / 291)
+  const [cutoffSettings, setCutoffSettings] = useState<{
+    enabled: boolean;
+    cutoffHour: number;
+    allowSundays: boolean;
+    allowHolidays: boolean;
+    vacationConfig: any;
+  }>({
+    enabled: true,
+    cutoffHour: 20,
+    allowSundays: false,
+    allowHolidays: false,
+    vacationConfig: null
+  });
+
+  useEffect(() => {
+    async function loadCutoffSettings() {
+      try {
+        const { data } = await supabase
+          .from('app_settings')
+          .select('key, value')
+          .in('key', ['enable_cutoff_rules', 'cutoff_hour_admin', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'store_vacation_config']);
+        if (data && data.length > 0) {
+          const enabled = data.find((s: any) => s.key === 'enable_cutoff_rules')?.value !== 'false';
+          const hourVal = data.find((s: any) => s.key === 'cutoff_hour_admin')?.value;
+          const cutoffHour = hourVal ? parseInt(hourVal, 10) : 20;
+          const allowSundays = data.find((s: any) => s.key === 'allow_sunday_deliveries')?.value === 'true';
+          const allowHolidays = data.find((s: any) => s.key === 'allow_holiday_deliveries')?.value === 'true';
+          const vacVal = data.find((s: any) => s.key === 'store_vacation_config')?.value;
+          setCutoffSettings({
+            enabled,
+            cutoffHour,
+            allowSundays,
+            allowHolidays,
+            vacationConfig: vacVal ? parseStoreVacationConfig(vacVal) : null
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching cutoff settings in EmailDraftsModule:', err);
+      }
+    }
+    loadCutoffSettings();
+  }, []);
+
+  const minDeliveryDate = useMemo(() => {
+    return calculateStandardMinDeliveryDate(
+      cutoffSettings.enabled,
+      cutoffSettings.cutoffHour,
+      cutoffSettings.allowSundays,
+      cutoffSettings.allowHolidays,
+      cutoffSettings.vacationConfig
+    );
+  }, [cutoffSettings]);
   const getMinDeliveryDate = () => minDeliveryDate;
   const lastDraftIdRef = useRef<string | null>(null);
   const [deliveryDate, setDeliveryDate] = useState<string>(minDeliveryDate);
@@ -7728,7 +7780,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     onChange={e => {
                       const newDate = e.target.value;
                       if (newDate) {
-                        if (newDate < minDeliveryDate) {
+                        if (newDate < minDeliveryDate && cutoffSettings.enabled) {
                           showToast(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
                           setDeliveryDate(minDeliveryDate);
                           return;
@@ -11341,7 +11393,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     onChange={(e) => {
                       const newDate = e.target.value;
                       if (!newDate) return;
-                      if (newDate < minDeliveryDate) {
+                      if (newDate < minDeliveryDate && cutoffSettings.enabled) {
                         showToast(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
                         setDeliveryDate(minDeliveryDate);
                         return;

@@ -263,15 +263,17 @@ export default function OrderDetailPage() {
             return false;
         }
 
-        // 1. Check Global Switch
+        // 1. Check Global Switch & Dynamic Admin Cutoff Hour (SDD Escenario 122 / 291)
         const { data: settings } = await supabase
             .from('app_settings')
-            .select('value')
-            .eq('key', 'enable_cutoff_rules')
-            .single();
+            .select('key, value')
+            .in('key', ['enable_cutoff_rules', 'cutoff_hour_admin']);
         
-        const cutoffEnabled = settings?.value !== 'false';
+        const cutoffEnabled = settings?.find((s: any) => s.key === 'enable_cutoff_rules')?.value !== 'false';
         if (!cutoffEnabled) return true;
+
+        const hourSetting = settings?.find((s: any) => s.key === 'cutoff_hour_admin')?.value;
+        const dynamicCutoffHour = hourSetting ? parseInt(hourSetting, 10) : ADMIN_EDIT_CUTOFF_HOUR;
 
         // 2. Bogota Time logic
         const now = new Date();
@@ -281,9 +283,9 @@ export default function OrderDetailPage() {
         const deliveryDate = new Date(order.delivery_date + 'T00:00:00');
         const cutoffDate = new Date(deliveryDate);
         cutoffDate.setDate(deliveryDate.getDate() - 1);
-        cutoffDate.setHours(ADMIN_EDIT_CUTOFF_HOUR, 0, 0, 0);
+        cutoffDate.setHours(dynamicCutoffHour, 0, 0, 0);
 
-        // If it's already the delivery day or past 8 PM of the day before
+        // If it's already the delivery day or past dynamic cutoff hour of the day before
         return bogotaNow.getTime() < cutoffDate.getTime();
     }, [order]);
 

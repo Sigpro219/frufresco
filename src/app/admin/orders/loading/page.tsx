@@ -400,6 +400,8 @@ function OrderLoadingContent() {
 
                     setAllowSundaysSetting(allowSundays);
                     setAllowHolidaysSetting(allowHolidays);
+                    setCutoffRulesActive(cutoffEnabled);
+                    setCutoffHourState(cutoffHour);
                     setMinDeliveryDate(calculateStandardMinDeliveryDate(cutoffEnabled, cutoffHour, allowSundays, allowHolidays));
                 }
             } catch (e) {
@@ -470,6 +472,8 @@ function OrderLoadingContent() {
     const [editDeliveryDate, setEditDeliveryDate] = useState('');
     const [allowSundaysSetting, setAllowSundaysSetting] = useState(false);
     const [allowHolidaysSetting, setAllowHolidaysSetting] = useState(false);
+    const [cutoffRulesActive, setCutoffRulesActive] = useState(true);
+    const [cutoffHourState, setCutoffHourState] = useState(20);
     const [minDeliveryDate, setMinDeliveryDate] = useState(() => calculateStandardMinDeliveryDate(true, 20, false, false));
     const [editShippingAddress, setEditShippingAddress] = useState('');
     const [editLatitude, setEditLatitude] = useState<number | null>(null);
@@ -3691,7 +3695,7 @@ useEffect(() => {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {selectedDate === getTomorrowDateStr() ? (
-                            <><Sparkles size={13} style={{ color: '#10B981', flexShrink: 0 }} /> <span><strong>Tanda Activa:</strong> Pedidos para entregar <strong>MAÑANA ({getTomorrowDateStr()})</strong> · Corte de Compras hoy a las 10:00 PM</span></>
+                            <><Sparkles size={13} style={{ color: '#10B981', flexShrink: 0 }} /> <span><strong>Tanda Activa:</strong> Pedidos para entregar <strong>MAÑANA ({getTomorrowDateStr()})</strong> · {cutoffRulesActive ? `Corte de Pedidos hoy a las ${cutoffHourState > 12 ? (cutoffHourState - 12) + ':00 PM' : cutoffHourState + ':00 AM'}` : 'Horario Flexible (Reglas de Corte Desactivadas)'}</span></>
                         ) : selectedDate === getTodayDateStr() ? (
                             <><Truck size={13} style={{ color: '#0284C7', flexShrink: 0 }} /> <span><strong>Despacho de Hoy (En Ruta):</strong> Seguimiento en vivo de entregas programadas para <strong>HOY ({getTodayDateStr()})</strong></span></>
                         ) : selectedDate === getYesterdayDateStr() ? (

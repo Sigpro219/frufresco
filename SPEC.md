@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.267 (Resolución Forense Hallazgo #1 Gemba Operación: Derogación de Split de Pedidos, Consolidación en Pedido Único con Ítems $0 al Final, Retención en Facturación e Inmunidad Anti-Duplicados — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.269 (Resolución Forense Hallazgo #3 Gemba: Matriz Operativa de Imputación Multidisciplinaria Novedades por Producto y Consolidación Automática para Nómina — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 290 Escenarios BDD Ininterrumpidos (1..290)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 292 Escenarios BDD Ininterrumpidos (1..292)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **290 Escenarios Canónicos (1..290)** | **🟢 100%** |
+| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **291 Escenarios Canónicos (1..291)** | **🟢 100%** |
 
 ---
 
@@ -11763,3 +11763,41 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   3. **Estampilla de Auditoría y Tarea Comercial Automática:** El pedido único estampa en `admin_notes`: `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ...]`, insertando atómicamente una tarea urgente en `admin_tasks` dirigida al Área Comercial para la fijación de tarifa antes del cierre del corte.
   4. **Retención Poka-Yoke en Mesa de Facturación:** En `/admin/commercial/billing`, el pedido se clasifica en estado `Retenido / Con Novedad` (`isUnpricedNovelty = true`), bloqueando su facturación DIAN o exportación contable a World Office hasta que el Área Comercial asigne los precios unitarios vía `/api/commercial/billing/assign-off-agreement-prices`, recalculando subtotal, IVA y total neto para liberar la orden automáticamente.
   5. **Inmunidad contra Falsas Alarmas de Pedido Duplicado (`orderDuplicates.ts`):** El motor `areOrdersDuplicate` reconoce relaciones de subordinación (`parent_order_id`) y marcas de split (`is_off_agreement_split`), garantizando que órdenes vinculadas o preexistentes jamás se resalten falsamente con borde rojo ni etiqueta `@duplicado`.
+
+---
+
+### Escenario 291: Quíntuple Causal Operativa de Línea en Auditoría PQR SAC (SDD v1.9.268)
+- **Given** el Paso 1 (Hecho & Evidencias) del Modal de Auditoría Técnica PQR SAC (`src/app/admin/customer-service/components/PqrAuditModal.tsx`),
+- **When** el auditor o líder operativo tipifica una novedad sobre una línea específica de producto devuelta o reclamada,
+- **Then** el sistema proporciona una barra de selección con cinco (5) causales operativas de alta precisión del Gemba:
+  1. **`[ 📦 Faltante ]`**: Faltante físico en pesaje o alistamiento de báscula.
+  2. **`[ ⚠️ Avería ]`**: Avería física o deterioro de calidad biológica/mecánica.
+  3. **`[ 🚫 Sin Cargue ]`**: Producto escaso en plaza/acopio no embarcado en camión.
+  4. **`[ 📝 Error Digitación ]`**: Error de digitación comercial en cantidad o SKU.
+  5. **`[ ❌ No Solicitado ]`**: Ítem despachado que el cliente no ordenó.
+- **And** en la tabla de novedades declaradas de la reclamación:
+  1. Cada registro proyecta su badge distintivo de color con ícono temático correspondiente (`Sin Cargue`, `Error Digitación`, `No Solicitado`, `Faltante`, `Avería`).
+  2. La custodia física del producto devuelto (`handleTogglePhysicalReturnCustody`) se habilita de forma selectiva para productos que físicamente viajaron al cliente (`Avería` y `No Solicitado`), permitiendo alternar entre `En Sede Cliente (Sin Retorno)` y `Devuelto en Camión (A Bodega)`.
+  3. El motivo canónico registrado en `billing_returns.reason` almacena el prefijo oficial (`Producto Escaso (Sin Cargue)`, `Error de Digitación`, `Producto No Solicitado`, etc.), garantizando la trazabilidad exacta de cara a la liquidación financiera y al dictamen de imputabilidad en el Paso 3.
+
+---
+
+### Escenario 292: Matriz Operativa de Imputación Multidisciplinaria Novedades por Producto y Consolidación Automática para Nómina (SDD v1.9.269)
+- **Given** el Paso 3 (Causa Raíz & Imputación) del Modal de Auditoría PQR SAC (`src/app/admin/customer-service/components/PqrAuditModal.tsx`) para pedidos con múltiples productos devueltos o reclamados (ej. *Mango Tommy* y *Aguacate Hass*),
+- **When** una remisión presenta novedades donde diferentes colaboradores intervinieron en diferentes productos (ej. a *Mango* se imputa a Juan y Luis; y a *Aguacate* se imputa a Camilo, Juan y Pedro),
+- **Then** el sistema aplica la doctrina matricial $N \times M$ superando la limitación lineal:
+  1. **Tarjeta de Imputación por Producto:** Cada producto devuelto se despliega en su propia tarjeta operativa con su costo liquidado, causal de novedad y selector de área causal.
+  2. **Asignación Múltiple por Ítem:** Dentro de cada producto, el auditor puede asignar uno o varios colaboradores (conductores, alistadores, pesadores, comerciales o proveedores) con selección asistida mediante `SearchableSelect`.
+  3. **Control Numérico Directo en Pesos ($ COP) y División Equitativa:** Cada colaborador asignado a un producto cuenta con un campo numérico directo para fijar la cuota exacta en pesos colombianos (`$ Cuota`), atajos porcentuales (`100%`, `50%`, `Exonerar $0`) y el botón `[➗ Partes Iguales]` para dividir el valor del ítem equitativamente entre los responsables de esa línea.
+  4. **Consolidación Automática e Inter-Producto para Nómina (`imputedEntities`):** El sistema agrupa en tiempo real a los colaboradores únicos que participaron en una o varias líneas (ej. *Juan* recibe su parte de Mango + su parte de Aguacate), proyectando un resumen consolidado con el monto total acumulado que se transferirá al módulo de deducciones de nómina de RRHH, preservando la compatibilidad canónica 1:1 con `imputedEntities`.
+
+---
+
+### Escenario 291: Gobernanza Dinámica y Flexible de Horas de Corte en Toda la Plataforma (Gemba Hallazgo #2 Operación), Desacoplamiento de Horas Cableadas y Paridad Total con `app_settings` (`enable_cutoff_rules` y `cutoff_hour_admin`) (SDD v1.9.268)
+- **Given** la parametrización operativa de horas de corte administrada desde `/admin/settings` mediante las llaves `enable_cutoff_rules` (Interruptor Maestro de Reglas de Corte), `cutoff_hour_admin` (Hora de Corte B2B / Interno) y `cutoff_hour_public` (Hora de Corte B2C),
+- **When** el administrador desactiva las reglas de corte (`enable_cutoff_rules = 'false'`) o ajusta la hora límite de toma de pedidos comerciales (`cutoff_hour_admin = '19'`, `'20'`, `'22'`, etc.),
+- **Then** el ecosistema completo reacciona de manera 100% reactiva y dinámica sin valores estáticos cableados en código:
+  1. **Bandeja de Correos Asistida (`EmailDraftsModule.tsx`):** Se erradica el valor cableado (`calculateStandardMinDeliveryDate(true, 20, false, false)`). El módulo consulta `app_settings` en tiempo de ejecución. Si las reglas están desactivadas (`enable_cutoff_rules = false`), los analistas pueden seleccionar libremente la fecha de mañana sin que el sistema bloquee o revierta la selección con mensajes de error.
+  2. **Expediente de Pedido y Candado de Edición (`/admin/orders/[id]`):** El cálculo de cierre de edición se desacopla de la constante estática `ADMIN_EDIT_CUTOFF_HOUR = 20`. La compuerta consulta `app_settings`, habilitando edición continua si las reglas están desactivadas o respetando la hora configurada en `cutoff_hour_admin`.
+  3. **Torre de Control de Despachos (`/admin/orders/loading`):** El cintillo superior de tanda activa proyecta dinámicamente el estado real de la operación: si las reglas están activas, anuncia la hora de corte exacta parametrizada; si están desactivadas, exhibe el rótulo informativo: `Horario Flexible (Reglas de Corte Desactivadas)`.
+  4. **Creación Manual de Pedidos (`/admin/orders/create`):** El validador Poka-Yoke de despacho respeta el estado de `cutoffRulesEnabled`, permitiendo registrar pedidos de contingencia o extemporáneos de forma ágil sin interrupciones hostiles de interfaz.

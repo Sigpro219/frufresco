@@ -26,6 +26,15 @@ import {
     stripRcaMetadataTags
 } from '@/lib/rcaTaxonomy';
 import { useAuth } from '@/lib/authContext';
+
+export interface ItemCollaboratorShare {
+    entityId: string;
+    entityName: string;
+    entityRole?: string;
+    entityType?: any;
+    amount: number;
+    waiveDeduction?: boolean;
+}
 import { 
     cleanColombianPhone, 
     formatPqrFolio,
@@ -54,6 +63,7 @@ interface PqrAuditModalProps {
     showToast: (text: string, type?: 'success' | 'error' | 'warning') => void;
     onZoomPhoto: (url: string) => void;
 }
+
 
 export default function PqrAuditModal({
     pqr,
@@ -202,6 +212,12 @@ export default function PqrAuditModal({
         entityType?: any;
         waiveDeduction?: boolean;
     }>>({});
+
+    const [itemMultiImputations, setItemMultiImputations] = useState<Record<string, {
+        responsible: 'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente';
+        collaborators: ItemCollaboratorShare[];
+    }>>({});
+
 
     // Photos State
     const [activePhotoIdx, setActivePhotoIdx] = useState(0);
@@ -1171,6 +1187,276 @@ export default function PqrAuditModal({
         const finalized = calculateEqualSplit(imputedEntities, nominalNoveltiesCoQ);
         setImputedEntities(finalized);
         showToast('Reparto equitativo aplicado: cada responsable asume exactamente el mismo valor en COP.', 'success');
+    };
+
+    // Recalculate consolidated imputedEntities from multi-person item matrix
+    const recalculateFromMultiMatrix = (
+        currentMatrix: Record<string, { responsible: string; collaborators: ItemCollaboratorShare[] }>
+    ) => {
+        const entityMap = new Map<string, ImputedEntity>();
+
+        caseReturns.forEach((ret: any) => {
+            const entry = currentMatrix[ret.id];
+            if (!entry) return;
+
+            const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+            const pName = ret.products?.name || oi?.products?.name || 'Producto';
+            const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+            const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+
+            if (entry.responsible === 'proveedor') {
+                const provId = 'proveedor-origen';
+                const existing = entityMap.get(provId);
+                if (existing) {
+                    existing.deductionAmount = (existing.deductionAmount || 0) + itemAmount;
+                    if (!existing.assignedItemNames) existing.assignedItemNames = [];
+                    if (!existing.assignedItemNames.includes(pName)) existing.assignedItemNames.push(pName);
+                } else {
+                    entityMap.set(provId, {
+                        id: provId,
+                        name: 'Asignado al Proveedor (Campo / Origen)',
+                        role: 'Proveedor',
+                        entityType: 'provider',
+                        sharePercent: 0,
+                        deductionAmount: itemAmount,
+                        assignedItemNames: [pName]
+                    });
+                }
+                return;
+            }
+
+            if (entry.responsible === 'cliente') {
+                const clId = pqr?.client_id || 'cliente';
+                const existing = entityMap.get(clId);
+                const clName = pqr?.profiles?.company_name || pqr?.profiles?.contact_name || 'Cliente';
+                if (existing) {
+                    existing.deductionAmount = (existing.deductionAmount || 0) + itemAmount;
+                    if (!existing.assignedItemNames) existing.assignedItemNames = [];
+                    if (!existing.assignedItemNames.includes(pName)) existing.assignedItemNames.push(pName);
+                } else {
+                    entityMap.set(clId, {
+                        id: clId,
+                        name: clName,
+                        role: 'Cliente',
+                        entityType: 'client',
+                        sharePercent: 0,
+                        deductionAmount: itemAmount,
+                        assignedItemNames: [pName]
+                    });
+                }
+                return;
+            }
+
+            // Normal operational employees
+            (entry.collaborators || []).forEach(colab => {
+                if (!colab.entityId) return;
+                const deduction = colab.waiveDeduction ? 0 : (Number(colab.amount) || 0);
+                const existing = entityMap.get(colab.entityId);
+
+                if (existing) {
+                    existing.deductionAmount = (existing.deductionAmount || 0) + deduction;
+                    if (!existing.assignedItemNames) existing.assignedItemNames = [];
+                    if (!existing.assignedItemNames.includes(pName)) existing.assignedItemNames.push(pName);
+                } else {
+                    entityMap.set(colab.entityId, {
+                        id: colab.entityId,
+                        name: colab.entityName || 'Responsable',
+                        role: colab.entityRole || entry.responsible,
+                        entityType: colab.entityType || 'employee',
+                        sharePercent: 0,
+                        deductionAmount: deduction,
+                        waiveDeduction: colab.waiveDeduction,
+                        assignedItemNames: [pName]
+                    });
+                }
+            });
+        });
+
+        const list = Array.from(entityMap.values());
+        const totalBaseCoQ = nominalNoveltiesCoQ > 0 ? nominalNoveltiesCoQ : 1;
+        const consolidated = list.map(e => ({
+            ...e,
+            sharePercent: Number((((e.deductionAmount || 0) / totalBaseCoQ) * 100).toFixed(1))
+        }));
+
+        setImputedEntities(consolidated);
+    };
+
+    const handleAddCollaboratorToItem = (returnId: string, entityId: string) => {
+        if (!entityId) return;
+        const ret = caseReturns.find(r => r.id === returnId);
+        const oi = orderItems.find(o => o.product_id === ret?.product_id) || 
+                   ret?.orders?.order_items?.find((o: any) => o.product_id === ret?.product_id);
+        const unitPrice = Number(oi?.unit_price || ret?.unit_price || 0);
+        const itemAmount = Math.round(unitPrice * (Number(ret?.quantity_returned) || 0));
+
+        let name = 'Funcionario';
+        let role = 'Operativo';
+        let type: any = 'employee';
+
+        const foundColab = collaboratorsList.find(c => c.id === entityId);
+        if (foundColab) {
+            name = foundColab.contact_name;
+            role = foundColab.role || 'Operativo';
+            type = 'employee';
+        } else if (assignedRouteDriver && (entityId === assignedRouteDriver.id || entityId === 'driver-route')) {
+            name = `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`;
+            role = 'Conductor de Ruta';
+            type = 'driver';
+        }
+
+        setItemMultiImputations(prev => {
+            const currentItem = prev[returnId] || {
+                responsible: 'picking',
+                collaborators: []
+            };
+
+            if (currentItem.collaborators.some(c => c.entityId === entityId)) {
+                return prev;
+            }
+
+            const currentCols = currentItem.collaborators;
+            const newCount = currentCols.length + 1;
+            const splitAmount = Math.round(itemAmount / newCount);
+
+            const updatedCols = currentCols.map(c => ({
+                ...c,
+                amount: splitAmount
+            }));
+            updatedCols.push({
+                entityId,
+                entityName: name,
+                entityRole: role,
+                entityType: type,
+                amount: splitAmount,
+                waiveDeduction: false
+            });
+
+            const nextMatrix = {
+                ...prev,
+                [returnId]: {
+                    ...currentItem,
+                    collaborators: updatedCols
+                }
+            };
+            recalculateFromMultiMatrix(nextMatrix);
+            return nextMatrix;
+        });
+    };
+
+    const handleRemoveCollaboratorFromItem = (returnId: string, entityId: string) => {
+        setItemMultiImputations(prev => {
+            const currentItem = prev[returnId];
+            if (!currentItem) return prev;
+
+            const remaining = currentItem.collaborators.filter(c => c.entityId !== entityId);
+            const nextMatrix = {
+                ...prev,
+                [returnId]: {
+                    ...currentItem,
+                    collaborators: remaining
+                }
+            };
+            recalculateFromMultiMatrix(nextMatrix);
+            return nextMatrix;
+        });
+    };
+
+    const handleUpdateCollaboratorAmount = (returnId: string, entityId: string, newAmount: number) => {
+        setItemMultiImputations(prev => {
+            const currentItem = prev[returnId];
+            if (!currentItem) return prev;
+
+            const updatedCols = currentItem.collaborators.map(c => {
+                if (c.entityId === entityId) {
+                    return { ...c, amount: Math.max(0, newAmount) };
+                }
+                return c;
+            });
+
+            const nextMatrix = {
+                ...prev,
+                [returnId]: {
+                    ...currentItem,
+                    collaborators: updatedCols
+                }
+            };
+            recalculateFromMultiMatrix(nextMatrix);
+            return nextMatrix;
+        });
+    };
+
+    const handleToggleCollaboratorWaive = (returnId: string, entityId: string) => {
+        setItemMultiImputations(prev => {
+            const currentItem = prev[returnId];
+            if (!currentItem) return prev;
+
+            const updatedCols = currentItem.collaborators.map(c => {
+                if (c.entityId === entityId) {
+                    return { ...c, waiveDeduction: !c.waiveDeduction };
+                }
+                return c;
+            });
+
+            const nextMatrix = {
+                ...prev,
+                [returnId]: {
+                    ...currentItem,
+                    collaborators: updatedCols
+                }
+            };
+            recalculateFromMultiMatrix(nextMatrix);
+            return nextMatrix;
+        });
+    };
+
+    const handleSplitItemEquallyAmongCollaborators = (returnId: string) => {
+        const ret = caseReturns.find(r => r.id === returnId);
+        const oi = orderItems.find(o => o.product_id === ret?.product_id) || 
+                   ret?.orders?.order_items?.find((o: any) => o.product_id === ret?.product_id);
+        const unitPrice = Number(oi?.unit_price || ret?.unit_price || 0);
+        const itemAmount = Math.round(unitPrice * (Number(ret?.quantity_returned) || 0));
+
+        setItemMultiImputations(prev => {
+            const currentItem = prev[returnId];
+            if (!currentItem || currentItem.collaborators.length === 0) return prev;
+
+            const split = Math.round(itemAmount / currentItem.collaborators.length);
+            const updatedCols = currentItem.collaborators.map(c => ({
+                ...c,
+                amount: split
+            }));
+
+            const nextMatrix = {
+                ...prev,
+                [returnId]: {
+                    ...currentItem,
+                    collaborators: updatedCols
+                }
+            };
+            recalculateFromMultiMatrix(nextMatrix);
+            return nextMatrix;
+        });
+    };
+
+    const handleItemAreaChange = (returnId: string, responsible: any) => {
+        setItemMultiImputations(prev => {
+            const currentItem = prev[returnId] || {
+                responsible: 'picking',
+                collaborators: []
+            };
+
+            const nextMatrix = {
+                ...prev,
+                [returnId]: {
+                    ...currentItem,
+                    responsible
+                }
+            };
+            recalculateFromMultiMatrix(nextMatrix);
+            return nextMatrix;
+        });
     };
 
     // Recalculate consolidated imputedEntities from granular item assignments
@@ -3077,10 +3363,12 @@ export default function PqrAuditModal({
                                                     />
                                                 </div>
 
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', alignItems: 'end' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                     <div>
-                                                        <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Tipo de Novedad</label>
-                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', height: '32px' }}>
+                                                        <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '4px' }}>
+                                                            Tipo de Novedad / Causal
+                                                        </label>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '5px' }}>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setNoveltyType('faltante')}
@@ -3089,7 +3377,8 @@ export default function PqrAuditModal({
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
                                                                     gap: '4px',
-                                                                    fontSize: '0.7rem',
+                                                                    padding: '6px 8px',
+                                                                    fontSize: '0.68rem',
                                                                     fontWeight: '700',
                                                                     borderRadius: '6px',
                                                                     border: noveltyType === 'faltante' ? '1px solid #0D7A57' : '1px solid #CBD5E1',
@@ -3109,7 +3398,8 @@ export default function PqrAuditModal({
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
                                                                     gap: '4px',
-                                                                    fontSize: '0.7rem',
+                                                                    padding: '6px 8px',
+                                                                    fontSize: '0.68rem',
                                                                     fontWeight: '700',
                                                                     borderRadius: '6px',
                                                                     border: noveltyType === 'averia' ? '1px solid #B45309' : '1px solid #CBD5E1',
@@ -3120,6 +3410,69 @@ export default function PqrAuditModal({
                                                             >
                                                                 <AlertTriangle size={13} />
                                                                 <span>Avería</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setNoveltyType('producto_escaso')}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '4px',
+                                                                    padding: '6px 8px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: noveltyType === 'producto_escaso' ? '1px solid #DC2626' : '1px solid #CBD5E1',
+                                                                    backgroundColor: noveltyType === 'producto_escaso' ? '#FEF2F2' : '#FFFFFF',
+                                                                    color: noveltyType === 'producto_escaso' ? '#991B1B' : '#64748B',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <PackageMinus size={13} />
+                                                                <span>Sin Cargue</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setNoveltyType('error_digitacion')}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '4px',
+                                                                    padding: '6px 8px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: noveltyType === 'error_digitacion' ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                                                                    backgroundColor: noveltyType === 'error_digitacion' ? '#EFF6FF' : '#FFFFFF',
+                                                                    color: noveltyType === 'error_digitacion' ? '#1D4ED8' : '#64748B',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <FileText size={13} />
+                                                                <span>Error Digitación</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setNoveltyType('no_solicitado')}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '4px',
+                                                                    padding: '6px 8px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: noveltyType === 'no_solicitado' ? '1px solid #7C3AED' : '1px solid #CBD5E1',
+                                                                    backgroundColor: noveltyType === 'no_solicitado' ? '#FAF5FF' : '#FFFFFF',
+                                                                    color: noveltyType === 'no_solicitado' ? '#6D28D9' : '#64748B',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <X size={13} />
+                                                                <span>No Solicitado</span>
                                                             </button>
                                                         </div>
                                                     </div>
@@ -3172,7 +3525,7 @@ export default function PqrAuditModal({
                                                     </div>
                                                 </div>
 
-                                                {noveltyType === 'averia' && (
+                                                {(noveltyType === 'averia' || noveltyType === 'no_solicitado') && (
                                                     <div style={{ paddingTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                         <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#475569' }}>
                                                             Custodia Física del Producto Afectado:
@@ -3243,118 +3596,313 @@ export default function PqrAuditModal({
                                                 ) : (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                                         {caseReturns.map((ret: any) => {
-                                                            const oi = orderItems.find(o => o.product_id === ret.product_id) || 
-                                                                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
-                                                            const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
-                                                            const subtotal = unitPrice * (Number(ret.quantity_returned) || 0);
-                                                            const pName = ret.products?.name || oi?.products?.name || 'Producto';
-                                                            const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
-                                                            const isPhysical = hasPhysicalReturn;
-                                                            const isFaltante = (ret.reason || '').toLowerCase().includes('faltante');
+                                            const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                                                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                                            const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                                            const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+                                            const pName = ret.products?.name || oi?.products?.name || 'Producto';
+                                            const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+                                            
+                                            const reasonLower = (ret.reason || '').toLowerCase();
+                                            const isSinCargue = reasonLower.includes('escaso') || reasonLower.includes('sin cargue');
+                                            const isErrorDigitacion = reasonLower.includes('digitaci');
+                                            const isNoSolicitado = reasonLower.includes('no solicitado');
+                                            const isFaltante = !isSinCargue && !isErrorDigitacion && !isNoSolicitado && reasonLower.includes('faltante');
+                                            const causalLabel = isSinCargue ? 'Sin Cargue' :
+                                                                isErrorDigitacion ? 'Error Digitación' :
+                                                                isNoSolicitado ? 'No Solicitado' :
+                                                                isFaltante ? 'Faltante' : 'Avería';
 
-                                                            return (
-                                                                <div
-                                                                    key={ret.id}
-                                                                    style={{
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'space-between',
-                                                                        backgroundColor: '#F8FAFC',
-                                                                        border: '1px solid #E2E8F0',
-                                                                        borderRadius: '8px',
-                                                                        padding: '8px 10px',
-                                                                        fontSize: '0.72rem'
-                                                                    }}
-                                                                >
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                                                                        <div style={{
-                                                                            width: '24px',
-                                                                            height: '24px',
-                                                                            borderRadius: '50%',
-                                                                            backgroundColor: isFaltante ? '#ECFDF5' : '#FFFBEB',
-                                                                            color: isFaltante ? '#065F46' : '#B45309',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                            flexShrink: 0
-                                                                        }}>
-                                                                            {isFaltante ? <PackageX size={13} /> : <AlertTriangle size={13} />}
-                                                                        </div>
-                                                                        <div style={{ minWidth: 0, flex: 1 }}>
-                                                                            <strong style={{ color: '#0F172A', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName}</strong>
-                                                                            <div style={{ fontSize: '0.66rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                                                <span><strong>{ret.quantity_returned} {uom}</strong> @ {formatMoney(unitPrice)}/{uom}</span>
-                                                                                <span style={{
-                                                                                    fontSize: '0.62rem',
-                                                                                    fontWeight: '700',
-                                                                                    padding: '1px 6px',
-                                                                                    borderRadius: '4px',
-                                                                                    backgroundColor: isFaltante ? '#D1FAE5' : '#FEF3C7',
-                                                                                    color: isFaltante ? '#065F46' : '#92400E'
-                                                                                }}>
-                                                                                    {isFaltante ? 'Faltante' : 'Avería'}
-                                                                                </span>
-                                                                                {!isFaltante && (
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => handleTogglePhysicalReturnCustody(!isPhysical, ret.id)}
-                                                                                        title="Haz clic para cambiar si el producto se quedó con el cliente o fue devuelto en el camión a bodega"
-                                                                                        style={{
-                                                                                            fontSize: '0.62rem',
-                                                                                            fontWeight: '700',
-                                                                                            padding: '1px 7px',
-                                                                                            borderRadius: '4px',
-                                                                                            backgroundColor: isPhysical ? '#E0E7FF' : '#ECFDF5',
-                                                                                            color: isPhysical ? '#3730A3' : '#065F46',
-                                                                                            border: isPhysical ? '1px solid #C7D2FE' : '1px solid #A7F3D0',
-                                                                                            cursor: 'pointer',
-                                                                                            display: 'inline-flex',
-                                                                                            alignItems: 'center',
-                                                                                            gap: '4px'
-                                                                                        }}
-                                                                                    >
-                                                                                        {isPhysical ? <Truck size={10} /> : <Store size={10} />}
-                                                                                        <span>{isPhysical ? 'Devuelto en Camión (A Bodega)' : 'En Sede Cliente (Sin Retorno)'}</span>
-                                                                                    </button>
-                                                                                )}
-                                                                                <span style={{
-                                                                                    fontSize: '0.62rem',
-                                                                                    fontWeight: '700',
-                                                                                    padding: '1px 6px',
-                                                                                    borderRadius: '4px',
-                                                                                    backgroundColor: ret.status === 'approved' ? '#D1FAE5' : ret.status === 'rejected' ? '#F1F5F9' : '#FEF3C7',
-                                                                                    color: ret.status === 'approved' ? '#065F46' : ret.status === 'rejected' ? '#475569' : '#92400E'
-                                                                                }}>
-                                                                                    {ret.status === 'approved' ? 'Aprobada' : ret.status === 'rejected' ? 'Sin Costo' : 'Pendiente'}
+                                            const itemEntry = itemMultiImputations[ret.id] || {
+                                                responsible: isSinCargue ? 'proveedor' :
+                                                             isErrorDigitacion ? 'comercial' :
+                                                             isNoSolicitado ? 'comercial' :
+                                                             isFaltante ? 'picking' : 'transporte',
+                                                collaborators: []
+                                            };
+                                            const itemResponsible = itemEntry.responsible;
+                                            const assignedCols = itemEntry.collaborators || [];
+
+                                            const totalAssignedCOP = assignedCols.reduce((sum, c) => sum + (c.waiveDeduction ? 0 : (Number(c.amount) || 0)), 0);
+                                            const isFullyAssigned = totalAssignedCOP === itemAmount;
+                                            const isOverAssigned = totalAssignedCOP > itemAmount;
+
+                                            return (
+                                                <div
+                                                    key={ret.id}
+                                                    style={{
+                                                        backgroundColor: '#FFFFFF',
+                                                        border: '1px solid #CBD5E1',
+                                                        borderRadius: '10px',
+                                                        padding: '12px',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '10px',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                                                    }}
+                                                >
+                                                    {/* Header: Producto + Causal + Costo */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '8px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <div style={{
+                                                                width: '26px',
+                                                                height: '26px',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: '#F1F5F9',
+                                                                color: '#0F172A',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                flexShrink: 0
+                                                            }}>
+                                                                {isSinCargue ? <PackageMinus size={14} /> :
+                                                                 isErrorDigitacion ? <FileText size={14} /> :
+                                                                 isNoSolicitado ? <X size={14} /> :
+                                                                 isFaltante ? <PackageX size={14} /> :
+                                                                 <AlertTriangle size={14} />}
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <strong style={{ fontSize: '0.82rem', color: '#0F172A' }}>{pName}</strong>
+                                                                    <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', color: '#475569' }}>
+                                                                        {causalLabel}
+                                                                    </span>
+                                                                </div>
+                                                                <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
+                                                                    {ret.quantity_returned} {uom} reclamados @ {formatMoney(unitPrice)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ textAlign: 'right' }}>
+                                                            <span style={{ fontSize: '0.60rem', color: '#94A3B8', display: 'block', textTransform: 'uppercase', fontWeight: '700' }}>Costo Novedad</span>
+                                                            <strong style={{ fontSize: '0.92rem', color: '#0F172A', fontFamily: 'monospace' }}>
+                                                                {formatMoney(itemAmount)}
+                                                            </strong>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Fila Área Causal + Acciones */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <label style={{ fontSize: '0.66rem', fontWeight: '700', color: '#64748B' }}>
+                                                                Área Causal:
+                                                            </label>
+                                                            <select
+                                                                value={itemResponsible}
+                                                                onChange={e => handleItemAreaChange(ret.id, e.target.value)}
+                                                                style={{
+                                                                    padding: '4px 8px',
+                                                                    fontSize: '0.70rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    backgroundColor: '#F8FAFC',
+                                                                    color: '#1E293B'
+                                                                }}
+                                                            >
+                                                                <option value="picking">Picking (Alistamiento)</option>
+                                                                <option value="transporte">Transporte (Ruta / Flota)</option>
+                                                                <option value="bodega">Bodega (Almacén)</option>
+                                                                <option value="proveedor">Proveedor (Campo / Origen)</option>
+                                                                <option value="comercial">Comercial (Montaje)</option>
+                                                                <option value="cliente">Cliente (Autogestión)</option>
+                                                            </select>
+                                                        </div>
+
+                                                        {itemResponsible !== 'proveedor' && itemResponsible !== 'cliente' && assignedCols.length > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleSplitItemEquallyAmongCollaborators(ret.id)}
+                                                                style={{
+                                                                    padding: '3px 8px',
+                                                                    borderRadius: '6px',
+                                                                    backgroundColor: '#F1F5F9',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    fontSize: '0.65rem',
+                                                                    fontWeight: '700',
+                                                                    color: '#0F172A',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px'
+                                                                }}
+                                                                title="Divide el costo del producto en partes iguales entre los funcionarios asignados"
+                                                            >
+                                                                <span>➗ Repartir en partes iguales (${formatMoney(Math.round(itemAmount / assignedCols.length))} c/u)</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Imputación según Área */}
+                                                    {itemResponsible === 'proveedor' ? (
+                                                        <div style={{ padding: '8px 12px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '6px', fontSize: '0.72rem', color: '#B45309', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                            <span>🏢 Imputado a Proveedor (Campo / Origen) — Aplica Nota Débito automática</span>
+                                                            <strong>{formatMoney(itemAmount)}</strong>
+                                                        </div>
+                                                    ) : itemResponsible === 'cliente' ? (
+                                                        <div style={{ padding: '8px 12px', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.72rem', color: '#475569', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                            <span>👤 Imputado al Cliente ({pqr?.profiles?.company_name || 'Autogestión'}) — No genera deducción interna</span>
+                                                            <strong>{formatMoney(itemAmount)}</strong>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                            {/* Lista de Colaboradores Asignados a este Producto */}
+                                                            {assignedCols.length > 0 && (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                                    {assignedCols.map((colab) => (
+                                                                        <div
+                                                                            key={colab.entityId}
+                                                                            style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'space-between',
+                                                                                gap: '8px',
+                                                                                padding: '6px 10px',
+                                                                                backgroundColor: '#F8FAFC',
+                                                                                border: '1px solid #E2E8F0',
+                                                                                borderRadius: '6px',
+                                                                                fontSize: '0.72rem'
+                                                                            }}
+                                                                        >
+                                                                            <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                <User size={13} style={{ color: '#64748B', flexShrink: 0 }} />
+                                                                                <strong style={{ color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                                    {colab.entityName}
+                                                                                </strong>
+                                                                                <span style={{ fontSize: '0.60rem', fontWeight: '700', padding: '1px 5px', borderRadius: '4px', backgroundColor: '#E2E8F0', color: '#334155', flexShrink: 0 }}>
+                                                                                    {colab.entityRole || 'Operativo'}
                                                                                 </span>
                                                                             </div>
-                                                                        </div>
-                                                                    </div>
 
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                                                                        <strong style={{ color: '#047857', fontSize: '0.78rem' }}>
-                                                                            {formatMoney(subtotal)}
-                                                                        </strong>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleDeleteNovelty(ret.id)}
-                                                                            disabled={actionLoading}
-                                                                            style={{
-                                                                                border: 'none',
-                                                                                background: 'transparent',
-                                                                                color: '#DC2626',
-                                                                                cursor: 'pointer',
-                                                                                padding: '4px',
-                                                                                borderRadius: '4px'
-                                                                            }}
-                                                                            title="Eliminar esta novedad"
-                                                                        >
-                                                                            <Trash2 size={14} />
-                                                                        </button>
-                                                                    </div>
+                                                                            {/* Controles de Monto en COP */}
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleToggleCollaboratorWaive(ret.id, colab.entityId)}
+                                                                                    style={{
+                                                                                        padding: '3px 6px',
+                                                                                        borderRadius: '4px',
+                                                                                        fontSize: '0.62rem',
+                                                                                        fontWeight: '700',
+                                                                                        border: colab.waiveDeduction ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
+                                                                                        backgroundColor: colab.waiveDeduction ? '#ECFDF5' : '#FFFFFF',
+                                                                                        color: colab.waiveDeduction ? '#059669' : '#64748B',
+                                                                                        cursor: 'pointer'
+                                                                                    }}
+                                                                                >
+                                                                                    {colab.waiveDeduction ? 'Exonerado ($0)' : 'A Cobrar'}
+                                                                                </button>
+
+                                                                                {!colab.waiveDeduction && (
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                        <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>$</span>
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            value={colab.amount}
+                                                                                            onChange={e => handleUpdateCollaboratorAmount(ret.id, colab.entityId, parseFloat(e.target.value) || 0)}
+                                                                                            style={{
+                                                                                                width: '85px',
+                                                                                                padding: '3px 6px',
+                                                                                                borderRadius: '5px',
+                                                                                                border: '1px solid #CBD5E1',
+                                                                                                fontSize: '0.72rem',
+                                                                                                fontWeight: '800',
+                                                                                                color: '#0F172A',
+                                                                                                textAlign: 'right',
+                                                                                                backgroundColor: '#FFFFFF'
+                                                                                            }}
+                                                                                        />
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleUpdateCollaboratorAmount(ret.id, colab.entityId, Math.round(itemAmount * 0.5))}
+                                                                                            style={{ padding: '2px 5px', fontSize: '0.60rem', fontWeight: '700', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '4px', cursor: 'pointer' }}
+                                                                                            title="Asignar 50% del valor del ítem"
+                                                                                        >
+                                                                                            50%
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleUpdateCollaboratorAmount(ret.id, colab.entityId, itemAmount)}
+                                                                                            style={{ padding: '2px 5px', fontSize: '0.60rem', fontWeight: '700', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '4px', cursor: 'pointer' }}
+                                                                                            title="Asignar 100% del valor del ítem"
+                                                                                        >
+                                                                                            100%
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleRemoveCollaboratorFromItem(ret.id, colab.entityId)}
+                                                                                    style={{
+                                                                                        padding: '4px',
+                                                                                        color: '#EF4444',
+                                                                                        background: 'none',
+                                                                                        border: 'none',
+                                                                                        cursor: 'pointer',
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center'
+                                                                                    }}
+                                                                                    title="Quitar funcionario de este producto"
+                                                                                >
+                                                                                    <Trash2 size={13} />
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
-                                                            );
-                                                        })}
+                                                            )}
+
+                                                            {/* Selector para agregar funcionario a este ítem */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                                                                <div style={{ flex: 1 }}>
+                                                                    <SearchableSelect
+                                                                        value=""
+                                                                        onChange={val => handleAddCollaboratorToItem(ret.id, val)}
+                                                                        placeholder="+ Asignar funcionario a este producto..."
+                                                                        searchPlaceholder="Buscar funcionario por nombre o cargo..."
+                                                                        options={[
+                                                                            ...(itemResponsible === 'transporte' && assignedRouteDriver && !collaboratorsList.some(c => c.id === assignedRouteDriver.id)
+                                                                                ? [{
+                                                                                    value: assignedRouteDriver.id || 'driver-route',
+                                                                                    label: `${assignedRouteDriver.name} (${assignedRouteDriver.plate || 'Furgón'})`,
+                                                                                    badge: 'Conductor de Ruta'
+                                                                                }]
+                                                                                : []),
+                                                                            ...collaboratorsList
+                                                                                .filter(c => !assignedCols.some(ac => ac.entityId === c.id))
+                                                                                .map(c => ({
+                                                                                    value: c.id,
+                                                                                    label: c.contact_name,
+                                                                                    sublabel: c.phone || undefined,
+                                                                                    badge: c.role || 'Operativo'
+                                                                                }))
+                                                                        ]}
+                                                                    />
+                                                                </div>
+
+                                                                {/* Indicador de cobertura del ítem */}
+                                                                {assignedCols.length > 0 && (
+                                                                    <span style={{
+                                                                        fontSize: '0.65rem',
+                                                                        fontWeight: '800',
+                                                                        padding: '3px 8px',
+                                                                        borderRadius: '5px',
+                                                                        backgroundColor: isFullyAssigned ? '#ECFDF5' : isOverAssigned ? '#FEF2F2' : '#FFFBEB',
+                                                                        color: isFullyAssigned ? '#065F46' : isOverAssigned ? '#991B1B' : '#92400E',
+                                                                        border: isFullyAssigned ? '1px solid #A7F3D0' : isOverAssigned ? '1px solid #FECACA' : '1px solid #FDE68A',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        Asignado: {formatMoney(totalAssignedCOP)} / {formatMoney(itemAmount)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                                     </div>
                                                 )}
                                             </div>
