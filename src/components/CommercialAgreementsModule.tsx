@@ -449,6 +449,7 @@ export default function CommercialAgreementsModule() {
     const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
     const [clientSearchQuery, setClientSearchQuery] = useState('');
     const [clientTypeFilter, setClientTypeFilter] = useState<'all' | 'matriz' | 'sucursal'>('all');
+    const [createClientStatusFilter, setCreateClientStatusFilter] = useState<'available' | 'all'>('available');
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
     const [focusedOptionIndex, setFocusedOptionIndex] = useState(0);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -3711,7 +3712,33 @@ export default function CommercialAgreementsModule() {
         return `ACI ${day}${month} ${paddedSeq}`;
     };
 
+    const getClientActiveAgreement = (clientId: string) => {
+        // 1. Direct agreement
+        const direct = agreements.find(a => a.client_id === clientId && a.status === 'agreement');
+        if (direct) return { agreement: direct, isDirect: true };
+
+        // 2. Parent agreement
+        const client = b2bClients.find(c => c.id === clientId);
+        if (client?.parent_id) {
+            const parentAg = agreements.find(a => a.client_id === client.parent_id && a.status === 'agreement');
+            if (parentAg) return { agreement: parentAg, isParent: true, parentName: client.parentName };
+        }
+
+        // 3. Shared master agreement links
+        for (const [agId, clientIds] of Object.entries(sharedLinks)) {
+            if (clientIds.includes(clientId) || (client?.parent_id && clientIds.includes(client.parent_id))) {
+                const sharedAg = agreements.find(a => a.id === agId && a.status === 'agreement');
+                if (sharedAg) return { agreement: sharedAg, isShared: true };
+            }
+        }
+        return null;
+    };
+
     const filteredB2bClients = useMemo(() => b2bClients.filter(c => {
+        const activeAgInfo = getClientActiveAgreement(c.id);
+        if (createClientStatusFilter === 'available' && activeAgInfo) {
+            return false;
+        }
         // Multi-client mode (General Institutional): strictly Casas Matrices / Root clients
         if (isMultiClientMode) {
             if (c.parent_id) return false;
@@ -3729,7 +3756,7 @@ export default function CommercialAgreementsModule() {
         const matchesNit = String(c.nit || '').toLowerCase().includes(query);
         const matchesParent = c.parentName?.toLowerCase().includes(query);
         return Boolean(matchesName || matchesContact || matchesNit || matchesParent);
-    }), [b2bClients, isMultiClientMode, clientTypeFilter, clientSearchQuery]);
+    }), [b2bClients, isMultiClientMode, clientTypeFilter, clientSearchQuery, createClientStatusFilter, agreements, sharedLinks]);
 
     const toggleSort = (col: typeof sortColumn) => {
         if (sortColumn === col) {
@@ -6831,8 +6858,46 @@ export default function CommercialAgreementsModule() {
                                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
                                                         Buscar Casa Matriz o Sucursal Específica:
                                                     </label>
-                                                    {/* Filter Pills */}
-                                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                                    {/* Filter Pills with Poka-Yoke Status */}
+                                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setCreateClientStatusFilter('available')}
+                                                            style={{
+                                                                padding: '3px 10px',
+                                                                borderRadius: '14px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: 'bold',
+                                                                border: createClientStatusFilter === 'available' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                backgroundColor: createClientStatusFilter === 'available' ? '#ECFDF5' : '#FFFFFF',
+                                                                color: createClientStatusFilter === 'available' ? '#0D7A57' : '#64748B',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                        >
+                                                            <CheckCircle2 size={12} /> Disponibles Sin Acuerdo ({clientsWithoutAgreement.length})
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setCreateClientStatusFilter('all')}
+                                                            style={{
+                                                                padding: '3px 10px',
+                                                                borderRadius: '14px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: 'bold',
+                                                                border: createClientStatusFilter === 'all' ? '1.5px solid #64748B' : '1px solid #CBD5E1',
+                                                                backgroundColor: createClientStatusFilter === 'all' ? '#F1F5F9' : '#FFFFFF',
+                                                                color: createClientStatusFilter === 'all' ? '#0F172A' : '#64748B',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                        >
+                                                            Ver Todos ({b2bClients.length})
+                                                        </button>
+                                                        <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 4px' }} />
                                                         <button
                                                             type="button"
                                                             onClick={() => setClientTypeFilter('all')}
@@ -6848,7 +6913,7 @@ export default function CommercialAgreementsModule() {
                                                                 transition: 'all 0.15s'
                                                             }}
                                                         >
-                                                            Todos ({b2bClients.length})
+                                                            Tipo: Todos
                                                         </button>
                                                         <button
                                                             type="button"
@@ -6947,10 +7012,17 @@ export default function CommercialAgreementsModule() {
                                                     ) : (
                                                         filteredB2bClients.map((c) => {
                                                             const isSucursal = Boolean(c.parent_id);
+                                                            const activeAgInfo = getClientActiveAgreement(c.id);
+                                                            const hasActive = Boolean(activeAgInfo);
+
                                                             return (
                                                                 <div
                                                                     key={c.id}
                                                                     onClick={() => {
+                                                                        if (hasActive) {
+                                                                            showToast(`${c.company_name} ya tiene un Acuerdo Activo (#${activeAgInfo?.agreement.quote_number}). Para crearle uno nuevo, primero debes revocar el actual.`, 'warning');
+                                                                            return;
+                                                                        }
                                                                         setSelectedClientId(c.id);
                                                                         setClientSearchQuery('');
                                                                         if (!isNameManuallyEdited) {
@@ -6960,14 +7032,22 @@ export default function CommercialAgreementsModule() {
                                                                     style={{
                                                                         padding: '12px 16px',
                                                                         borderBottom: '1px solid #F1F5F9',
-                                                                        cursor: 'pointer',
+                                                                        cursor: hasActive ? 'not-allowed' : 'pointer',
                                                                         display: 'flex',
                                                                         justifyContent: 'space-between',
                                                                         alignItems: 'center',
-                                                                        transition: 'all 0.15s ease'
+                                                                        transition: 'all 0.15s ease',
+                                                                        backgroundColor: hasActive ? '#FFFBEB' : 'transparent',
+                                                                        opacity: hasActive ? 0.8 : 1
                                                                     }}
-                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSucursal ? '#F0F9FF' : '#F0FDF4'}
-                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                                    onMouseEnter={(e) => {
+                                                                        if (!hasActive) {
+                                                                            e.currentTarget.style.backgroundColor = isSucursal ? '#F0F9FF' : '#F0FDF4';
+                                                                        }
+                                                                    }}
+                                                                    onMouseLeave={(e) => {
+                                                                        e.currentTarget.style.backgroundColor = hasActive ? '#FFFBEB' : 'transparent';
+                                                                    }}
                                                                 >
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                                                         <div style={{ 
@@ -6999,7 +7079,25 @@ export default function CommercialAgreementsModule() {
                                                                         </div>
                                                                     </div>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                        {isSucursal ? (
+                                                                        {hasActive ? (
+                                                                            <span 
+                                                                                title="Este cliente ya posee un acuerdo comercial vigente. Debe revocarse para crear uno nuevo."
+                                                                                style={{ 
+                                                                                    fontSize: '0.7rem', 
+                                                                                    padding: '3px 9px', 
+                                                                                    borderRadius: '20px', 
+                                                                                    backgroundColor: '#FEF3C7', 
+                                                                                    color: '#B45309', 
+                                                                                    fontWeight: 'bold', 
+                                                                                    display: 'inline-flex', 
+                                                                                    alignItems: 'center', 
+                                                                                    gap: '4px', 
+                                                                                    border: '1px solid #FCD34D' 
+                                                                                }}
+                                                                            >
+                                                                                <AlertTriangle size={12} /> Acuerdo Activo #{activeAgInfo?.agreement.quote_number}
+                                                                            </span>
+                                                                        ) : isSucursal ? (
                                                                             <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#E0F2FE', color: '#0284C7', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #BAE6FD' }}>
                                                                                 <MapPin size={12} /> Sucursal Específica
                                                                             </span>
@@ -7008,7 +7106,7 @@ export default function CommercialAgreementsModule() {
                                                                                 <Building2 size={12} /> Casa Matriz {c.branchCount > 0 ? `(${c.branchCount} ${c.branchCount === 1 ? 'sucursal' : 'sucursales'})` : ''}
                                                                             </span>
                                                                         )}
-                                                                        <ChevronRight size={16} color="#94A3B8" />
+                                                                        {!hasActive && <ChevronRight size={16} color="#94A3B8" />}
                                                                     </div>
                                                                 </div>
                                                             );

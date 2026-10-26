@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.286 (Asignación Inmune de SKUs en Acuerdos, Consecutivo Numérico World Office y Ley Marcial Anti-Legacy — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.287 (Poka-Yoke Anti-Colisión de Clientes en Acuerdos, Consecutivo Numérico World Office y Ley Marcial Anti-Legacy — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -12136,3 +12136,7 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   6. **Asignación Inmune de Nuevos SKUs y Consecutivo Numérico Estricto World Office (Hallazgos 5 y 6 - SDD v1.9.286):**
      - En el creador de productos al vuelo (`handleSaveQuickProduct`), el consecutivo `accounting_id` se calcula obligatoriamente mediante escaneo numérico exhaustivo: $\text{nextAccId} = \max(\text{parseInt}(accounting\_id)) + 1$, garantizando que nunca se produzcan saltos por ordenamiento de texto en Supabase (`'999' > '1700'`).
      - Al presionar *"Crear y Asignar a Fila"*, el sistema ejecuta una resolución de índice con doble verificación (por `originalIndex` persistido y por nombre de ítem). La fila recién creada muta atómicamente a `matched_product`, recalculando de inmediato los contadores `matchedCount` y `unmatchedCount`, desapareciendo de la pestaña `Sin Coincidencia` y asegurando que jamás se sobrescriba otra fila del Excel ni se apliquen precios con criterio imprevisto.
+  7. **Poka-Yoke de Blindaje en Selección de Clientes para Acuerdos (Hallazgo 7 - SDD v1.9.287):**
+     - En el Paso 1 de creación de Acuerdos Comerciales (`CommercialAgreementsModule.tsx`), se incorpora el selector de estado: `[Disponibles Sin Acuerdo (N)]` (activo por defecto) y `[Ver Todos]`.
+     - Si un cliente institucional (directo, sucursal o vinculado) ya posee un acuerdo comercial activo (`status = 'agreement'`), queda estrictamente bloqueada su selección redundante.
+     - En la vista general, el registro despliega el badge de advertencia: `[Acuerdo Activo #ACI...]` con cursor deshabilitado. Al intentar interactuar, el sistema emite notificación Poka-Yoke explicativa impidiendo la colisión con el índice único `idx_single_active_agreement_per_client` y eliminando la falsa expectativa de creación.

@@ -1469,8 +1469,261 @@ export default function CommercialDailyMonitorModule() {
                         </div>
                     </div>
 
-                    {/* VISTA 1: VENTAS POR CLIENTE */}
-                    {activeView === 'clients' && (
+                                        {activeView === 'clients' && (
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}`,
+                            border: `1px solid ${THEME.colors.border}`,
+                            overflow: 'visible',
+                            borderTop: 'none'
+                        }}>
+                                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.85rem', textAlign: 'left' }}>
+                                <thead style={{ position: 'sticky', top: '137px', zIndex: 35 }}>
+                                    <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                        <th 
+                                            onClick={() => handleOrderSort('consecutivo')}
+                                            title="Ordenar por Consecutivo de Planta"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 1rem', width: '14%', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span>Consecutivo & Zona</span>
+                                                {orderSortColumn === 'consecutivo' ? (
+                                                    orderSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th 
+                                            onClick={() => handleOrderSort('client')}
+                                            title="Ordenar por Cliente / Sucursal"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 1rem', width: '36%', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span>Cliente & Sucursal</span>
+                                                {orderSortColumn === 'client' ? (
+                                                    orderSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th 
+                                            onClick={() => handleOrderSort('document')}
+                                            title="Ordenar por Modalidad Documental y Pago"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 1rem', width: '16%', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span>Documento & Pago</span>
+                                                {orderSortColumn === 'document' ? (
+                                                    orderSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th 
+                                            onClick={() => handleOrderSort('total')}
+                                            title="Ordenar por Total Facturado"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 1rem', width: '14%', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Facturación & Carga</span>
+                                                {orderSortColumn === 'total' ? (
+                                                    orderSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th 
+                                            onClick={() => handleOrderSort('margin')}
+                                            title="Ordenar por Utilidad / Margen"
+                                            style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 1rem', width: '13%', textAlign: 'right', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Rentabilidad BI</span>
+                                                {orderSortColumn === 'margin' ? (
+                                                    orderSortDirection === 'asc' ? <ChevronUp size={13} color={THEME.colors.primary} /> : <ChevronDown size={13} color={THEME.colors.primary} />
+                                                ) : (
+                                                    <ChevronsUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th style={{ position: 'sticky', top: '137px', zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '0.70rem 1rem', width: '7%', textAlign: 'center', color: '#64748B', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                            Acción
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedFilteredOrders.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} style={{ padding: '3.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                                No se encontraron pedidos para los filtros aplicados.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        sortedFilteredOrders.map((ord) => (
+                                            <tr
+                                                key={ord.id}
+                                                style={{
+                                                    borderBottom: '1px solid #F1F5F9',
+                                                    backgroundColor: ord.hasEqualValueAlert ? '#FEF2F2' : (ord.hasMultipleOrdersAlert ? '#FAF5FF' : 'white'),
+                                                    transition: 'background-color 0.15s ease'
+                                                }}
+                                            >
+                                                {/* 1. Consecutivo & Zona */}
+                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
+                                                    <div style={{ fontWeight: '800', color: THEME.colors.primary, fontFamily: 'monospace', fontSize: '0.90rem', letterSpacing: '0.02em' }}>
+                                                        {ord.friendlyId || ord.sequenceId}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                        <span style={{ fontWeight: '600' }}>#{ord.sequenceId}</span>
+                                                        <span>•</span>
+                                                        <span style={{ backgroundColor: '#F1F5F9', color: '#475569', padding: '1px 5px', borderRadius: '4px', fontWeight: '600', fontSize: '0.70rem' }}>
+                                                            {ord.zone}
+                                                        </span>
+                                                    </div>
+                                                </td>
+
+                                                {/* 2. Cliente & Sucursal (Desacople Limpio Sede vs Matriz) */}
+                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.92rem', letterSpacing: '-0.01em' }}>
+                                                                {ord.branchName || ord.clientName}
+                                                            </span>
+                                                            <span style={{
+                                                                padding: '1px 6px',
+                                                                borderRadius: '4px',
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: ord.type === 'b2b' ? '#EFF6FF' : '#F0FDF4',
+                                                                color: ord.type === 'b2b' ? '#1D4ED8' : '#15803D',
+                                                                border: `1px solid ${ord.type === 'b2b' ? '#BFDBFE' : '#BBF7D0'}`
+                                                            }}>
+                                                                {ord.type === 'b2b' ? 'B2B INSTITUCIONAL' : 'B2C HOGAR'}
+                                                            </span>
+                                                        </div>
+                                                        {ord.parentName && (
+                                                            <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: '500' }}>
+                                                                Matriz: <span style={{ color: '#334155', fontWeight: '700' }}>{ord.parentName}</span>
+                                                            </div>
+                                                        )}
+                                                        <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '1px' }}>
+                                                            {ord.nit && ord.nit !== 'Sin NIT' && (
+                                                                <span style={{ fontWeight: '600', color: '#475569' }}>NIT: {ord.nit}</span>
+                                                            )}
+                                                            <span>•</span>
+                                                            <span style={{ color: '#64748B' }}>{ord.address}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* 3. Documento & Pago */}
+                                                <td style={{ padding: '1rem 1.25rem', verticalAlign: 'top' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                        <div>
+                                                            <span style={{
+                                                                padding: '2px 8px',
+                                                                borderRadius: '6px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: ord.documentType === 'Factura' ? '#EFF6FF' : '#ECFDF5',
+                                                                color: ord.documentType === 'Factura' ? '#1D4ED8' : '#047857',
+                                                                border: `1px solid ${ord.documentType === 'Factura' ? '#BFDBFE' : '#A7F3D0'}`
+                                                            }}>
+                                                                {ord.documentType}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.74rem', color: '#475569', fontWeight: '600' }}>
+                                                            {ord.paymentMethod}
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* 4. Facturación & Carga */}
+                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'right', verticalAlign: 'top' }}>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain }}>
+                                                        {formatMoney(ord.total)}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.73rem', color: THEME.colors.textSecondary, marginTop: '3px' }}>
+                                                        <strong style={{ color: '#0369A1' }}>{formatNumber(ord.totalWeightKg, 1)} Kg</strong> • {ord.itemsCount} {ord.itemsCount === 1 ? 'ítem' : 'ítems'}
+                                                    </div>
+                                                </td>
+
+                                                {/* 5. Rentabilidad BI */}
+                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'right', verticalAlign: 'top' }}>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.88rem', color: ord.grossProfit >= 0 ? '#0D7A57' : '#DC2626' }}>
+                                                        {formatMoney(ord.grossProfit)}
+                                                    </div>
+                                                    <div style={{ marginTop: '4px' }}>
+                                                        <span style={{
+                                                            padding: '2px 7px',
+                                                            borderRadius: '999px',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '800',
+                                                            backgroundColor: ord.marginPct >= 20 ? '#DCFCE7' : (ord.marginPct >= 10 ? '#FEF3C7' : '#FEE2E2'),
+                                                            color: ord.marginPct >= 20 ? '#15803D' : (ord.marginPct >= 10 ? '#B45309' : '#B91C1C'),
+                                                            border: `1px solid ${ord.marginPct >= 20 ? '#86EFAC' : (ord.marginPct >= 10 ? '#FDE68A' : '#FECACA')}`
+                                                        }}>
+                                                            {ord.marginPct.toFixed(1)}% margen
+                                                        </span>
+                                                    </div>
+                                                </td>
+
+                                                {/* 6. Acción */}
+                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                        {ord.hasEqualValueAlert && (
+                                                            <span style={{ padding: '1px 5px', borderRadius: '4px', fontSize: '0.64rem', fontWeight: '800', backgroundColor: '#FEE2E2', color: '#B91C1C' }}>
+                                                                Duplicado
+                                                            </span>
+                                                        )}
+                                                        {ord.hasMultipleOrdersAlert && !ord.hasEqualValueAlert && (
+                                                            <span style={{ padding: '1px 5px', borderRadius: '4px', fontSize: '0.64rem', fontWeight: '800', backgroundColor: '#F3E8FF', color: '#7E22CE' }}>
+                                                                Multipedido
+                                                            </span>
+                                                        )}
+                                                        <a
+                                                            href={`/admin/orders/contingency-print?mode=remissions&orderId=${ord.id}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            style={{
+                                                                color: THEME.colors.primary,
+                                                                padding: '5px 10px',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: THEME.colors.primaryLight,
+                                                                fontSize: '0.74rem',
+                                                                fontWeight: '700',
+                                                                textDecoration: 'none',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                transition: 'all 0.15s ease'
+                                                            }}
+                                                        >
+                                                            Verificar <ChevronRight size={13} />
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* VISTA 2: VENTAS POR PRODUCTO */}
+
+{/* VISTA 2: VENTAS POR PRODUCTO (CONSOLIDADO) */}
+                    {activeView === 'products' && (
                         <div style={{
                             backgroundColor: 'white',
                             borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}`,
