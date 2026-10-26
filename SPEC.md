@@ -11801,3 +11801,16 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   2. **Expediente de Pedido y Candado de Edición (`/admin/orders/[id]`):** El cálculo de cierre de edición se desacopla de la constante estática `ADMIN_EDIT_CUTOFF_HOUR = 20`. La compuerta consulta `app_settings`, habilitando edición continua si las reglas están desactivadas o respetando la hora configurada en `cutoff_hour_admin`.
   3. **Torre de Control de Despachos (`/admin/orders/loading`):** El cintillo superior de tanda activa proyecta dinámicamente el estado real de la operación: si las reglas están activas, anuncia la hora de corte exacta parametrizada; si están desactivadas, exhibe el rótulo informativo: `Horario Flexible (Reglas de Corte Desactivadas)`.
   4. **Creación Manual de Pedidos (`/admin/orders/create`):** El validador Poka-Yoke de despacho respeta el estado de `cutoffRulesEnabled`, permitiendo registrar pedidos de contingencia o extemporáneos de forma ágil sin interrupciones hostiles de interfaz.
+
+---
+
+### Escenario 292: Rediseño Visual de Alta Fidelidad y Micro-Copy Táctico para Gobernanza de Cortes en Ajustes (SDD v1.9.269)
+- **Given** el panel de configuración operativa en `/admin/settings`,
+- **When** cualquier usuario administrativo o comercial accede a la sección de Operación de Tienda para consultar o modificar la política de cortes de despacho,
+- **Then** el sistema presenta un panel unificado de ancho completo (`gridColumn: '1 / -1'`) denominado **Gobernanza de Horarios de Corte y Despachos (D+1 / D+2)** con jerarquía visual de alto impacto:
+  1. **Badge Reactivo de Estado:** En el encabezado proyecta en tiempo real si el sistema opera bajo `[ 🔒 CORTES ESTRICTOS ACTIVOS ]` (verde esmeralda) o `[ 🔓 MODO FLEXIBLE / CONTINGENCIA (SIN BLOQUEOS) ]` (ámbar cálido).
+  2. **Interruptor Maestro Explicativo:** Dispone del selector `enable_cutoff_rules` con opciones explícitas (`ACTIVADA — Bloqueo Estricto de Horarios` vs `DESACTIVADA — Modo Flexible (Sin Bloqueos)`) y micro-copy didáctico que explica las implicaciones operativas de cada modo (bloqueo automático a D+2 vs libertad total para cierres de mes y contingencias).
+  3. **Tarjetas Subordinadas de Canales (B2B vs B2C):** Organiza en 2 columnas claras e intuitivas los dos límites horarios con distintivo de estado reactivo:
+     - **Mesa Operativa & B2B (Admin / Empresas):** Explica con precisión que gobierna la toma manual de operadoras, edición de pedidos institucionales (restaurantes, casinos) e ingesta por correos AI, con su hora de corte recomendada (08:00 PM).
+     - **Tienda Web Pública (B2C / Hogares):** Explica con claridad que gobierna el checkout y carrito de compras de la tienda online para consumidores finales, con su hora de corte recomendada (05:00 PM).
+  4. **Notas de Efecto en Gemba:** Cada canal detalla su impacto directo en la plaza de mercado (Corabastos) y en el calendario del cliente final, erradicando cualquier duda o ambigüedad conceptual.
