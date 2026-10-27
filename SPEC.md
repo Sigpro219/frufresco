@@ -12329,7 +12329,7 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 
 ---
 
-### Escenario 313: Gobernanza Estricta de Calendario de Despachos, Bloqueo de Fechas Pasadas, Domingos y Festivos, y Días Habilitados para Hogares (B2C) (Gemba Detalles Pedidos: Hallazgo 4) (SDD v1.9.296)
+### Escenario 314: Gobernanza Estricta de Calendario de Despachos, Bloqueo de Fechas Pasadas, Domingos y Festivos, y Días Habilitados para Hogares (B2C) (Gemba Detalles Pedidos: Hallazgo 4) (SDD v1.9.296)
 - **Given** el módulo administrativo de creación de pedidos (`/admin/orders/create`), el checkout público de la tienda (`/checkout`), la configuración operativa (`/admin/settings`) y el motor de festivos de Colombia (`colombianHolidays.ts`),
 - **When** un usuario administrativo o cliente particular selecciona una fecha de entrega en el calendario,
 - **Then** el sistema impone las siguientes cinco (5) reglas inviolables de control de fechas:
@@ -12346,3 +12346,24 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Cuando el pedido pertenece al canal Hogar (`clientType === 'B2C'`), el calendario bloquea automáticamente los días no cubiertos por las rutas de hogar y adelanta la fecha al día habilitado más cercano.
   5. **Estándar Puro Lucide React y Cero Emojis:**
      - Todos los indicadores, selectores de días y badges de configuración utilizan exclusivamente componentes de `lucide-react` (`Calendar`, `CalendarClock`, `CalendarX`, `CheckCircle2`, `Sparkles`), erradicando cualquier emoji unicode en los paneles operativos.
+
+---
+
+### Escenario 315: Radar Preventivo de Frecuencias B2B en Servicio al Cliente (SAC) con Límite de Recepción a las 4:00 PM, Disparador WhatsApp 1-Clic y Ratificación de Protocolo Express Same-Day Remisionado (Gemba Detalles Pedidos: Hallazgos 5 y 6) (SDD v1.9.297)
+- **Given** el módulo de Gestión de Calidad, PQRS & Devoluciones (`/admin/customer-service`), la galería de pedidos pendientes (`MissingOrdersGallery.tsx`), el protocolo de pedidos express extemporáneos (Escenario 226) y la gobernanza de horas límite (`colombianHolidays.ts`),
+- **When** el equipo de Servicio al Cliente (SAC) o la Mesa de Pedidos gestiona las rutas de despacho del día siguiente o recibe solicitudes de entrega para el mismo día,
+- **Then** el sistema consagra los siguientes cinco (5) estándares operativos y de comunicación:
+  1. **Consolidación Centralizada en Servicio al Cliente (`/admin/customer-service` → *Pedidos Pendientes*):**
+     - La gestión preventiva de pedidos de ruta se centraliza en la pestaña **`Pedidos Pendientes`** de Calidad y Servicio al Cliente.
+     - El radar analiza automáticamente la *Ruta Objetivo* de mañana, cruzando los días habituales configurados en la ficha logística del cliente (`logistics_data.allowed_days` o patrones históricos transaccionales) contra los pedidos ya ingresados en firme o borrador.
+  2. **Regla Lean de Comunicación: Recepción de Solicitudes hasta las 4:00 P.M.:**
+     - La plantilla oficial de contacto WhatsApp se fija con límite a las **4:00 p.m.** (`¡Hola {contactName}! ¡Mañana salimos de ruta! Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. Esperamos tu pedido por este medio o al correo pedidos@frufresco.com. ¡Quedamos muy atentos!`).
+     - Esta regla operacional genera la urgencia adecuada en el cliente durante la tarde y le otorga a FruFresco un buffer de cuatro (4) horas antes del corte interno mayorista de las 8:00 PM, permitiendo consolidar compras en Corabastos y cerrar la operación a tiempo sin sobrecostos nocturnos.
+  3. **Disparador WhatsApp 1-Clic, Registro de Contacto y Atajo de Carrito:**
+     - Al presionar **`Recordar`**, el sistema abre la conversación en WhatsApp Web/App al teléfono móvil del comprador registrado y marca la fila como *"Ya Contactado"* para prevenir gestiones duplicadas.
+     - Incorpora el botón de **`Copiar`** mensaje y el botón de **`Carrito`** para abrir de inmediato la creación de pedidos asistida con el cliente precargado en caso de que envíe la lista por chat.
+  4. **Ratificación Inviolable del Protocolo B2B Same-Day (Hallazgo 6 / Escenario 226):**
+     - Se ratifica que todo pedido extemporáneo agendado para *hoy mismo* (`isSameDayExpress`) viaja **100% amparado bajo Remisión Oficial en PDF** (`document_type_override = 'remission'`).
+     - Queda estrictamente prohibida la emisión de Factura Electrónica previa al despacho para no detener la salida de vehículos ni comprometer el control de consecutivos contables/DIAN; la valorización y facturación electrónica se difiere al corte contable regular.
+  5. **Estándar Puro Lucide React:**
+     - La interfaz de pedidos pendientes erradica caracteres unicode ocultos o emojis rotos, empleando exclusivamente iconos vectoriales de `lucide-react` (`Phone`, `Copy`, `ShoppingCart`, `CheckCircle2`, `AlertTriangle`).
