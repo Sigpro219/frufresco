@@ -724,9 +724,9 @@ export const calculatePqrSla = (pqr: PQR, nowMs: number = Date.now()): PqrSlaTel
             progressBarBg: wasInSla ? '#10B981' : '#F59E0B',
             textColor: wasInSla ? '#065F46' : '#B45309',
             label: resolutionMin > 0 
-                ? (wasInSla ? `Cerrado en ${formatDuration(resolutionMin)} (En SLA)` : `Cerrado en ${formatDuration(resolutionMin)} (Fuera SLA)`)
-                : 'Cerrado en SLA',
-            tooltip: `PQR resuelta. Tiempo de ciclo: ${formatDuration(resolutionMin)}. Meta SLA: 2 horas.`,
+                ? (wasInSla ? `Cerrado en ${formatDuration(resolutionMin)} (A tiempo)` : `Cerrado en ${formatDuration(resolutionMin)} (Con retraso)`)
+                : 'Cerrado a tiempo',
+            tooltip: `PQR resuelta. Tiempo de atención: ${formatDuration(resolutionMin)}. Tiempo límite meta: 2 horas.`,
             elapsedMin: resolutionMin,
             remainingMin: 0,
             elapsedFormatted: formatDuration(resolutionMin)
@@ -776,8 +776,8 @@ export const calculatePqrSla = (pqr: PQR, nowMs: number = Date.now()): PqrSlaTel
             progressPct,
             progressBarBg,
             textColor,
-            label: `${formatDuration(remainingMin)} restantes (SLA 2h)`,
-            tooltip: `PQR en curso. Creada hace ${formatDuration(elapsedMin)}. Ventana de respuesta: 2 horas. Restan ${formatDuration(remainingMin)}.`,
+            label: `${formatDuration(remainingMin)} restantes (Límite 2h)`,
+            tooltip: `PQR en curso. Creada hace ${formatDuration(elapsedMin)}. Tiempo límite para responder: 2 horas. Restan ${formatDuration(remainingMin)}.`,
             elapsedMin,
             remainingMin,
             elapsedFormatted: formatDuration(elapsedMin)
@@ -790,8 +790,8 @@ export const calculatePqrSla = (pqr: PQR, nowMs: number = Date.now()): PqrSlaTel
             progressPct: 100,
             progressBarBg: '#DC2626', // Rojo alerta
             textColor: '#DC2626',
-            label: `SLA Vencido (+${formatDuration(overdueMin)})`,
-            tooltip: `¡Alerta SLA excedido! Esta PQR supera la ventana máxima de 2 horas (tiempo transcurrido: ${formatDuration(elapsedMin)}). Requiere dictamen inmediato.`,
+            label: `Tiempo Vencido (+${formatDuration(overdueMin)})`,
+            tooltip: `¡Alerta de tiempo vencido! Esta PQR superó el límite de 2 horas para emitir dictamen (tiempo transcurrido: ${formatDuration(elapsedMin)}). Requiere atención inmediata.`,
             elapsedMin,
             remainingMin,
             elapsedFormatted: formatDuration(elapsedMin)
