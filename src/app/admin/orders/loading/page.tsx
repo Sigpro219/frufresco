@@ -2629,12 +2629,8 @@ useEffect(() => {
     const handleUpdateOrder = async () => {
         if (!selectedOrder) return;
 
-        // Block Zero Margin / Zero Price
-        const zeroPriceItem = orderItems.find(item => !item.unit_price || parseFloat(item.unit_price.toString()) === 0);
-        if (zeroPriceItem) {
-            alert(`No se puede guardar: El producto "${zeroPriceItem.products?.name || 'Item'}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`);
-            return;
-        }
+        // SDD Escenario 312 / 332: Permitir guardado con ítems a $0 COP (Tarifa Pendiente / Remisión Fuera de Acuerdo)
+        // Los productos sin tarifa pactada viajan a bodega a $0 COP y se liquidan posteriormente en Facturación Comercial.
 
         // Block Zero / Negative Quantities
         const zeroQtyItem = orderItems.find(item => !item.quantity || parseFloat(item.quantity.toString()) <= 0);
@@ -2724,13 +2720,19 @@ useEffect(() => {
 
             // 3. Preparar ítems para Upsert (Nuevos o Modificados)
             const itemsToUpsert = orderItems.filter(item => item.isNew || item.isModified).map(item => {
+                const numericPrice = Number(item.unit_price || 0);
+                const isPendingTariff = numericPrice <= 0;
+                const mergedSelectedOptions = isPendingTariff
+                    ? { ...(item.selected_options || {}), tarifa_pendiente: true, _off_agreement: true }
+                    : item.selected_options;
+
                 const baseItem: any = {
                     order_id: selectedOrder.id,
                     product_id: item.product_id,
                     quantity: item.quantity,
-                    unit_price: item.unit_price,
+                    unit_price: isPendingTariff ? 0 : numericPrice,
                     variant_label: item.variant_label,
-                    selected_options: item.selected_options,
+                    selected_options: mergedSelectedOptions,
                     nickname: item.nickname || item.variant_label || null,
                     unit: item.unit || item.products?.unit_of_measure || 'Kg'
                 };
@@ -5266,38 +5268,39 @@ useEffect(() => {
                         justifyContent: 'center',
                         zIndex: 2000,
                         backdropFilter: 'blur(8px)',
-                        padding: '1rem'
+                        padding: '0.75rem'
                     }} onClick={() => setSelectedOrder(null)}>
                         <div style={{
                             backgroundColor: 'white',
-                            borderRadius: '24px',
-                            width: '95%',
-                            maxWidth: '1100px',
-                            maxHeight: '90vh',
+                            borderRadius: '16px',
+                            width: '96%',
+                            maxWidth: '1280px',
+                            maxHeight: '94vh',
                             display: 'flex',
                             flexDirection: 'column',
                             boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
                             overflow: 'hidden',
                             border: '1px solid rgba(255,255,255,0.2)'
                         }} onClick={e => e.stopPropagation()}>
-                            {/* Modal Header */}
+                            {/* Modal Header Docked & Ultra-Compact */}
                             <div style={{ 
-                                padding: '2rem', 
-                                borderBottom: '1px solid #F1F5F9', 
+                                padding: '0.65rem 1.25rem', 
+                                borderBottom: '1px solid #E2E8F0', 
                                 display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'flex-start',
+                                flexDirection: 'column',
+                                gap: '6px',
                                 background: 'linear-gradient(to right, #F8FAFC, #FFFFFF)'
                             }}>
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                                        <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#0F172A', fontWeight: '900' }}>
+                                {/* Header Tier 1: ID, Badges & Actions */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#0F172A', fontWeight: '900', lineHeight: 1.1 }}>
                                             Pedido {getFriendlyOrderId(selectedOrder)}
                                         </h2>
                                         <span style={{
-                                            padding: '4px 12px',
-                                            borderRadius: '20px',
-                                            fontSize: '0.75rem',
+                                            padding: '2px 8px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.72rem',
                                             fontWeight: '800',
                                             backgroundColor: 
                                                 selectedOrder.status === 'pending_approval' ? '#FEF3C7' : 
@@ -5319,37 +5322,37 @@ useEffect(() => {
                                             if (rep.isReplacement) {
                                                 return (
                                                     <span style={{
-                                                        padding: '4px 12px',
-                                                        borderRadius: '20px',
-                                                        fontSize: '0.75rem',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '0.72rem',
                                                         fontWeight: '900',
                                                         backgroundColor: '#EEF2FF',
                                                         color: '#4338CA',
-                                                        border: '1.5px solid #818CF8',
+                                                        border: '1px solid #818CF8',
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
-                                                        gap: '5px'
+                                                        gap: '4px'
                                                     }}>
-                                                        <RotateCcw size={13} strokeWidth={2.8} />
-                                                        PEDIDO HIJO · REPOSICIÓN {rep.parentSequenceId ? `DE #${rep.parentSequenceId}` : '($0 COP)'}
+                                                        <RotateCcw size={11} strokeWidth={2.8} />
+                                                        REPOSICIÓN {rep.parentSequenceId ? `DE #${rep.parentSequenceId}` : '($0 COP)'}
                                                     </span>
                                                 );
                                             }
                                             return (
                                                 <span style={{
-                                                    padding: '4px 12px',
-                                                    borderRadius: '20px',
-                                                    fontSize: '0.75rem',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.72rem',
                                                     fontWeight: '900',
                                                     backgroundColor: '#ECFDF5',
                                                     color: '#047857',
-                                                    border: '1.5px solid #6EE7B7',
+                                                    border: '1px solid #6EE7B7',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '5px'
+                                                    gap: '4px'
                                                 }}>
-                                                    <RotateCcw size={13} strokeWidth={2.8} />
-                                                    PEDIDO PADRE · TIENE HIJO #{rep.childReplacementSequenceId}
+                                                    <RotateCcw size={11} strokeWidth={2.8} />
+                                                    TIENE REPOSICIÓN #{rep.childReplacementSequenceId}
                                                 </span>
                                             );
                                         })()}
@@ -5360,20 +5363,20 @@ useEffect(() => {
 
                                             if (proc.status === 'none' && proc.isColsubsidio) {
                                                 return (
-                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                                         <span style={{
-                                                            padding: '4px 12px',
-                                                            borderRadius: '20px',
-                                                            fontSize: '0.74rem',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '12px',
+                                                            fontSize: '0.72rem',
                                                             fontWeight: '900',
                                                             backgroundColor: '#FEF2F2',
                                                             color: '#991B1B',
-                                                            border: '1.5px solid #F87171',
+                                                            border: '1px solid #F87171',
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
-                                                            gap: '5px'
+                                                            gap: '4px'
                                                         }}>
-                                                            <AlertTriangle size={12} strokeWidth={2.8} />
+                                                            <AlertTriangle size={11} strokeWidth={2.8} />
                                                             <span>COLSUBSIDIO: Sin OC / SOLPED</span>
                                                         </span>
                                                         <button
@@ -5386,39 +5389,39 @@ useEffect(() => {
                                                                 backgroundColor: '#DC2626',
                                                                 color: 'white',
                                                                 border: 'none',
-                                                                borderRadius: '8px',
-                                                                padding: '4px 10px',
-                                                                fontSize: '0.72rem',
+                                                                borderRadius: '6px',
+                                                                padding: '2px 8px',
+                                                                fontSize: '0.7rem',
                                                                 fontWeight: '800',
                                                                 cursor: 'pointer',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: '4px',
-                                                                boxShadow: '0 1px 3px rgba(220, 38, 38, 0.25)'
+                                                                gap: '3px',
+                                                                boxShadow: '0 1px 2px rgba(220, 38, 38, 0.25)'
                                                             }}
                                                             title="Ingresar la Orden de Compra (OC) o SOLPED obligatoria de Colsubsidio"
                                                         >
-                                                            <Edit3 size={11} /> Asignar OC
+                                                            <Edit3 size={10} /> Asignar OC
                                                         </button>
                                                     </div>
                                                 );
                                             }
 
                                             return (
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                                     <span style={{
-                                                        padding: '4px 12px',
-                                                        borderRadius: '20px',
-                                                        fontSize: '0.74rem',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '0.72rem',
                                                         fontWeight: '900',
                                                         backgroundColor: proc.status === 'oc_formalizada' ? '#ECFDF5' : '#FEF3C7',
                                                         color: proc.status === 'oc_formalizada' ? '#065F46' : '#92400E',
-                                                        border: proc.status === 'oc_formalizada' ? '1.5px solid #34D399' : '1.5px solid #F59E0B',
+                                                        border: proc.status === 'oc_formalizada' ? '1px solid #34D399' : '1px solid #F59E0B',
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
-                                                        gap: '5px'
+                                                        gap: '4px'
                                                     }}>
-                                                        <FileText size={12} strokeWidth={2.8} />
+                                                        <FileText size={11} strokeWidth={2.8} />
                                                         <span>{proc.status === 'oc_formalizada' ? `OC: ${proc.purchaseOrderNumber}${proc.solpedNumber ? ` (SOLPED: ${proc.solpedNumber})` : ''}` : `SOLPED: ${proc.solpedNumber} (Pendiente OC)`}</span>
                                                     </span>
                                                     {proc.status === 'solped_provisional' && (
@@ -5432,19 +5435,19 @@ useEffect(() => {
                                                                 backgroundColor: '#0D7A57',
                                                                 color: 'white',
                                                                 border: 'none',
-                                                                borderRadius: '8px',
-                                                                padding: '4px 10px',
-                                                                fontSize: '0.72rem',
+                                                                borderRadius: '6px',
+                                                                padding: '2px 8px',
+                                                                fontSize: '0.7rem',
                                                                 fontWeight: '800',
                                                                 cursor: 'pointer',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: '4px',
-                                                                boxShadow: '0 1px 3px rgba(13, 122, 87, 0.25)'
+                                                                gap: '3px',
+                                                                boxShadow: '0 1px 2px rgba(13, 122, 87, 0.25)'
                                                             }}
                                                             title="Registrar la Orden de Compra (OC) oficial emitida por Colsubsidio"
                                                         >
-                                                            <Edit3 size={11} /> Formalizar OC
+                                                            <Edit3 size={10} /> Formalizar OC
                                                         </button>
                                                     )}
                                                 </div>
@@ -5455,268 +5458,285 @@ useEffect(() => {
                                             <div style={{
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
-                                                gap: '6px',
+                                                gap: '4px',
                                                 backgroundColor: '#F8FAFC',
-                                                border: '1px solid #CBD5E1',
-                                                padding: '3px 10px',
-                                                borderRadius: '8px',
-                                                fontSize: '0.78rem',
+                                                border: '1px solid #E2E8F0',
+                                                padding: '2px 8px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.72rem',
                                                 color: '#334155',
                                                 fontWeight: '700'
                                             }}>
-                                                <Clock size={13} strokeWidth={2.2} style={{ color: '#0D7A57' }} />
-                                                <span>Creado: {formatCreatedAt(selectedOrder.created_at)}</span>
+                                                <Clock size={11} strokeWidth={2.2} style={{ color: '#0D7A57' }} />
+                                                <span>{formatCreatedAt(selectedOrder.created_at)}</span>
                                                 {(() => {
                                                     const audit = getOrderLastAudit(selectedOrder);
                                                     if (!audit) return null;
                                                     return (
                                                         <span 
                                                             title={audit.full}
-                                                            style={{ color: '#1D4ED8', marginLeft: '6px', borderLeft: '1.5px solid #CBD5E1', paddingLeft: '8px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                            style={{ color: '#1D4ED8', marginLeft: '4px', borderLeft: '1px solid #CBD5E1', paddingLeft: '6px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}
                                                         >
-                                                            <Edit2 size={11} strokeWidth={2.2} /> {audit.full}
+                                                            <Edit2 size={10} strokeWidth={2.2} /> {audit.full}
                                                         </span>
                                                     );
                                                 })()}
                                             </div>
                                         )}
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                            <div style={{ fontWeight: '700', color: '#334155', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                <span>{selectedOrder.customer_name}</span>
-                                                <SpecialClientBadge state={selectedOrder.special_attention} />
-                                                {selectedOrder.customer_nit && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>
-                                                        (NIT: {selectedOrder.customer_nit})
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {editMode && (
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleOpenReassignModal}
-                                                    style={{
-                                                        backgroundColor: '#EFF6FF',
-                                                        color: '#1D4ED8',
-                                                        border: '1.5px solid #93C5FD',
-                                                        borderRadius: '8px',
-                                                        padding: '3px 10px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '800',
-                                                        cursor: 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '5px',
-                                                        transition: 'all 0.15s',
-                                                        boxShadow: '0 1px 2px rgba(37, 99, 235, 0.08)'
-                                                    }}
-                                                    title="Reasignar este pedido completo a otro cliente o sucursal con trazabilidad inmutable"
-                                                >
-                                                    <UserCheck size={12} strokeWidth={2} /> Reasignar Cliente / Sucursal
-                                                    </button>
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleOpenReplacementModal}
-                                                        style={{
-                                                            backgroundColor: selectedOrder.logistics_data?.is_replacement ? '#EEF2FF' : '#FEF3C7',
-                                                            color: selectedOrder.logistics_data?.is_replacement ? '#4338CA' : '#B45309',
-                                                            border: selectedOrder.logistics_data?.is_replacement ? '1.5px solid #818CF8' : '1.5px solid #FCD34D',
-                                                            borderRadius: '8px',
-                                                            padding: '3px 10px',
-                                                            fontSize: '0.72rem',
-                                                            fontWeight: '800',
-                                                            cursor: 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '5px',
-                                                            transition: 'all 0.15s',
-                                                            boxShadow: '0 1px 2px rgba(180, 83, 9, 0.08)'
-                                                        }}
-                                                        title="Marcar o modificar condición de Reposición en Garantía ($0 COP) y vincular con pedido original"
-                                                    >
-                                                        <RotateCcw size={12} strokeWidth={2.2} /> 
-                                                        {selectedOrder.logistics_data?.is_replacement ? 'Modificar Vínculo Reposición ($0 COP)' : 'Marcar como Reposición ($0 COP)'}
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                        {/* Banner Operativo Atención Especial */}
-                                        {selectedOrder.special_attention?.isActive && (
+                                    {/* Right Actions & Close */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                        {isOrderLocked() ? (
                                             <div style={{
-                                                marginTop: '6px',
-                                                marginBottom: '6px',
-                                                padding: '10px 14px',
-                                                borderRadius: '12px',
-                                                backgroundColor: '#FEF2F2',
-                                                border: '1.5px solid #F87171',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: '6px'
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                                                    <span style={{ fontSize: '0.82rem', fontWeight: '900', color: '#991B1B', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                                        <ShieldAlert size={16} strokeWidth={2.4} /> ATENCIÓN OPERATIVA: {selectedOrder.special_attention.title.toUpperCase()}
-                                                    </span>
-                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #F87171' }}>
-                                                        {selectedOrder.special_attention.progressLabel}
-                                                    </span>
-                                                </div>
-                                                <p style={{ margin: 0, fontSize: '0.74rem', color: '#7F1D1D', lineHeight: 1.3 }}>
-                                                    {selectedOrder.special_attention.subtitle}
-                                                </p>
-                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
-                                                    {selectedOrder.special_attention.directives?.map((d: any) => (
-                                                        <span key={d.key} style={{ fontSize: '0.68rem', fontWeight: '800', color: '#991B1B', backgroundColor: '#FFFFFF', padding: '3px 8px', borderRadius: '6px', border: '1px solid #FECACA' }}>
-                                                            <CheckCircle2 size={11} strokeWidth={2.5} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '3px' }} />{d.label}: {d.detail}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div style={{ color: '#64748B', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                            <MapPin size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
-                                            <span style={{ fontWeight: '700', color: '#334155' }}>{selectedOrder.shipping_address}</span>
-                                            {selectedOrder.latitude && selectedOrder.longitude ? (
-                                                <span style={{ fontSize: '0.68rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '2px 6px', borderRadius: '6px', fontWeight: '800', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                    <CheckCircle2 size={10} /> GPS: {Number(selectedOrder.latitude).toFixed(4)}, {Number(selectedOrder.longitude).toFixed(4)}
-                                                </span>
-                                            ) : selectedOrder.profiles?.latitude && selectedOrder.profiles?.longitude ? (
-                                                <span style={{ fontSize: '0.68rem', backgroundColor: '#F0F9FF', color: '#0369A1', padding: '2px 6px', borderRadius: '6px', fontWeight: '700', border: '1px solid #BAE6FD', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                    <Globe size={10} /> GPS Perfil: {Number(selectedOrder.profiles.latitude).toFixed(4)}, {Number(selectedOrder.profiles.longitude).toFixed(4)}
-                                                </span>
-                                            ) : (
-                                                <span style={{ fontSize: '0.68rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 6px', borderRadius: '6px', fontWeight: '800', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                    <AlertTriangle size={10} /> Sin GPS Propio
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', color: '#475569', alignItems: 'center' }}>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={12} strokeWidth={1.5} /> {selectedOrder.customer_phone || 'Sin tel.'}</div>
-                                            {selectedOrder.paymentMethod && (
-                                                <div style={{ fontWeight: '700', color: '#166534', backgroundColor: '#DCFCE7', padding: '2px 6px', borderRadius: '4px' }}>
-                                                    {selectedOrder.paymentMethod}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                    {isOrderLocked() ? (
-                                        <div style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            backgroundColor: '#F1F5F9',
-                                            color: '#64748B',
-                                            padding: '8px 16px',
-                                            borderRadius: '12px',
-                                            fontSize: '0.875rem',
-                                            fontWeight: '700',
-                                            border: '1px solid #CBD5E1'
-                                        }}>
-                                            <Lock size={14} style={{ color: '#EF4444' }} /> Edición Cerrada
-                                        </div>
-                                    ) : !editMode ? (
-                                        <button 
-                                            onClick={() => {
-                                                const proc = getOrderProcurementReferences(selectedOrder);
-                                                setEditPurchaseOrder(proc.purchaseOrderNumber || '');
-                                                setEditSolped(proc.solpedNumber || '');
-                                                setEditMode(true);
-                                            }}
-                                            style={{
-                                                backgroundColor: '#0891B2',
-                                                color: 'white',
-                                                border: 'none',
-                                                padding: '8px 16px',
-                                                borderRadius: '12px',
-                                                fontSize: '0.875rem',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                backgroundColor: '#F1F5F9',
+                                                color: '#64748B',
+                                                padding: '4px 10px',
+                                                borderRadius: '8px',
+                                                fontSize: '0.78rem',
                                                 fontWeight: '700',
-                                                cursor: 'pointer',
-                                                boxShadow: '0 4px 6px -1px rgba(8, 145, 178, 0.4)'
-                                            }}
-                                        >
-                                            <Edit2 size={12} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Modificar
-                                        </button>
-                                    ) : (
-                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                border: '1px solid #CBD5E1'
+                                            }}>
+                                                <Lock size={12} style={{ color: '#EF4444' }} /> Edición Cerrada
+                                            </div>
+                                        ) : !editMode ? (
                                             <button 
-                                                type="button"
-                                                onClick={handleDeleteOrder}
-                                                disabled={updateLoading}
-                                                style={{
-                                                    backgroundColor: '#FEF2F2',
-                                                    color: '#DC2626',
-                                                    border: '1.5px solid #FCA5A5',
-                                                    padding: '8px 14px',
-                                                    borderRadius: '12px',
-                                                    fontSize: '0.875rem',
-                                                    fontWeight: '800',
-                                                    cursor: updateLoading ? 'not-allowed' : 'pointer',
-                                                    opacity: updateLoading ? 0.7 : 1,
-                                                    boxShadow: '0 1px 3px rgba(220, 38, 38, 0.08)',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    transition: 'all 0.15s'
+                                                onClick={() => {
+                                                    const proc = getOrderProcurementReferences(selectedOrder);
+                                                    setEditPurchaseOrder(proc.purchaseOrderNumber || '');
+                                                    setEditSolped(proc.solpedNumber || '');
+                                                    setEditMode(true);
                                                 }}
-                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; }}
-                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FEF2F2'; }}
-                                                title="Eliminar completamente este pedido y sus ítems vinculados"
-                                            >
-                                                <Trash2 size={15} strokeWidth={2} />
-                                                <span>Eliminar Pedido</span>
-                                            </button>
-                                            <button 
-                                                onClick={handleUpdateOrder}
-                                                disabled={updateLoading}
                                                 style={{
-                                                    backgroundColor: '#059669',
+                                                    backgroundColor: '#0891B2',
                                                     color: 'white',
                                                     border: 'none',
-                                                    padding: '8px 16px',
-                                                    borderRadius: '12px',
-                                                    fontSize: '0.875rem',
+                                                    padding: '5px 12px',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.8rem',
                                                     fontWeight: '700',
-                                                    cursor: updateLoading ? 'not-allowed' : 'pointer',
-                                                    opacity: updateLoading ? 0.7 : 1,
-                                                    boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.4)',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 2px 4px -1px rgba(8, 145, 178, 0.4)',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '6px'
+                                                    gap: '4px'
                                                 }}
                                             >
-                                                <CheckCircle2 size={15} strokeWidth={2} />
-                                                <span>{updateLoading ? 'Guardando...' : 'Guardar Cambios'}</span>
+                                                <Edit2 size={11} strokeWidth={2} /> Modificar
+                                            </button>
+                                        ) : (
+                                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                <button 
+                                                    type="button"
+                                                    onClick={handleDeleteOrder}
+                                                    disabled={updateLoading}
+                                                    style={{
+                                                        backgroundColor: '#FEF2F2',
+                                                        color: '#DC2626',
+                                                        border: '1px solid #FCA5A5',
+                                                        padding: '5px 10px',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: '800',
+                                                        cursor: updateLoading ? 'not-allowed' : 'pointer',
+                                                        opacity: updateLoading ? 0.7 : 1,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FEF2F2'; }}
+                                                    title="Eliminar completamente este pedido y sus ítems vinculados"
+                                                >
+                                                    <Trash2 size={13} strokeWidth={2} />
+                                                    <span>Eliminar</span>
+                                                </button>
+                                                <button 
+                                                    onClick={handleUpdateOrder}
+                                                    disabled={updateLoading}
+                                                    style={{
+                                                        backgroundColor: '#059669',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        padding: '5px 14px',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.8rem',
+                                                        fontWeight: '700',
+                                                        cursor: updateLoading ? 'not-allowed' : 'pointer',
+                                                        opacity: updateLoading ? 0.7 : 1,
+                                                        boxShadow: '0 2px 4px -1px rgba(5, 150, 105, 0.4)',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px'
+                                                    }}
+                                                >
+                                                    <CheckCircle2 size={13} strokeWidth={2} />
+                                                    <span>{updateLoading ? 'Guardando...' : 'Guardar'}</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                        <button 
+                                            onClick={() => setSelectedOrder(null)}
+                                            style={{ 
+                                                background: '#F1F5F9', 
+                                                border: 'none', 
+                                                width: '32px', 
+                                                height: '32px', 
+                                                borderRadius: '8px', 
+                                                cursor: 'pointer', 
+                                                color: '#64748B',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}
+                                            title="Cerrar detalle de pedido"
+                                        >
+                                            <X size={17} strokeWidth={2.2} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Header Tier 2: Client, Address, Meta & Reassignment */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.82rem' }}>
+                                        <span style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.92rem' }}>{selectedOrder.customer_name}</span>
+                                        <SpecialClientBadge state={selectedOrder.special_attention} />
+                                        {selectedOrder.customer_nit && (
+                                            <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '500' }}>
+                                                (NIT: {selectedOrder.customer_nit})
+                                            </span>
+                                        )}
+                                        <span style={{ color: '#CBD5E1' }}>•</span>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#334155' }}>
+                                            <MapPin size={12} strokeWidth={1.8} style={{ color: '#0D7A57', flexShrink: 0 }} />
+                                            <span style={{ fontWeight: '700' }}>{selectedOrder.shipping_address}</span>
+                                        </div>
+                                        {selectedOrder.latitude && selectedOrder.longitude ? (
+                                            <span style={{ fontSize: '0.66rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '1px 5px', borderRadius: '4px', fontWeight: '800', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                <CheckCircle2 size={9} /> GPS: {Number(selectedOrder.latitude).toFixed(4)}, {Number(selectedOrder.longitude).toFixed(4)}
+                                            </span>
+                                        ) : selectedOrder.profiles?.latitude && selectedOrder.profiles?.longitude ? (
+                                            <span style={{ fontSize: '0.66rem', backgroundColor: '#F0F9FF', color: '#0369A1', padding: '1px 5px', borderRadius: '4px', fontWeight: '700', border: '1px solid #BAE6FD', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                <Globe size={9} /> GPS Perfil: {Number(selectedOrder.profiles.latitude).toFixed(4)}, {Number(selectedOrder.profiles.longitude).toFixed(4)}
+                                            </span>
+                                        ) : (
+                                            <span style={{ fontSize: '0.66rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '1px 5px', borderRadius: '4px', fontWeight: '800', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                <AlertTriangle size={9} /> Sin GPS Propio
+                                            </span>
+                                        )}
+                                        <span style={{ color: '#CBD5E1' }}>•</span>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#475569' }}>
+                                            <Phone size={11} strokeWidth={1.8} />
+                                            <span>{selectedOrder.customer_phone || 'Sin tel.'}</span>
+                                        </div>
+                                        {selectedOrder.paymentMethod && (
+                                            <div style={{ fontWeight: '700', color: '#166534', backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: '4px', fontSize: '0.72rem' }}>
+                                                {selectedOrder.paymentMethod}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {editMode && (
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenReassignModal}
+                                                style={{
+                                                    backgroundColor: '#EFF6FF',
+                                                    color: '#1D4ED8',
+                                                    border: '1px solid #93C5FD',
+                                                    borderRadius: '6px',
+                                                    padding: '2px 8px',
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                                title="Reasignar este pedido completo a otro cliente o sucursal con trazabilidad inmutable"
+                                            >
+                                                <UserCheck size={11} strokeWidth={2} /> Reasignar Cliente
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenReplacementModal}
+                                                style={{
+                                                    backgroundColor: selectedOrder.logistics_data?.is_replacement ? '#EEF2FF' : '#FEF3C7',
+                                                    color: selectedOrder.logistics_data?.is_replacement ? '#4338CA' : '#B45309',
+                                                    border: selectedOrder.logistics_data?.is_replacement ? '1px solid #818CF8' : '1px solid #FCD34D',
+                                                    borderRadius: '6px',
+                                                    padding: '2px 8px',
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                                title="Marcar o modificar condición de Reposición en Garantía ($0 COP) y vincular con pedido original"
+                                            >
+                                                <RotateCcw size={11} strokeWidth={2.2} /> 
+                                                {selectedOrder.logistics_data?.is_replacement ? 'Vínculo Reposición' : 'Marcar Reposición ($0 COP)'}
                                             </button>
                                         </div>
                                     )}
-                                    <button 
-                                        onClick={() => setSelectedOrder(null)}
-                                        style={{ 
-                                            background: '#F1F5F9', 
-                                            border: 'none', 
-                                            width: '40px', 
-                                            height: '40px', 
-                                            borderRadius: '12px', 
-                                            fontSize: '1.25rem', 
-                                            cursor: 'pointer', 
-                                            color: '#64748B',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}
-                                    >
-                                        <X size={20} strokeWidth={2.2} />
-                                    </button>
                                 </div>
+
+                                {/* Header Tier 3: Operational Banner Special Attention (Only if active) */}
+                                {selectedOrder.special_attention?.isActive && (
+                                    <div style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '8px',
+                                        backgroundColor: '#FEF2F2',
+                                        border: '1px solid #F87171',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '8px',
+                                        fontSize: '0.72rem'
+                                    }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#991B1B', fontWeight: '800' }}>
+                                            <ShieldAlert size={14} strokeWidth={2.4} />
+                                            <span>ATENCIÓN OPERATIVA: {selectedOrder.special_attention.title.toUpperCase()}</span>
+                                            <span style={{ fontWeight: '500', color: '#7F1D1D', marginLeft: '4px' }}>
+                                                {selectedOrder.special_attention.subtitle}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #F87171' }}>
+                                                {selectedOrder.special_attention.progressLabel}
+                                            </span>
+                                            {selectedOrder.special_attention.actionPath && (
+                                                <Link 
+                                                    href={selectedOrder.special_attention.actionPath}
+                                                    style={{
+                                                        padding: '1px 6px',
+                                                        borderRadius: '4px',
+                                                        backgroundColor: '#DC2626',
+                                                        color: 'white',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        textDecoration: 'none',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px'
+                                                    }}
+                                                >
+                                                    {selectedOrder.special_attention.actionLabel || 'Ver'} <ExternalLink size={9} />
+                                                </Link>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Modal Body */}
+                            {/* Modal Body (Scrollable Container) */}
                             <div style={{ padding: '0', overflowY: 'auto', flex: 1, position: 'relative' }}>
                                 {(() => {
                                     const modalDup = duplicatesMap.get(selectedOrder.id);
@@ -5724,46 +5744,41 @@ useEffect(() => {
 
                                     return (
                                         <div style={{
-                                            margin: '1.2rem 2rem 0.5rem 2rem',
-                                            padding: '1.1rem 1.5rem',
+                                            margin: '0.75rem 1.25rem 0.5rem 1.25rem',
+                                            padding: '8px 12px',
+                                            borderRadius: '8px',
                                             backgroundColor: '#FEF2F2',
-                                            border: '2px solid #F87171',
-                                            borderLeft: '10px solid #DC2626',
-                                            borderRadius: '14px',
+                                            border: '1.5px solid #F87171',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
-                                            gap: '16px',
-                                            boxShadow: '0 4px 16px rgba(220, 38, 38, 0.16)'
+                                            gap: '12px',
+                                            boxShadow: '0 2px 8px rgba(220, 38, 38, 0.12)'
                                         }}>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                 <div style={{
-                                                    width: '40px',
-                                                    height: '40px',
-                                                    borderRadius: '10px',
+                                                    width: '32px',
+                                                    height: '32px',
+                                                    borderRadius: '8px',
                                                     backgroundColor: '#DC2626',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    flexShrink: 0,
-                                                    boxShadow: '0 2px 6px rgba(220, 38, 38, 0.35)'
+                                                    flexShrink: 0
                                                 }}>
-                                                    <AlertTriangle size={22} color="#FFFFFF" strokeWidth={2.6} />
+                                                    <AlertTriangle size={18} color="#FFFFFF" strokeWidth={2.6} />
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#991B1B', letterSpacing: '-0.01em' }}>
-                                                        ALERTA OPERATIVA: POSIBLE PEDIDO DUPLICADO
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#991B1B' }}>
+                                                        ALERTA: POSIBLE PEDIDO DUPLICADO
                                                     </div>
-                                                    <div style={{ fontSize: '0.8rem', color: '#B91C1C', marginTop: '3px', fontWeight: '700', lineHeight: '1.35' }}>
-                                                        {modalDup.alertMessage}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.74rem', color: '#7F1D1D', marginTop: '4px', fontWeight: '600' }}>
-                                                        Mismo cliente (<strong>{modalDup.matchingCriteria.client}</strong>), misma fecha de entrega (<strong>{modalDup.matchingCriteria.deliveryDate}</strong>) y misma sede (<strong>{modalDup.matchingCriteria.address}</strong>).
+                                                    <div style={{ fontSize: '0.75rem', color: '#B91C1C', fontWeight: '600' }}>
+                                                        {modalDup.alertMessage} (Cliente: <strong>{modalDup.matchingCriteria.client}</strong>, Fecha: <strong>{modalDup.matchingCriteria.deliveryDate}</strong>, Sede: <strong>{modalDup.matchingCriteria.address}</strong>)
                                                     </div>
                                                 </div>
                                             </div>
                                             {modalDup.otherOrders.length > 0 && (
-                                                <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                                                     {modalDup.otherOrders.map((otherOrder: any) => (
                                                         <button
                                                             key={otherOrder.id}
@@ -5773,22 +5788,20 @@ useEffect(() => {
                                                                 backgroundColor: '#DC2626',
                                                                 color: '#FFFFFF',
                                                                 border: 'none',
-                                                                borderRadius: '8px',
-                                                                padding: '9px 16px',
-                                                                fontSize: '0.8rem',
-                                                                fontWeight: '900',
+                                                                borderRadius: '6px',
+                                                                padding: '6px 10px',
+                                                                fontSize: '0.74rem',
+                                                                fontWeight: '800',
                                                                 cursor: 'pointer',
                                                                 display: 'flex',
                                                                 alignItems: 'center',
-                                                                gap: '6px',
-                                                                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
-                                                                transition: 'all 0.15s'
+                                                                gap: '4px'
                                                             }}
                                                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B91C1C'}
                                                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
                                                         >
-                                                            <ExternalLink size={13} strokeWidth={2.5} />
-                                                            Ver Pedido Hermano #{getFriendlyOrderId(otherOrder)}
+                                                            <ExternalLink size={11} strokeWidth={2.5} />
+                                                            Ver #{getFriendlyOrderId(otherOrder)}
                                                         </button>
                                                     ))}
                                                 </div>
@@ -5797,11 +5810,11 @@ useEffect(() => {
                                     );
                                 })()}
                                 {editMode && (
-                                    <div style={{ padding: '1.5rem 2rem', backgroundColor: '#F0FDFA', borderBottom: '1px solid #D1FAE5' }}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.2fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                                    <div style={{ padding: '0.65rem 1.25rem', backgroundColor: '#F0FDFA', borderBottom: '1px solid #D1FAE5' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.2fr', gap: '0.85rem', marginBottom: '0.75rem' }}>
                                             {/* Fecha de Entrega */}
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#065F46', marginBottom: '6px' }}>FECHA DE ENTREGA</label>
+                                                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#065F46', marginBottom: '4px' }}>FECHA DE ENTREGA</label>
                                                 <input 
                                                     type="date"
                                                     min={minDeliveryDate}
@@ -5826,83 +5839,82 @@ useEffect(() => {
                                                     onClick={(e) => (e.target as any).showPicker?.()}
                                                     style={{
                                                         width: '100%',
-                                                        padding: '10px',
-                                                        borderRadius: '8px',
+                                                        padding: '6px 8px',
+                                                        borderRadius: '6px',
                                                         border: !editDeliveryRestrictionStatus.isValid ? '1.5px solid #F87171' : '1px solid #A7F3D0',
                                                         backgroundColor: !editDeliveryRestrictionStatus.isValid ? '#FEF2F2' : '#FFFFFF',
-                                                        fontSize: '0.9rem',
+                                                        fontSize: '0.82rem',
                                                         cursor: 'pointer',
                                                         fontWeight: '700'
                                                     }}
                                                 />
                                                 {!editDeliveryRestrictionStatus.isValid ? (
                                                     <div style={{
-                                                        marginTop: '6px',
-                                                        padding: '0.5rem 0.75rem',
+                                                        marginTop: '4px',
+                                                        padding: '4px 6px',
                                                         backgroundColor: '#FEF2F2',
                                                         border: '1px solid #FECACA',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.72rem',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.7rem',
                                                         display: 'flex',
                                                         alignItems: 'flex-start',
-                                                        gap: '6px'
+                                                        gap: '4px'
                                                     }}>
-                                                        <AlertTriangle size={14} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
+                                                        <AlertTriangle size={12} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
                                                         <div>
-                                                            <div style={{ fontWeight: '800', color: '#991B1B', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={14} /> Día no habitual de sede:</div>
-                                                            <div style={{ color: '#7F1D1D', fontWeight: '500', marginTop: '2px' }}>{editDeliveryRestrictionStatus.message}</div>
-                                                            <div style={{ color: '#047857', fontWeight: '700', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={14} /> Puedes guardar para autorizar el despacho excepcional.</div>
+                                                            <div style={{ fontWeight: '800', color: '#991B1B' }}>Día no habitual:</div>
+                                                            <div style={{ color: '#7F1D1D', fontWeight: '500' }}>{editDeliveryRestrictionStatus.message}</div>
+                                                            <div style={{ color: '#047857', fontWeight: '700', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}><Check size={12} /> Puedes guardar para autorizar el despacho excepcional.</div>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#047857', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <Info size={12} /> Mueve el pedido al día seleccionado.
+                                                    <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: '#047857', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                        <Info size={11} /> Mueve el pedido al día seleccionado.
                                                     </p>
                                                 )}
                                             </div>
 
                                             {/* Dirección Exclusiva del Pedido y Georreferenciación GPS */}
                                             <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#065F46' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#065F46' }}>
                                                         DIRECCIÓN DE ENTREGA (EXCLUSIVA PARA ESTE PEDIDO)
                                                     </label>
-                                                    <span style={{ fontSize: '0.68rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontWeight: '800', border: '1px solid #7DD3FC', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                        <MapPin size={10} /> No altera la sucursal en Maestra
+                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '10px', fontWeight: '800', border: '1px solid #7DD3FC', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <MapPin size={9} /> No altera sucursal Maestra
                                                     </span>
                                                 </div>
 
                                                 {!showAddressInput ? (
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', backgroundColor: '#FFFFFF', padding: '8px 12px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
-                                                        <div style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <MapPin size={14} strokeWidth={1.5} style={{ color: '#0D7A57', flexShrink: 0 }} />
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: '#FFFFFF', padding: '5px 10px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
+                                                        <div style={{ fontSize: '0.82rem', color: '#334155', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <MapPin size={13} strokeWidth={1.5} style={{ color: '#0D7A57', flexShrink: 0 }} />
                                                             <span>{editShippingAddress || 'Dirección por defecto de la sucursal'}</span>
                                                         </div>
                                                         <button
                                                             type="button"
                                                             onClick={() => setShowAddressInput(true)}
                                                             style={{
-                                                                padding: '6px 12px',
-                                                                borderRadius: '8px',
+                                                                padding: '4px 8px',
+                                                                borderRadius: '6px',
                                                                 backgroundColor: '#0D7A57',
                                                                 color: 'white',
                                                                 border: 'none',
-                                                                fontSize: '0.75rem',
+                                                                fontSize: '0.72rem',
                                                                 fontWeight: '800',
                                                                 cursor: 'pointer',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: '6px',
-                                                                whiteSpace: 'nowrap',
-                                                                boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)'
+                                                                gap: '4px',
+                                                                whiteSpace: 'nowrap'
                                                             }}
                                                         >
-                                                            <Edit3 size={13} /> Cambiar dirección para esta entrega
+                                                            <Edit3 size={11} /> Cambiar dirección
                                                         </button>
                                                     </div>
                                                 ) : (
                                                     <div>
-                                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <div style={{ display: 'flex', gap: '6px' }}>
                                                             <input 
                                                                 type="text"
                                                                 value={editShippingAddress}
@@ -5913,10 +5925,10 @@ useEffect(() => {
                                                                 placeholder="Ej: Calle 63 # 77 - 73 Sede Especial"
                                                                 style={{
                                                                     flex: 1,
-                                                                    padding: '10px 12px',
-                                                                    borderRadius: '8px',
+                                                                    padding: '6px 10px',
+                                                                    borderRadius: '6px',
                                                                     border: '1px solid #A7F3D0',
-                                                                    fontSize: '0.88rem',
+                                                                    fontSize: '0.82rem',
                                                                     outline: 'none',
                                                                     fontWeight: '600'
                                                                 }}
@@ -5927,32 +5939,32 @@ useEffect(() => {
                                                                 disabled={isGeocoding}
                                                                 title="Georreferenciar dirección y obtener coordenadas GPS para este pedido"
                                                                 style={{
-                                                                    padding: '0 12px',
-                                                                    borderRadius: '8px',
+                                                                    padding: '0 8px',
+                                                                    borderRadius: '6px',
                                                                     backgroundColor: '#0D7A57',
                                                                     color: 'white',
                                                                     border: 'none',
-                                                                    fontSize: '0.78rem',
+                                                                    fontSize: '0.72rem',
                                                                     fontWeight: '800',
                                                                     cursor: isGeocoding ? 'wait' : 'pointer',
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
-                                                                    gap: '6px',
+                                                                    gap: '4px',
                                                                     whiteSpace: 'nowrap'
                                                                 }}
                                                             >
-                                                                {isGeocoding ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                                                {isGeocoding ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
                                                                 {isGeocoding ? 'Buscando GPS...' : 'Georreferenciar GPS'}
                                                             </button>
                                                         </div>
                                                         {geocodedMessage && (
-                                                            <div style={{ marginTop: '6px', fontSize: '0.75rem', fontWeight: '700', color: editLatitude ? '#065F46' : '#B45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <MapPin size={12} /> {geocodedMessage}
+                                                            <div style={{ marginTop: '4px', fontSize: '0.72rem', fontWeight: '700', color: editLatitude ? '#065F46' : '#B45309', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                <MapPin size={11} /> {geocodedMessage}
                                                             </div>
                                                         )}
                                                         {editLatitude && editLongitude && !geocodedMessage && (
-                                                            <div style={{ marginTop: '5px', fontSize: '0.73rem', color: '#047857', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <CheckCircle2 size={12} /> Coordenadas GPS asignadas al pedido: Lat {editLatitude.toFixed(4)}, Lng {editLongitude.toFixed(4)}
+                                                            <div style={{ marginTop: '4px', fontSize: '0.7rem', color: '#047857', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                <CheckCircle2 size={11} /> GPS: {editLatitude.toFixed(4)}, {editLongitude.toFixed(4)}
                                                             </div>
                                                         )}
                                                     </div>
@@ -5964,23 +5976,22 @@ useEffect(() => {
                                         <div style={{
                                             display: 'grid',
                                             gridTemplateColumns: '1fr 1fr',
-                                            gap: '1.5rem',
-                                            marginBottom: '1.5rem',
-                                            padding: isSelectedOrderColsubsidio ? '1rem 1.25rem' : '0.85rem 1rem',
+                                            gap: '0.85rem',
+                                            marginBottom: '0.75rem',
+                                            padding: '0.5rem 0.85rem',
                                             backgroundColor: isSelectedOrderColsubsidio ? '#EFF6FF' : '#FFFFFF',
-                                            borderRadius: '10px',
-                                            border: isSelectedOrderColsubsidio ? '1.5px solid #93C5FD' : '1px solid #D1FAE5',
-                                            boxShadow: isSelectedOrderColsubsidio ? '0 1px 3px rgba(37, 99, 235, 0.08)' : 'none'
+                                            borderRadius: '8px',
+                                            border: isSelectedOrderColsubsidio ? '1px solid #93C5FD' : '1px solid #D1FAE5'
                                         }}>
                                             {/* Orden de Compra (OC) */}
                                             <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '800', color: isSelectedOrderColsubsidio ? '#1E40AF' : '#065F46' }}>
-                                                        <FileText size={13} /> # ORDEN DE COMPRA (OC)
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: '800', color: isSelectedOrderColsubsidio ? '#1E40AF' : '#065F46' }}>
+                                                        <FileText size={11} /> # ORDEN DE COMPRA (OC)
                                                     </label>
                                                     {isSelectedOrderColsubsidio && (
-                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '1px 8px', borderRadius: '10px', fontWeight: '800', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                            <Building2 size={11} strokeWidth={2.5} /> Regla Colsubsidio
+                                                        <span style={{ fontSize: '0.62rem', backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '1px 6px', borderRadius: '8px', fontWeight: '800', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            <Building2 size={10} strokeWidth={2.5} /> Colsubsidio
                                                         </span>
                                                     )}
                                                 </div>
@@ -5991,40 +6002,40 @@ useEffect(() => {
                                                     placeholder="Ej: 4500123456"
                                                     style={{
                                                         width: '100%',
-                                                        padding: '9px 12px',
-                                                        borderRadius: '8px',
+                                                        padding: '6px 8px',
+                                                        borderRadius: '6px',
                                                         border: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '1.5px solid #F87171' : '1px solid #CBD5E1',
                                                         backgroundColor: '#FFFFFF',
-                                                        fontSize: '0.88rem',
+                                                        fontSize: '0.82rem',
                                                         fontWeight: '700',
                                                         color: '#1E293B',
                                                         outline: 'none'
                                                     }}
                                                 />
-                                                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '#DC2626' : '#64748B', fontWeight: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '700' : 'normal', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '#DC2626' : '#64748B', fontWeight: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '700' : 'normal', display: 'flex', alignItems: 'center', gap: '3px' }}>
                                                     {isSelectedOrderColsubsidio 
-                                                        ? (!editPurchaseOrder.trim() && !editSolped.trim() ? <><AlertTriangle size={12} strokeWidth={2.5} /> Obligatorio ingresar OC o SOLPED para Colsubsidio</> : 'Número oficial de OC. Se imprime en remisión y factura.')
-                                                        : 'Número de orden de compra oficial del cliente (opcional).'}
+                                                        ? (!editPurchaseOrder.trim() && !editSolped.trim() ? <><AlertTriangle size={11} strokeWidth={2.5} /> Obligatorio ingresar OC o SOLPED</> : 'Número oficial de OC.')
+                                                        : 'Número de orden de compra (opcional).'}
                                                 </p>
                                             </div>
 
                                             {/* SOLPED */}
                                             <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '800', color: isSelectedOrderColsubsidio ? '#1E40AF' : '#065F46' }}>
-                                                        <Clock size={13} /> # SOLICITUD DE PEDIDO (SOLPED)
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: '800', color: isSelectedOrderColsubsidio ? '#1E40AF' : '#065F46' }}>
+                                                        <Clock size={11} /> # SOLICITUD DE PEDIDO (SOLPED)
                                                     </label>
                                                     {isSelectedOrderColsubsidio && (
                                                         <span style={{ 
-                                                            fontSize: '0.65rem', 
+                                                            fontSize: '0.62rem', 
                                                             backgroundColor: editSolped.trim() && !editPurchaseOrder.trim() ? '#FEF3C7' : '#F1F5F9', 
                                                             color: editSolped.trim() && !editPurchaseOrder.trim() ? '#B45309' : '#64748B', 
-                                                            padding: '1px 8px', 
-                                                            borderRadius: '10px', 
-                                                            fontWeight: '800',
+                                                            padding: '1px 6px', 
+                                                            borderRadius: '8px', 
+                                                            fontWeight: '800', 
                                                             border: editSolped.trim() && !editPurchaseOrder.trim() ? '1px solid #FCD34D' : '1px solid #E2E8F0'
                                                         }}>
-                                                            {editSolped.trim() && !editPurchaseOrder.trim() ? 'Estado Provisional' : 'Referencia Inicial'}
+                                                            {editSolped.trim() && !editPurchaseOrder.trim() ? 'Provisional' : 'Referencia'}
                                                         </span>
                                                     )}
                                                 </div>
@@ -6035,41 +6046,41 @@ useEffect(() => {
                                                     placeholder="Ej: 1000987654"
                                                     style={{
                                                         width: '100%',
-                                                        padding: '9px 12px',
-                                                        borderRadius: '8px',
+                                                        padding: '6px 8px',
+                                                        borderRadius: '6px',
                                                         border: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '1.5px solid #F87171' : '1px solid #CBD5E1',
                                                         backgroundColor: '#FFFFFF',
-                                                        fontSize: '0.88rem',
+                                                        fontSize: '0.82rem',
                                                         fontWeight: '700',
                                                         color: '#1E293B',
                                                         outline: 'none'
                                                     }}
                                                 />
-                                                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#64748B' }}>
+                                                <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#64748B' }}>
                                                     {isSelectedOrderColsubsidio 
-                                                        ? 'Número de SOLPED si Colsubsidio aún no ha formalizado la OC.' 
-                                                        : 'Código o referencia interna previa de compra (opcional).'}
+                                                        ? 'Número de SOLPED si aún no se formaliza la OC.' 
+                                                        : 'Código de referencia interna de compra (opcional).'}
                                                 </p>
                                             </div>
                                         </div>
 
-                                         {/* Product Search */}
+                                        {/* Product Search */}
                                         <div style={{ position: 'relative' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                                <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#065F46' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: '#065F46' }}>
                                                     AGREGAR PRODUCTO (NOMBRE O SKU)
                                                 </label>
                                                 {!allowOffAgreement ? (
-                                                    <span style={{ fontSize: '0.7rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '12px', fontWeight: '800', border: '1px solid #F59E0B', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                        <Lock size={11} /> Cliente Restringido solo a Convenio
+                                                    <span style={{ fontSize: '0.66rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '1px 6px', borderRadius: '10px', fontWeight: '800', border: '1px solid #F59E0B', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <Lock size={10} /> Restringido a Convenio
                                                     </span>
                                                 ) : (
-                                                    <span style={{ fontSize: '0.7rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontWeight: '800', border: '1px solid #7DD3FC', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                        <Unlock size={11} /> Permite Fuera de Convenio
+                                                    <span style={{ fontSize: '0.66rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '10px', fontWeight: '800', border: '1px solid #7DD3FC', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <Unlock size={10} /> Permite Fuera de Convenio
                                                     </span>
                                                 )}
                                             </div>
-                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
                                                 <div style={{ position: 'relative', flex: 1 }}>
                                                     <input 
                                                         type="text"
@@ -6079,10 +6090,10 @@ useEffect(() => {
                                                         onKeyDown={handleProductSearchKeyDown}
                                                         style={{
                                                             width: '100%',
-                                                            padding: '12px 16px',
-                                                            borderRadius: '12px',
-                                                            border: '2px solid #A7F3D0',
-                                                            fontSize: '1rem',
+                                                            padding: '7px 12px',
+                                                            borderRadius: '8px',
+                                                            border: '1.5px solid #A7F3D0',
+                                                            fontSize: '0.88rem',
                                                             outline: 'none',
                                                             transition: 'border-color 0.2s'
                                                         }}
@@ -6090,8 +6101,8 @@ useEffect(() => {
                                                         onBlur={(e) => e.target.style.borderColor = '#A7F3D0'}
                                                     />
                                                     {searching && (
-                                                        <div style={{ position: 'absolute', right: '12px', top: '12px' }}>
-                                                            <Loader2 size={16} className="animate-spin" style={{ color: '#059669' }} />
+                                                        <div style={{ position: 'absolute', right: '10px', top: '9px' }}>
+                                                            <Loader2 size={15} className="animate-spin" style={{ color: '#059669' }} />
                                                         </div>
                                                     )}
                                                 </div>
@@ -6105,12 +6116,12 @@ useEffect(() => {
                                                     left: 0,
                                                     right: 0,
                                                     backgroundColor: 'white',
-                                                    borderRadius: '12px',
+                                                    borderRadius: '8px',
                                                     boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-                                                    zIndex: 10,
-                                                    marginTop: '8px',
+                                                    zIndex: 20,
+                                                    marginTop: '4px',
                                                     border: '1px solid #E2E8F0',
-                                                    maxHeight: '280px',
+                                                    maxHeight: '260px',
                                                     overflowY: 'auto'
                                                 }}>
                                                     {searchResults.map((prod, idx) => {
@@ -6129,38 +6140,35 @@ useEffect(() => {
                                                                 className="search-item"
                                                                 onMouseEnter={() => setFocusedProductIndex(idx)}
                                                                 style={{
-                                                                    padding: '12px 16px',
+                                                                    padding: '8px 12px',
                                                                     cursor: 'pointer',
                                                                     borderBottom: '1px solid #F1F5F9',
                                                                     display: 'flex',
                                                                     justifyContent: 'space-between',
                                                                     alignItems: 'center',
-                                                                    transition: 'background-color 0.2s',
-                                                                    backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
+                                                                    backgroundColor: focusedProductIndex === idx ? '#F0FDF4' : 'transparent',
+                                                                    transition: 'background-color 0.15s'
                                                                 }}
                                                             >
                                                                 <div>
-                                                                    <div style={{ fontWeight: '700', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                        <span>{prod.name}</span>
-                                                                        {prod.accounting_id && <span style={{ fontSize: '0.8em', color: '#6B7280' }}>({prod.accounting_id})</span>}
+                                                                    <div style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.85rem' }}>{prod.name}</div>
+                                                                    <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                                        SKU: {prod.accounting_id || 'Sin ID'} | {formatMoney(resolvedPrice)} / {prod.unit_of_measure}
                                                                     </div>
                                                                 </div>
-                                                                <div style={{ fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                    <span>
-                                                                        {formatMoney(resolvedPrice)}/{prod.unit_of_measure || 'Kg'}
-                                                                    </span>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                     {isAgreePrice ? (
-                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '2px 6px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                        <span style={{ fontSize: '0.62rem', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>
                                                                             Convenio
                                                                         </span>
                                                                     ) : (
-                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#F3F4F6', color: '#4B5563', border: '1px solid #E5E7EB', padding: '2px 6px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                        <span style={{ fontSize: '0.62rem', backgroundColor: '#F3F4F6', color: '#4B5563', border: '1px solid #E5E7EB', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>
                                                                             Lista General
                                                                         </span>
                                                                     )}
                                                                     {prod.options_config && prod.options_config.length > 0 && (
-                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 5px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                            <Settings size={10} strokeWidth={2.2} /> Opciones
+                                                                        <span style={{ fontSize: '0.62rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '1px 4px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                                            <Settings size={9} strokeWidth={2.2} /> Opciones
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -6174,36 +6182,37 @@ useEffect(() => {
                                 )}
 
                                 {loadingItems ? (
-                                    <div style={{ textAlign: 'center', padding: '5rem' }}>
-                                        <div style={{ color: THEME.colors.textSecondary, marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}><PackageOpen size={48} strokeWidth={1.5} /></div>
-                                        <p style={{ color: '#64748B', fontWeight: '600', fontSize: '1.125rem' }}>Preparando el detalle de los productos...</p>
+                                    <div style={{ textAlign: 'center', padding: '3rem' }}>
+                                        <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}><PackageOpen size={36} strokeWidth={1.5} /></div>
+                                        <p style={{ color: '#64748B', fontWeight: '600', fontSize: '0.95rem' }}>Preparando el detalle de los productos...</p>
                                     </div>
                                 ) : (
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead>
-                                            <tr style={{ textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>ID</th>
-                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>PRODUCTO</th>
-                                                <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'center' }}>CANTIDAD</th>
-                                                <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>PRECIO U.</th>
-                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>SUBTOTAL</th>
-                                                {editMode && <th style={{ width: '50px' }}></th>}
+                                        <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F8FAFC', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
+                                            <tr style={{ textAlign: 'left', borderBottom: '1px solid #E2E8F0' }}>
+                                                <th style={{ padding: '0.45rem 0.85rem', fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', width: '75px' }}>ID</th>
+                                                <th style={{ padding: '0.45rem 0.85rem', fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>PRODUCTO</th>
+                                                <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'center', width: '140px' }}>CANTIDAD</th>
+                                                <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'right', width: '120px' }}>PRECIO U.</th>
+                                                <th style={{ padding: '0.45rem 0.85rem', fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'right', width: '120px' }}>SUBTOTAL</th>
+                                                {editMode && <th style={{ width: '40px', padding: '0.45rem 0.5rem' }}></th>}
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {orderItems.map((item, idx) => (
                                                 <tr key={idx} style={{ 
                                                     borderBottom: '1px solid #F1F5F9',
-                                                    backgroundColor: item.isNew ? '#F0F9FF' : 'transparent'
+                                                    backgroundColor: item.isNew ? '#F0F9FF' : 'transparent',
+                                                    transition: 'background-color 0.1s'
                                                 }}>
-                                                    <td style={{ padding: '1.25rem 2rem', fontSize: '0.95rem', color: '#475569', fontWeight: '800' }}>
+                                                    <td style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem', color: '#475569', fontWeight: '800' }}>
                                                          {item.products?.accounting_id || '-'}
                                                      </td>
-                                                    <td style={{ padding: '1.25rem 2rem' }}>
-                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                                                             <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
+                                                    <td style={{ padding: '0.4rem 0.85rem' }}>
+                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                             <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem' }}>
                                                                  {item.products?.name}
-                                                                 {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
+                                                                 {item.isNew && <span style={{ marginLeft: '6px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '1px 5px', borderRadius: '4px' }}>NUEVO</span>}
                                                              </div>
                                                              {editMode && (
                                                                  <button
@@ -6212,28 +6221,27 @@ useEffect(() => {
                                                                      style={{
                                                                          backgroundColor: '#F8FAFC',
                                                                          border: '1px solid #CBD5E1',
-                                                                         borderRadius: '8px',
-                                                                         padding: '4px 10px',
-                                                                         fontSize: '0.75rem',
+                                                                         borderRadius: '6px',
+                                                                         padding: '2px 6px',
+                                                                         fontSize: '0.7rem',
                                                                          fontWeight: '700',
                                                                          color: '#334155',
                                                                          cursor: 'pointer',
                                                                          display: 'inline-flex',
                                                                          alignItems: 'center',
-                                                                         gap: '4px',
-                                                                         boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                         gap: '3px',
                                                                          transition: 'all 0.15s ease-in-out'
                                                                      }}
                                                                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
                                                                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                                                      title="Editar presentación y cantidad de este ítem"
                                                                  >
-                                                                     <Edit2 size={12} strokeWidth={2.2} style={{ color: '#2563EB' }} />
+                                                                     <Edit2 size={10} strokeWidth={2.2} style={{ color: '#2563EB' }} />
                                                                      <span>Opciones</span>
                                                                  </button>
                                                              )}
                                                          </div>
-                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
+                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '2px', alignItems: 'center' }}>
                                                              {(() => {
                                                                  const badges = resolveProductCharacteristicsBadges({
                                                                      variant_label: item.variant_label,
@@ -6248,20 +6256,19 @@ useEffect(() => {
                                                                      <div 
                                                                          key={bIdx}
                                                                          style={{ 
-                                                                             fontSize: '0.72rem', 
+                                                                             fontSize: '0.68rem', 
                                                                              color: badge.color, 
                                                                              fontWeight: '700', 
                                                                              backgroundColor: badge.backgroundColor, 
                                                                              border: badge.borderColor ? `1px solid ${badge.borderColor}` : 'none',
-                                                                             padding: '2px 8px', 
+                                                                             padding: '1px 6px', 
                                                                              borderRadius: '4px', 
                                                                              display: 'inline-flex', 
                                                                              alignItems: 'center', 
-                                                                             gap: '4px',
-                                                                             letterSpacing: '0.01em'
+                                                                             gap: '3px'
                                                                          }}
                                                                      >
-                                                                         <Sparkles size={10} strokeWidth={1.5} /> {badge.text}
+                                                                         <Sparkles size={9} strokeWidth={1.5} /> {badge.text}
                                                                      </div>
                                                                  ));
                                                              })()}
@@ -6270,31 +6277,31 @@ useEffect(() => {
                                                                  return (
                                                                      <>
                                                                          {exc?.picking_note && (
-                                                                             <div style={{ fontWeight: '600', color: '#D97706', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 8px', borderRadius: '4px', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center' }}>
+                                                                             <div style={{ fontWeight: '600', color: '#D97706', fontSize: '0.7rem', backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '4px', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center' }}>
                                                                                  Nota: {exc.picking_note}
                                                                              </div>
                                                                          )}
                                                                          {exc?.delivery_note && (
-                                                                             <div style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.75rem', backgroundColor: '#EEF2FF', padding: '2px 8px', borderRadius: '4px', border: '1px solid #C7D2FE', display: 'inline-flex', alignItems: 'center' }}>
+                                                                             <div style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.7rem', backgroundColor: '#EEF2FF', padding: '1px 6px', borderRadius: '4px', border: '1px solid #C7D2FE', display: 'inline-flex', alignItems: 'center' }}>
                                                                                  Entr: {exc.delivery_note}
                                                                              </div>
                                                                          )}
                                                                          {!(item.unit_price) || parseFloat(item.unit_price.toString()) <= 0 ? (
-                                                                             <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                                 <AlertTriangle size={11} strokeWidth={2.5} /> Sin Precio
+                                                                             <span style={{ fontSize: '0.7rem', backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FCD34D', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                 <AlertTriangle size={10} strokeWidth={2.5} /> Tarifa Pendiente ($0)
                                                                              </span>
                                                                          ) : contractPrices[item.product_id] !== undefined && contractPrices[item.product_id] !== null ? (
                                                                              customPriceIds.has(item.product_id) ? (
-                                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                 <span style={{ fontSize: '0.7rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                                      Tarifa Contrato
                                                                                  </span>
                                                                              ) : (
-                                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                 <span style={{ fontSize: '0.7rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                                      Tarifa B2C (Defecto)
                                                                                  </span>
                                                                              )
                                                                          ) : (
-                                                                             <span style={{ fontSize: '0.75rem', backgroundColor: '#ECFDF5', color: '#047857', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                             <span style={{ fontSize: '0.7rem', backgroundColor: '#ECFDF5', color: '#047857', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                                  Tarifa Asignada
                                                                              </span>
                                                                          )}
@@ -6303,10 +6310,10 @@ useEffect(() => {
                                                              })()}
                                                          </div>
                                                     </td>
-                                                    <td style={{ padding: '1.25rem 1rem', textAlign: 'center' }}>
+                                                    <td style={{ padding: '0.4rem 0.65rem', textAlign: 'center' }}>
                                                         {editMode ? (
-                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                                                     <input 
                                                                         type="number"
                                                                         step="any"
@@ -6316,9 +6323,9 @@ useEffect(() => {
                                                                             const val = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
                                                                             updateItemQuantity(idx, val);
                                                                         }}
-                                                                        style={{ width: '75px', textAlign: 'center', padding: '6px', borderRadius: '8px', border: '1px solid #CBD5E1', fontWeight: '800', backgroundColor: 'white' }}
+                                                                        style={{ width: '65px', height: '28px', textAlign: 'center', padding: '2px 4px', borderRadius: '6px', border: '1px solid #CBD5E1', fontWeight: '800', backgroundColor: 'white', fontSize: '0.85rem' }}
                                                                     />
-                                                                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.products?.unit_of_measure}</span>
+                                                                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>{item.products?.unit_of_measure}</span>
                                                                 </div>
                                                                 {(() => {
                                                                     const specText = formatStructuredSpecification({
@@ -6333,14 +6340,13 @@ useEffect(() => {
                                                                         <span 
                                                                             onClick={() => openEditItemModal(item, idx)}
                                                                             style={{
-                                                                                fontSize: '0.72rem',
+                                                                                fontSize: '0.68rem',
                                                                                 fontWeight: '700',
                                                                                 color: '#065F46',
                                                                                 backgroundColor: '#D1FAE5',
                                                                                 border: '1px solid #6EE7B7',
-                                                                                borderRadius: '5px',
-                                                                                padding: '2px 8px',
-                                                                                letterSpacing: '0.01em',
+                                                                                borderRadius: '4px',
+                                                                                padding: '1px 6px',
                                                                                 whiteSpace: 'nowrap',
                                                                                 cursor: 'pointer'
                                                                             }}
@@ -6352,17 +6358,17 @@ useEffect(() => {
                                                                 })()}
                                                             </div>
                                                         ) : (
-                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                                                                 <span style={{ 
-                                                                    padding: '6px 12px', 
+                                                                    padding: '3px 8px', 
                                                                     backgroundColor: '#F1F5F9', 
-                                                                    borderRadius: '8px',
+                                                                    borderRadius: '6px', 
                                                                     fontWeight: '800', 
                                                                     color: '#334155',
-                                                                    fontSize: '1rem'
+                                                                    fontSize: '0.88rem'
                                                                 }}>
                                                                     {formatQuantity(item.quantity)} 
-                                                                    <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '4px', fontWeight: '600' }}>
+                                                                    <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '3px', fontWeight: '600' }}>
                                                                         {item.products?.unit_of_measure}
                                                                     </span>
                                                                 </span>
@@ -6378,14 +6384,13 @@ useEffect(() => {
                                                                     if (!specText) return null;
                                                                     return (
                                                                         <span style={{
-                                                                            fontSize: '0.72rem',
+                                                                            fontSize: '0.68rem',
                                                                             fontWeight: '700',
                                                                             color: '#065F46',
                                                                             backgroundColor: '#D1FAE5',
                                                                             border: '1px solid #6EE7B7',
-                                                                            borderRadius: '5px',
-                                                                            padding: '2px 8px',
-                                                                            letterSpacing: '0.01em',
+                                                                            borderRadius: '4px',
+                                                                            padding: '1px 6px',
                                                                             whiteSpace: 'nowrap'
                                                                         }}>
                                                                             {specText}
@@ -6395,10 +6400,10 @@ useEffect(() => {
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#1E293B', fontWeight: '800', fontSize: '0.95rem' }}>
+                                                    <td style={{ padding: '0.4rem 0.65rem', textAlign: 'right', color: '#1E293B', fontWeight: '800', fontSize: '0.88rem' }}>
                                                         {editMode ? (
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                                                                <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '700' }}>$</span>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                                                                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700' }}>$</span>
                                                                 <input 
                                                                     type="number"
                                                                     step="any"
@@ -6410,14 +6415,16 @@ useEffect(() => {
                                                                         updateItemPrice(idx, val);
                                                                     }}
                                                                     style={{ 
-                                                                        width: '95px', 
+                                                                        width: '80px', 
+                                                                        height: '28px',
                                                                         textAlign: 'right', 
-                                                                        padding: '6px 8px', 
-                                                                        borderRadius: '8px', 
+                                                                        padding: '2px 6px', 
+                                                                        borderRadius: '6px', 
                                                                         border: (!item.unit_price || item.unit_price <= 0) ? '2px solid #EF4444' : '1px solid #CBD5E1', 
                                                                         fontWeight: '800', 
                                                                         backgroundColor: (!item.unit_price || item.unit_price <= 0) ? '#FEF2F2' : 'white',
-                                                                        color: '#0F172A'
+                                                                        color: '#0F172A',
+                                                                        fontSize: '0.85rem'
                                                                     }}
                                                                 />
                                                             </div>
@@ -6425,17 +6432,17 @@ useEffect(() => {
                                                             formatMoney(item.unit_price || 0)
                                                         )}
                                                     </td>
-                                                    <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '1.125rem' }}>
+                                                    <td style={{ padding: '0.4rem 0.85rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '0.92rem' }}>
                                                         {formatMoney((item.unit_price || 0) * item.quantity)}
                                                     </td>
                                                     {editMode && (
-                                                        <td style={{ paddingRight: '1rem' }}>
+                                                        <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
                                                             <button 
                                                                 onClick={() => removeItemFromOrder(idx)}
-                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444' }}
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', padding: '2px' }}
                                                                 title="Eliminar de la orden"
                                                             >
-                                                                <Trash2 size={16} strokeWidth={1.5} />
+                                                                <Trash2 size={15} strokeWidth={1.5} />
                                                             </button>
                                                         </td>
                                                     )}
@@ -6443,7 +6450,7 @@ useEffect(() => {
                                             ))}
                                             {orderItems.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={editMode ? 6 : 5} style={{ padding: '4rem', textAlign: 'center', color: '#94A3B8' }}>
+                                                    <td colSpan={editMode ? 6 : 5} style={{ padding: '3rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.9rem' }}>
                                                         No se encontraron productos en este pedido
                                                     </td>
                                                 </tr>
@@ -6451,160 +6458,159 @@ useEffect(() => {
                                         </tbody>
                                     </table>
                                 )}
+
+                                {/* Sección de Productos Cancelados / Descartados (Dentro del scroll del body) */}
+                                {cancelledOrderItems.length > 0 && (
+                                    <div style={{ margin: '0.65rem 1.25rem', border: '1px solid #FECACA', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#FFF5F5' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCancelledSection(!showCancelledSection)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.5rem 1rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                background: '#FEF2F2',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                borderBottom: showCancelledSection ? '1px solid #FCA5A5' : 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ 
+                                                    backgroundColor: '#EF4444', 
+                                                    color: 'white', 
+                                                    fontSize: '0.68rem', 
+                                                    fontWeight: '800', 
+                                                    padding: '1px 6px', 
+                                                    borderRadius: '9999px' 
+                                                }}>
+                                                    {cancelledOrderItems.length}
+                                                </span>
+                                                <span style={{ fontWeight: '800', color: '#991B1B', fontSize: '0.8rem' }}>
+                                                    Productos Cancelados / Removidos del Pedido
+                                                </span>
+                                                <span style={{ fontSize: '0.7rem', color: '#B91C1C' }}>
+                                                    (Excluidos de compras, alistamiento y facturación)
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#991B1B', fontSize: '0.75rem', fontWeight: '700' }}>
+                                                <span>{showCancelledSection ? 'Ocultar' : 'Ver detalle'}</span>
+                                                {showCancelledSection ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                            </div>
+                                        </button>
+
+                                        {showCancelledSection && (
+                                            <div style={{ padding: '0.5rem 0.85rem', overflowX: 'auto' }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                                    <thead>
+                                                        <tr style={{ borderBottom: '1px solid #FCA5A5', color: '#7F1D1D', textAlign: 'left', fontSize: '0.7rem' }}>
+                                                            <th style={{ padding: '4px 6px' }}>PRODUCTO CANCELADO</th>
+                                                            <th style={{ padding: '4px 6px', textAlign: 'center' }}>CANTIDAD</th>
+                                                            <th style={{ padding: '4px 6px', textAlign: 'right' }}>PRECIO U.</th>
+                                                            <th style={{ padding: '4px 6px', textAlign: 'right' }}>SUBTOTAL</th>
+                                                            <th style={{ padding: '4px 6px' }}>MOTIVO & AUDITORÍA</th>
+                                                            {editMode && <th style={{ padding: '4px 6px', textAlign: 'center' }}>ACCIÓN</th>}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {cancelledOrderItems.map((cItem, cIdx) => (
+                                                            <tr key={cItem.id || cIdx} style={{ borderBottom: '1px dashed #FECACA', color: '#991B1B' }}>
+                                                                <td style={{ padding: '6px' }}>
+                                                                    <div style={{ fontWeight: '700', textDecoration: 'line-through', color: '#991B1B' }}>
+                                                                        {cItem.product_name}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.68rem', color: '#B91C1C' }}>
+                                                                        SKU: {cItem.products?.accounting_id || 'N/A'} {cItem.variant_label ? `· ${cItem.variant_label}` : ''}
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ padding: '6px', textAlign: 'center', fontWeight: '600' }}>
+                                                                    {cItem.quantity} {cItem.unit || cItem.products?.unit_of_measure}
+                                                                </td>
+                                                                <td style={{ padding: '6px', textAlign: 'right', fontWeight: '600' }}>
+                                                                    {formatMoney(cItem.unit_price || 0)}
+                                                                </td>
+                                                                <td style={{ padding: '6px', textAlign: 'right', fontWeight: '700' }}>
+                                                                    {formatMoney((cItem.unit_price || 0) * (cItem.quantity || 0))}
+                                                                </td>
+                                                                <td style={{ padding: '6px' }}>
+                                                                    <div style={{ fontSize: '0.72rem', fontWeight: '700', color: '#7F1D1D' }}>
+                                                                        {cItem.cancellation_reason || 'Sin motivo especificado'}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.66rem', color: '#B91C1C', marginTop: '1px' }}>
+                                                                        {cItem.cancelled_by ? `Por: ${cItem.cancelled_by}` : ''} {cItem.cancelled_at ? `· ${new Date(cItem.cancelled_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+                                                                    </div>
+                                                                </td>
+                                                                {editMode && (
+                                                                    <td style={{ padding: '6px', textAlign: 'center' }}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => restoreCancelledItem(cItem)}
+                                                                            style={{
+                                                                                backgroundColor: '#ECFDF5',
+                                                                                color: '#047857',
+                                                                                border: '1px solid #A7F3D0',
+                                                                                borderRadius: '6px',
+                                                                                padding: '3px 8px',
+                                                                                fontSize: '0.72rem',
+                                                                                fontWeight: '800',
+                                                                                cursor: 'pointer',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px'
+                                                                            }}
+                                                                            title="Restaurar este producto nuevamente a la orden activa"
+                                                                        >
+                                                                            <RotateCcw size={11} strokeWidth={2} />
+                                                                            <span>Restaurar</span>
+                                                                        </button>
+                                                                    </td>
+                                                                )}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Sección de Productos Cancelados / Descartados */}
-                            {cancelledOrderItems.length > 0 && (
-                                <div style={{ margin: '0 2rem 1.5rem 2rem', border: '1px solid #FECACA', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#FFF5F5' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCancelledSection(!showCancelledSection)}
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.85rem 1.25rem',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            background: '#FEF2F2',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            borderBottom: showCancelledSection ? '1px solid #FCA5A5' : 'none'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ 
-                                                backgroundColor: '#EF4444', 
-                                                color: 'white', 
-                                                fontSize: '0.7rem', 
-                                                fontWeight: '800', 
-                                                padding: '2px 8px', 
-                                                borderRadius: '9999px' 
-                                            }}>
-                                                {cancelledOrderItems.length}
-                                            </span>
-                                            <span style={{ fontWeight: '800', color: '#991B1B', fontSize: '0.875rem' }}>
-                                                Productos Cancelados / Removidos del Pedido
-                                            </span>
-                                            <span style={{ fontSize: '0.75rem', color: '#B91C1C' }}>
-                                                (Excluidos de compras, alistamiento y facturación)
-                                            </span>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#991B1B', fontSize: '0.8rem', fontWeight: '700' }}>
-                                            <span>{showCancelledSection ? 'Ocultar' : 'Ver detalle'}</span>
-                                            {showCancelledSection ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                        </div>
-                                    </button>
-
-                                    {showCancelledSection && (
-                                        <div style={{ padding: '0.75rem 1.25rem', overflowX: 'auto' }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                                                <thead>
-                                                    <tr style={{ borderBottom: '1px solid #FCA5A5', color: '#7F1D1D', textAlign: 'left', fontSize: '0.75rem' }}>
-                                                        <th style={{ padding: '8px 4px' }}>PRODUCTO CANCELADO</th>
-                                                        <th style={{ padding: '8px 4px', textAlign: 'center' }}>CANTIDAD</th>
-                                                        <th style={{ padding: '8px 4px', textAlign: 'right' }}>PRECIO U.</th>
-                                                        <th style={{ padding: '8px 4px', textAlign: 'right' }}>SUBTOTAL</th>
-                                                        <th style={{ padding: '8px 4px' }}>MOTIVO & AUDITORÍA</th>
-                                                        {editMode && <th style={{ padding: '8px 4px', textAlign: 'center' }}>ACCIÓN</th>}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {cancelledOrderItems.map((cItem, cIdx) => (
-                                                        <tr key={cItem.id || cIdx} style={{ borderBottom: '1px solid #FEE2E2', color: '#374151' }}>
-                                                            <td style={{ padding: '10px 4px' }}>
-                                                                <div style={{ textDecoration: 'line-through', fontWeight: '700', color: '#6B7280' }}>
-                                                                    {cItem.products?.name || cItem.name || cItem.nickname || 'Producto'}
-                                                                </div>
-                                                                {cItem.variant_label && (
-                                                                    <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>{cItem.variant_label}</div>
-                                                                )}
-                                                            </td>
-                                                            <td style={{ padding: '10px 4px', textAlign: 'center', color: '#6B7280', textDecoration: 'line-through' }}>
-                                                                {cItem.quantity} {cItem.unit || 'Kg'}
-                                                            </td>
-                                                            <td style={{ padding: '10px 4px', textAlign: 'right', color: '#6B7280', textDecoration: 'line-through' }}>
-                                                                {formatMoney(cItem.unit_price || 0)}
-                                                            </td>
-                                                            <td style={{ padding: '10px 4px', textAlign: 'right', color: '#9CA3AF', textDecoration: 'line-through', fontWeight: '700' }}>
-                                                                {formatMoney((cItem.unit_price || 0) * (cItem.quantity || 0))}
-                                                            </td>
-                                                            <td style={{ padding: '10px 4px', fontSize: '0.75rem' }}>
-                                                                <div style={{ fontWeight: '700', color: '#DC2626' }}>
-                                                                    {cItem.reason || 'Cancelado por solicitud del cliente'}
-                                                                </div>
-                                                                <div style={{ color: '#6B7280', fontSize: '0.7rem' }}>
-                                                                    {cItem.cancelled_by_name ? `Por: ${cItem.cancelled_by_name}` : ''} 
-                                                                    {cItem.cancelled_at ? ` (${new Date(cItem.cancelled_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })})` : ''}
-                                                                </div>
-                                                            </td>
-                                                            {editMode && (
-                                                                <td style={{ padding: '10px 4px', textAlign: 'center' }}>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => restoreCancelledItem(cIdx)}
-                                                                        style={{
-                                                                            backgroundColor: '#059669',
-                                                                            color: 'white',
-                                                                            border: 'none',
-                                                                            borderRadius: '8px',
-                                                                            padding: '4px 10px',
-                                                                            fontSize: '0.75rem',
-                                                                            fontWeight: '800',
-                                                                            cursor: 'pointer',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '4px'
-                                                                        }}
-                                                                        title="Restaurar este producto nuevamente a la orden activa"
-                                                                    >
-                                                                        <RotateCcw size={12} strokeWidth={2} />
-                                                                        <span>Restaurar</span>
-                                                                    </button>
-                                                                </td>
-                                                            )}
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Modal Footer */}
+                            {/* Modal Footer Docked & Ultra-Compact */}
                             <div style={{ 
-                                padding: '2rem', 
-                                borderTop: '1px solid #F1F5F9', 
+                                padding: '0.55rem 1.25rem', 
+                                borderTop: '1px solid #E2E8F0', 
                                 backgroundColor: '#F8FAFC', 
                                 display: 'flex', 
                                 justifyContent: 'space-between', 
                                 alignItems: 'center' 
                             }}>
-                                <div style={{ display: 'flex', gap: '3rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{ color: THEME.colors.textSecondary }}><Truck size={24} strokeWidth={1.5} /></div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.75rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ color: THEME.colors.textSecondary }}><Truck size={18} strokeWidth={1.8} /></div>
                                         <div>
-                                            <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>PESO TOTAL</div>
-                                            <div style={{ fontWeight: '900', color: '#1E293B', fontSize: '1.125rem' }}>
+                                            <div style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>PESO TOTAL</div>
+                                            <div style={{ fontWeight: '900', color: '#1E293B', fontSize: '0.95rem', lineHeight: 1 }}>
                                                 {formatNumber(currentWeight, 1)} kg
                                             </div>
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{ color: THEME.colors.textSecondary }}><Globe size={24} strokeWidth={1.5} /></div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ color: THEME.colors.textSecondary }}><Globe size={18} strokeWidth={1.8} /></div>
                                         <div>
-                                            <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>CANAL</div>
-                                            <div style={{ marginTop: '2px' }}>
+                                            <div style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>CANAL</div>
+                                            <div style={{ marginTop: '1px' }}>
                                                 {getChannelBadge(selectedOrder.origin_source)}
                                             </div>
                                         </div>
                                     </div>
                                     {selectedOrder.document_url && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <div style={{ color: '#3B82F6' }}><FileText size={24} strokeWidth={1.5} /></div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ color: '#3B82F6' }}><FileText size={18} strokeWidth={1.8} /></div>
                                             <div>
-                                                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>DOCUMENTO</div>
-                                                <div style={{ marginTop: '2px' }}>
+                                                <div style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>DOCUMENTO</div>
+                                                <div style={{ marginTop: '1px' }}>
                                                     <a 
                                                         href={selectedOrder.document_url} 
                                                         target="_blank" 
@@ -6612,13 +6618,13 @@ useEffect(() => {
                                                         style={{ 
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
-                                                            gap: '4px',
+                                                            gap: '3px',
                                                             backgroundColor: '#EFF6FF', 
                                                             color: '#1D4ED8', 
-                                                            padding: '2px 8px', 
-                                                            borderRadius: '6px', 
+                                                            padding: '2px 6px', 
+                                                            borderRadius: '4px', 
                                                             fontWeight: '800', 
-                                                            fontSize: '0.75rem',
+                                                            fontSize: '0.72rem', 
                                                             border: '1px solid #BFDBFE',
                                                             textDecoration: 'none',
                                                             transition: 'all 0.2s'
@@ -6637,28 +6643,31 @@ useEffect(() => {
                                         </div>
                                     )}
                                 </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', marginBottom: '8px' }}>
-                                        <div style={{ fontSize: '0.85rem', color: '#64748B' }}>
-                                            <span>Subtotal (Neto): </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.78rem', color: '#64748B' }}>
+                                        <div>
+                                            <span>Subtotal: </span>
                                             <span style={{ fontWeight: '700', color: '#334155' }}>{formatMoney(currentSubtotal)}</span>
                                         </div>
-                                        <div style={{ fontSize: '0.85rem', color: '#64748B' }}>
-                                            <span>IVA Estimado: </span>
+                                        <span style={{ color: '#CBD5E1' }}>•</span>
+                                        <div>
+                                            <span>IVA: </span>
                                             <span style={{ fontWeight: '700', color: '#334155' }}>{formatMoney(currentTax)}</span>
                                         </div>
                                     </div>
-                                    <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: '700', marginBottom: '4px' }}>TOTAL CONSOLIDADO</div>
-                                    <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669', lineHeight: '1' }}>
-                                        {formatMoney(currentTotal)}
+                                    <div style={{ width: '1px', height: '22px', backgroundColor: '#CBD5E1' }} />
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                                        <span style={{ fontSize: '0.72rem', color: '#0F172A', fontWeight: '800', textTransform: 'uppercase' }}>TOTAL:</span>
+                                        <span style={{ fontSize: '1.35rem', fontWeight: '900', color: '#059669', lineHeight: 1 }}>
+                                            {formatMoney(currentTotal)}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 )}
-
-                {/* --- VARIANT SELECTION MODAL (SUB-MODAL) --- */}
+{/* --- VARIANT SELECTION MODAL (SUB-MODAL) --- */}
                 {selectedProductForVariant && (() => {
                     const exc = clientExceptions.find(e => e.product_id === selectedProductForVariant.id);
                     

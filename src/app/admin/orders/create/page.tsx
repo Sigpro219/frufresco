@@ -4604,20 +4604,16 @@ function CreateOrderContent() {
 
         if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
-        // Block Zero Margin / Zero Price ONLY IF NOT covered by an open agreement AND NOT replacement/gift AND NOT off-agreement allowed ($0 remission, Escenario 221)
-        const hasActiveAgreementSplit = clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired;
+        // SDD Escenario 312 / 332: Permitir guardado a $0 COP en Clientes B2B (Tarifa Pendiente / Remisión Fuera de Acuerdo) y Reposiciones/Obsequios
         const zeroPriceItem = cart.find(item => {
             if (orderNature === 'replacement' || isGiftRemissionClient) return false; // SDD §7.5.8 / §21.3: Reposición u Obsequio exonerado a $0 COP
+            if (clientType === 'B2B') return false; // SDD Escenario 312: Ítems institucionales sin tarifa viajan a $0 COP (Tarifa Pendiente para Facturación)
             const isZero = !item.price || parseFloat(item.price.toString()) === 0;
             if (!isZero) return false;
-            const isCoveredByAgreement = agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0;
-            if (isCoveredByAgreement) return false;
-            const isAllowedOffAgreement = hasActiveAgreementSplit && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id);
-            if (isAllowedOffAgreement) return false;
             return true;
         });
         if (zeroPriceItem) {
-            return showToast(`No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 (sin tarifa en contrato ni B2C). Parametrice el precio en el Módulo de Acuerdos Comerciales.`, 'error');
+            return showToast(`No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 en pedido B2C Hogar. Ingrese un precio válido.`, 'error');
         }
 
         // Poka-Yoke SDD §7.5.8: Reposición debe estar ligada a un Pedido Original

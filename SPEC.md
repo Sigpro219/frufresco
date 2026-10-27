@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.312 (Capítulo 44: Principio del Operador como Guardián Humano & Trazabilidad de Radicación de PQRS por Persona — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.314 (Capítulo 44: Ergonómica Industrial Suiza en Modal de Carga & Trazabilidad de Facturación y Guardián Humano — 76/76 Pantallas Certificadas)
 > **Fecha:** 27 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 330 Escenarios BDD Ininterrumpidos (1..330)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 332 Escenarios BDD Ininterrumpidos (1..332)
 
 ---
 
@@ -12737,3 +12737,28 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
   4. **Acciones Operativas y Persistencia Auditada:**
      - **Exportación Inmediata de Faltantes a Excel:** Genera el reporte filtrado con las remisiones pendientes para que facturación las expida de urgencia.
      - **Aplicación de Conciliación en Base de Datos:** Guarda los números de factura, CUFE, fecha de emisión y eventos RADIAN en `orders.logistics_data.cadena_reconciliation` y actualiza `billing_invoices.worldoffice_sync_status = 'reconciled_cadena'`, registrando la bitácora en `app_settings.cadena_reconciliations_history`.
+
+---
+
+### Escenario 332: Rediseño Ergonómico Compacto de Alta Densidad del Modal de Detalle de Pedido (`/admin/orders/loading`) (SDD v1.9.314)
+- **Given** la consola operativa de Despacho y Carga de Camiones (`/admin/orders/loading`), donde al inspeccionar un pedido en pantallas de computadores portátiles (resolución 1366x768 o 1080p con escalado de Windows a 125%/150%, dejando ~600-650px de viewport útil vertical), el modal de detalle consumía más de ~420px únicamente entre el encabezado (padding `2rem` ~240px) y el pie de totales (padding `2rem` ~180px), provocando que solo 1 fila de producto fuera visible a la vez y la cabecera de la tabla se ocultara fuera de la vista al desplazarse,
+- **When** el jefe de bodega, despachador o analista de operaciones hace clic en cualquier pedido de la parrilla de despacho para auditar sus ítems, modificar cantidades/precios, asignar OC o gestionar su trazabilidad:
+- **Then** el sistema aplica las siguientes reglas arquitectónicas de Diseño Industrial Suizo y Ergonomía de Pantalla:
+  1. **Encabezado Compacto y Acoplado (Docked Header ~70px):**
+     - El padding perimetral se reduce de `2rem` a `0.65rem 1.25rem`, distribuyendo la información en 2 niveles estrictos:
+       - **Nivel 1 (Identidad y Acciones):** Consecutivo amigable (`Pedido {DDMM_XXXX}`, font `1.25rem`), píldora de estado, badge de reposición en garantía (\$0 COP), badge de OC/SOLPED con micro-botón de asignación, fecha de creación con auditoría de última edición, acciones contextuales (`Modificar`, `Eliminar`, `Guardar`) con padding `5px 12px` y botón de cierre compacto (`32x32px`).
+       - **Nivel 2 (Cliente, Dirección y Metadatos):** Nombre de cliente (font `0.92rem`, bold), `SpecialClientBadge`, NIT, separadores sutiles (`•`), dirección con ícono `MapPin` (12px), georreferenciación GPS (`CheckCircle2` o alerta), teléfono con `Phone` (11px) y método de pago; con micro-píldoras de `Reasignar Cliente` y `Vínculo Reposición` en modo edición.
+       - **Nivel 3 (Banner de Atención Especial, si aplica):** Si el pedido posee alerta operativa activa, se despliega en una franja delgada de `4px 10px` (font `0.72rem`) sin desplazar los contenidos clave.
+  2. **Panel de Edición Optimizado (EditMode):**
+     - Margen y padding compactos (`0.65rem 1.25rem`), inputs de fecha y dirección de `6px 8px`, cuadrícula de OC/SOLPED ajustada a `0.5rem 0.85rem` y caja de búsqueda de producto ágil de `7px 12px`.
+  3. **Cabecera de Tabla Congelada (Sticky Thead):**
+     - La cabecera `<thead>` se fija permanentemente en la parte superior del cuerpo escroleable (`position: sticky, top: 0, zIndex: 10, backgroundColor: '#F8FAFC', boxShadow: '0 1px 2px rgba(0,0,0,0.06)'`), garantizando que las columnas (ID, PRODUCTO, CANTIDAD, PRECIO U., SUBTOTAL) permanezcan visibles en todo momento independientemente de la profundidad de desplazamiento.
+  4. **Filas de Tabla de Alta Densidad (Dense Table Rows ~38-42px):**
+     - El padding de cada celda `<td>` se reduce de `1.25rem 2rem` (~90px) a `0.4rem 0.85rem` (~40px), permitiendo la visualización simultánea de 7 a 10+ productos en laptops sin apiñamiento ni pérdida de legibilidad tipográfica.
+     - Los inputs numéricos de edición adoptan dimensiones ergonómicas (`height: 28px`, `padding: 2px 6px`).
+  5. **Sección de Productos Cancelados Integrada en el Scroll:**
+     - La sección colapsable de productos cancelados/removidos se ubica dentro del contenedor escroleable (`overflowY: auto`) debajo de la tabla principal, evitando empujar o recortar el espacio disponible para los productos activos.
+  6. **Pie de Totales Compacto y Acoplado (Docked Footer ~50px):**
+     - El padding se reduce de `2rem` a `0.55rem 1.25rem`.
+     - Lado izquierdo: Peso total (`Truck 18px`, valor `0.95rem`), canal (`Globe 18px`) y enlace a anexo (`FileText 18px`) en formato horizontal de bajo perfil.
+     - Lado derecho: Subtotal e IVA en línea horizontal (`0.78rem`), separador vertical discreto y Total Consolidado en `1.35rem` (en reemplazo de los masivos `2.5rem` previos), manteniendo máxima legibilidad y sobriedad ejecutiva.
