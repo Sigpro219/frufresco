@@ -2381,10 +2381,6 @@ useEffect(() => {
                 initialOptions[k] = String(v);
             });
         }
-        // Escenario 329: Inyectar nota de alistamiento fija del cliente si existe
-        if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim() && !initialOptions.nota_alistamiento) {
-            initialOptions.nota_alistamiento = exc.picking_note.trim();
-        }
         setSelectedOptions(initialOptions);
 
         // Always open the sub-modal to input quantity/variants (just like create page!)

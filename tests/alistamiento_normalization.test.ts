@@ -399,52 +399,48 @@ test('Alistamiento Print: Normalización Canónica de Unidades en Fila 1', async
         assert.strictEqual(matchedProduct?.id, 'prod-suelta-batavia', 'Debe resolver inexorablemente a Lechuga batavia suelta');
     });
 
-    await t.test('Escenario 329: Fallback y Renderizado de Caracteristicas Fijas desde product_nicknames (Gemba Hallazgo 8 - Moras y Freson)', () => {
-        // Mapa simulado de notas fijas en product_nicknames
-        const fixedNotesMap: Record<string, string> = {
-            'colsubsidio-catering_prod-mora': 'En Capuchon x5Kg.',
-            'yanuba-santa-barbara_prod-mora': 'Canastilla x10kg',
-            'wyndham_prod-freson': 'rojo/empaq-bandeja',
-            'colsubsidio-penalisa_prod-fresa-mediana': 'Pintona',
-            'colsubsidio-matriz_prod-mora': 'Canastilla general x10kg'
-        };
-
-        // Funcion resolutora identica a alistamiento-print/page.tsx
-        function resolvePickingNote(
-            rawNote: string | null | undefined,
-            profileId: string | undefined,
-            parentProfileId: string | undefined,
-            productId: string,
-            parentProductId?: string
-        ): string | undefined {
-            const cleanPickingNote = typeof rawNote === 'string' && rawNote.trim().length > 0 ? rawNote.trim() : null;
-            const fixedNote = (profileId ? fixedNotesMap[`${profileId}_${productId}`] : null)
-                           || (parentProductId && profileId ? fixedNotesMap[`${profileId}_${parentProductId}`] : null)
-                           || (parentProfileId ? fixedNotesMap[`${parentProfileId}_${productId}`] : null)
-                           || (parentProductId && parentProfileId ? fixedNotesMap[`${parentProfileId}_${parentProductId}`] : null)
-                           || null;
-            return cleanPickingNote || fixedNote || undefined;
+    await t.test('Escenario 329: Principio de Guardian Humano y Prohibicion de Inyeccion Ciega de Notas (Zero Unverified Floor Noise)', () => {
+        // En alistamiento-print, las notas de Badge 2 se extraen UNICAMENTE si el operador las registro en el item
+        function extractOperationalPickingNote(selectedOptions?: Record<string, any> | null): string | undefined {
+            const rawPickingNote = (
+                selectedOptions?.nota_alistamiento ||
+                selectedOptions?.['Nota alistamiento'] ||
+                selectedOptions?.['Nota de alistamiento'] ||
+                selectedOptions?.picking_note ||
+                selectedOptions?.nota_picking ||
+                null
+            );
+            return typeof rawPickingNote === 'string' && rawPickingNote.trim().length > 0
+                ? rawPickingNote.trim()
+                : undefined;
         }
 
-        // 1. Caso Colsubsidio Catering Mora -> Sin nota manual en item, debe heredar 'En Capuchon x5Kg.'
-        const cateringMoraNote = resolvePickingNote(null, 'colsubsidio-catering', 'colsubsidio-matriz', 'prod-mora');
-        assert.strictEqual(cateringMoraNote, 'En Capuchon x5Kg.', 'Colsubsidio Catering debe recuperar En Capuchon x5Kg. de product_nicknames');
+        // 1. Caso sin intervencion de operador: Un pedido normal NO debe inventar ni jalar notas de apodos automaticamente
+        const unvettedItemOptions = {
+            'Presentación': '1000 gr'
+        };
+        const unvettedPickingNote = extractOperationalPickingNote(unvettedItemOptions);
+        assert.strictEqual(unvettedPickingNote, undefined, 'Sin intervencion del operador, Badge 2 debe ser estrictamente undefined');
 
-        // 2. Caso Yanuba Mora -> Canastilla x10kg
-        const yanubaMoraNote = resolvePickingNote(undefined, 'yanuba-santa-barbara', undefined, 'prod-mora');
-        assert.strictEqual(yanubaMoraNote, 'Canastilla x10kg', 'Yanuba debe recuperar Canastilla x10kg');
+        // 2. Caso con intervencion deliberada de operador (ej. Catering Mora en capuchon x5kg ingresado en modal)
+        const vettedCateringItem = {
+            'Presentación': '1000 gr',
+            'nota_alistamiento': 'En Capuchon x5Kg.'
+        };
+        const vettedPickingNote = extractOperationalPickingNote(vettedCateringItem);
+        assert.strictEqual(vettedPickingNote, 'En Capuchon x5Kg.', 'Cuando el operador digita la nota excepcional en el modal, Badge 2 la renderiza con precision');
 
-        // 3. Caso Wyndham Freson -> rojo/empaq-bandeja
-        const wyndhamFresonNote = resolvePickingNote('', 'wyndham', undefined, 'prod-freson');
-        assert.strictEqual(wyndhamFresonNote, 'rojo/empaq-bandeja', 'Wyndham debe recuperar rojo/empaq-bandeja');
+        // 3. Caso Yanuba canastilla x10kg
+        const vettedYanubaItem = {
+            'nota_alistamiento': 'Canastilla x10kg'
+        };
+        assert.strictEqual(extractOperationalPickingNote(vettedYanubaItem), 'Canastilla x10kg', 'Debe renderizar la nota digitada por el operador para Yanuba');
 
-        // 4. Caso Sobrescritura manual en pedido: La nota excepcional digitada en modal tiene prioridad
-        const manualOverrideNote = resolvePickingNote('Capuchon x3kg especial', 'colsubsidio-catering', 'colsubsidio-matriz', 'prod-mora');
-        assert.strictEqual(manualOverrideNote, 'Capuchon x3kg especial', 'Nota manual en selected_options debe tener prioridad sobre la fija');
-
-        // 5. Caso Fallback a matriz: Si la sucursal no tiene nota propia pero la matriz si
-        const matrizFallbackNote = resolvePickingNote(null, 'colsubsidio-bellavista', 'colsubsidio-matriz', 'prod-mora');
-        assert.strictEqual(matrizFallbackNote, 'Canastilla general x10kg', 'Debe heredar la nota fija de la matriz si la sucursal no la tiene especificada');
+        // 4. Poka-Yoke: Cadenas vacias o solo espacios son tratadas como undefined
+        const whitespaceItem = {
+            'nota_alistamiento': '   '
+        };
+        assert.strictEqual(extractOperationalPickingNote(whitespaceItem), undefined, 'Cadenas vacias no deben generar Badge 2 vacio en bodega');
     });
 });
 

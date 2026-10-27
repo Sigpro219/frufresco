@@ -12678,25 +12678,20 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 
 ---
 
-### Escenario 329: Inyección y Renderizado Automático de Características Fijas de Alistamiento desde `product_nicknames` (Gemba Feedback Sábana: Hallazgo 8 - Moras y Fresón) (SDD v1.9.311)
-- **Given** los clientes corporativos institucionales que cuentan con especificaciones físicas fijas de empaque y selección registradas en la tabla maestra `product_nicknames.picking_note` (ej. Colsubsidio Catering con *"En Capuchon x5Kg."*, Yanuba Santa Bárbara con *"Canastilla x10kg"*, Wyndham Bogotá con *"rojo/empaq-bandeja"*, Colsubsidio Peñalisa con *"Pintona"*), donde la sábana física de alistamiento de bodega (`/admin/orders/alistamiento-print`) en `feedback_sabana_image10.png` omitía dichas notas obligando a los supervisores de piso a recurrir al ERP legado (`feedback_sabana_image11.png` y `feedback_sabana_image12.png`),
-- **When** se emite la Sábana de Alistamiento (`/admin/orders/alistamiento-print`), o se capturan e importan pedidos en Creación de Pedidos (`/admin/orders/create`) y Torre de Control (`/admin/orders/loading`):
-- **Then** el sistema ejecuta de forma determinística las siguientes compuertas de resolución y renderizado:
-  1. **Recuperación Automática de Notas Fijas de Cliente (`product_nicknames` $\to$ Badge 2 en Alistamiento):**
-     - En `alistamiento-print/page.tsx`, la función `fetchOrdersAndItems` recolecta todos los identificadores de perfil de cliente presentes en la tanda (incluyendo sedes hijas y perfiles matriz `parent_id`) y consulta la tabla `product_nicknames` filtrando `picking_note IS NOT NULL`.
-     - Al construir la demanda por pedido (`prodRec.orderDemand[it.order_id]`), si el ítem no trae una nota física manual (`selected_options.nota_alistamiento`), el sistema resuelve y hereda automáticamente la nota fija (`fixedNote`) del cliente o su matriz.
-     - Dicha nota se renderiza en el **Badge 2** (fondo pizarra `#F1F5F9`, borde `#94A3B8`, tipografía negrita `#0F172A`, 6.5pt), visualizando de manera inmediata en la celda:
-       * Colsubsidio Catering: `[En Capuchon x5Kg.]`
-       * Yanuba Santa Bárbara: `[Canastilla x10kg]`
-       * Wyndham Bogotá: `[rojo/empaq-bandeja]`
-       * Colsubsidio Peñalisa: `[Pintona]`
-  2. **Pre-poblado en Captura e Importación de Pedidos (`create/page.tsx` y `loading/page.tsx`):**
-     - En Creación de Pedidos (`create/page.tsx`), el motor de ingesta (`processRawImportItems`) inyecta automáticamente `opts.nota_alistamiento = exc.picking_note` si existe en `clientExceptions`.
-     - En el modal de producto (`handleProductClick` en `create` y `proceedAddProduct` en `loading`), el campo **"Nota de Alistamiento (Excepcional)"** se inicializa automáticamente con la instrucción fija registrada del cliente si aún no ha sido digitada manualmente.
-  3. **Jerarquía Resolutora Poka-Yoke de Piso:**
-     - Si el operador digita una nota manual en el modal (ej. *"Canastilla x5kg especial"*), la nota manual tiene prioridad absoluta sobre la nota fija (`cleanPickingNote`).
-     - Si no hay nota manual, se aplica la nota fija de la sucursal (`profile_id + product_id`).
-     - Si la sucursal carece de instrucción propia, hereda la nota fija de la matriz corporativa (`parent_profile_id + product_id`).
+### Escenario 329: Principio del Operador como Guardián Humano & Prohibición de Inyección Ciega de Notas (Zero Unverified Floor Noise) (SDD v1.9.311)
+- **Given** las notas informales y apodos de clientes registrados históricamente en `product_nicknames` (ej. especificaciones de empaque de moras, calibres especiales o alias de insumos), y el mandato operativo de impedir que textos arbitrarios viajen ciegamente por el sistema forzando al operario de suelo en bodega a interpretar solicitudes del cliente,
+- **When** se capturan pedidos en Creación de Pedidos (`/admin/orders/create`), se gestionan en Torre de Control (`/admin/orders/loading`) o se imprime la Sábana de Alistamiento (`/admin/orders/alistamiento-print`):
+- **Then** el sistema aplica las siguientes reglas inviolables de arquitectura y gobernanza:
+  1. **El Operador de Pedidos como Filtro Ineludible (Human-in-the-Loop Poka-Yoke):**
+     - Los registros de `product_nicknames` (apodos y notas informales del cliente) existen **estrictamente como referencia visual informativa** en el modal de selección de producto (`<NOTA INFORMAL DEL CLIENTE (SIN ESTRUCTURAR)>`).
+     - Queda terminantemente prohibido que las notas o apodos del cliente viajen automáticamente o de forma invisible al pedido o a la sábana física de alistamiento sin la intervención deliberada del operador.
+     - Es potestad exclusiva de la persona que monta el pedido evaluar dicha referencia y, de manera consciente y excepcional, decidir si aplica una opción estructurada del catálogo o si digita la instrucción física en el campo **"Nota de Alistamiento (Excepcional)"** (`selected_options.nota_alistamiento`).
+  2. **Inmutabilidad y Pureza en Piso de Bodega (`alistamiento-print/page.tsx`):**
+     - La planilla física de alistamiento de bodega **NUNCA** consulta `product_nicknames` ni ejecuta resoluciones implícitas por su cuenta.
+     - El **Badge 2** (fondo pizarra `#F1F5F9`, borde `#94A3B8`, tipografía negrita `#0F172A`, 6.5pt) se renderiza **única y exclusivamente** si el ítem de la orden contiene una nota física formal (`selected_options.nota_alistamiento`) ingresada deliberadamente por el operador.
+     - Si el operador no digitó nota excepcional de alistamiento, el Badge 2 permanece estrictamente vacío (`undefined`), erradicando ruidos en bodega y garantizando que el personal de piso solo reciba instrucciones validadas y aprobadas.
+  3. **Aislamiento en Ingesta Masiva (`processRawImportItems`):**
+     - La ingesta automatizada de archivos (Excel/ODS) no auto-inyecta notas de alistamiento de forma ciega. Toda particularidad operativa debe ser canalizada a través del operador humano de la mesa de pedidos.
 
 
 
