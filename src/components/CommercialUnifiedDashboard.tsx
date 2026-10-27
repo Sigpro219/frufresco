@@ -2133,7 +2133,7 @@ export default function CommercialUnifiedDashboard({
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '0.78rem' }}>
                             <span style={{ fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                📊 Mix de Facturación Bruta: <strong>{formatMoney(kpis.totalSales)}</strong>
+                                <BarChart2 size={15} color={THEME.colors.primary} /> Mix de Facturación Bruta: <strong>{formatMoney(kpis.totalSales)}</strong>
                             </span>
                             <span style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary }}>
                                 Proporción sobre total facturado
@@ -2161,7 +2161,7 @@ export default function CommercialUnifiedDashboard({
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '0.78rem' }}>
                             <span style={{ fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                💰 Mix de Utilidad Bruta (Ganancia Real): <strong>{formatMoney(channelMixData.reduce((s, c) => s + c.grossProfit, 0))}</strong>
+                                <DollarSign size={15} color="#059669" /> Mix de Utilidad Bruta (Ganancia Real): <strong>{formatMoney(channelMixData.reduce((s, c) => s + c.grossProfit, 0))}</strong>
                             </span>
                             <span style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary }}>
                                 Proporción sobre utilidad acumulada
