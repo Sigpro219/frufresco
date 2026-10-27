@@ -3,7 +3,7 @@
  * y Cubicaje de Canastillas para el Modo Manual de Bodega
  * 
  * Reglas de Negocio FruFresco:
- * - 150 Espacios físicos en el suelo de la nave central (Muelle).
+ * - 150 Espacios físicos en el suelo de la nave central (Espacios en Suelo / Bahías).
  * - avg_kg_per_crate = 12.5 kg (estimación de volumen).
  * - space_capacity = 36 canastillas apilables por bahía.
  * - Asignación contigua por zona geográfica para que clientes del mismo camión queden juntos.
@@ -282,7 +282,7 @@ export function allocateStagingSpacesGeographically(
 }
 
 /**
- * Garantiza que cada orden en una tanda tenga asignadas bahías físicas de muelle (1..150)
+ * Garantiza que cada orden en una tanda tenga asignados espacios físicos de bahía (1..150)
  * según su cubicaje real de carga (12.5 kg/canastilla, 36 canastillas/bahía) y clúster geográfico.
  * - Si una orden ya tiene bahías válidas asignadas en DB, las respeta.
  * - Para las órdenes sin bahías asignadas, busca los slots contiguos libres evitando colisiones

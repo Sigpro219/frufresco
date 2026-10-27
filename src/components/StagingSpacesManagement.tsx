@@ -118,7 +118,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             const { data: ordersData, error: oErr } = await orderQuery.order('created_at', { ascending: false });
 
             if (oErr) {
-                console.error('Error cargando pedidos para muelle:', oErr.message || oErr.details || oErr);
+                console.error('Error cargando pedidos para espacios:', oErr.message || oErr.details || oErr);
                 throw oErr;
             }
 
@@ -135,7 +135,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             setManualSpacesMap(initialMap);
 
         } catch (err: any) {
-            console.error('Error cargando pedidos para muelle:', err?.message || err?.details || err);
+            console.error('Error cargando pedidos para espacios:', err?.message || err?.details || err);
         } finally {
             setLoading(false);
         }
@@ -270,7 +270,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 4000);
         } catch (err: any) {
-            console.error('Error guardando asignación de muelle:', err);
+            console.error('Error guardando asignación de espacios:', err);
             const msg = err?.message || 'Error al guardar en base de datos';
             setSaveError(msg);
             setTimeout(() => setSaveError(null), 6000);
@@ -382,7 +382,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 <Grid size={18} />
                             </div>
                             <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: THEME.colors.textMain, letterSpacing: '-0.02em' }}>
-                                Centro de Mando de Muelle &amp; Bahías en Suelo (1 a 150)
+                                Centro de Mando de Espacios &amp; Bahías en Suelo (1 a 150)
                             </h2>
                         </div>
                         <p style={{ margin: 0, fontSize: '0.78rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>

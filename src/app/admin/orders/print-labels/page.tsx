@@ -624,7 +624,7 @@ export default function BulkOrderPrintLabelsPage() {
                                         paddingTop: '1mm',
                                         marginTop: '1mm'
                                     }}>
-                                        {/* Bahia Muelle */}
+                                        {/* Espacio / Bahia */}
                                         <div style={{ 
                                             border: '1.5px solid #000000', 
                                             padding: '1px 5px', 
@@ -690,7 +690,7 @@ export default function BulkOrderPrintLabelsPage() {
 
                                     {/* Scan Instruction */}
                                     <div style={{ fontSize: '5.5pt', fontWeight: '800', textAlign: 'center', letterSpacing: '0.02em' }}>
-                                        ESCANEAR EN MUELLE
+                                        ESCANEAR EN ESPACIO / BAHÍA
                                     </div>
                                 </div>
                             </div>

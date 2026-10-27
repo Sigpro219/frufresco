@@ -604,7 +604,7 @@ export default function ContingencyReconciliationPage() {
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                                         <span style={{ backgroundColor: '#0D7A57', color: '#FFFFFF', fontSize: '0.75rem', fontWeight: '900', padding: '2px 8px', borderRadius: '4px' }}>
-                                            ESPACIO MUELLE [{activeOrder.space_label}]
+                                            ESPACIO EN PISO [{activeOrder.space_label}]
                                         </span>
                                         <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#64748B' }}>
                                             ORDEN #{getFriendlyOrderId(activeOrder)}

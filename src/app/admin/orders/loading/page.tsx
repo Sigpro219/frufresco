@@ -4927,7 +4927,7 @@ useEffect(() => {
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#F59E0B', color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>1</div>
-                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Bahías Muelle</span>
+                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Espacios / Bahías</span>
                                                     </div>
                                                     <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
                                                         Asigna y visualiza en piso (1-150) por ventana LIFO.

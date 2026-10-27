@@ -30,7 +30,7 @@ export const PRINT_DOCUMENTS: PrintDocumentOption[] = [
         shortLabel: 'Sábana Alistamiento (Oficio)',
         paperFormat: 'Oficio (Legal Landscape)',
         path: '/admin/orders/alistamiento-print',
-        description: 'Matriz industrial por bahías de muelle y células de trabajo'
+        description: 'Matriz industrial por espacios de bahía en suelo y células de trabajo'
     },
     {
         key: 'purchases',

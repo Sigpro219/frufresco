@@ -74,7 +74,7 @@ const RoutePlanner = dynamic(() => import('@/components/RoutePlanner'), {
 });
 
 const StagingSpacesManagement = dynamic(() => import('@/components/StagingSpacesManagement'), {
-    loading: () => <SubtabSkeleton title="Muelle / Bahías 1-150" />,
+    loading: () => <SubtabSkeleton title="Espacios / Bahías 1-150" />,
     ssr: false
 });
 
@@ -569,7 +569,7 @@ export default function TransportControlTower() {
                         {[
                             { id: 'map', label: 'Monitor Global', icon: <Globe size={14} strokeWidth={2} /> },
                             { id: 'planner', label: 'Planeación', icon: <Compass size={14} strokeWidth={2} /> },
-                            { id: 'staging', label: 'Muelle / Bahías', icon: <Grid size={14} strokeWidth={2} /> },
+                            { id: 'staging', label: 'Espacios / Bahías', icon: <Grid size={14} strokeWidth={2} /> },
                             { id: 'fleet', label: 'Flota', icon: <Truck size={14} strokeWidth={2} /> },
                             { id: 'drivers_panel', label: 'Conductores', icon: <Users size={14} strokeWidth={2} /> },
                             { id: 'maintenance', label: 'Mantenimiento', icon: <Wrench size={14} strokeWidth={2} /> },

@@ -12777,3 +12777,27 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - En la interfaz del modal de detalle de pedido, el badge de estado de precio reemplaza el texto de error *"Sin Precio"* por una píldora ámbar preventiva (`#FEF3C7`, texto `#B45309`, borde `#FCD34D`): **`Tarifa Pendiente ($0)`**.
   3. **Fluidez en Creación de Pedidos B2B (`create/page.tsx`):**
      - Para clientes institucionales (`clientType === 'B2B'`), los productos sin tarifa pactada viajan autorizados a `$0 COP` bajo el flujo de *Remisión Fuera de Acuerdo (Tarifa Pendiente)* para su posterior liquidación en el módulo de Facturación Comercial (`/admin/commercial/billing`).
+
+---
+
+### Escenario 334: Estandarización Ontológica y Erradicación del Término 'Muelle' por 'Espacio' en Suelo de Nave Central y Asistente Guiado BCP (SDD v1.9.316)
+- **Given** la operación logística y de alistamiento en piso dentro de la nave central de FruFresco, donde se modelaron 150 cuadrantes físicos en el suelo para consolidar pedidos por cliente antes del cargue vehicular, y donde la interfaz del **Asistente Guiado de Despacho Manual BCP** (`ManualDispatchWizardModal.tsx`), el **Centro de Mando de Bahías** (`StagingSpacesManagement.tsx`) y los documentos de impresión utilizaban equívocamente la palabra *"Muelle"* (ej. *"1. Muelle & Bahías"*, *"Muelles Req."*, *"1 muelle"*, *"4 muelles"*, *"Plano de Muelle"*, *"bahías de muelle"*),
+- **When** el jefe de operaciones, despachador o analista logístico gestiona la asignación de espacios, cubicaje de canastillas e impresión de documentos en el flujo Poka-Yoke de despacho:
+- **Then** el sistema aplica las siguientes reglas ontológicas y de interfaz innegociables:
+  1. **Principio Ontológico de Nave Central (Espacios en Suelo vs. Muelle de Carga):**
+     - Se establece la distinción física estricta: un *"Muelle"* es exclusivamente la infraestructura exterior vehicular de atraque de camiones (Muelle de Recibo / Muelle de Despacho). Los cuadrantes internos de 36 canastillas apilables en el suelo de la nave central son **"Espacios"** (o **"Espacios de Bahía"**).
+     - Queda terminantemente prohibido cuantificar la capacidad de piso de un pedido en "muelles" (ej. "requiere 2 muelles"). La unidad de medida dimensional en piso es **"Espacio" / "Espacios"**.
+  2. **Sustitución Terminológica en Asistente Guiado BCP (`ManualDispatchWizardModal.tsx`):**
+     - **Paso 1 del Stepper:** Pasa de `"1. Muelle & Bahías"` a **`"1. Espacios & Bahías"`** *(Subtítulo: "Asignación de espacios en piso")*.
+     - **Cabecera de Tabla:** La columna `"Muelles Req."` se renombra obligatoriamente a **`"Espacios Req."`** (o **`"Espacios"`**).
+     - **Píldoras y Badges de Cubicaje:** El cálculo volumétrico cambia de `"{N} muelle"` / `"{N} muelles"` a **`"{N} espacio"`** / **`"{N} espacios"`** (ej. *"1 espacio (7c / 36)"*, *"4 espacios (116c / 36)"*).
+     - **Validación de Capacidad:** El mensaje de alerta cambia de `"Requiere {N} muelles"` a **`"Requiere {N} espacios"`**.
+     - **Navegación y Planos:** `"Plano de Muelle"` cambia a **`"Plano de Espacios"`** (o *"Plano de Bahías en Piso"*), y `"Configuración Avanzada de Muelle"` pasa a **`"Configuración de Espacios"`**.
+     - **Compuerta Poka-Yoke (Checkbox Obligatorio):** Pasa de *"He verificado las bahías de muelle y tengo la Sábana de Alistamiento impresa"* a: **`"He verificado los espacios de bahía en suelo y tengo la Sábana de Alistamiento impresa."`**
+     - **Resumen Paso 4:** Cambia a **`"1. Espacios de bahía asignados • Sábana alistamiento impresa"`**.
+  3. **Sustitución en Centro de Mando de Suelo (`StagingSpacesManagement.tsx`):**
+     - El encabezado pasa de `"Centro de Mando de Muelle & Bahías en Suelo (1 a 150)"` a **`"Centro de Mando de Espacios & Bahías en Suelo (1 a 150)"`**.
+     - Los textos de ayuda, tooltips y mensajes de error reemplazan *"muelle"* por *"espacio en suelo"* o *"espacios de bahía"*.
+  4. **Documentos de Impresión (`PrintDocumentSwitcher.tsx`):**
+     - La descripción de la Sábana de Alistamiento se estandariza a: **`"Matriz industrial por espacios de bahía en suelo y células de trabajo"`**.
+     - Se preserva el término *"Muelle de Recibo"* exclusivamente para la minuta de control de pesaje exterior de proveedores de Corabastos.

@@ -282,7 +282,7 @@ export default function ManualDispatchWizardModal({
             setTimeout(() => setSpacesSavedSuccess(false), 5000);
             return true;
         } catch (err: any) {
-            console.error('Error guardando bahías de muelle:', err);
+            console.error('Error guardando espacios de bahía:', err);
             alert(`Error al guardar bahías: ${err?.message || 'Error desconocido'}`);
             return false;
         } finally {
@@ -314,7 +314,7 @@ export default function ManualDispatchWizardModal({
         setCurrentStep(2);
     };
 
-    // Refrescar bahías desde la base de datos (por si se editaron en la pestaña de muelle)
+    // Refrescar bahías desde la base de datos (por si se editaron en la pestaña de espacios)
     const handleRefreshSpacesFromDB = async () => {
         setLoading(true);
         try {
@@ -700,7 +700,7 @@ export default function ManualDispatchWizardModal({
                 {/* Stepper Bar (Indicador de Progreso 4 Pasos) */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                     {[
-                        { num: 1, title: '1. Muelle & Bahías', subtitle: 'Asignación de espacios', icon: Grid, confirmed: step1Confirmed },
+                        { num: 1, title: '1. Espacios & Bahías', subtitle: 'Asignación de espacios en piso', icon: Grid, confirmed: step1Confirmed },
                         { num: 2, title: '2. Compras & Recibo', subtitle: 'Corabastos e ingreso', icon: FileText, confirmed: step2Confirmed },
                         { num: 3, title: '3. Remisiones & Manifiesto', subtitle: 'Entrega a clientes y ruta', icon: Truck, confirmed: step3Confirmed },
                         { num: 4, title: '4. Rótulos Térmicos', subtitle: 'Etiquetas de producto (SKUs)', icon: Tag, confirmed: step4Confirmed }
@@ -750,7 +750,7 @@ export default function ManualDispatchWizardModal({
                 </div>
 
                 {/* ========================================================================= */}
-                {/* PASO 1: TOPOLOGÍA DE PLANTA & MUELLE (BAHÍAS 1 A 150)                      */}
+                {/* PASO 1: TOPOLOGÍA DE PLANTA & ESPACIOS (BAHÍAS 1 A 150)                     */}
                 {/* ========================================================================= */}
                 {currentStep === 1 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -841,7 +841,7 @@ export default function ManualDispatchWizardModal({
                                             <th style={{ padding: '8px 10px', textAlign: 'center', width: '14%' }}>Ventana Entrega</th>
                                             <th style={{ padding: '8px 10px', textAlign: 'right', width: '8%' }}>Kilos</th>
                                             <th style={{ padding: '8px 10px', textAlign: 'center', width: '6%' }}>Can.</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '9%', backgroundColor: '#1E293B' }}>Muelles Req.</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '9%', backgroundColor: '#1E293B' }}>Espacios Req.</th>
                                             <th style={{ padding: '8px 10px', textAlign: 'center', width: '11%', backgroundColor: '#0F172A' }}>Bahía (1-150)</th>
                                         </tr>
                                     </thead>
@@ -874,7 +874,7 @@ export default function ManualDispatchWizardModal({
                                                     <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: '800', color: '#D97706' }}>
                                                         {item.estimated_crates}
                                                     </td>
-                                                    {/* Muelles Necesarios Calculados Explícitamente */}
+                                                    {/* Espacios Necesarios Calculados Explícitamente */}
                                                     <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                                                         <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
                                                             <span style={{
@@ -891,7 +891,7 @@ export default function ManualDispatchWizardModal({
                                                                 gap: '4px'
                                                             }}>
                                                                 <Package size={13} color="#1D4ED8" />
-                                                                {item.spaces_needed} {item.spaces_needed === 1 ? 'muelle' : 'muelles'}
+                                                                {item.spaces_needed} {item.spaces_needed === 1 ? 'espacio' : 'espacios'}
                                                             </span>
                                                             <span style={{ fontSize: '0.56rem', color: '#64748B', marginTop: '1px', fontWeight: '600' }}>
                                                                 ({item.estimated_crates}c / 36)
@@ -940,7 +940,7 @@ export default function ManualDispatchWizardModal({
                                                         )}
                                                         {currentSpaces.length === 0 && (
                                                             <div style={{ fontSize: '0.56rem', color: '#DC2626', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
-                                                                <AlertTriangle size={10} color="#DC2626" /> Requiere {item.spaces_needed} {item.spaces_needed === 1 ? 'muelle' : 'muelles'}
+                                                                <AlertTriangle size={10} color="#DC2626" /> Requiere {item.spaces_needed} {item.spaces_needed === 1 ? 'espacio' : 'espacios'}
                                                             </div>
                                                         )}
                                                     </td>
@@ -989,7 +989,7 @@ export default function ManualDispatchWizardModal({
                                     gap: '4px'
                                 }}
                             >
-                                Configuración Avanzada de Muelle <ExternalLink size={10} />
+                                Configuración de Espacios en Piso <ExternalLink size={10} />
                             </Link>
                         </div>
 
@@ -1052,7 +1052,7 @@ export default function ManualDispatchWizardModal({
                                 <Printer size={18} color="#0D7A57" />
                                 <div>
                                     <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#0F172A' }}>
-                                        Documentos Físicos de Planta (Muelle &amp; Alistamiento)
+                                        Documentos Físicos de Planta (Espacios &amp; Alistamiento)
                                     </div>
                                     <div style={{ fontSize: '0.70rem', color: '#64748B' }}>
                                         Genera la sábana de 12 células con la columna LUGAR y el plano para la pared de bodega.
@@ -1093,7 +1093,7 @@ export default function ManualDispatchWizardModal({
                                         cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px'
                                     }}
                                 >
-                                    Plano de Muelle
+                                    Plano de Espacios
                                 </button>
                             </div>
                         </div>
@@ -1107,7 +1107,7 @@ export default function ManualDispatchWizardModal({
                                     onChange={(e) => setStep1Confirmed(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: '#0D7A57', cursor: 'pointer' }}
                                 />
-                                He verificado las bahías de muelle y tengo la Sábana de Alistamiento impresa.
+                                He verificado los espacios de bahía en suelo y tengo la Sábana de Alistamiento impresa.
                             </label>
 
                             <button
@@ -1586,7 +1586,7 @@ export default function ManualDispatchWizardModal({
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.74rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step1Confirmed ? '#166534' : '#64748B' }}>
                                     <CheckCircle2 size={16} color={step1Confirmed ? '#16A34A' : '#94A3B8'} />
-                                    1. Bahías de muelle asignadas &bull; Sábana alistamiento impresa
+                                    1. Espacios de bahía asignados &bull; Sábana alistamiento impresa
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step2Confirmed ? '#166534' : '#64748B' }}>
                                     <CheckCircle2 size={16} color={step2Confirmed ? '#16A34A' : '#94A3B8'} />
