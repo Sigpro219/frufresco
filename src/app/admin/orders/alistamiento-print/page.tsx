@@ -574,16 +574,16 @@ export default function AlistamientoSabanaPrintPage() {
             // Ordenar pedidos por número de bahía física en suelo
             parsedOrders.sort((a, b) => a.first_space - b.first_space);
 
-            // Fetch existencias de inventario inicial para la fecha seleccionada (SDD v1.9.258 Escenario 281):
-            // 1. Priorizar el Conteo Físico Real (bodegaPost10am ?? physicalCount ?? 0) del último cierre oficial previo a selectedDate.
-            // 2. Nunca usar calculatedStock cuando physicalCount es null.
+            // Fetch existencias de inventario inicial para la fecha seleccionada (SDD v1.9.307 Escenario 325):
+            // 1. Priorizar el Conteo Físico Real (bodegaPost10am ?? physicalCount) del último cierre oficial previo o igual a selectedDate.
+            // 2. En modo marcha blanca / transición, si no hubo conteo físico (null), respaldar con calculatedStock.
             const newInventoryMap: Record<string, number> = {};
             let loadedFromClosing = false;
             try {
                 const { data: prevClosing } = await supabase
                     .from('daily_inventory_closings')
                     .select('snapshot_items, closing_date')
-                    .lt('closing_date', selectedDate)
+                    .lte('closing_date', selectedDate)
                     .order('closing_date', { ascending: false })
                     .limit(1)
                     .maybeSingle();
@@ -595,7 +595,9 @@ export default function AlistamientoSabanaPrintPage() {
                             ? Number(item.bodegaPost10am)
                             : (item.physicalCount !== null && item.physicalCount !== undefined
                                 ? Number(item.physicalCount)
-                                : 0);
+                                : (item.calculatedStock !== null && item.calculatedStock !== undefined
+                                    ? Number(item.calculatedStock)
+                                    : 0));
                         newInventoryMap[item.productId] = Math.max(0, finalStock);
                     });
                     loadedFromClosing = true;

@@ -218,26 +218,26 @@ export const COLUMN_METADATA: Record<string, {
     borderLeft?: string;
     borderRight?: string;
 }> = {
-    E: { letter: 'E', title: 'Inicial', shortName: 'Inicial', sign: '(+)', block: 'ENTRADAS (+)', effect: 'Heredado del Conteo Físico Real (Col T) de la jornada anterior. Solo Lectura (+)', color: '#34D399' },
-    F: { letter: 'F', title: 'Corrección', shortName: 'Correc.', sign: '(±)', block: 'ENTRADAS (±)', effect: 'Ajuste manual operativo de descuadre o ingreso extemporáneo (±)', color: '#34D399' },
-    G: { letter: 'G', title: 'Compra', shortName: 'Compra', sign: '(+)', block: 'ENTRADAS (+)', effect: 'Compras plaza Corabastos o recepción de proveedores (+)', color: '#34D399', borderRight: '2px solid #334155' },
-    H: { letter: 'H', title: 'Venta KG', shortName: 'Venta KG', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Salidas facturadas a clientes en kilogramos (-)', color: '#60A5FA' },
-    I: { letter: 'I', title: 'Venta UN', shortName: 'Venta UN', sign: '(Info)', block: 'VENTAS & PEDIDOS (Info)', effect: 'Salidas facturadas a clientes en unidades (Informativo)', color: '#94A3B8' },
-    J: { letter: 'J', title: 'Peso UN', shortName: 'Peso UN', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Kilogramos equivalentes de productos vendidos por unidad (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
-    K: { letter: 'K', title: 'Escaso', shortName: 'Escaso', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Faltante de despacho en alistamiento (-)', color: '#F87171' },
+    E: { letter: 'E', title: 'Inventario Inicial', shortName: 'Inv. Inicial', sign: '(+)', block: 'ENTRADAS (+)', effect: 'Heredado del Inventario de Bodega / Conteo Físico de la jornada anterior. Solo Lectura (+)', color: '#34D399' },
+    F: { letter: 'F', title: 'Corrección', shortName: 'Corrección', sign: '(±)', block: 'ENTRADAS (±)', effect: 'Ajuste manual operativo de descuadre o ingreso extemporáneo (±)', color: '#34D399' },
+    G: { letter: 'G', title: 'Compras', shortName: 'Compras', sign: '(+)', block: 'ENTRADAS (+)', effect: 'Compras plaza Corabastos o recepción de proveedores (+)', color: '#34D399', borderRight: '2px solid #334155' },
+    H: { letter: 'H', title: 'Venta (Kg)', shortName: 'Venta (Kg)', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Salidas facturadas a clientes en kilogramos (-)', color: '#60A5FA' },
+    I: { letter: 'I', title: 'Venta (Und)', shortName: 'Venta (Und)', sign: '(Info)', block: 'VENTAS & PEDIDOS (Info)', effect: 'Salidas facturadas a clientes en unidades (Informativo)', color: '#94A3B8' },
+    J: { letter: 'J', title: 'Peso (Und)', shortName: 'Peso (Und)', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Kilogramos equivalentes de productos vendidos por unidad (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
+    K: { letter: 'K', title: 'Escasos', shortName: 'Escasos', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Faltante de despacho en alistamiento (-)', color: '#F87171' },
     L: { letter: 'L', title: 'Sin Enviar', shortName: 'Sin Enviar', sign: '(+)', block: 'EXCEPCIONES (+)', effect: 'Producto alistado que no salió en ruta (+)', color: '#34D399' },
-    M: { letter: 'M', title: 'Vta Extra', shortName: 'Vta Extra', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta adicional en mostrador de bodega (-)', color: '#C084FC' },
-    N: { letter: 'N', title: 'Vta Nómina', shortName: 'Vta Nómina', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta autorizada descontada a colaboradores (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
-    O: { letter: 'O', title: 'Devoluciones', shortName: 'Devol.', sign: '(+)', block: 'DEVOLUCIONES & MERMAS (+)', effect: 'Producto retornado por clientes al almacén (+)', color: '#FBBF24' },
-    P: { letter: 'P', title: 'Pesada', shortName: 'Pesada', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Merma por merma de peso, calibración o humedad (-)', color: '#FBBF24' },
-    Q: { letter: 'Q', title: 'Desperdicio', shortName: 'Desperd.', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Daño, maduración o pérdida en selección (-)', color: '#F87171' },
+    M: { letter: 'M', title: 'Venta Extra', shortName: 'Vta. Extra', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta adicional en mostrador de bodega (-)', color: '#C084FC' },
+    N: { letter: 'N', title: 'Venta Nómina', shortName: 'Vta. Nómina', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta autorizada descontada a colaboradores (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
+    O: { letter: 'O', title: 'Devoluciones', shortName: 'Devoluciones', sign: '(+)', block: 'DEVOLUCIONES & MERMAS (+)', effect: 'Producto retornado por clientes al almacén (+)', color: '#FBBF24' },
+    P: { letter: 'P', title: 'Merma Pesada', shortName: 'Pesada', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Merma por merma de peso, calibración o humedad (-)', color: '#FBBF24' },
+    Q: { letter: 'Q', title: 'Desperdicio', shortName: 'Desperdicio', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Daño, maduración o pérdida en selección (-)', color: '#F87171' },
     R: { letter: 'R', title: 'Basura', shortName: 'Basura', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Descarte total no aprovechable (-)', color: '#FBBF24', borderRight: '2px solid #334155' },
-    S: { letter: 'S', title: 'Calculado', shortName: 'Calc. Final', sign: '(=)', block: 'CIERRE & BODEGA', formula: 'S = E + F + G - H - J - K + L - M - N + O - P - Q - R', effect: 'Balance teórico calculado de masa al cierre de turno', color: '#5EEAD4', bgColor: '#042F2E', borderLeft: '2px solid #0D9488', borderRight: '2px solid #0D9488' },
-    T: { letter: 'T', title: 'Conteo Real', shortName: 'Conteo Real', sign: '(Físico)', block: 'CIERRE & BODEGA', effect: 'Inventario físico real contado en bodega al cierre de jornada', color: '#34D399', bgColor: '#1E293B' },
-    U: { letter: 'U', title: 'Bodega (Dev)', shortName: 'Inv. Bodega', sign: '(T + O)', block: 'CIERRE & BODEGA', formula: 'U = T + O', effect: 'Stock físico total en bodega incluyendo devoluciones (T + O)', color: '#F8FAFC', bgColor: '#1E293B', borderRight: '2px solid #334155' },
+    S: { letter: 'S', title: 'Cálculo Final', shortName: 'Cálculo Final', sign: '(=)', block: 'CIERRE & BODEGA', formula: 'S = E + F + G - H - J - K + L - M - N + O - P - Q - R', effect: 'Balance teórico calculado de masa al cierre de turno', color: '#5EEAD4', bgColor: '#042F2E', borderLeft: '2px solid #0D9488', borderRight: '2px solid #0D9488' },
+    T: { letter: 'T', title: 'Conteo Físico', shortName: 'Conteo Físico', sign: '(Físico)', block: 'CIERRE & BODEGA', effect: 'Inventario físico real contado en bodega al cierre de jornada', color: '#34D399', bgColor: '#1E293B' },
+    U: { letter: 'U', title: 'Inventario Bodega', shortName: 'Inv. Bodega', sign: '(T + O)', block: 'CIERRE & BODEGA', formula: 'U = (T != null ? T + O : S)', effect: 'Stock físico total en bodega para salida a siguiente jornada (T + O o fallback teórico S en transición)', color: '#F8FAFC', bgColor: '#1E293B', borderRight: '2px solid #334155' },
     V: { letter: 'V', title: 'Faltantes', shortName: 'Faltantes', sign: '(-)', block: 'CONCILIACIÓN (-)', formula: 'V = Max(0, S - T)', effect: 'Descuadre en contra: Falta producto físico respecto al calculado (-)', color: '#F87171' },
     W: { letter: 'W', title: 'Sobrantes', shortName: 'Sobrantes', sign: '(+)', block: 'CONCILIACIÓN (+)', formula: 'W = Max(0, T - S)', effect: 'Descuadre a favor: Sobra producto físico respecto al calculado (+)', color: '#34D399' },
-    X: { letter: 'X', title: 'Donación', shortName: 'Donación', sign: '(-)', block: 'CONCILIACIÓN', effect: 'Baja autorizada para donación o Banco de Alimentos', color: '#F472B6' }
+    X: { letter: 'X', title: 'Donaciones', shortName: 'Donaciones', sign: '(-)', block: 'CONCILIACIÓN', effect: 'Baja autorizada para donación o Banco de Alimentos', color: '#F472B6' }
 };
 
 export const matchNumericFilter = (val: number, filterStr: string): boolean => {
@@ -740,7 +740,9 @@ export default function InventoryDailyBalanceTab({
                             ? Number(item.bodegaPost10am)
                             : (item.physicalCount !== null && item.physicalCount !== undefined
                                 ? Number(item.physicalCount)
-                                : 0);
+                                : (item.calculatedStock !== null && item.calculatedStock !== undefined
+                                    ? Number(item.calculatedStock)
+                                    : 0));
                         prevClosingSnapshots[item.productId] = Math.max(0, finalStock);
                     });
                 }
@@ -999,8 +1001,8 @@ export default function InventoryDailyBalanceTab({
             // S = E + F + G - H - J - K + L - M - N + O - P - Q - R
             const calculatedStock = initialStock + f_corrections + g_purchases - h_salesKg - j_weightSalesUnits - k_shortage + l_unshipped - m_additionalSales - n_employeeSales + o_returns - p_weighingWaste - q_damageWaste - r_cleaningWaste;
 
-            // U: Inventario en bodega (devoluciones) = T + O
-            const bodegaPost10 = physicalCount !== null ? physicalCount + o_returns : null;
+            // U: Inventario en bodega (devoluciones) = T + O (o fallback a cálculo final S en transición)
+            const bodegaPost10 = physicalCount !== null ? (physicalCount + o_returns) : calculatedStock;
 
             // V & W: Faltantes y Sobrantes (Magnitudes positivas como en el Excel del cliente)
             let missing = 0;
@@ -1116,7 +1118,7 @@ export default function InventoryDailyBalanceTab({
                 hasPhysicalCount: row.hasPhysicalCount || children.some(c => c.hasPhysicalCount),
                 colU_bodegaPost10am: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
                     ? (((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)) + (row.colO_returns + children.reduce((s, c) => s + c.colO_returns, 0)))
-                    : null,
+                    : (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0)),
                 colV_missing: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
                     ? Math.max(0, (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0)) - ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)))
                     : 0,
@@ -4040,14 +4042,14 @@ export default function InventoryDailyBalanceTab({
                                         }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <span>A-D: PRODUCTO & SKU</span>
+                                            <span>PRODUCTO & SKU</span>
                                             <span style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: '500', textTransform: 'none' }}>Célula / Fecha</span>
                                         </div>
                                     </th>
                                 ) : (
                                     <React.Fragment key="header-traditional-id">
-                                        <th key="header-A" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? 0 : undefined, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>A: Fecha</th>
-                                        <th key="header-B" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? 0 : undefined, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>B: ID Prod</th>
+                                        <th key="header-A" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? 0 : undefined, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>Fecha</th>
+                                        <th key="header-B" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? 0 : undefined, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>ID Prod</th>
                                         <th 
                                             key="header-C"
                                             onClick={() => setCellColumnMode(prev => prev === 'collapsed' ? 'expanded' : 'collapsed')}
@@ -4077,7 +4079,7 @@ export default function InventoryDailyBalanceTab({
                                                 </div>
                                             ) : (
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                                                    <span>C: Célula</span>
+                                                    <span>Célula</span>
                                                     <span style={{ fontSize: '0.58rem', color: '#64748B' }} title="Colapsar célula">◀</span>
                                                 </div>
                                             )}
@@ -4103,7 +4105,7 @@ export default function InventoryDailyBalanceTab({
                                                 transition: 'left 0.2s ease, width 0.2s ease'
                                             }}
                                         >
-                                            D: Producto
+                                            Producto
                                         </th>
                                     </React.Fragment>
                                 )}
@@ -4156,7 +4158,7 @@ export default function InventoryDailyBalanceTab({
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
                                                 <GripVertical size={10} color="#64748B" style={{ opacity: 0.6, flexShrink: 0 }} />
                                                 <span style={{ fontSize: '0.69rem', fontWeight: '800', letterSpacing: '0.02em' }}>
-                                                    {colKey}: {meta?.shortName || colKey}
+                                                    {meta?.shortName || meta?.title || colKey}
                                                 </span>
                                             </div>
                                         </th>

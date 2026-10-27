@@ -12607,15 +12607,20 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 
 ---
 
-### Escenario 325: Gobernanza Dual de Inventario para Marcha Blanca y Switch-Off Imperativo (Gemba Feedback Sábana: Hallazgo 5) (SDD v1.9.306)
+### Escenario 325: Gobernanza Dual de Inventario para Marcha Blanca, Saneamiento Ergonómico de Encabezados y Switch-Off Imperativo (Gemba Feedback Sábana: Hallazgo 5) (SDD v1.9.307)
 - **Given** el ecosistema de operaciones agro-logísticas de FruFresco donde coexiste temporalmente el ERP legado con el nuevo sistema onFRU, y donde durante la fase de pilotaje el equipo monta archivos de balance de masa de prueba que pueden tener desfases de fechas o SKUs no contados físicamente,
-- **When** se imprime la Sábana de Alistamiento (`/admin/orders/alistamiento-print`) o la Planilla de Compras (`/admin/procurement/purchases-print`) al momento del corte operativo (5:00 PM - 8:00 PM):
-- **Then** el sistema obedece la directriz de gobernanza parametrizada en `app_settings` (`inventory_governance_mode`):
-  1. **Modo Transición / Pilotaje Suave (`transicion_pilotaje` — Activo en Pruebas):**
-     - **Lookback Flexible de Cierre:** Si para la fecha operativa consultada (`selectedDate`) no existe un cierre cerrado en `daily_inventory_closings` previo a la hora de corte, el sistema hereda el **último balance disponible en la base de datos** (`order by closing_date desc limit 1`), evitando que la hoja arroje `INV[0]` por desfase horario.
-     - **Respaldo de Stock Teórico:** Si en el archivo de prueba un SKU tiene `physicalCount = null` pero registra stock disponible en `calculatedStock` o en `inventory_stocks`, el sistema rescata ese saldo para permitir que la cuadrilla de alistamiento y compras evalúe cifras lógicas de planta.
-     - **Telemetría Transparente:** La columna imprime el inventario de referencia con la etiqueta canónica (ej. `INV[277]`), permitiendo a la operación verificar el flujo sin interrupciones.
-  2. **Modo Régimen Estricto / Switch-Off (`estricto_produccion` — Día del Go-Live Definitivo):**
-     - **Cierre Diario Obligatorio:** Se activa el candado formal que exige que el turno tarde registre el balance físico del día antes de emitir la sábana.
-     - **Inmutabilidad de Báscula:** Solo se reconoce como saldo inicial el conteo físico verificado (`bodegaPost10am ?? physicalCount ?? 0`). Lo que no fue contado en suelo se clasifica estrictamente como inventario cero (`INV[0]`).
-     - **Alerta de Bloqueo de Alistamiento:** Si se intenta generar la sábana sin el cierre formal de la jornada, la mesa de operaciones bloquea la emisión con advertencia perentoria de gobernanza.
+- **When** se consulta la Consola de Balance Diario (`/admin/commercial/inventory`) o se imprime la Sábana de Alistamiento (`/admin/orders/alistamiento-print`) al momento del corte operativo (5:00 PM - 8:00 PM):
+- **Then** el sistema aplica las siguientes reglas de arquitectura ergonómica y gobernanza:
+  1. **Saneamiento Ergonómico de Encabezados (Zero Letter Clutter):**
+     - Se eliminan estrictamente las letras prefijadas (`A:`, `B:`, `E:`, `H:`, `S:`, `T:`, `U:`, etc.) de todos los encabezados visibles de la tabla de 24 columnas (`InventoryDailyBalanceTab.tsx`), liberando entre un 15% y un 25% del ancho de celda para desplegar nombres operativos completos y legibles (`Inv. Inicial`, `Venta (Kg)`, `Cálculo Final`, `Conteo Físico`, `Inv. Bodega`, `Faltantes`, `Sobrantes`).
+     - La trazabilidad contable, letra técnica y fórmula matemática permanecen accesibles vía tooltip interactivo (`title`) para auditoría y soporte.
+  2. **Formulación Dinámica de Salida (Columna U - Inv. Bodega):**
+     - En condiciones de planta con conteo físico, la salida es la suma física verificada: `U = T + O` (`physicalCount + colO_returns`).
+     - En Modo Transición / Marcha Blanca, cuando un SKU no ha sido pesado en suelo (`physicalCount === null`), la columna U conmuta limpiamente al Cálculo Final teórico: `U = calculatedStock` (Columna S), garantizando que las existencias no se desplomen a cero ni dejen en blanco la entrada del día siguiente (`Col E_{D+1}`).
+  3. **Gobernanza Dual de Impresión de Alistamiento y Abastecimiento:**
+     - **Modo Transición / Pilotaje Suave (`transicion_pilotaje` — Activo en Pruebas):**
+       - **Lookback Flexible de Cierre:** El sistema consulta el último cierre registrado (`lte('closing_date', selectedDate)` ordenado descendentemente) y rescata el saldo disponible en `bodegaPost10am ?? physicalCount ?? calculatedStock`, evitando que la sábana de alistamiento imprima `INV[0]` durante pruebas paralelas.
+     - **Modo Régimen Estricto / Switch-Off (`estricto_produccion` — Día del Go-Live Definitivo):**
+       - **Cierre Diario Obligatorio:** Se activa el candado formal que exige que el turno tarde registre el balance físico del día antes de emitir la sábana.
+       - **Inmutabilidad de Báscula:** Solo se reconoce como saldo inicial el conteo físico verificado (`bodegaPost10am ?? physicalCount ?? 0`). Lo que no fue contado en suelo se clasifica estrictamente como inventario cero (`INV[0]`).
+       - **Alerta de Bloqueo de Alistamiento:** Si se intenta generar la sábana sin el cierre formal de la jornada, la mesa de operaciones bloquea la emisión con advertencia perentoria de gobernanza.
