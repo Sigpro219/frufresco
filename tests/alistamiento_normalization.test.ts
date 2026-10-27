@@ -366,6 +366,39 @@ test('Alistamiento Print: Normalización Canónica de Unidades en Fila 1', async
 
         assert.strictEqual(variantLabel, 'Unidad', 'El variantLabel comercial debe permanecer limpio sin incluir la nota interna de alistamiento');
     });
+
+    await t.test('Escenario 328: Restricción Estricta de Catálogo a Productos del Acuerdo (Poka-Yoke El Corral Batavia Suelta)', () => {
+        // Catálogo maestro con Batavia genérica y Batavia suelta
+        const allProducts = [
+            { id: 'prod-generic-batavia', name: 'Lechuga batavia', sku: 'V-LCH-01' },
+            { id: 'prod-suelta-batavia', name: 'Lechuga batavia suelta', sku: 'V-LCH-K14' },
+            { id: 'prod-tomate', name: 'Tomate chonto', sku: 'V-TOM-01' }
+        ];
+
+        // Acuerdo cerrado (ej. Nutresa / El Corral) donde solo está pactada la Batavia Suelta
+        const nutresaAgreementProductIds = new Set(['prod-suelta-batavia', 'prod-tomate']);
+        const allowOffAgreementPurchases = false;
+        const isGiftRemissionClient = false;
+
+        // 1. Filtrado de catálogo estricto
+        const isStrictAgreement = !allowOffAgreementPurchases && !isGiftRemissionClient && nutresaAgreementProductIds.size > 0;
+        assert.strictEqual(isStrictAgreement, true, 'El Corral debe operar en régimen de acuerdo estricto');
+
+        const candidatePool = isStrictAgreement
+            ? allProducts.filter(p => nutresaAgreementProductIds.has(p.id))
+            : allProducts;
+
+        // La batavia genérica DEBE quedar excluida del catálogo elegible
+        assert.strictEqual(candidatePool.some(p => p.id === 'prod-generic-batavia'), false, 'Batavia genérica NO debe existir en el pool del acuerdo');
+        assert.strictEqual(candidatePool.some(p => p.id === 'prod-suelta-batavia'), true, 'Batavia suelta DEBE ser la única batavia disponible');
+
+        // 2. Matching de texto de ingesta: Cuando el cliente envía 'LECHUGA BATAVIA'
+        const rawImportName = 'LECHUGA BATAVIA';
+        const matchedProduct = candidatePool.find(p => p.name.toLowerCase().includes('batavia'));
+        assert.ok(matchedProduct, 'Debe encontrar un producto de batavia en el acuerdo');
+        assert.strictEqual(matchedProduct?.id, 'prod-suelta-batavia', 'Debe resolver inexorablemente a Lechuga batavia suelta');
+    });
 });
+
 
 

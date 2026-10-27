@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.309 (Capítulo 44: Protocolo Canónico de Apagado del ERP Legado & Doble Badge de Notas Físicas Excepcionales — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.310 (Capítulo 44: Protocolo Canónico de Apagado del ERP Legado & Poka-Yoke de Restricción Estricta de Catálogo — 76/76 Pantallas Certificadas)
 > **Fecha:** 27 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 327 Escenarios BDD Ininterrumpidos (1..327)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 328 Escenarios BDD Ininterrumpidos (1..328)
 
 ---
 
@@ -12562,15 +12562,14 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 │                                 RADAR DE FOCO LÁSER ACTIVO                                    │
 ├──────────────────────┬────────────────────────────────────────────────────────────────────────┤
 │ OBJETIVO ESTRATÉGICO │ Apagado Definitivo del ERP Legado (Legacy Cutover).                   │
-│ DOMINIO EN LA MIRA   │ Dominio 5 (WMS Bodega) & Dominio 3 (Alistamiento & Inventarios).      │
+│ DOMINIO EN LA MIRA   │ Dominio 1 & 2 (Comercial / Acuerdos) & Dominio 5 (Alistamiento WMS).   │
 │ EXPEDIENTE GEMBA     │ "Feedback_sabana_alistamiento.docx" (Resolución quirúrgica 1 a 1).    │
-│ FOCO LÁSER ACTUAL    │ Hallazgo 7: Restricción estricta de catálogo a productos del acuerdo.  │
+│ FOCO LÁSER ACTUAL    │ Hallazgo 8: Impresión de características fijas en moras/empaque ([P36])│
 ├──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ COMPLETADOS RECIENTE │ • Hallazgo 5: Gobernanza Dual de Inventario (Modo Transición/Estricto) │
-│                      │ • Hallazgo 6: Doble badge de alistamiento y notas físicas excepcionales│
-│ EN LA CÁMARA (NEXT)  │ • Hallazgo 7: Restricción estricta de catálogo a productos del acuerdo.│
-│                      │ • Hallazgo 8: Impresión de características fijas en moras/empaque.     │
-│ COLA POST-DOCUMENTO  │ • Switch-Off Gate: Activación de Modo Estricto de Inventarios.         │
+│ COMPLETADOS RECIENTE │ • Hallazgo 6: Doble badge de alistamiento y notas físicas excepcionales│
+│                      │ • Hallazgo 7: Restricción estricta de catálogo (El Corral Batavia)     │
+│ EN LA CÁMARA (NEXT)  │ • Hallazgo 8: Impresión de características fijas en moras/empaque.     │
+│                      │ • Switch-Off Gate: Activación de Modo Estricto de Inventarios.         │
 └──────────────────────┴────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -12598,7 +12597,7 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 
 | Dominio Operativo | Reemplaza del ERP Viejo | Estado Paridad | Criterio de Apagado (Switch-Off Gate) |
 | :--- | :--- | :---: | :--- |
-| **1. Comercial & Pedidos** | Toma de pedidos manual y digitación ciega | 🟢 **95%** | [x] 100% pedidos ingresan por Checkout B2B, landing o admin con modelos corporativos y descuentos automatizados. |
+| **1. Comercial & Pedidos** | Toma de pedidos manual y digitación ciega | 🟢 **97%** | [x] 100% pedidos ingresan con catálogo cerrado en clientes de convenio y Poka-Yoke anti-digitación ciega. |
 | **2. Bodega & Alistamiento (WMS)** | Planillas planas desordenadas | 🟢 **94%** | [x] Sábana con bahías secuenciales 1..150, zebra striping, supresión de 'Maduro', gramajes reales y doble badge de notas físicas excepcionales. |
 | **3. Abastecimiento (JIT)** | Cálculo manual de compras | 🟢 **88%** | [ ] Planilla de compras neteada contra inventario en marcha blanca fluida. |
 | **4. Inventarios (Masa)** | Kardex tradicional en diferido | 🟡 **En Pilotaje** | [ ] Operación dual en Modo Transición $\rightarrow$ Listo para candado obligatorio diario en Modo Estricto. |
@@ -12660,3 +12659,19 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - **Badge 1 (Especificación Culinaria Estructurada):** Despliega atributos maestros formales (`12 und de 2 kg`, maduración diferencial, calibres estándar) con fondo ámbar (`#FEF3C7`) y texto oscuro (`#1E293B`).
      - **Badge 2 (Nota Excepcional de Alistamiento Físico de Bodega):** Cuando el pedido contiene `nota_alistamiento` (o alias equivalentes como `picking_note`), se renderiza como una pastilla secundaria diferenciada con fondo pizarra (`#F1F5F9`), borde sutil (`#94A3B8`) y tipografía negrita (`#0F172A`, 6.5pt), situada inmediatamente debajo de la cantidad principal y del Badge 1.
      - Esta separación otorga a los operarios de planta visibilidad total sobre las instrucciones físicas de empaque y selección sin degradar la normalización canónica del WMS.
+
+
+---
+
+### Escenario 328: Poka-Yoke de Restricción Estricta de Catálogo a Productos del Acuerdo Comercial (Gemba Feedback Sábana: Hallazgo 7 - El Corral y Listas Cerradas) (SDD v1.9.310)
+- **Given** las cuentas corporativas institucionales con lista cerrada de productos pactados (como el Grupo Nutresa / IRCC para todas las sedes de El Corral en el modelo `nutresa` y `allow_off_agreement_purchases = false`), donde la sábana de alistamiento evidenció que la sede *El Corral Gourmet Floresta* apareció bajo `LECHUGA BATAVIA` (1 KG) mientras las demás 10+ sedes aparecieron bajo `LECHUGA BATAVIA SUELTA` (14 KG, 28 KG), forzando dos columnas operativas innecesarias en bodega,
+- **When** se procesan archivos de suministros (Excel/ODS en ingesta) o el operador realiza búsqueda/adición manual de productos en Creación de Pedidos (`/admin/orders/create`) o Torre de Control (`/admin/orders/loading`):
+- **Then** el sistema aplica las siguientes compuertas inviolables de catálogo:
+  1. **Scoping Hermético de Ingesta y Auto-Matching (`processRawImportItems`):**
+     - Cuando el cliente opera en régimen de acuerdo cerrado (`!allowOffAgreementPurchases && agreementProductIds.size > 0`), el grupo de candidatos de emparejamiento (`candidateProductPool`) se restringe estrictamente a los productos del acuerdo comercial (`agreementProductIds`).
+     - Al procesar el alias *"LECHUGA BATAVIA"* del archivo del cliente, el matcher busca exclusivamente dentro de los productos del convenio, asignando de manera determinística y automática **`Lechuga batavia suelta`** (SKU pactado) e imposibilitando por completo que el ítem caiga en la `Lechuga batavia` genérica abierta.
+  2. **Restricción Poka-Yoke en Búsqueda y Edición de Torre de Control (`loading/page.tsx`):**
+     - La Torre de Control invoca el resolvedor canónico unificado (`/api/orders/resolve-agreement-pricing`), recuperando tanto los precios pactados como el conjunto exacto de `agreementProductIds`.
+     - En el buscador de productos durante la adición o reemplazo de ítems, si `allowOffAgreement === false`, los resultados se filtran obligatoriamente contra `agreementProductIds`, impidiendo que el operador digite o seleccione productos ajenos a la lista cerrada del cliente.
+  3. **Resiliencia de Carga de Acuerdos Maestros (`resolve-agreement-pricing`):**
+     - La búsqueda de cotizaciones de acuerdo (Niveles 1, 2 y 3) no se bloquea ante estados temporales de renovación (`status: 'expired'` derivado del índice de exclusividad por cliente), preservando siempre la lista canónica de productos pactados para garantizar el blindaje del catálogo durante las transiciones operativas.

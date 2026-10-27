@@ -822,6 +822,7 @@ function OrderLoadingContent() {
     const [isB2CDefault, setIsB2CDefault] = useState(false);
     const [isContractExpired, setIsContractExpired] = useState(false);
     const [agreementPricesMap, setAgreementPricesMap] = useState<Record<string, number>>({});
+    const [agreementProductIds, setAgreementProductIds] = useState<Set<string>>(new Set());
     const [allowOffAgreement, setAllowOffAgreement] = useState<boolean>(true);
 
     // Client Exceptions (Product Nicknames & Notes) State
@@ -1324,6 +1325,7 @@ useEffect(() => {
             if (!selectedOrder) {
                 setContractPrices({});
                 setAgreementPricesMap({});
+                setAgreementProductIds(new Set());
                 setAllowOffAgreement(true);
                 setActivePricingModel(null);
                 setIsB2CDefault(false);
@@ -1352,15 +1354,24 @@ useEffect(() => {
             const profileObj = selectedOrder.profiles;
             const effectiveClientId = profileObj?.parent_id || profileObj?.id;
 
-            // 0. Fetch B2B Commercial Agreement Prices for this client
+            // 0. Fetch B2B Commercial Agreement Prices for this client (Canonical Resolver)
             let agreeMap: Record<string, number> = {};
+            const agreementProdIds = new Set<string>();
+            let canOffAgreement = true;
             if (effectiveClientId) {
                 try {
-                    const res = await fetch(`/api/b2b/agreements?clientId=${effectiveClientId}`);
+                    const checkDate = selectedOrder.delivery_date ? String(selectedOrder.delivery_date).split('T')[0] : '';
+                    const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${effectiveClientId}&delivery_date=${checkDate}&client_type=B2B`);
                     if (res.ok) {
                         const json = await res.json();
-                        if (json.pricesMap) {
-                            agreeMap = json.pricesMap;
+                        if (json.contractPrices) {
+                            agreeMap = json.contractPrices;
+                        }
+                        if (Array.isArray(json.agreementProductIds)) {
+                            json.agreementProductIds.forEach((id: string) => agreementProdIds.add(id));
+                        }
+                        if (json.allowOffAgreementPurchases !== undefined && json.allowOffAgreementPurchases !== null) {
+                            canOffAgreement = Boolean(json.allowOffAgreementPurchases);
                         }
                     }
                 } catch (e) {
@@ -1368,9 +1379,10 @@ useEffect(() => {
                 }
             }
             setAgreementPricesMap(agreeMap);
+            setAgreementProductIds(agreementProdIds);
+            setAllowOffAgreement(canOffAgreement);
 
-            // 0.1 Determine allow_off_agreement_purchases restriction
-            let canOffAgreement = true;
+            // 0.1 Determine allow_off_agreement_purchases restriction (fallback override)
             if (profileObj) {
                 if (profileObj.allow_off_agreement_purchases !== undefined && profileObj.allow_off_agreement_purchases !== null) {
                     canOffAgreement = Boolean(profileObj.allow_off_agreement_purchases);
@@ -2132,8 +2144,8 @@ useEffect(() => {
                 let finalProducts = data || [];
 
                 // SI EL CLIENTE TIENE RESTRICCIÓN SOLO A CONVENIO (allowOffAgreement === false), FILTRAR PRODUCTOS
-                if (!allowOffAgreement && Object.keys(agreementPricesMap).length > 0) {
-                    finalProducts = finalProducts.filter(p => agreementPricesMap[p.id] !== undefined);
+                if (!allowOffAgreement && (agreementProductIds.size > 0 || Object.keys(agreementPricesMap).length > 0)) {
+                    finalProducts = finalProducts.filter(p => agreementProductIds.has(p.id) || agreementPricesMap[p.id] !== undefined);
                 }
                 
                 console.log('Resultados encontrados en edición:', finalProducts.length);
@@ -2151,7 +2163,7 @@ useEffect(() => {
         }, 250);
 
         return () => clearTimeout(delayDebounceFn);
-    }, [productSearch, allowOffAgreement, agreementPricesMap]);
+    }, [productSearch, allowOffAgreement, agreementPricesMap, agreementProductIds]);
 
     // Autofocus logic for sub-modal
     useEffect(() => {

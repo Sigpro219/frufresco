@@ -3387,12 +3387,17 @@ function CreateOrderContent() {
             const rawItems = Array.isArray(data.items) ? data.items : [];
 
             // Intentamos encontrar el mejor SKU sugerido usando el Motor Unificado (Memoria + Catalog + Tokens)
+            const isStrictAgreement = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
+            const candidateProductPool = isStrictAgreement
+                ? products.filter(p => agreementProductIds.has(p.id))
+                : products;
+
             const suggested = rawItems.map((item: any) => {
                 if (!item) return null;
                 const originalName = item.originalName || 'Producto Desconocido';
                 const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
 
-                const matchResult = findBestProductMatchDetails(originalName, products, learnedMemory);
+                const matchResult = findBestProductMatchDetails(originalName, candidateProductPool, learnedMemory);
                 const match = matchResult.product;
 
                 const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
@@ -8074,7 +8079,9 @@ ${primaryAdminNotes}`.trim();
                                                                         }}
                                                                         onBlur={(e) => {
                                                                             const val = e.target.value;
-                                                                            const exactProduct = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
+                                                                            const isStrict = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
+                                                                            const pool = isStrict ? products.filter(p => agreementProductIds.has(p.id)) : products;
+                                                                            const exactProduct = pool.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
                                                                             if (exactProduct && (!item.suggestedProduct || item.suggestedProduct.id !== exactProduct.id)) {
                                                                                 selectStagedProduct(item.id, exactProduct, idx);
                                                                             }

@@ -189,9 +189,9 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         if (branchId) {
             const { data: bAg } = await supabase
                 .from('quotes')
-                .select('id, quote_number, start_date, valid_until, model_snapshot_name')
+                .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
                 .eq('client_id', branchId)
-                .eq('status', 'agreement')
+                .in('status', ['agreement', 'expired', 'approved', 'active'])
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -208,9 +208,9 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         if (!candidateAgreement && parentId) {
             const { data: mAg } = await supabase
                 .from('quotes')
-                .select('id, quote_number, start_date, valid_until, model_snapshot_name')
+                .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
                 .eq('client_id', parentId)
-                .eq('status', 'agreement')
+                .in('status', ['agreement', 'expired', 'approved', 'active'])
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -230,9 +230,8 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             if (masterId) {
                 const { data: sm } = await supabase
                     .from('quotes')
-                    .select('id, quote_number, start_date, valid_until, model_snapshot_name')
+                    .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
                     .eq('id', masterId)
-                    .eq('status', 'agreement')
                     .maybeSingle();
                 if (sm) {
                     const ag = enrichAgreementDates(sm);
@@ -257,9 +256,8 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                                 const quoteId = item.key.replace('agreement_clients:', '');
                                 const { data: sm } = await supabase
                                     .from('quotes')
-                                    .select('id, quote_number, start_date, valid_until, model_snapshot_name')
+                                    .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
                                     .eq('id', quoteId)
-                                    .eq('status', 'agreement')
                                     .maybeSingle();
                                 if (sm) {
                                     const ag = enrichAgreementDates(sm);
