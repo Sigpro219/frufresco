@@ -393,8 +393,8 @@ export default function MissingOrdersGallery({
     const buildMessageText = (item: MissingOrderItem) => {
         const contactName = item.profile.contact_name?.trim() || item.profile.company_name?.trim() || 'Estimado Cliente';
         return `¡Hola ${contactName}!
-¡Mañana salimos de ruta! Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. ️ Esperamos tu pedido: pedidos@frufresco.com
-Quedamos atentos`;
+¡Mañana salimos de ruta! Hoy estamos organizando los pedidos y recibimos solicitudes hasta las 4:00 p.m. Esperamos tu pedido por este medio o al correo pedidos@frufresco.com.
+¡Quedamos muy atentos!`;
     };
 
     // 12. Handler to Send WhatsApp Reminder (Gemba Template)
