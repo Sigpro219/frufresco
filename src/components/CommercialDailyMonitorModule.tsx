@@ -673,12 +673,12 @@ export default function CommercialDailyMonitorModule() {
         }[] = [];
 
         dayOrders.forEach(ord => {
-            const match = ord.items.find(it => it.productId === selectedDrilldownProductId);
-            if (match) {
+            const matches = ord.items.filter(it => it.productId === selectedDrilldownProductId);
+            matches.forEach(match => {
                 rows.push({
                     orderSequenceId: ord.sequenceId,
                     orderId: ord.id,
-                    clientName: ord.clientName,
+                    clientName: ord.branchName || ord.clientName,
                     zone: ord.zone,
                     quantity: match.quantity,
                     unit: match.unit,
@@ -688,11 +688,17 @@ export default function CommercialDailyMonitorModule() {
                     profit: match.itemProfit,
                     marginPct: match.itemMarginPct
                 });
-            }
+            });
         });
 
-        return rows.sort((a, b) => b.quantity - a.quantity);
-    }, [dayOrders, selectedDrilldownProductId]);
+        const term = searchTerm.trim().toLowerCase();
+        return rows.filter(r => {
+            if (!term) return true;
+            return r.clientName.toLowerCase().includes(term) ||
+                r.zone.toLowerCase().includes(term) ||
+                r.orderSequenceId.toString().toLowerCase().includes(term);
+        }).sort((a, b) => b.quantity - a.quantity);
+    }, [dayOrders, selectedDrilldownProductId, searchTerm]);
 
     // Totales del Día
     const dayTotals = useMemo(() => {
@@ -1455,7 +1461,7 @@ export default function CommercialDailyMonitorModule() {
                             <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                             <input
                                 type="text"
-                                placeholder={activeView === 'clients' ? 'Buscar cliente, pedido o zona...' : 'Buscar producto o SKU...'}
+                                placeholder={activeView === 'clients' ? 'Buscar cliente, pedido o zona...' : activeView === 'products' ? 'Buscar producto o SKU...' : 'Buscar cliente, pedido o zona...'}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 style={{
