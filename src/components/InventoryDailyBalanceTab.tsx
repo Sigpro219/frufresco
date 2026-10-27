@@ -4008,9 +4008,9 @@ export default function InventoryDailyBalanceTab({
                     <table className="daily-balance-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
                         {/* Cabecera Aplanada a 1 Solo Nivel (32px) + Fila Conmutable de Filtros (SPEC.md §8.8.8, §8.8.9, §8.8.10) */}
                         <thead style={{ 
-                            position: isPanesFrozen ? 'sticky' : 'static', 
-                            top: isPanesFrozen ? 0 : undefined, 
-                            zIndex: isPanesFrozen ? 40 : undefined, 
+                            position: 'sticky', 
+                            top: 0, 
+                            zIndex: 40, 
                             backgroundColor: '#0F172A', 
                             color: '#F8FAFC',
                             boxShadow: isPanesFrozen ? '0 4px 10px -2px rgba(0, 0, 0, 0.25)' : 'none'
@@ -4031,10 +4031,10 @@ export default function InventoryDailyBalanceTab({
                                             minWidth: '240px',
                                             maxWidth: '240px',
                                             borderRight: '2px solid #334155',
-                                            position: isPanesFrozen ? 'sticky' : 'static',
-                                            top: isPanesFrozen ? 0 : undefined,
+                                            position: 'sticky',
+                                            top: 0,
                                             left: isPanesFrozen ? 0 : undefined,
-                                            zIndex: isPanesFrozen ? 55 : undefined,
+                                            zIndex: isPanesFrozen ? 55 : 45,
                                             backgroundColor: '#0F172A',
                                             boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
                                             fontSize: '0.7rem',
@@ -4048,8 +4048,8 @@ export default function InventoryDailyBalanceTab({
                                     </th>
                                 ) : (
                                     <React.Fragment key="header-traditional-id">
-                                        <th key="header-A" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? 0 : undefined, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>Fecha</th>
-                                        <th key="header-B" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? 0 : undefined, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0F172A' }}>ID Prod</th>
+                                        <th key="header-A" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: 'sticky', top: 0, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0F172A' }}>Fecha</th>
+                                        <th key="header-B" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: 'sticky', top: 0, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0F172A' }}>ID Prod</th>
                                         <th 
                                             key="header-C"
                                             onClick={() => setCellColumnMode(prev => prev === 'collapsed' ? 'expanded' : 'collapsed')}
@@ -4062,10 +4062,10 @@ export default function InventoryDailyBalanceTab({
                                                 width: isCellCollapsed ? '44px' : '130px', 
                                                 minWidth: isCellCollapsed ? '44px' : '130px', 
                                                 maxWidth: isCellCollapsed ? '44px' : '130px', 
-                                                position: isPanesFrozen ? 'sticky' : 'static', 
-                                                top: isPanesFrozen ? 0 : undefined, 
+                                                position: 'sticky', 
+                                                top: 0, 
                                                 left: isPanesFrozen ? '155px' : undefined, 
-                                                zIndex: isPanesFrozen ? 55 : undefined, 
+                                                zIndex: isPanesFrozen ? 55 : 45, 
                                                 backgroundColor: '#0F172A', 
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
@@ -4096,10 +4096,10 @@ export default function InventoryDailyBalanceTab({
                                                 minWidth: '190px', 
                                                 maxWidth: '190px', 
                                                 borderRight: '2px solid #334155', 
-                                                position: isPanesFrozen ? 'sticky' : 'static', 
-                                                top: isPanesFrozen ? 0 : undefined, 
+                                                position: 'sticky', 
+                                                top: 0, 
                                                 left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, 
-                                                zIndex: isPanesFrozen ? 55 : undefined, 
+                                                zIndex: isPanesFrozen ? 55 : 45, 
                                                 backgroundColor: '#0F172A', 
                                                 boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
                                                 transition: 'left 0.2s ease, width 0.2s ease'
@@ -4136,9 +4136,9 @@ export default function InventoryDailyBalanceTab({
                                             style={{
                                                 height: '32px',
                                                 boxSizing: 'border-box',
-                                                position: isPanesFrozen ? 'sticky' : 'static',
-                                                top: isPanesFrozen ? 0 : undefined,
-                                                zIndex: isPanesFrozen ? 40 : undefined,
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 40,
                                                 backgroundColor: isSpecialColS ? '#042F2E' : (isSpecialColTU ? '#1E293B' : '#0F172A'),
                                                 padding: colKey === 'U' ? '4px 4px' : '4px 8px',
                                                 textAlign: 'right',
@@ -4176,10 +4176,10 @@ export default function InventoryDailyBalanceTab({
                                             style={{
                                                 height: '28px',
                                                 padding: '2px 6px',
-                                                position: isPanesFrozen ? 'sticky' : 'static',
-                                                top: isPanesFrozen ? '32px' : undefined,
+                                                position: 'sticky',
+                                                top: '32px',
                                                 left: isPanesFrozen ? 0 : undefined,
-                                                zIndex: isPanesFrozen ? 55 : undefined,
+                                                zIndex: isPanesFrozen ? 55 : 45,
                                                 backgroundColor: '#0B132B',
                                                 borderRight: '2px solid #334155'
                                             }}
@@ -4205,7 +4205,7 @@ export default function InventoryDailyBalanceTab({
                                         </th>
                                     ) : (
                                         <React.Fragment key="filter-traditional-id">
-                                            <th key="filter-A" style={{ height: '28px', padding: '2px 4px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0B132B' }}>
+                                            <th key="filter-A" style={{ height: '28px', padding: '2px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0B132B' }}>
                                                 <input
                                                     type="text"
                                                     placeholder="Fecha..."
@@ -4214,7 +4214,7 @@ export default function InventoryDailyBalanceTab({
                                                     style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['date'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
                                                 />
                                             </th>
-                                            <th key="filter-B" style={{ height: '28px', padding: '2px 4px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0B132B' }}>
+                                            <th key="filter-B" style={{ height: '28px', padding: '2px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0B132B' }}>
                                                 <input
                                                     type="text"
                                                     placeholder="ID..."
@@ -4223,7 +4223,7 @@ export default function InventoryDailyBalanceTab({
                                                     style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['id'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
                                                 />
                                             </th>
-                                            <th key="filter-C" style={{ height: '28px', padding: '2px 4px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? '155px' : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0B132B' }}>
+                                            <th key="filter-C" style={{ height: '28px', padding: '2px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '155px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0B132B' }}>
                                                 <input
                                                     type="text"
                                                     placeholder="Cél..."
@@ -4232,7 +4232,7 @@ export default function InventoryDailyBalanceTab({
                                                     style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['cell'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
                                                 />
                                             </th>
-                                            <th key="filter-D" style={{ height: '28px', padding: '2px 6px', position: isPanesFrozen ? 'sticky' : 'static', top: isPanesFrozen ? '32px' : undefined, left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : undefined, backgroundColor: '#0B132B', borderRight: '2px solid #334155' }}>
+                                            <th key="filter-D" style={{ height: '28px', padding: '2px 6px', position: 'sticky', top: '32px', left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0B132B', borderRight: '2px solid #334155' }}>
                                                 <input
                                                     type="text"
                                                     placeholder="Filtrar producto..."
@@ -4257,9 +4257,9 @@ export default function InventoryDailyBalanceTab({
                                                 style={{
                                                     height: '28px',
                                                     padding: '2px 4px',
-                                                    position: isPanesFrozen ? 'sticky' : 'static',
-                                                    top: isPanesFrozen ? '32px' : undefined,
-                                                    zIndex: isPanesFrozen ? 40 : undefined,
+                                                    position: 'sticky',
+                                                    top: '32px',
+                                                    zIndex: 40,
                                                     backgroundColor: '#0B132B',
                                                     borderRight: isColS ? '2px solid #0D9488' : (hasRightBorder ? '2px solid #334155' : '1px solid #1E293B'),
                                                     borderLeft: isColS ? '2px solid #0D9488' : undefined
@@ -4364,9 +4364,9 @@ export default function InventoryDailyBalanceTab({
 
                         {/* Fila Fija de Totales Consolidada (∑ 24 Columnas Lean) */}
                         <tfoot style={{
-                            position: isPanesFrozen ? 'sticky' : 'static',
-                            bottom: isPanesFrozen ? 0 : undefined,
-                            zIndex: isPanesFrozen ? 30 : undefined,
+                            position: 'sticky',
+                            bottom: 0,
+                            zIndex: 30,
                             backgroundColor: '#0F172A',
                             color: '#F8FAFC',
                             boxShadow: isPanesFrozen ? '0 -4px 10px -2px rgba(0, 0, 0, 0.25)' : undefined
@@ -4383,10 +4383,10 @@ export default function InventoryDailyBalanceTab({
                                         color: '#F8FAFC',
                                         borderRight: '2px solid #334155',
                                         borderTop: '2px solid #334155',
-                                        position: isPanesFrozen ? 'sticky' : 'static',
+                                        position: 'sticky',
                                         left: isPanesFrozen ? 0 : undefined,
-                                        bottom: isPanesFrozen ? 0 : undefined,
-                                        zIndex: isPanesFrozen ? 35 : undefined,
+                                        bottom: 0,
+                                        zIndex: isPanesFrozen ? 35 : 25,
                                         boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
                                         width: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
                                         minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
@@ -4416,9 +4416,9 @@ export default function InventoryDailyBalanceTab({
                                             <td
                                                 key={`total-${colKey}`}
                                                 style={{
-                                                    position: isPanesFrozen ? 'sticky' : 'static',
-                                                    bottom: isPanesFrozen ? 0 : undefined,
-                                                    zIndex: isPanesFrozen ? 31 : undefined,
+                                                    position: 'sticky',
+                                                    bottom: 0,
+                                                    zIndex: 31,
                                                     padding: '6px 8px',
                                                     textAlign: 'right',
                                                     color: '#5EEAD4',
@@ -4445,9 +4445,9 @@ export default function InventoryDailyBalanceTab({
                                         <td
                                             key={`total-${colKey}`}
                                             style={{
-                                                position: isPanesFrozen ? 'sticky' : 'static',
-                                                bottom: isPanesFrozen ? 0 : undefined,
-                                                zIndex: isPanesFrozen ? 30 : undefined,
+                                                position: 'sticky',
+                                                bottom: 0,
+                                                zIndex: 30,
                                                 backgroundColor: isSpecialBg ? '#1E293B' : '#0F172A',
                                                 padding: colKey === 'U' ? '6px 4px' : '6px 8px',
                                                 textAlign: 'right',
