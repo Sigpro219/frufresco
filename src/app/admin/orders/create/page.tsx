@@ -204,13 +204,13 @@ const getParsedWeight = (text: string): number | null => {
         const grams = parseFloat(parts[1]);
         if (!isNaN(grams) && grams > 0) return grams / 1000;
     }
-    const clean = text.toLowerCase();
-    const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+    const clean = text.replace(/\bplu\s*[:#\-]?\s*\d+\b/gi, ' ').toLowerCase();
+    const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)\b/);
     if (kgMatch) {
         const val = parseFloat(kgMatch[1]);
         if (!isNaN(val) && val > 0) return val;
     }
-    const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+    const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)\b/);
     if (gMatch) {
         const val = parseFloat(gMatch[1]);
         if (!isNaN(val) && val > 0) return val / 1000;

@@ -122,8 +122,9 @@ export function getCanonicalProcurementSpec(item: {
             unitWeightPart = `${isBandejaOpt ? 'bandeja' : 'und'} de ${weightStr}`;
         } else {
             // Fallback estructurado en texto de presentación (ej. "Unidad 2000 gr", "Bandeja 500 gr")
-            const pres = (opts['Presentación'] || opts['Presentacion'] || '') as string;
-            const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+            const rawPres = (opts['Presentación'] || opts['Presentacion'] || '') as string;
+            const pres = typeof rawPres === 'string' ? rawPres.replace(/\bplu\s*[:#\-]?\s*\d+\b/gi, ' ') : '';
+            const matchGr = pres ? pres.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i) : null;
             if (matchGr) {
                 const gr = parseFloat(matchGr[1].replace(',', '.'));
                 const weightStr = gr >= 1000 ? `${gr / 1000} kg` : `${gr} gr`;
@@ -278,8 +279,9 @@ export function normalizeDemandToKg(params: {
         effectiveKg = calculatedKg > 0 ? calculatedKg : quantity;
     } else {
         const isRawAlreadyKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(cleanRaw);
-        const matchGr = typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
-        const matchKg = !matchGr && typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+        const cleanPresText = typeof presText === 'string' ? presText.replace(/\bplu\s*[:#\-]?\s*\d+\b/gi, ' ') : '';
+        const matchGr = cleanPresText ? cleanPresText.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i) : null;
+        const matchKg = !matchGr && cleanPresText ? cleanPresText.match(/\b(?:Unidad(?:es)?|Und|U)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)\b/i) : null;
 
         if (matchGr) {
             const gr = parseFloat(matchGr[1].replace(',', '.'));

@@ -143,8 +143,9 @@ function normalizeToKg(
         // B. Detectar especificación de peso en texto de presentación (ej. "Unidad 7000 gr", "und de 160 gr")
         // SDD v1.9.259: Si rawUnit ya es 'kg'/'kilo', quantity ya viene convertido a kilos en BD (ej. 3.68 kg para 23 und de 160 gr) y NO debe multiplicarse de nuevo.
         const isRawAlreadyKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(cleanRaw);
-        const matchGr = typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
-        const matchKg = !matchGr && typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+        const cleanPresText = typeof presText === 'string' ? presText.replace(/\bplu\s*[:#\-]?\s*\d+\b/gi, ' ') : '';
+        const matchGr = cleanPresText ? cleanPresText.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i) : null;
+        const matchKg = !matchGr && cleanPresText ? cleanPresText.match(/\b(?:Unidad(?:es)?|Und|U)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)\b/i) : null;
 
         if (matchGr) {
             const gr = parseFloat(matchGr[1].replace(',', '.'));

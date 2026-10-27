@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { formatStructuredSpecification, isRedundantAttribute } from '../src/lib/orderUtils';
+import { formatStructuredSpecification, isRedundantAttribute, resolvePhysicalInstruction, getStructuredSpecKey, getParsedWeight, resolveProductCharacteristicsBadges, stripPluNoise } from '../src/lib/orderUtils';
 import { PRINT_DOCUMENTS, getBogotaDate } from '../src/components/print/PrintDocumentSwitcher';
 
 /**
@@ -441,6 +441,55 @@ test('Alistamiento Print: Normalización Canónica de Unidades en Fila 1', async
             'nota_alistamiento': '   '
         };
         assert.strictEqual(extractOperationalPickingNote(whitespaceItem), undefined, 'Cadenas vacias no deben generar Badge 2 vacio en bodega');
+    });
+
+    await t.test('Escenario 333: Blindaje Poka-Yoke Anti-Colisión de Regex en Códigos PLU y Palabras con Prefijo "gr" (Caso Champiñón PLU 203519 granel)', () => {
+        // 1. stripPluNoise elimina códigos PLU sin afectar el resto
+        assert.strictEqual(stripPluNoise('PLU 203519 granel'), 'granel');
+        assert.strictEqual(stripPluNoise('PLU: 646594'), '');
+
+        // 2. formatStructuredSpecification NUNCA debe interpretar "PLU 203519 granel" como "1 und de 203.519 kg"
+        const champSpec = formatStructuredSpecification({
+            product_name: 'Champiñon',
+            quantity: 1,
+            unit: 'Kg',
+            variant_label: 'PLU 203519 granel',
+            selected_options: {}
+        });
+        assert.strictEqual(champSpec, null, 'PLU 203519 granel NO debe generar especificación falsa de 203.519 kg');
+
+        // 3. resolvePhysicalInstruction NUNCA debe generar "1 Unidad 203519 gr" ni siquiera si viene corrupto en _physical_instruction
+        const champInst = resolvePhysicalInstruction({
+            quantity: 1,
+            unit: 'Kg',
+            variant_label: 'PLU 203519 granel',
+            selected_options: { _physical_instruction: '1 Unidad 203519 gr' }
+        });
+        assert.strictEqual(champInst, null, 'resolvePhysicalInstruction debe bloquear falsos positivos de PLU en variant_label y _physical_instruction');
+
+        // 4. getStructuredSpecKey y getParsedWeight tampoco deben caer en la trampa "PLU ... granel"
+        assert.strictEqual(getStructuredSpecKey({ variant_label: 'PLU 203519 granel' }), '');
+        assert.strictEqual(getParsedWeight('PLU 203519 granel'), null);
+
+        // 5. resolveProductCharacteristicsBadges NO debe emitir el badge residual "PLU"
+        const champBadges = resolveProductCharacteristicsBadges({
+            product_name: 'Champiñon',
+            variant_label: 'PLU 203519 granel',
+            unit: 'Kg'
+        });
+        assert.strictEqual(champBadges.some(b => b.text.toUpperCase().includes('PLU')), false, 'No debe existir badge residual PLU');
+
+        // 6. Casos legítimos de Unidad/Bandeja siguen funcionando intactos
+        assert.strictEqual(
+            formatStructuredSpecification({
+                product_name: 'Champiñon',
+                quantity: 1,
+                unit: 'Bandeja',
+                variant_label: 'Bandeja 125 gr',
+                selected_options: {}
+            }),
+            '1 bandeja de 125 gr'
+        );
     });
 });
 

@@ -395,7 +395,8 @@ export function formatItemQuantityPresentation(item: any) {
     }
 
     // 2. Extracción y coincidencia de patrones en Presentación / Variante (ej: "Bandeja 120 gr", "Unidad 120 g", "Und 2000 gr")
-    const matchGr = presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i);
+    const cleanPresText = typeof presText === 'string' ? presText.replace(/\bplu\s*[:#\-]?\s*\d+\b/gi, ' ') : '';
+    const matchGr = cleanPresText.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i);
     if (matchGr) {
         const gr = parseFloat(matchGr[1].replace(',', '.'));
         const weightKg = gr / 1000;

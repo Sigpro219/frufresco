@@ -54,6 +54,19 @@ export const cleanPhysicalInstruction = (text?: string | null): string | null =>
         .trim();
 };
 
+/**
+ * Strips ERP / supermarket PLU codes (e.g., "PLU 203519", "PLU: 646594", "PLU")
+ * to prevent regex collisions with "U" (Unidad) or following words starting with "gr" (like "granel").
+ */
+export const stripPluNoise = (text?: string | null): string => {
+    if (!text || typeof text !== 'string') return '';
+    return text
+        .replace(/\bplu\s*[:#\-]?\s*\d+\b/gi, ' ')
+        .replace(/\bplu\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
 export interface DualUnitResult {
     billingQuantity: number;
     billingUnit: string;
@@ -78,19 +91,20 @@ export const resolvePhysicalInstruction = (item: {
 }): string | null => {
     if (!item) return null;
 
-    // 1. Explicit instruction in selected_options
+    // 1. Explicit instruction in selected_options (ignoring corrupted PLU > 50,000 gr false positives)
     const explicit = item.selected_options?._physical_instruction;
-    if (explicit && typeof explicit === 'string') {
+    if (explicit && typeof explicit === 'string' && !/\b\d{6,}\s*(?:gr|g|gramos)\b/i.test(explicit)) {
         return cleanPhysicalInstruction(explicit);
     }
 
     // 2. Retroactive derivation from selected_options or variant_label
     const opts = item.selected_options || {};
-    const presText = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '') as string;
+    const rawPresText = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '') as string;
+    const presText = stripPluNoise(rawPresText);
     if (!presText) return null;
 
-    // Match "Unidad 2000 gr", "Und 800 g", "Bandeja 500 gr", etc.
-    const matchGr = presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i);
+    // Match "Unidad 2000 gr", "Und 800 g", "Bandeja 500 gr", etc. (strict word boundaries)
+    const matchGr = presText.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i);
     if (matchGr) {
         const weightGr = parseFloat(matchGr[1].replace(',', '.'));
         const weightKg = weightGr / 1000;
@@ -112,8 +126,8 @@ export const resolvePhysicalInstruction = (item: {
         return `${unitCount} ${noun} ${Math.round(weightGr)} gr`;
     }
 
-    // Match "Unidad 2 Kg", "Und 1.5 Kg", etc.
-    const matchKg = presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i);
+    // Match "Unidad 2 Kg", "Und 1.5 Kg", etc. (strict word boundaries)
+    const matchKg = presText.match(/\b(?:Unidad(?:es)?|Und|U)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)\b/i);
     if (matchKg) {
         const weightKg = parseFloat(matchKg[1].replace(',', '.'));
         const weightGr = Math.round(weightKg * 1000);
@@ -152,18 +166,18 @@ export const getParsedWeight = (text: string | null | undefined): number | null 
         const grams = parseFloat(parts[1]);
         if (!isNaN(grams) && grams > 0) return grams / 1000;
     }
-    const clean = str.toLowerCase();
-    const kgMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilos)/);
+    const clean = stripPluNoise(str).toLowerCase();
+    const kgMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilos)\b/);
     if (kgMatch) {
         const val = parseFloat(kgMatch[1].replace(',', '.'));
         if (!isNaN(val) && val > 0) return val;
     }
-    const gMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+    const gMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)\b/);
     if (gMatch) {
         const val = parseFloat(gMatch[1].replace(',', '.'));
         if (!isNaN(val) && val > 0) return val / 1000;
     }
-    if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+    if (clean.includes('libra') || /\blb\b/.test(clean)) return 0.5;
     return null;
 };
 
@@ -196,14 +210,14 @@ export const buildDualUnitMetadata = (params: {
 
     // 2. Gramaje intrínseco en Presentación (Escenario 1: Unidad 140 gr, Bandeja 500 gr)
     if (!weightGr && rawPres) {
-        let presText = rawPres;
+        let presText = stripPluNoise(rawPres);
         if (presText.includes('|')) {
             const [base, gr] = presText.split('|');
             presText = `${base} ${gr} gr`;
         }
 
-        const matchGr = presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i);
-        const matchKg = !matchGr ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+        const matchGr = presText.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i);
+        const matchKg = !matchGr ? presText.match(/\b(?:Unidad(?:es)?|Und|U)\b\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)\b/i) : null;
 
         if (matchGr) {
             weightGr = parseFloat(matchGr[1].replace(',', '.'));
@@ -302,8 +316,9 @@ export const getStructuredSpecKey = (item: StructuredSpecItemInput): string => {
             : `${gr} gr`;
         unitWeightPart = `und de ${weightStr}`;
     } else {
-        const pres = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '') as string;
-        const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+        const rawPres = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '') as string;
+        const pres = stripPluNoise(rawPres);
+        const matchGr = pres ? pres.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i) : null;
         if (matchGr) {
             const gr = parseFloat(matchGr[1].replace(',', '.'));
             const weightStr = gr >= 1000 ? `${gr / 1000} kg` : `${gr} gr`;
@@ -385,9 +400,10 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
         discretePart = `${origQty} ${noun} de ${weightStr}`;
     } else {
         // Fallback: match from Presentación or variant_label like "Unidad 2000 gr", "und de 160 gr", "und de 2 kg"
-        const pres = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '');
-        const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
-        const matchKg = !matchGr && typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+        const rawPres = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '');
+        const pres = typeof rawPres === 'string' ? stripPluNoise(rawPres) : '';
+        const matchGr = pres ? pres.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i) : null;
+        const matchKg = !matchGr && pres ? pres.match(/\b(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\b\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)\b/i) : null;
         if (matchGr || matchKg) {
             const gr = matchGr
                 ? parseFloat(matchGr[1].replace(',', '.'))
@@ -508,8 +524,8 @@ export function resolveProductCharacteristicsBadges(item: {
         textToAnalyze = item.nickname.trim();
     }
 
-    // Limpiar notas de picking/entrega que van en sus propios badges
-    textToAnalyze = textToAnalyze.replace(/\s*\((Nota|Entr):[^\)]*\)/gi, ' ');
+    // Limpiar notas de picking/entrega que van en sus propios badges y códigos PLU de supermercados
+    textToAnalyze = stripPluNoise(textToAnalyze.replace(/\s*\((Nota|Entr):[^\)]*\)/gi, ' '));
     // Si contiene el nombre completo del producto o partes de él, removerlo (incluyendo variaciones de género y plural)
     if (prodName) {
         const prodWords = prodName.split(/[\s\-_\/]+/).filter(w => w.length > 2);
@@ -641,7 +657,7 @@ export function resolveProductCharacteristicsBadges(item: {
     }
 
     // 5. Extraer peso unitario por pieza (ej: "und de 160 gr", "undx160gr", o desde opts.Gramaje)
-    const unitGrMatch = textToAnalyze.match(/\b(?:und(?:x|[\s]+de[\s]+)?|u[\s]*)(\d+)\s*(?:gr|g)\b/i);
+    const unitGrMatch = textToAnalyze.match(/\b(?:und(?:x|[\s]+de[\s]+)?|u\b[\s]*)(\d+)\s*(?:gr|g)\b/i);
     if (unitGrMatch) {
         badges.push({
             type: 'portion',
@@ -672,7 +688,7 @@ export function resolveProductCharacteristicsBadges(item: {
 
     // 6. Filtrar ruido residual de unidades, tiers de catálogo B2B, clientes y empaques
     textToAnalyze = textToAnalyze
-        .replace(/\b(?:institucional|instiucional|instit|inst|horeca|retail|hogar|b2b|base|premium|estandar|estándar)\b/gi, ' ')
+        .replace(/\b(?:institucional|instiucional|instit|inst|horeca|retail|hogar|b2b|base|premium|estandar|estándar|plu)\b/gi, ' ')
         .replace(/\b(?:colsubs|colsubsidio|sodexo|compass|alsea|granelcolsubsidio)\b/gi, ' ')
         .replace(/\b(?:paq|paquete|bolsa|granel|malla|caja|atado|manojo|bandeja|pesado|limpio|rizada|organi|organico|organica|dtamal|tamal|bca|junca|rojo|roja|amarillo|amarilla|blanco|blanca|morado|morada)\b/gi, ' ')
         .replace(/\b(?:x\s*kilo|x\s*kg|al\s*kilo|por\s*kilo|kilo|kg|libras?|lb)\b/gi, ' ')

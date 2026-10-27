@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.314 (Capítulo 44: Ergonómica Industrial Suiza en Modal de Carga & Trazabilidad de Facturación y Guardián Humano — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.317 (Capítulo 44: Blindaje Poka-Yoke Anti-Colisión de Regex en Códigos PLU y Palabras con Prefijo "gr" — 76/76 Pantallas Certificadas)
 > **Fecha:** 27 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 332 Escenarios BDD Ininterrumpidos (1..332)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 335 Escenarios BDD Ininterrumpidos (1..335)
 
 ---
 
@@ -12801,3 +12801,19 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
   4. **Documentos de Impresión (`PrintDocumentSwitcher.tsx`):**
      - La descripción de la Sábana de Alistamiento se estandariza a: **`"Matriz industrial por espacios de bahía en suelo y células de trabajo"`**.
      - Se preserva el término *"Muelle de Recibo"* exclusivamente para la minuta de control de pesaje exterior de proveedores de Corabastos.
+
+---
+
+### Escenario 335: Blindaje Poka-Yoke Anti-Colisión de Regex en Códigos PLU y Palabras con Prefijo "gr" (Caso Champiñón "PLU 203519 granel") (SDD v1.9.317)
+- **Given** un pedido institucional B2B (ej. Pedido `#1218` — *CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - EL CUBO*) donde el archivo de compra o integración comercial envía para el producto **Champiñón** (`ID 112`, unidad maestra `Kg`) un `variant_label` o nota técnica con nomenclatura de supermercado/retail como **`"PLU 203519 granel"`**, y donde la expresión regular previa `/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i` carecía de delimitadores de palabra (`\b`), provocando que la **`U`** final de `PLU`, el código numérico **`203519`** y el prefijo **`gr`** de `granel` colisionaran sintácticamente y generaran la instrucción física espuria `"1 Unidad 203519 gr"` (renderizada como badge **`1 und de 203.519 kg`** y residuo **`✨ PLU`**),
+- **When** el motor de normalización de pedidos (`src/lib/orderUtils.ts`), la sábana de alistamiento (`/admin/orders/alistamiento-print`), el motor de consolidación de compras (`procurementNettingEngine.ts`), el liquidador de facturación (`/admin/commercial/billing`) o el creador de pedidos (`/admin/orders/create`) procesan variantes, instrucciones físicas o pesos embebidos:
+- **Then** el sistema aplica las siguientes reglas de blindaje léxico innegociables:
+  1. **Sanitización Previa de Códigos PLU (`stripPluNoise`):**
+     - Antes de evaluar cualquier patrón de peso o unidad, el sistema elimina todo token de código PLU (`/\bPLU\s*[:#-]?\s*\d+\b/gi` y `/\bPLU\b/gi`), impidiendo que el identificador numérico del cliente sea interpretado como gramaje o cantidad de unidades.
+  2. **Fronteras de Palabra Estrictas (`\b` Word Boundaries):**
+     - Todas las expresiones regulares que detectan unidades (`(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?|Paquete(?:s)?|Atado(?:s)?|Bolsa(?:s)?)`) y sufijos de masa (`(?:gr|g|gramos)\b` y `(?:kg|kilos)\b`) exigen obligatoriamente `\b` al inicio y al final del token.
+     - Queda terminantemente prohibido que la letra final de un acrónimo (como `PLU` o `SKU`) coincida con la abreviatura `U`, o que palabras que inician con `"gr"` (`granel`, `grande`, `grueso`, `grado`, `grano`) o con `"g"` (`gajo`, `grande`) coincidan con el sufijo de gramos (`gr`/`g`).
+  3. **Guardia de Sanidad contra Gramajes Absurdos heredados en BD:**
+     - Si un registro histórico en `selected_options._physical_instruction` contiene un número de 6 o más dígitos pegado a `gr` (ej. `"1 Unidad 203519 gr"` producto de un código PLU), `resolvePhysicalInstruction` lo descarta automáticamente (`/\b\d{6,}\s*(?:gr|g|gramos)\b/i`), retornando `null` y preservando la línea como producto estándar a granel (`1 Kg`).
+  4. **Supresión de Ruido PLU en Badges de Características (`resolveProductCharacteristicsBadges`):**
+     - Los códigos `PLU` y la palabra `granel` se excluyen de las píldoras de características personalizadas (`✨`), garantizando que en el modal de detalle de pedido, sábana de alistamiento y planilla de compras el ítem se visualice 100% limpio (`Champiñon — 1 Kg`).
