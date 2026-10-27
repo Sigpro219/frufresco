@@ -4605,6 +4605,7 @@ function CreateOrderContent() {
         if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
         // SDD Escenario 312 / 332: Permitir guardado a $0 COP en Clientes B2B (Tarifa Pendiente / Remisión Fuera de Acuerdo) y Reposiciones/Obsequios
+        const hasActiveAgreementSplit = clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired;
         const zeroPriceItem = cart.find(item => {
             if (orderNature === 'replacement' || isGiftRemissionClient) return false; // SDD §7.5.8 / §21.3: Reposición u Obsequio exonerado a $0 COP
             if (clientType === 'B2B') return false; // SDD Escenario 312: Ítems institucionales sin tarifa viajan a $0 COP (Tarifa Pendiente para Facturación)

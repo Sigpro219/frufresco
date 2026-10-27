@@ -12762,3 +12762,18 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - El padding se reduce de `2rem` a `0.55rem 1.25rem`.
      - Lado izquierdo: Peso total (`Truck 18px`, valor `0.95rem`), canal (`Globe 18px`) y enlace a anexo (`FileText 18px`) en formato horizontal de bajo perfil.
      - Lado derecho: Subtotal e IVA en línea horizontal (`0.78rem`), separador vertical discreto y Total Consolidado en `1.35rem` (en reemplazo de los masivos `2.5rem` previos), manteniendo máxima legibilidad y sobriedad ejecutiva.
+
+---
+
+### Escenario 333: Desbloqueo y Gobernanza de Edición de Pedidos con Ítems a $0 COP (Tarifa Pendiente / Fuera de Acuerdo) en Torre de Control y Creación de Pedidos (SDD v1.9.315)
+- **Given** la edición de pedidos en la Torre de Control (`/admin/orders/loading`) y la creación de pedidos (`/admin/orders/create`), donde existía una validación heredada (`alert('No se puede guardar: El producto ... tiene precio $0')`) que contradecía frontalmente el **Escenario 312** del SDD e impedía guardar modificaciones de un pedido institucional (ej. *Colegio San Jorge de Inglaterra*) si alguno de sus productos (ej. *Calabacín verde*) se encontraba con tarifa `$0 COP` pendiente de negociación comercial,
+- **When** el operador de la mesa de pedidos o despachador guarda o edita un pedido que contiene uno o más ítems con precio unitario `$0 COP`:
+- **Then** el sistema aplica las siguientes reglas canónicas de fluidez operativa y blindaje financiero:
+  1. **Erradicación del Bloqueo Rígido en Edición (`loading/page.tsx`):**
+     - Queda terminantemente prohibido lanzar alertas bloqueantes (`alert + return`) que impidan persistir la edición de un pedido cuando un ítem posee `unit_price <= 0`.
+     - El sistema permite guardar el pedido con normalidad para no frenar el alistamiento en bodega ni la compra en Corabastos.
+  2. **Etiquetado Automático de Tarifa Pendiente (`tarifa_pendiente: true`):**
+     - Al persistir en `itemsToUpsert`, todo ítem con `unit_price <= 0` se normaliza a `unit_price: 0` e inyecta automáticamente en `selected_options` los metadatos canónicos `{ tarifa_pendiente: true, _off_agreement: true }`.
+     - En la interfaz del modal de detalle de pedido, el badge de estado de precio reemplaza el texto de error *"Sin Precio"* por una píldora ámbar preventiva (`#FEF3C7`, texto `#B45309`, borde `#FCD34D`): **`Tarifa Pendiente ($0)`**.
+  3. **Fluidez en Creación de Pedidos B2B (`create/page.tsx`):**
+     - Para clientes institucionales (`clientType === 'B2B'`), los productos sin tarifa pactada viajan autorizados a `$0 COP` bajo el flujo de *Remisión Fuera de Acuerdo (Tarifa Pendiente)* para su posterior liquidación en el módulo de Facturación Comercial (`/admin/commercial/billing`).
