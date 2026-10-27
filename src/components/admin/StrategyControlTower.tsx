@@ -72,6 +72,11 @@ export default function StrategyControlTower() {
     const [matrixSortDir, setMatrixSortDir] = useState<'asc' | 'desc'>('desc');
     const [matrixShowAll, setMatrixShowAll] = useState(false);
     const [productRankingSort, setProductRankingSort] = useState<'volume' | 'profit' | 'revenue'>('volume');
+    const [purchasesHistory, setPurchasesHistory] = useState<any[]>([]);
+    const [scarcityLockedSkus, setScarcityLockedSkus] = useState<Record<string, any>>({});
+    const [scarcityViewTab, setScarcityViewTab] = useState<'scarcity' | 'abundance' | 'reported' | 'all'>('scarcity');
+    const [scarcitySearch, setScarcitySearch] = useState('');
+    const [selectedScarcityItem, setSelectedScarcityItem] = useState<any | null>(null);
 
     // Data State
     const [orders, setOrders] = useState<any[]>([]);
@@ -150,7 +155,9 @@ export default function StrategyControlTower() {
                 productsRes2,
                 leadsRes,
                 pricesRes,
-                returnsRes
+                returnsRes,
+                purchasesBatchRes,
+                scarcitySettingsRes
             ] = await Promise.all([
                 ordersQuery,
                 Promise.all(
@@ -201,7 +208,20 @@ export default function StrategyControlTower() {
                 supabase
                     .from('billing_returns')
                     .select('id, order_id, product_id, quantity_returned, status, reason, notes, created_at, calculated_amount')
-                    .limit(2000)
+                    .limit(2000),
+                Promise.all(
+                    Array.from({ length: 4 }, (_, idx) =>
+                        supabase
+                            .from('purchases')
+                            .select('product_id, unit_price, quantity, created_at, raw_data_source')
+                            .range(idx * 1000, idx * 1000 + 999)
+                    )
+                ),
+                supabase
+                    .from('app_settings')
+                    .select('key, value')
+                    .eq('key', 'scarcity_locked_skus')
+                    .maybeSingle()
             ]);
 
             setOrders(ordersRes.data || []);
@@ -218,6 +238,16 @@ export default function StrategyControlTower() {
             setProducts([...(productsRes1.data || []), ...(productsRes2.data || [])]);
             setLeads(leadsRes.data || []);
             setModelPrices(pricesRes.data || []);
+            const allFetchedPurchases = Array.isArray(purchasesBatchRes)
+                ? purchasesBatchRes.flatMap((r: any) => r.data || [])
+                : [];
+            setPurchasesHistory(allFetchedPurchases);
+            try {
+                const rawLocked = (scarcitySettingsRes as any)?.data?.value;
+                setScarcityLockedSkus(rawLocked ? JSON.parse(rawLocked) : {});
+            } catch {
+                setScarcityLockedSkus({});
+            }
         } catch (err) {
             console.error('Error fetching strategy control tower data:', err);
         } finally {
@@ -716,6 +746,233 @@ export default function StrategyControlTower() {
 
         const dailyMovements = Array.from(dailyMovementsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 
+        // Helper para formatear mes YYYY-MM a español corto (ej: "Mar 2026")
+        const monthNamesEs: Record<string, string> = {
+            '01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr',
+            '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Ago',
+            '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic'
+        };
+        const formatMonthEs = (ym: string) => {
+            if (!ym || ym.length < 7) return ym || 'N/A';
+            const [y, m] = ym.split('-');
+            return `${monthNamesEs[m] || m} ${y}`;
+        };
+
+        // 1. Reportes Operativos de Escasez y Faltantes en Despacho (billing_returns + scarcityLockedSkus)
+        const operationalScarcityMap = new Map<string, {
+            incidentsCount: number;
+            missingKg: number;
+            latestDate: string;
+            latestReason: string;
+            isCommercialLocked: boolean;
+            lockMessage?: string;
+            incidents: Array<{ date: string; qty: number; reason: string; notes: string }>;
+        }>();
+
+        Object.entries(scarcityLockedSkus || {}).forEach(([pid, info]: [string, any]) => {
+            operationalScarcityMap.set(pid, {
+                incidentsCount: 1,
+                missingKg: 0,
+                latestDate: info?.disabledAt || new Date().toISOString(),
+                latestReason: info?.message || 'Bloqueado temporalmente en catálogo por escasez de mercado',
+                isCommercialLocked: true,
+                lockMessage: info?.message,
+                incidents: [{
+                    date: (info?.disabledAt || '').slice(0, 10),
+                    qty: 0,
+                    reason: info?.message || 'Bloqueo comercial por escasez en mercado',
+                    notes: `Gestor: ${info?.disabledBy || 'Comercial'}`
+                }]
+            });
+        });
+
+        billingReturns.forEach(ret => {
+            if (!ret.product_id) return;
+            const combinedText = `${ret.reason || ''} ${ret.notes || ''}`;
+            if (!/escas|faltant|agotad|no se despach|incomplet/i.test(combinedText)) return;
+            const pid = ret.product_id;
+            const qty = Number(ret.quantity_returned) || 0;
+            const dateStr = (ret.created_at || '').slice(0, 10);
+            const cleanReason = (ret.reason || '')
+                .replace(/^\[AJUSTE FACTURA PQR #[a-z0-9]+\]\s*AVERIA:\s*Ajuste de facturación y cantidades recibidas por PQR #[a-z0-9]+\s*/i, '')
+                .replace(/^\(|\)\.$/g, '')
+                .trim() || 'Producto reportado escaso / faltante en despacho';
+
+            const prev = operationalScarcityMap.get(pid) || {
+                incidentsCount: 0,
+                missingKg: 0,
+                latestDate: dateStr,
+                latestReason: cleanReason,
+                isCommercialLocked: false,
+                incidents: []
+            };
+            prev.incidentsCount += 1;
+            prev.missingKg += qty;
+            if (!prev.latestDate || dateStr >= prev.latestDate) {
+                prev.latestDate = dateStr;
+                prev.latestReason = cleanReason;
+            }
+            prev.incidents.push({
+                date: dateStr,
+                qty,
+                reason: cleanReason,
+                notes: (ret.notes || '').split('\n')[0]
+            });
+            operationalScarcityMap.set(pid, prev);
+        });
+
+        // 2. Motor Histórico Cíclico de Escasez y Abundancia en el Mercado (purchases 2025-2026)
+        const rawPurchByProd = new Map<string, Array<{ month: string; price: number; qty: number; date: string }>>();
+        purchasesHistory.forEach(p => {
+            const price = Number(p.unit_price);
+            if (!p.product_id || !price || price <= 0) return;
+            const m = (p.created_at || '').slice(0, 7);
+            if (!m) return;
+            const list = rawPurchByProd.get(p.product_id) || [];
+            list.push({ month: m, price, qty: Number(p.quantity) || 1, date: p.created_at || '' });
+            rawPurchByProd.set(p.product_id, list);
+        });
+
+        const scarcityRadarItems: any[] = [];
+        let scarcityCycleCount = 0;
+        let abundanceCycleCount = 0;
+        let reportedShortageCount = 0;
+
+        products.forEach(p => {
+            const rawRecords = rawPurchByProd.get(p.id) || [];
+            const opReport = operationalScarcityMap.get(p.id);
+            const minLevel = Number(p.min_inventory_level) || 0;
+            const currentStock = stockByProductMap.get(p.id) || 0;
+
+            // Normalización de escala por producto (filtra compras en bulto vs unidad fuera de [0.28x .. 3.5x] de la mediana)
+            let validRecords = rawRecords;
+            if (rawRecords.length >= 3) {
+                const sortedPrices = [...rawRecords.map(r => r.price)].sort((a, b) => a - b);
+                const median = sortedPrices[Math.floor(sortedPrices.length / 2)];
+                const filtered = rawRecords.filter(r => r.price >= median * 0.28 && r.price <= median * 3.5);
+                if (filtered.length >= 2) validRecords = filtered;
+            }
+
+            if (validRecords.length < 2 && !opReport && minLevel <= 0) return;
+
+            validRecords.sort((a, b) => a.date.localeCompare(b.date));
+
+            let avgHistoricalPrice = 0;
+            let latestPrice = costMap.get(p.id) || 0;
+            let minHistoricalPrice = 0;
+            let maxHistoricalPrice = 0;
+            let peakScarcityMonth = '';
+            let peakAbundanceMonth = '';
+            let latestMonth = '';
+            let deltaPct = 0;
+            const monthlyTimeline: Array<{ month: string; label: string; avgPrice: number; count: number }> = [];
+
+            if (validRecords.length >= 2) {
+                const prices = validRecords.map(r => r.price);
+                avgHistoricalPrice = Math.round(prices.reduce((s, v) => s + v, 0) / prices.length);
+                latestPrice = Math.round(validRecords[validRecords.length - 1].price);
+                latestMonth = validRecords[validRecords.length - 1].month;
+
+                const byMonthMap = new Map<string, { sum: number; count: number }>();
+                validRecords.forEach(r => {
+                    const mObj = byMonthMap.get(r.month) || { sum: 0, count: 0 };
+                    mObj.sum += r.price;
+                    mObj.count += 1;
+                    byMonthMap.set(r.month, mObj);
+                });
+
+                Array.from(byMonthMap.entries())
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .forEach(([mKey, val]) => {
+                        monthlyTimeline.push({
+                            month: mKey,
+                            label: formatMonthEs(mKey),
+                            avgPrice: Math.round(val.sum / val.count),
+                            count: val.count
+                        });
+                    });
+
+                let maxM = monthlyTimeline[0];
+                let minM = monthlyTimeline[0];
+                monthlyTimeline.forEach(mItem => {
+                    if (mItem.avgPrice >= maxM.avgPrice) maxM = mItem;
+                    if (mItem.avgPrice <= minM.avgPrice) minM = mItem;
+                });
+
+                maxHistoricalPrice = maxM ? maxM.avgPrice : Math.max(...prices);
+                minHistoricalPrice = minM ? minM.avgPrice : Math.min(...prices);
+                peakScarcityMonth = maxM ? maxM.label : '';
+                peakAbundanceMonth = minM ? minM.label : '';
+                deltaPct = avgHistoricalPrice > 0 ? Number((((latestPrice - avgHistoricalPrice) / avgHistoricalPrice) * 100).toFixed(1)) : 0;
+            } else if (latestPrice > 0) {
+                avgHistoricalPrice = latestPrice;
+                minHistoricalPrice = latestPrice;
+                maxHistoricalPrice = latestPrice;
+            }
+
+            const hasOperationalShortage = !!opReport || (minLevel > 0 && currentStock <= minLevel);
+            const isMarketScarcityCycle = validRecords.length >= 3 && deltaPct >= 18;
+            const isMarketAbundanceCycle = validRecords.length >= 3 && deltaPct <= -15;
+
+            if (!hasOperationalShortage && !isMarketScarcityCycle && !isMarketAbundanceCycle && validRecords.length < 3) return;
+
+            let cycleStatusLabel = 'OFERTA ESTABLE';
+            let cycleType: 'reported' | 'scarcity' | 'abundance' | 'stable' = 'stable';
+            let severityScore = Math.abs(deltaPct);
+
+            if (opReport?.isCommercialLocked) {
+                cycleStatusLabel = 'BLOQUEADO POR ESCASEZ';
+                cycleType = 'reported';
+                severityScore = 500;
+            } else if (opReport && opReport.incidentsCount > 0) {
+                cycleStatusLabel = 'REPORTADO ESCASO EN DESPACHO';
+                cycleType = 'reported';
+                severityScore = 400 + opReport.incidentsCount * 25 + Math.max(deltaPct, 0);
+            } else if (isMarketScarcityCycle) {
+                cycleStatusLabel = `CICLO ESCASEZ (+${deltaPct.toFixed(0)}%)`;
+                cycleType = 'scarcity';
+                severityScore = 200 + deltaPct;
+            } else if (minLevel > 0 && currentStock <= minLevel) {
+                cycleStatusLabel = currentStock === 0 ? 'AGOTADO EN BODEGA' : 'BAJO MÍNIMO BODEGA';
+                cycleType = 'reported';
+                severityScore = 180 + (minLevel - currentStock);
+            } else if (isMarketAbundanceCycle) {
+                cycleStatusLabel = `ÉPOCA ABUNDANCIA (${deltaPct.toFixed(0)}%)`;
+                cycleType = 'abundance';
+                severityScore = Math.abs(deltaPct);
+            }
+
+            if (cycleType === 'scarcity' || opReport) scarcityCycleCount++;
+            if (cycleType === 'abundance') abundanceCycleCount++;
+            if (opReport || (minLevel > 0 && currentStock <= minLevel)) reportedShortageCount++;
+
+            scarcityRadarItems.push({
+                id: p.id,
+                name: p.name,
+                accountingId: p.accounting_id || null,
+                inventoryGroup: p.inventory_group || 'General',
+                unit: p.unit_of_measure || 'Kg',
+                currentStock,
+                minStock: minLevel,
+                recordsCount: validRecords.length,
+                avgHistoricalPrice,
+                latestPrice,
+                latestMonthLabel: latestMonth ? formatMonthEs(latestMonth) : 'Actual',
+                minHistoricalPrice,
+                maxHistoricalPrice,
+                peakScarcityMonth,
+                peakAbundanceMonth,
+                deltaPct,
+                cycleStatusLabel,
+                cycleType,
+                severityScore,
+                opReport: opReport || null,
+                monthlyTimeline
+            });
+        });
+
+        scarcityRadarItems.sort((a, b) => b.severityScore - a.severityScore);
+
         // Alerta temprana conectada exclusivamente a productos con min_inventory_level > 0 real en catálogo (cero mocks)
         const criticalStocks = products
             .filter(p => Number(p.min_inventory_level) > 0)
@@ -768,9 +1025,13 @@ export default function StrategyControlTower() {
             wasteRatePct: commercialMetrics.totalKg > 0 ? ((wasteQty / commercialMetrics.totalKg) * 100).toFixed(1) : '0.0',
             dailyMovements,
             criticalStocks,
+            scarcityRadarItems,
+            scarcityCycleCount,
+            abundanceCycleCount,
+            reportedShortageCount,
             groupBreakdown
         };
-    }, [products, stocks, movements, orders, costMap, commercialMetrics]);
+    }, [products, stocks, movements, orders, costMap, commercialMetrics, purchasesHistory, billingReturns, scarcityLockedSkus]);
 
     // Metrics calculations for CRM / Funnel Area
     const crmMetrics = useMemo(() => {
@@ -1753,7 +2014,7 @@ export default function StrategyControlTower() {
                             </div>
                         </div>
 
-                        {/* Alerta Temprana de Abastecimiento & Escasez (Conectada a Mínimos Reales Configurados) */}
+                        {/* Alerta Temprana de Abastecimiento & Escasez (Radar Cíclico de Mercado + Reportados Escasos) */}
                         <div style={{
                             backgroundColor: '#FFFFFF',
                             borderRadius: '16px',
@@ -1765,93 +2026,286 @@ export default function StrategyControlTower() {
                             justifyContent: 'space-between'
                         }}>
                             <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '850', color: '#0F172A' }}>
-                                        Alerta Temprana de Abastecimiento &amp; Escasez
-                                    </h3>
-                                    <span style={{
-                                        fontSize: '0.68rem',
-                                        fontWeight: '800',
-                                        color: '#92400E',
-                                        backgroundColor: '#FFFBEB',
-                                        border: '1px solid #FDE68A',
-                                        padding: '2px 8px',
-                                        borderRadius: '6px'
-                                    }}>
-                                        Mínimos Reales ({inventoryMetrics.configuredMinSkusCount})
-                                    </span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.45rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '850', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            Alerta Temprana de Abastecimiento &amp; Escasez
+                                        </h3>
+                                        <p style={{ margin: '3px 0 0 0', fontSize: '0.74rem', color: '#64748B' }}>
+                                            Inteligencia cíclica de mercado (escasez vs. cosecha en historial 2025-2026) y productos reportados escasos en despacho.
+                                        </p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                        <span style={{
+                                            fontSize: '0.66rem',
+                                            fontWeight: '800',
+                                            color: '#DC2626',
+                                            backgroundColor: '#FEF2F2',
+                                            border: '1px solid #FECACA',
+                                            padding: '2px 8px',
+                                            borderRadius: '6px',
+                                            fontVariantNumeric: 'tabular-nums'
+                                        }}>
+                                            En Escasez / Carestía: {inventoryMetrics.scarcityCycleCount}
+                                        </span>
+                                        <span style={{
+                                            fontSize: '0.66rem',
+                                            fontWeight: '800',
+                                            color: '#92400E',
+                                            backgroundColor: '#FFFBEB',
+                                            border: '1px solid #FDE68A',
+                                            padding: '2px 8px',
+                                            borderRadius: '6px',
+                                            fontVariantNumeric: 'tabular-nums'
+                                        }}>
+                                            Reportados Faltantes: {inventoryMetrics.reportedShortageCount}
+                                        </span>
+                                        <span style={{
+                                            fontSize: '0.66rem',
+                                            fontWeight: '800',
+                                            color: '#065F46',
+                                            backgroundColor: '#ECFDF5',
+                                            border: '1px solid #BBF7D0',
+                                            padding: '2px 8px',
+                                            borderRadius: '6px',
+                                            fontVariantNumeric: 'tabular-nums'
+                                        }}>
+                                            En Cosecha / Abundancia: {inventoryMetrics.abundanceCycleCount}
+                                        </span>
+                                    </div>
                                 </div>
-                                <p style={{ margin: '0 0 1rem 0', fontSize: '0.76rem', color: '#64748B' }}>
-                                    Monitoreo en vivo de productos con umbral mínimo de seguridad configurado en el catálogo maestro.
-                                </p>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                    {inventoryMetrics.criticalStocks.map((p, idx) => {
-                                        const isOut = p.currentStock === 0;
-                                        const isLow = p.currentStock <= p.minStock;
-                                        const accentColor = isOut ? '#DC2626' : (isLow ? '#D97706' : '#0D7A57');
-                                        return (
-                                            <div key={idx} style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                padding: '0.68rem 0.9rem',
-                                                backgroundColor: '#F8FAFC',
-                                                borderRadius: '10px',
-                                                border: '1px solid #E2E8F0',
-                                                borderLeft: `3.5px solid ${accentColor}`
-                                            }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#0F172A' }}>{p.name}</span>
-                                                        {p.accountingId && (
-                                                            <span style={{
-                                                                fontSize: '0.64rem',
-                                                                fontWeight: '700',
-                                                                color: '#475569',
-                                                                backgroundColor: '#FFFFFF',
-                                                                border: '1px solid #E2E8F0',
-                                                                padding: '1px 5px',
-                                                                borderRadius: '4px',
-                                                                fontVariantNumeric: 'tabular-nums'
-                                                            }}>
-                                                                Cód: {p.accountingId}
+                                {/* Selector de Vista Cíclica + Buscador */}
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    flexWrap: 'wrap',
+                                    marginBottom: '0.85rem',
+                                    padding: '0.55rem 0.65rem',
+                                    backgroundColor: '#F8FAFC',
+                                    borderRadius: '10px',
+                                    border: '1px solid #E2E8F0'
+                                }}>
+                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                        {[
+                                            { id: 'scarcity', label: `Escasez & Carestía (${inventoryMetrics.scarcityCycleCount})`, activeBg: '#DC2626', activeText: '#FFFFFF' },
+                                            { id: 'reported', label: `Reportados Despacho (${inventoryMetrics.reportedShortageCount})`, activeBg: '#D97706', activeText: '#FFFFFF' },
+                                            { id: 'abundance', label: `En Abundancia (${inventoryMetrics.abundanceCycleCount})`, activeBg: '#0D7A57', activeText: '#FFFFFF' },
+                                            { id: 'all', label: 'Ver Todos', activeBg: '#0F172A', activeText: '#FFFFFF' }
+                                        ].map(tab => {
+                                            const isAct = scarcityViewTab === tab.id;
+                                            return (
+                                                <button
+                                                    key={tab.id}
+                                                    type="button"
+                                                    onClick={() => setScarcityViewTab(tab.id as any)}
+                                                    style={{
+                                                        padding: '4px 9px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        border: isAct ? 'none' : '1px solid #CBD5E1',
+                                                        backgroundColor: isAct ? tab.activeBg : '#FFFFFF',
+                                                        color: isAct ? tab.activeText : '#475569',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                >
+                                                    {tab.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div style={{ position: 'relative', flex: '1 1 170px', maxWidth: '240px' }}>
+                                        <Search size={13} color="#64748B" style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)' }} />
+                                        <input
+                                            type="text"
+                                            value={scarcitySearch}
+                                            onChange={e => setScarcitySearch(e.target.value)}
+                                            placeholder="Buscar producto o Cód..."
+                                            style={{
+                                                width: '100%',
+                                                padding: '4px 24px 4px 26px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '600',
+                                                borderRadius: '6px',
+                                                border: '1px solid #CBD5E1',
+                                                backgroundColor: '#FFFFFF',
+                                                color: '#0F172A',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                        {scarcitySearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setScarcitySearch('')}
+                                                style={{
+                                                    position: 'absolute',
+                                                    right: '5px',
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    border: 'none',
+                                                    background: 'transparent',
+                                                    cursor: 'pointer',
+                                                    padding: 0,
+                                                    display: 'flex',
+                                                    color: '#64748B'
+                                                }}
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Lista Interactiva de Productos en Alerta de Escasez o Ciclo de Mercado */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.68rem', maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
+                                    {(() => {
+                                        const normQ = scarcitySearch.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                        const filteredList = (inventoryMetrics.scarcityRadarItems || []).filter((item: any) => {
+                                            if (scarcityViewTab === 'scarcity' && item.cycleType !== 'scarcity' && !item.opReport) return false;
+                                            if (scarcityViewTab === 'reported' && item.cycleType !== 'reported' && !item.opReport) return false;
+                                            if (scarcityViewTab === 'abundance' && item.cycleType !== 'abundance') return false;
+                                            if (!normQ) return true;
+                                            const haystack = `${item.name || ''} ${String(item.accountingId || '')} ${item.inventoryGroup || ''} ${item.cycleStatusLabel || ''} ${item.peakScarcityMonth || ''} ${item.peakAbundanceMonth || ''}`
+                                                .toLowerCase()
+                                                .normalize('NFD')
+                                                .replace(/[\u0300-\u036f]/g, '');
+                                            return haystack.includes(normQ);
+                                        });
+
+                                        if (filteredList.length === 0) {
+                                            return (
+                                                <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748B', fontSize: '0.78rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px dashed #CBD5E1' }}>
+                                                    No se encontraron productos con este criterio de escasez o ciclo de mercado.
+                                                </div>
+                                            );
+                                        }
+
+                                        return filteredList.slice(0, 25).map((p: any, idx: number) => {
+                                            const isAbundance = p.cycleType === 'abundance';
+                                            const isReported = p.cycleType === 'reported' || !!p.opReport;
+                                            const isScarcity = p.cycleType === 'scarcity';
+                                            const accentColor = isReported ? '#DC2626' : (isScarcity ? '#EA580C' : (isAbundance ? '#0D7A57' : '#475569'));
+                                            const badgeBg = isReported ? '#FEF2F2' : (isScarcity ? '#FFF7ED' : (isAbundance ? '#ECFDF5' : '#F1F5F9'));
+                                            const badgeBorder = isReported ? '#FECACA' : (isScarcity ? '#FED7AA' : (isAbundance ? '#BBF7D0' : '#CBD5E1'));
+                                            const badgeColor = isReported ? '#DC2626' : (isScarcity ? '#C2410C' : (isAbundance ? '#065F46' : '#334155'));
+
+                                            return (
+                                                <div
+                                                    key={p.id || idx}
+                                                    onClick={() => setSelectedScarcityItem(p)}
+                                                    style={{
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '5px',
+                                                        padding: '0.7rem 0.9rem',
+                                                        backgroundColor: '#F8FAFC',
+                                                        borderRadius: '10px',
+                                                        border: '1px solid #E2E8F0',
+                                                        borderLeft: `4px solid ${accentColor}`,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: '0.8rem', fontWeight: '850', color: '#0F172A' }}>{p.name}</span>
+                                                            {p.accountingId && (
+                                                                <span style={{
+                                                                    fontSize: '0.64rem',
+                                                                    fontWeight: '700',
+                                                                    color: '#475569',
+                                                                    backgroundColor: '#FFFFFF',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    padding: '1px 5px',
+                                                                    borderRadius: '4px',
+                                                                    fontVariantNumeric: 'tabular-nums'
+                                                                }}>
+                                                                    Cód: {p.accountingId}
+                                                                </span>
+                                                            )}
+                                                            <span style={{ fontSize: '0.64rem', fontWeight: '600', color: '#64748B' }}>
+                                                                • {p.inventoryGroup}
                                                             </span>
-                                                        )}
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontVariantNumeric: 'tabular-nums' }}>
+                                                            <span style={{
+                                                                fontSize: '0.62rem',
+                                                                fontWeight: '850',
+                                                                padding: '2px 7px',
+                                                                borderRadius: '5px',
+                                                                backgroundColor: badgeBg,
+                                                                border: `1px solid ${badgeBorder}`,
+                                                                color: badgeColor
+                                                            }}>
+                                                                {p.cycleStatusLabel}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.74rem', fontWeight: '800', color: p.currentStock > 0 ? '#0F172A' : '#DC2626' }}>
+                                                                Stock: {formatNumber(p.currentStock, 1)} {p.unit}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                    <div style={{ fontSize: '0.66rem', fontWeight: '600', color: '#64748B', marginTop: '2px' }}>
-                                                        {p.inventoryGroup}
-                                                    </div>
-                                                </div>
-                                                <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                                                        <span style={{
-                                                            fontSize: '0.62rem',
-                                                            fontWeight: '800',
-                                                            padding: '1px 6px',
-                                                            borderRadius: '4px',
-                                                            backgroundColor: isOut ? '#FEF2F2' : (isLow ? '#FFFBEB' : '#ECFDF5'),
-                                                            border: `1px solid ${isOut ? '#FECACA' : (isLow ? '#FDE68A' : '#BBF7D0')}`,
-                                                            color: isOut ? '#DC2626' : (isLow ? '#92400E' : '#065F46')
+
+                                                    {/* Línea de Telemetría Cíclica & Reportes de Escasez */}
+                                                    {p.opReport && (
+                                                        <div style={{
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: '700',
+                                                            color: '#991B1B',
+                                                            backgroundColor: '#FEF2F2',
+                                                            border: '1px solid #FECACA',
+                                                            padding: '3px 8px',
+                                                            borderRadius: '6px',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            flexWrap: 'wrap'
                                                         }}>
-                                                            {p.status}
-                                                        </span>
-                                                        <span style={{
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: '900',
-                                                            color: isOut ? '#DC2626' : (isLow ? '#92400E' : '#065F46')
+                                                            <span>
+                                                                Alerta Operativa ({p.opReport.incidentsCount} {p.opReport.incidentsCount === 1 ? 'reporte' : 'reportes'}
+                                                                {p.opReport.missingKg > 0 ? ` • ${formatNumber(p.opReport.missingKg, 1)} ${p.unit} sin despachar` : ''}): {p.opReport.latestReason}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.64rem', color: '#B91C1C', fontWeight: '800' }}>
+                                                                {p.opReport.latestDate}
+                                                            </span>
+                                                        </div>
+                                                    )}
+
+                                                    {p.recordsCount >= 2 ? (
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            flexWrap: 'wrap',
+                                                            gap: '6px',
+                                                            fontSize: '0.68rem',
+                                                            color: '#475569',
+                                                            fontVariantNumeric: 'tabular-nums'
                                                         }}>
-                                                            {formatNumber(p.currentStock, 1)} {p.unit}
-                                                        </span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.66rem', fontWeight: '700', color: '#64748B', marginTop: '2px' }}>
-                                                        Mínimo: {formatNumber(p.minStock, 0)} {p.unit}
-                                                        {p.deficit > 0 ? ` • Déficit: ${formatNumber(p.deficit, 1)} ${p.unit}` : ''}
-                                                    </div>
+                                                            <span>
+                                                                Costo Reciente ({p.latestMonthLabel}): <strong style={{ color: isScarcity ? '#C2410C' : (isAbundance ? '#065F46' : '#0F172A') }}>{formatMoney(p.latestPrice)}</strong> vs Prom. Histórico: <strong>{formatMoney(p.avgHistoricalPrice)}</strong> ({p.deltaPct > 0 ? `+${p.deltaPct}%` : `${p.deltaPct}%`})
+                                                            </span>
+                                                            <span style={{ fontSize: '0.65rem', fontWeight: '700' }}>
+                                                                <span style={{ color: '#DC2626' }}>Pico Escasez: {p.peakScarcityMonth} ({formatMoney(p.maxHistoricalPrice)})</span>
+                                                                {' • '}
+                                                                <span style={{ color: '#0D7A57' }}>Cosecha: {p.peakAbundanceMonth} ({formatMoney(p.minHistoricalPrice)})</span>
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: '0.66rem', fontWeight: '600', color: '#64748B' }}>
+                                                            {p.minStock > 0 ? `Umbral mínimo configurado: ${formatNumber(p.minStock, 0)} ${p.unit}` : 'Monitoreo operativo de despacho y disponibilidad en plaza'}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        });
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -1863,6 +2317,158 @@ export default function StrategyControlTower() {
                         onDownload={() => handleExportExcel('inventory')}
                         exporting={exporting}
                     />
+
+                    {/* Modal Forense de Ciclo Histórico de Escasez & Abundancia del Producto */}
+                    {selectedScarcityItem && (
+                        <div
+                            onClick={() => setSelectedScarcityItem(null)}
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                                backdropFilter: 'blur(4px)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 1000,
+                                padding: '1rem'
+                            }}
+                        >
+                            <div
+                                onClick={e => e.stopPropagation()}
+                                style={{
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: '16px',
+                                    border: '1px solid #E2E8F0',
+                                    width: '100%',
+                                    maxWidth: '680px',
+                                    maxHeight: '88vh',
+                                    overflowY: 'auto',
+                                    padding: '1.35rem 1.5rem',
+                                    boxShadow: '0 20px 45px rgba(15, 23, 42, 0.22)'
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.85rem', marginBottom: '1rem' }}>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.08rem', fontWeight: '900', color: '#0F172A' }}>
+                                                {selectedScarcityItem.name}
+                                            </h3>
+                                            {selectedScarcityItem.accountingId && (
+                                                <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
+                                                    Cód: {selectedScarcityItem.accountingId}
+                                                </span>
+                                            )}
+                                            <span style={{
+                                                fontSize: '0.68rem',
+                                                fontWeight: '850',
+                                                padding: '2px 8px',
+                                                borderRadius: '6px',
+                                                backgroundColor: selectedScarcityItem.cycleType === 'abundance' ? '#ECFDF5' : '#FEF2F2',
+                                                color: selectedScarcityItem.cycleType === 'abundance' ? '#065F46' : '#DC2626',
+                                                border: `1px solid ${selectedScarcityItem.cycleType === 'abundance' ? '#BBF7D0' : '#FECACA'}`
+                                            }}>
+                                                {selectedScarcityItem.cycleStatusLabel}
+                                            </span>
+                                        </div>
+                                        <p style={{ margin: '4px 0 0 0', fontSize: '0.76rem', color: '#64748B', fontWeight: '600' }}>
+                                            {selectedScarcityItem.inventoryGroup} • Stock Físico Actual: <strong>{formatNumber(selectedScarcityItem.currentStock, 1)} {selectedScarcityItem.unit}</strong>
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedScarcityItem(null)}
+                                        style={{
+                                            border: '1px solid #CBD5E1',
+                                            backgroundColor: '#F8FAFC',
+                                            borderRadius: '8px',
+                                            padding: '6px',
+                                            cursor: 'pointer',
+                                            color: '#475569',
+                                            display: 'flex'
+                                        }}
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                {/* KPIs del Ciclo del Producto */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1rem', fontVariantNumeric: 'tabular-nums' }}>
+                                    <div style={{ padding: '0.7rem 0.85rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ fontSize: '0.66rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Costo Reciente ({selectedScarcityItem.latestMonthLabel})</div>
+                                        <div style={{ fontSize: '1rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>{formatMoney(selectedScarcityItem.latestPrice)}</div>
+                                    </div>
+                                    <div style={{ padding: '0.7rem 0.85rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ fontSize: '0.66rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Promedio Histórico</div>
+                                        <div style={{ fontSize: '1rem', fontWeight: '900', color: '#334155', marginTop: '2px' }}>{formatMoney(selectedScarcityItem.avgHistoricalPrice)}</div>
+                                    </div>
+                                    <div style={{ padding: '0.7rem 0.85rem', backgroundColor: '#FEF2F2', borderRadius: '10px', border: '1px solid #FECACA' }}>
+                                        <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#991B1B', textTransform: 'uppercase' }}>Mes Crítico Escasez</div>
+                                        <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#DC2626', marginTop: '2px' }}>
+                                            {selectedScarcityItem.peakScarcityMonth || 'N/A'} ({formatMoney(selectedScarcityItem.maxHistoricalPrice)})
+                                        </div>
+                                    </div>
+                                    <div style={{ padding: '0.7rem 0.85rem', backgroundColor: '#ECFDF5', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
+                                        <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#065F46', textTransform: 'uppercase' }}>Mes de Abundancia</div>
+                                        <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#0D7A57', marginTop: '2px' }}>
+                                            {selectedScarcityItem.peakAbundanceMonth || 'N/A'} ({formatMoney(selectedScarcityItem.minHistoricalPrice)})
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Historial Mensual de Costos & Disponibilidad */}
+                                {selectedScarcityItem.monthlyTimeline && selectedScarcityItem.monthlyTimeline.length > 0 && (
+                                    <div style={{ marginBottom: '1rem', padding: '0.9rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ fontSize: '0.78rem', fontWeight: '850', color: '#0F172A', marginBottom: '0.65rem' }}>
+                                            Curva Histórica de Escasez vs. Abundancia por Mes ({selectedScarcityItem.recordsCount} registros de compra)
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontVariantNumeric: 'tabular-nums' }}>
+                                            {selectedScarcityItem.monthlyTimeline.map((mItem: any, i: number) => {
+                                                const maxP = Math.max(selectedScarcityItem.maxHistoricalPrice, 1);
+                                                const pctW = Math.max(Math.round((mItem.avgPrice / maxP) * 100), 8);
+                                                const isPeak = mItem.avgPrice === selectedScarcityItem.maxHistoricalPrice && selectedScarcityItem.monthlyTimeline.length > 1;
+                                                const isLow = mItem.avgPrice === selectedScarcityItem.minHistoricalPrice && selectedScarcityItem.monthlyTimeline.length > 1;
+                                                const barColor = isPeak ? '#DC2626' : (isLow ? '#0D7A57' : '#64748B');
+                                                return (
+                                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '85px 1fr 135px', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
+                                                        <span style={{ fontWeight: '800', color: '#334155' }}>{mItem.label}</span>
+                                                        <div style={{ height: '10px', backgroundColor: '#E2E8F0', borderRadius: '999px', overflow: 'hidden' }}>
+                                                            <div style={{ height: '100%', width: `${pctW}%`, backgroundColor: barColor, borderRadius: '999px' }} />
+                                                        </div>
+                                                        <span style={{ textAlign: 'right', fontWeight: '850', color: barColor }}>
+                                                            {formatMoney(mItem.avgPrice)} {isPeak ? '• Escasez' : isLow ? '• Cosecha' : ''}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Reportes Operativos de Escasez en Despacho si existen */}
+                                {selectedScarcityItem.opReport && selectedScarcityItem.opReport.incidents?.length > 0 && (
+                                    <div style={{ padding: '0.85rem 1rem', backgroundColor: '#FEF2F2', borderRadius: '12px', border: '1px solid #FECACA' }}>
+                                        <div style={{ fontSize: '0.78rem', fontWeight: '850', color: '#991B1B', marginBottom: '0.5rem' }}>
+                                            Historial de Reportes de Escasez / Faltantes en Despacho ({selectedScarcityItem.opReport.incidentsCount})
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                                            {selectedScarcityItem.opReport.incidents.map((inc: any, k: number) => (
+                                                <div key={k} style={{ backgroundColor: '#FFFFFF', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #FECACA', fontSize: '0.72rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '800', color: '#991B1B' }}>
+                                                        <span>{inc.reason}</span>
+                                                        <span>{inc.date} {inc.qty > 0 ? `• ${formatNumber(inc.qty, 1)} ${selectedScarcityItem.unit}` : ''}</span>
+                                                    </div>
+                                                    {inc.notes && (
+                                                        <div style={{ fontSize: '0.66rem', color: '#64748B', marginTop: '2px' }}>{inc.notes}</div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

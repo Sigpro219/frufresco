@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.306 (Capítulo 44: Protocolo Canónico de Apagado del ERP Legado & Radar de Foco Láser + Gobernanza Dual de Inventario — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.308 (Capítulo 44: Protocolo Canónico de Apagado del ERP Legado & Radar Cíclico de Escasez y Abastecimiento — 76/76 Pantallas Certificadas)
 > **Fecha:** 27 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 325 Escenarios BDD Ininterrumpidos (1..325)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 326 Escenarios BDD Ininterrumpidos (1..326)
 
 ---
 
@@ -12625,3 +12625,19 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
        - **Cierre Diario Obligatorio:** Se activa el candado formal que exige que el turno tarde registre el balance físico del día antes de emitir la sábana.
        - **Inmutabilidad de Báscula:** Solo se reconoce como saldo inicial el conteo físico verificado (`bodegaPost10am ?? physicalCount ?? 0`). Lo que no fue contado en suelo se clasifica estrictamente como inventario cero (`INV[0]`).
        - **Alerta de Bloqueo de Alistamiento:** Si se intenta generar la sábana sin el cierre formal de la jornada, la mesa de operaciones bloquea la emisión con advertencia perentoria de gobernanza.
+
+
+---
+
+### Escenario 326: Radar Cíclico de Escasez y Abundancia en el Mercado + Alerta Temprana de Abastecimiento Operativo en Torre de Control (`/admin/strategy`) (SDD v1.9.308)
+- **Given** la sub-pestaña `2. Cadena & Inventario` de la Torre de Control Estratégica (`src/components/admin/StrategyControlTower.tsx`), el historial real de compras (`public.purchases` con más de 3.100 registros históricos 2025-2026), los bloqueos comerciales por escasez (`app_settings.scarcity_locked_skus`) y los reportes operativos de faltantes/escasez en despacho (`public.billing_returns`),
+- **When** el usuario consulta la tarjeta **`Alerta Temprana de Abastecimiento & Escasez`**:
+- **Then** el sistema ejecuta un motor dual de inteligencia de abastecimiento y ciclos de mercado:
+  1. **Detección Histórica de Ciclos de Escasez vs. Abundancia en el Mercado (`purchases` 2025-2026):**
+     - Agrupa las compras históricas por `product_id`, normalizando la escala de unidad mediante filtrado estadístico por mediana (`[0.28x .. 3.5x]`) para evitar distorsiones entre bultos y kilos.
+     - Calcula para cada producto el **Costo Reciente**, **Promedio Histórico**, **Mes Crítico de Escasez** (techo histórico de precio) y **Mes de Abundancia / Cosecha** (piso histórico de precio), determinando la desviación porcentual (`deltaPct`).
+     - Clasifica automáticamente como **`CICLO ESCASEZ (+X%)`** aquellos insumos con encarecimiento significativo (`>= +18%` sobre su media histórica) y como **`ÉPOCA ABUNDANCIA (-Y%)`** aquellos en ventana de cosecha (`<= -15%`).
+  2. **Conexión Directa con Productos Reportados como Escasos en Operación & Despacho:**
+     - Integra los SKUs bloqueados en el Control de Escasez Comercial (`scarcity_locked_skus`) y los productos con novedades explícitas de escasez o faltante en despachos/PQR (`PRODUCTO ESCASO`, `PRODUCTOS FALTANTES Y ESCASOS`, `pedido_incompleto_faltante` en `billing_returns`), además de alertas de stock físico en bodega.
+  3. **Filtros Interactivos, Buscador Instantáneo y Modal Forense de Curva Mensual:**
+     - Provee píldoras de filtrado rápido (`Escasez & Carestía`, `Reportados Despacho`, `En Abundancia`, `Ver Todos`), buscador instantáneo por nombre/código/grupo y un modal interactivo al hacer clic en cualquier producto que grafica su curva mensual histórica de precios (resaltando los meses de escasez en rojo `#DC2626` y los meses de cosecha en verde `#0D7A57`) junto con el detalle de reportes operativos de despacho.
