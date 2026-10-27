@@ -449,10 +449,18 @@ function CreateOrderContent() {
         return false;
     }, [clientType, selectedClient, clients, b2cMode, selectedClientB2C, b2cClients]);
 
-    // SDD §7.5.8: Naturaleza del Pedido (Venta Ordinaria vs Reposición por Calidad $0 COP)
-    const [orderNature, setOrderNature] = useState<'regular' | 'replacement'>(
-        (searchParams.get('replacement') === 'true' || searchParams.get('isReplacement') === 'true') ? 'replacement' : 'regular'
+        // SDD §7.5.8 / §39.3: Naturaleza del Pedido (Venta Ordinaria, Reposición $0 COP o Formato Obsequio con Precio Interno)
+    const [orderNature, setOrderNature] = useState<'regular' | 'replacement' | 'gift'>(
+        (searchParams.get('replacement') === 'true' || searchParams.get('isReplacement') === 'true')
+            ? 'replacement'
+            : (searchParams.get('gift') === 'true' || searchParams.get('isGift') === 'true')
+                ? 'gift'
+                : 'regular'
     );
+    const [giftRecipientName, setGiftRecipientName] = useState('');
+    const [giftRecipientPhone, setGiftRecipientPhone] = useState('');
+    const [giftMessage, setGiftMessage] = useState('');
+    const isGiftOrder = orderNature === 'gift' || isGiftRemissionClient;
     const [parentOrderId, setParentOrderId] = useState<string | null>(
         searchParams.get('parentOrderId') || searchParams.get('parent_order_id') || null
     );
@@ -556,10 +564,10 @@ function CreateOrderContent() {
         return () => { isMounted = false; };
     }, [activeCustomerId, orderNature, parentOrderId]);
 
-    const handleToggleOrderNature = (nature: 'regular' | 'replacement') => {
+    const handleToggleOrderNature = (nature: 'regular' | 'replacement' | 'gift') => {
         setOrderNature(nature);
         if (nature === 'replacement') {
-            // Forzar $0 COP en todos los ítems actuales del carrito
+            // Forzar $0 COP únicamente en Reposiciones por Garantía
             setCart(prev => prev.map(item => ({
                 ...item,
                 price: 0,
@@ -567,7 +575,7 @@ function CreateOrderContent() {
             })));
             showToast('Modo Reposición Activo: Todos los productos se liquidarán a $0 COP.', 'info');
         } else {
-            // Restaurar precios de catálogo/acuerdo
+            // Restaurar precios reales de catálogo/acuerdo tanto en Venta Ordinaria como en Formato Obsequio
             setParentOrderId(null);
             setParentOrderFriendlyId(null);
             setCart(prev => prev.map(item => {
@@ -577,10 +585,15 @@ function CreateOrderContent() {
                     : 0;
                 return {
                     ...item,
-                    price: rePrice
+                    price: rePrice,
+                    observations: nature === 'gift' ? 'Formato Obsequio (Precio interno registrado · Imprime $0 en puerta)' : ''
                 };
             }));
-            showToast('Modo Venta Ordinaria Restaurado.', 'info');
+            if (nature === 'gift') {
+                showToast('Modo Formato Obsequio Activo: Se registra el precio interno real y la remisión de entrega saldrá sin precios ($0 en puerta).', 'info');
+            } else {
+                showToast('Modo Venta Ordinaria Restaurado.', 'info');
+            }
         }
     };
 
@@ -1891,7 +1904,7 @@ function CreateOrderContent() {
             }
         }
 
-        const resolvedPrice = (orderNature === 'replacement' || isGiftRemissionClient)
+        const resolvedPrice = (orderNature === 'replacement')
             ? 0
             : ((contractPrices[product.id] !== undefined && contractPrices[product.id] !== null && contractPrices[product.id] > 0)
                 ? contractPrices[product.id]
@@ -1899,8 +1912,8 @@ function CreateOrderContent() {
 
         const defaultObservations = orderNature === 'replacement'
             ? (parentOrderFriendlyId ? `Reposición de garantía (Ampara #${parentOrderFriendlyId})` : 'Reposición de garantía ($0 COP)')
-            : isGiftRemissionClient
-                ? 'Obsequio de Cortesía ($0 COP)'
+            : isGiftOrder
+                ? 'Formato Obsequio (Remisión sin precio en puerta)'
                 : '';
 
         setCart(prev => [{ 
@@ -2712,7 +2725,7 @@ function CreateOrderContent() {
     };
 
     const calculateGrossTotal = () => {
-        if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
+        if (orderNature === 'replacement') return 0;
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
             const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
@@ -2728,7 +2741,7 @@ function CreateOrderContent() {
     };
 
     const calculateTotal = () => {
-        if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
+        if (orderNature === 'replacement') return 0;
         const gross = calculateGrossTotal();
         const discount = calculateCollaboratorDiscountAmount();
         return Math.max(0, gross - discount);
@@ -2756,7 +2769,7 @@ function CreateOrderContent() {
     };
 
     const calculateTotalTax = () => {
-        if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
+        if (orderNature === 'replacement') return 0;
         const discountFactor = 1 - (getCollaboratorDiscountPct() / 100);
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
@@ -2768,7 +2781,7 @@ function CreateOrderContent() {
     };
 
     const calculateSubtotal = () => {
-        if (orderNature === 'replacement' || isGiftRemissionClient) return 0;
+        if (orderNature === 'replacement') return 0;
         return calculateTotal() - calculateTotalTax();
     };
 
@@ -3795,7 +3808,7 @@ function CreateOrderContent() {
                 const prod = item.suggestedProduct!;
                 const prodId = prod.id;
                 const isOffAgreementItem = hasActiveB2BAgreement && !agreementProductIds.has(prodId);
-                const unitPrice = (isGiftRemissionClient || isOffAgreementItem)
+                const unitPrice = isOffAgreementItem
                     ? 0
                     : ((clientType === 'B2B' && prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
                         ? contractPrices[prodId]
@@ -3803,7 +3816,7 @@ function CreateOrderContent() {
 
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '1');
                 const itemTotal = unitPrice * qtyNum;
-                const ivaRate = (isGiftRemissionClient || isOffAgreementItem) ? 0 : (prod.iva_rate !== null && prod.iva_rate !== undefined ? Number(prod.iva_rate) : 19);
+                const ivaRate = isOffAgreementItem ? 0 : (prod.iva_rate !== null && prod.iva_rate !== undefined ? Number(prod.iva_rate) : 19);
                 const itemTax = itemTotal * (ivaRate / (100 + ivaRate));
                 const itemSubtotal = itemTotal - itemTax;
 
@@ -3942,10 +3955,10 @@ function CreateOrderContent() {
                     profile_id: finalProfileId,
                     purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
                     type: clientType === 'B2B' ? 'b2b' : 'b2c',
-                    total: (isGiftRemissionClient || isOnlyOffAgreementOrder) ? 0 : Math.round(total),
+                    total: isOnlyOffAgreementOrder ? 0 : Math.round(total),
                     total_weight_kg: parseFloat(primaryWeightKg.toFixed(3)),
-                    subtotal: (isGiftRemissionClient || isOnlyOffAgreementOrder) ? 0 : Math.round(subtotal),
-                    tax: (isGiftRemissionClient || isOnlyOffAgreementOrder) ? 0 : Math.round(tax),
+                    subtotal: isOnlyOffAgreementOrder ? 0 : Math.round(subtotal),
+                    tax: isOnlyOffAgreementOrder ? 0 : Math.round(tax),
                     status: 'pending_approval',
                     payment_status: isGiftRemissionClient ? 'Exonerado' : 'Pendiente',
                     payment_method: isGiftRemissionClient ? 'obsequio_cortesia' : (paymentMethod || (clientType === 'B2B' ? 'Crédito B2B' : 'Contra Entrega')),
@@ -3963,7 +3976,7 @@ function CreateOrderContent() {
                     manual_delivery_note: manualDeliveryNote || null,
                     logistics_data: {
                         ...(logisticsOverride || {}),
-                        is_gift_remission: isGiftRemissionClient,
+                        is_gift_remission: isGiftOrder,
                         ...(isOnlyOffAgreementOrder ? {
                             document_type_override: 'remission',
                             remission_with_prices_override: false,
@@ -4669,8 +4682,10 @@ function CreateOrderContent() {
             if (orderNature === 'replacement') {
                 const parentTag = parentOrderFriendlyId ? `#PED-${parentOrderFriendlyId}` : (parentOrderId ? parentOrderId.substring(0, 8) : 'S/F');
                 finalAdminNotes = `[REPOSICIÓN DE GARANTÍA $0 COP - VINCULADA AL PEDIDO ${parentTag}]\n${finalAdminNotes}`.trim();
-            } else if (isGiftRemissionClient && !finalAdminNotes.includes('REMISIÓN DE OBSEQUIO')) {
-                finalAdminNotes = `[REMISIÓN DE OBSEQUIO / CORTESÍA $0 COP]\n${finalAdminNotes}`.trim();
+            } else if (isGiftOrder && !finalAdminNotes.includes('REMISIÓN DE OBSEQUIO')) {
+                const recNote = giftRecipientName.trim() ? `\n[DESTINATARIO / RECIBE EN PUERTA: ${giftRecipientName.trim()} | Tel: ${giftRecipientPhone.trim() || 'S/T'}]` : '';
+                const msgNote = giftMessage.trim() ? `\n[MENSAJE OBSEQUIO: ${giftMessage.trim()}]` : '';
+                finalAdminNotes = `[REMISIÓN DE OBSEQUIO - PRECIO INTERNO REGISTRADO / IMPRIME $0 EN PUERTA]${recNote}${msgNote}\n${finalAdminNotes}`.trim();
             }
             
             if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
@@ -4795,7 +4810,7 @@ function CreateOrderContent() {
                 }
             }
 
-            const isExoneratedZero = orderNature === 'replacement' || isGiftRemissionClient;
+            const isExoneratedZero = orderNature === 'replacement';
 
             // GAP-01: Interbloqueo de Crédito y Cartera para clientes B2B (Solo ventas ordinarias con cobro)
             if (clientType === 'B2B' && finalProfileId && !isExoneratedZero) {
@@ -4809,7 +4824,13 @@ function CreateOrderContent() {
             const baseLogisticsData = {
                 ...(logisticsOverride || {}),
                 is_replacement: orderNature === 'replacement',
-                is_gift_remission: isGiftRemissionClient,
+                is_gift_remission: isGiftOrder,
+                ...(isGiftOrder && giftRecipientName.trim() ? {
+                    is_b2c_gift: clientType === 'B2C',
+                    recipient_name: giftRecipientName.trim(),
+                    recipient_phone: giftRecipientPhone.trim(),
+                    gift_message: giftMessage.trim()
+                } : {}),
                 parent_order_id: parentOrderId || null,
                 parent_order_sequence: parentOrderFriendlyId || null,
                 is_colsubsidio: isColsubsidioSelected,
@@ -5659,6 +5680,22 @@ ${primaryAdminNotes}`.trim();
                             >
                                 <RotateCcw size={13} strokeWidth={2.4} />
                                 <span>Reposición por Calidad ($0 COP)</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleToggleOrderNature('gift')}
+                                style={{
+                                    padding: '0.35rem 0.65rem', borderRadius: '6px', border: 'none',
+                                    backgroundColor: isGiftOrder ? '#7C3AED' : 'transparent',
+                                    color: isGiftOrder ? '#FFFFFF' : '#64748B',
+                                    fontWeight: '800', cursor: 'pointer',
+                                    boxShadow: isGiftOrder ? '0 1px 3px rgba(124,58,237,0.3)' : 'none',
+                                    transition: 'all 0.15s', fontSize: '0.75rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                }}
+                            >
+                                <Gift size={13} strokeWidth={2.4} />
+                                <span>Formato Obsequio</span>
                             </button>
                         </div>
                     </div>
@@ -8774,6 +8811,77 @@ ${primaryAdminNotes}`.trim();
                             </div>
                         )}
 
+                        {/* PANEL DE FORMATO OBSEQUIO (INSTITUCIONAL Y HOGAR CON PRECIO INTERNO) */}
+                        {isGiftOrder && orderNature !== 'replacement' && (
+                            <div style={{
+                                marginBottom: '1.25rem',
+                                padding: '1.1rem 1.25rem',
+                                backgroundColor: '#FAF5FF',
+                                border: '1.8px solid #D8B4FE',
+                                borderRadius: '12px',
+                                boxShadow: '0 2px 8px rgba(124, 58, 237, 0.08)'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#F3E8FF', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Gift size={18} strokeWidth={2.4} />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: '800', color: '#581C87' }}>
+                                                Formato de Obsequio Activo • Precio Interno Registrado
+                                            </h3>
+                                            <p style={{ margin: '2px 0 0', fontSize: '0.74rem', color: '#6B21A8' }}>
+                                                El sistema guarda internamente el valor real de los productos, pero la Remisión de Entrega impresa saldrá sin precios ($0 en puerta).
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#F3E8FF', border: '1px solid #C084FC', padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '800', color: '#581C87' }}>
+                                        <CheckCircle2 size={13} />
+                                        <span>Remisión de Entrega $0</span>
+                                    </span>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', backgroundColor: '#FFFFFF', padding: '0.85rem', borderRadius: '8px', border: '1px solid #E9D5FF' }}>
+                                    <div>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: '800', color: '#581C87', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                            <User size={11} /> Destinatario (Quien recibe en puerta)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={giftRecipientName}
+                                            onChange={(e) => setGiftRecipientName(e.target.value)}
+                                            placeholder="Opcional: Nombre de quien recibe el regalo..."
+                                            style={{ width: '100%', padding: '0.45rem 0.65rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.78rem', color: '#0F172A' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: '800', color: '#581C87', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                            <Phone size={11} /> Teléfono del Destinatario
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={giftRecipientPhone}
+                                            onChange={(e) => setGiftRecipientPhone(e.target.value)}
+                                            placeholder="Opcional: Celular de contacto en entrega..."
+                                            style={{ width: '100%', padding: '0.45rem 0.65rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.78rem', color: '#0F172A' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: '800', color: '#581C87', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                            <MessageSquare size={11} /> Nota / Dedicatoria de Obsequio
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={giftMessage}
+                                            onChange={(e) => setGiftMessage(e.target.value)}
+                                            placeholder="Opcional: Mensaje o referencia de obsequio..."
+                                            style={{ width: '100%', padding: '0.45rem 0.65rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.78rem', color: '#0F172A' }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* 2. PRODUCT SEARCH (Visible only if NOT importing a document) */}
                         {originSource !== 'file_upload' && (
                             <div style={{ marginBottom: '1.25rem', position: 'relative' }}>
@@ -9374,15 +9482,15 @@ ${primaryAdminNotes}`.trim();
                                                             color: (orderNature === 'replacement' || isGiftRemissionClient) ? '#6D28D9' : (clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? '#D97706' : isZeroPrice ? '#DC2626' : '#1E293B',
                                                             fontVariantNumeric: 'tabular-nums'
                                                         }}>
-                                                            {formatMoney((orderNature === 'replacement' || isGiftRemissionClient) ? 0 : unitPrice)}
+                                                            {formatMoney(orderNature === 'replacement' ? 0 : unitPrice)}
                                                         </div>
                                                         {orderNature === 'replacement' ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#EDE9FE', border: '1px solid #C4B5FD', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                 <RotateCcw size={10} color="#6D28D9" /> Reposición $0
                                                             </span>
-                                                        ) : isGiftRemissionClient ? (
-                                                            <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#FAF5FF', border: '1px solid #D8B4FE', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                <Gift size={10} color="#6D28D9" /> Obsequio $0
+                                                        ) : isGiftOrder ? (
+                                                            <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#FAF5FF', border: '1px solid #D8B4FE', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }} title="Registra precio interno real pero imprime $0 en la remisión de entrega">
+                                                                <Gift size={10} color="#6D28D9" /> Remisión Obsequio ($0 en puerta)
                                                             </span>
                                                         ) : (clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#B45309', fontWeight: 'bold', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -9397,7 +9505,7 @@ ${primaryAdminNotes}`.trim();
 
                                                     {/* Subtotal */}
                                                     <div style={{ textAlign: 'right', fontWeight: '800', color: (orderNature === 'replacement' || isGiftRemissionClient) ? '#6D28D9' : '#111827', fontSize: '0.95rem' }}>
-                                                        {formatMoney((orderNature === 'replacement' || isGiftRemissionClient) ? 0 : (unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0')))}
+                                                        {formatMoney(orderNature === 'replacement' ? 0 : (unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0')))}
                                                     </div>
 
                                                     {/* Actions (Edit and Delete) */}

@@ -5556,7 +5556,7 @@ useEffect(() => {
                                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
                                                     {selectedOrder.special_attention.directives?.map((d: any) => (
                                                         <span key={d.key} style={{ fontSize: '0.68rem', fontWeight: '800', color: '#991B1B', backgroundColor: '#FFFFFF', padding: '3px 8px', borderRadius: '6px', border: '1px solid #FECACA' }}>
-                                                            ✓ {d.label}: {d.detail}
+                                                            <CheckCircle2 size={11} strokeWidth={2.5} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '3px' }} />{d.label}: {d.detail}
                                                         </span>
                                                     ))}
                                                 </div>

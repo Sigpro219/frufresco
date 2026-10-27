@@ -237,7 +237,7 @@ function PickingClientContent() {
                                 color: '#F8FAFC',
                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                             }}>
-                                ✓ {d.label}: {d.detail}
+                                <CheckCircle size={11} strokeWidth={2.5} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '3px' }} />{d.label}: {d.detail}
                             </span>
                         ))}
                     </div>

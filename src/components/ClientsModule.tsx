@@ -6830,12 +6830,12 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     {/* Modo de Atención: Píldoras */}
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '6px', marginBottom: '1rem' }}>
                                         {[
-                                            { id: 'auto', label: '🤖 Automático', desc: 'Por pedidos y PQRs' },
-                                            { id: 'new_client', label: '✨ Cliente Nuevo', desc: 'Primeras 3 entregas' },
-                                            { id: 'recurring_pqr', label: '🚨 Crítico PQR', desc: 'Alerta máxima calidad' },
-                                            { id: 'low_consumption', label: '📉 Bajo Consumo', desc: 'Seguimiento retención' },
-                                            { id: 'custom', label: '⚙️ Manual / Especial', desc: 'Instrucción a medida' },
-                                            { id: 'disabled', label: '⚪ Desactivado', desc: 'Estándar ordinario' }
+                                            { id: 'auto', label: 'Automático', icon: Cpu, desc: 'Por pedidos y PQRs' },
+                                            { id: 'new_client', label: 'Cliente Nuevo', icon: Sparkles, desc: 'Primeras 3 entregas' },
+                                            { id: 'recurring_pqr', label: 'Crítico PQR', icon: ShieldAlert, desc: 'Alerta máxima calidad' },
+                                            { id: 'low_consumption', label: 'Bajo Consumo', icon: TrendingUp, desc: 'Seguimiento retención' },
+                                            { id: 'custom', label: 'Manual / Especial', icon: Sliders, desc: 'Instrucción a medida' },
+                                            { id: 'disabled', label: 'Desactivado', icon: Ban, desc: 'Estándar ordinario' }
                                         ].map(opt => {
                                             const currentAtt = formData.logistics_data?.special_attention;
                                             const currentMode = currentAtt?.mode || (currentAtt?.active === false ? 'disabled' : (currentAtt?.active ? (currentAtt.reason || 'custom') : 'auto'));
@@ -6887,8 +6887,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                         transition: 'all 0.15s ease'
                                                     }}
                                                 >
-                                                    <span style={{ fontSize: '0.74rem', fontWeight: isSelected ? '900' : '700', color: isSelected ? '#991B1B' : '#334155' }}>
-                                                        {opt.label}
+                                                    <span style={{ fontSize: '0.74rem', fontWeight: isSelected ? '900' : '700', color: isSelected ? '#991B1B' : '#334155', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        {(() => { const OptIcon = (opt as any).icon; return OptIcon ? <OptIcon size={12} strokeWidth={2.2} /> : null; })()}
+                                                        <span>{opt.label}</span>
                                                     </span>
                                                     <span style={{ fontSize: '0.62rem', color: isSelected ? '#B91C1C' : '#94A3B8' }}>
                                                         {opt.desc}
@@ -6906,10 +6907,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             </span>
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', marginBottom: '8px' }}>
                                                 {[
-                                                    { key: 'crates', label: '📦 Canastillas Limpias / Higienizadas' },
-                                                    { key: 'selection', label: '🔍 Selección 1A (Sin Magulladuras)' },
-                                                    { key: 'weight', label: '⚖️ Peso Exacto en Báscula' },
-                                                    { key: 'specs', label: '🎚️ Calibre y Madurez Exacta' }
+                                                    { key: 'crates', label: 'Canastillas Limpias / Higienizadas' },
+                                                    { key: 'selection', label: 'Selección 1A (Sin Magulladuras)' },
+                                                    { key: 'weight', label: 'Peso Exacto en Báscula' },
+                                                    { key: 'specs', label: 'Calibre y Madurez Exacta' }
                                                 ].map(dir => {
                                                     const currentDirs = formData.logistics_data?.special_attention?.directives || { selection: true, weight: true, specs: true, crates: true };
                                                     const isChecked = currentDirs[dir.key] !== false;

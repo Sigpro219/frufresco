@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.293 (Atención Especial Logística Dual Auto/Manual en Cadena WMS, Blindaje Transparente de Remisiones y Gobernanza de Clientes — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.294 (Formato Universal de Obsequio B2B/B2C con Registro de Precio Interno y Remisión sin Precios en Puerta — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 310 Escenarios BDD Ininterrumpidos (1..310)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 311 Escenarios BDD Ininterrumpidos (1..311)
 
 ---
 
@@ -12249,3 +12249,20 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Al ingresar a la pantalla táctil de alistamiento de la célula de picking, se despliega en la parte superior un banner prominente de advertencia operativa con borde y fondo carmesí (`#EF4444`), detallando el motivo de la atención especial y las directivas obligatorias que el alistador debe verificar en báscula y empaque.
   5. **Banner Operativo en Cargue de Pedidos (`/admin/orders/loading`):**
      - En el modal de inspección y edición de pedidos (`selectedOrder`), se proyecta una tarjeta de alerta operativa para los despachadores y supervisores de mesa, asegurando sincronía total entre el área de Servicio al Cliente, Comercial y Bodega.
+
+---
+
+### Escenario 311: Formato Universal de Obsequio con Registro de Precio Interno Real y Remisión de Entrega sin Precios Visibles para Pedidos Institucionales y Hogares (Gemba Detalles Pedidos: Hallazgo 2) (SDD v1.9.294)
+- **Given** el módulo administrativo de creación de pedidos (`/admin/orders/create`), el checkout público de hogares (`/checkout`) y el motor de impresión documental (`contingency-print`),
+- **When** se registra un pedido en modalidad de obsequio tanto para un cliente institucional (B2B) como para un cliente de hogar (B2C), ya sea por configuración fija del cliente (`document_type = 'gift_remission'`) o mediante activación puntual del pedido,
+- **Then** el sistema certifica los siguientes cuatro (4) estándares operativos y contables:
+  1. **Selector Rápido de "Formato Obsequio" en Creación Administrativa (`/admin/orders/create`):**
+     - En la barra superior de naturaleza del pedido (`orderNature`), se incorpora el tercer botón con ícono `lucide-react` (`Gift`): **`Formato Obsequio`**, disponible tanto en pestaña *Institucional (B2B)* como en *Hogar (B2C)*.
+     - Al activarse, despliega el panel de datos de entrega del obsequio: *Destinatario (Quien recibe en puerta)*, *Teléfono del Destinatario* y *Nota / Dedicatoria de Obsequio*.
+  2. **Persistencia Obligatoria del Precio Interno Real en Base de Datos:**
+     - Se erradica el vaciado a `$0 COP` en la base de datos para los pedidos de obsequio (`isGiftOrder`). Únicamente las *Reposiciones por Garantía de Calidad* (`orderNature === 'replacement'`) se liquidan internamente a `$0`.
+     - En los pedidos con *Formato Obsequio*, tanto `orders` (`subtotal`, `tax`, `total`) como `order_items` (`unit_price`) registran y conservan el precio real de acuerdo comercial o lista vigente. Esto garantiza la trazabilidad financiera del costo/venta del obsequio y el cobro exacto al comprador que envía el regalo.
+  3. **Remisión de Entrega sin Precios Visibles en Puerta (`$0` al Destinatario):**
+     - Al imprimir o generar el PDF del documento de entrega (`contingency-print?mode=remissions`), el sistema detecta `logistics_data.is_gift_remission = true` y emite el formato oficial **`REMISIÓN DE OBSEQUIO #...`**, ocultando la totalidad de los precios unitarios y totales en el papel físico para que el destinatario reciba su obsequio sin visualizar valores monetarios.
+  4. **Estándar Puro de Iconografía Lucide React:**
+     - Todos los selectores, insignias (`Remisión Obsequio ($0 en puerta)`) y paneles utilizan exclusivamente componentes vectoriales de `lucide-react` (`Gift`, `CheckCircle2`, `User`, `Phone`, `MessageSquare`), erradicando cualquier emoji unicode en la interfaz.
