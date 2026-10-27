@@ -497,15 +497,15 @@ function resolveDeliverySlotInfo(order: OrderData): DeliverySlotResult {
 
 /**
  * Paginador inteligente para Remisiones Físicas estrictamente en tamaño CARTA (Letter Portrait).
- * - Si el pedido tiene hasta 18 ítems: 1 sola hoja Carta completa con Header, micro-grid cliente,
- *   tabla, control de canastillas, liquidación de totales, firmas, sello y Footer.
- * - Si supera 18 ítems: pagina de forma balanceada en 2 (o más) folios Carta independientes,
- *   donde CADA folio tiene su propio encabezado oficial, Pág X de Y, y pie de página legal.
+ * - Si el pedido tiene hasta 36 ítems: 1 sola hoja Carta completa (Monofolio) con Header, micro-grid cliente,
+ *   tabla compacta auto-escalable, control de canastillas, liquidación de totales, firmas, sello y Footer.
+ * - Si supera 36 ítems: llena la primera hoja con hasta 38 ítems y envía el remanente al segundo folio Carta
+ *   con su propio encabezado oficial, Pág X de Y, totales, firmas y pie de página legal.
  */
 function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
-    const SINGLE_PAGE_MAX = 18;
-    const INTERMEDIATE_PAGE_MAX = 24;
-    const LAST_PAGE_MAX = 18;
+    const SINGLE_PAGE_MAX = 36;
+    const INTERMEDIATE_PAGE_MAX = 38;
+    const LAST_PAGE_MAX = 32;
 
     if (!items || items.length === 0) return [[]];
     if (items.length <= SINGLE_PAGE_MAX) return [items];
@@ -520,7 +520,7 @@ function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
         }
 
         if (remaining.length <= INTERMEDIATE_PAGE_MAX + LAST_PAGE_MAX) {
-            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.ceil(remaining.length / 2));
+            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.max(24, remaining.length - 6));
             pages.push(remaining.slice(0, firstPageCount));
             pages.push(remaining.slice(firstPageCount));
             break;
@@ -1473,12 +1473,13 @@ function ContingencyPrintContent() {
 
                                     {/* Products Table con todas las columnas (IVA, KG-UN Recibe) y cuadro de check al final */}
                                     {(() => {
-                                        const isDense = pageItems.length > 20;
-                                        const rowPad = isDense ? '0.8px 3px' : '1.5px 3px';
-                                        const prodPad = isDense ? '0.8px 4px' : '1.5px 5px';
-                                        const prodFontSize = isDense ? '7.4pt' : '8pt';
-                                        const bodyFontSize = isDense ? '7.2pt' : '7.8pt';
-                                        const smallFontSize = isDense ? '6.8pt' : '7.2pt';
+                                        const isUltraDense = pageItems.length > 25;
+                                        const isDense = pageItems.length > 16;
+                                        const rowPad = isUltraDense ? '0.6px 3px' : isDense ? '1px 3px' : '1.8px 3px';
+                                        const prodPad = isUltraDense ? '0.6px 4px' : isDense ? '1px 4px' : '1.8px 5px';
+                                        const prodFontSize = isUltraDense ? '7pt' : isDense ? '7.4pt' : '8pt';
+                                        const bodyFontSize = isUltraDense ? '6.9pt' : isDense ? '7.2pt' : '7.8pt';
+                                        const smallFontSize = isUltraDense ? '6.4pt' : isDense ? '6.8pt' : '7.2pt';
 
                                         return (
                                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1579,7 +1580,7 @@ function ContingencyPrintContent() {
                                             Continúa en la siguiente página... (Pág. {pageIdx + 1} de {remissionPages.length})
                                         </div>
                                     ) : (() => {
-                                        const isDense = pageItems.length > 20;
+                                        const isDense = pageItems.length > 16;
                                         return (
                                             <div style={{ marginTop: 'auto', paddingTop: isDense ? '3px' : '6px' }}>
                                                 {/* Summary & Canastillas Control Compact */}

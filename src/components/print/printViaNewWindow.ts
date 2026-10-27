@@ -172,13 +172,13 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             display: none !important;
         }
 
-        /* Tablas de alta legibilidad en papel */
+        /* Tablas de alta legibilidad en papel (respeta densidad inline de cada documento) */
         table {
             width: 100% !important;
             border-collapse: collapse !important;
             page-break-inside: auto !important;
-            font-size: 8.5pt !important;
-            margin-bottom: 6px !important;
+            font-size: 7.5pt;
+            margin-bottom: 4px;
         }
         thead {
             display: table-header-group !important;
@@ -191,17 +191,17 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             break-inside: avoid !important;
         }
         th {
-            font-size: 8pt !important;
+            font-size: 7pt;
             font-weight: 800 !important;
-            padding: 4px 6px !important;
+            padding: 2px 4px;
             vertical-align: middle !important;
             text-transform: uppercase !important;
         }
         td {
-            font-size: 8.5pt !important;
-            padding: 4px 6px !important;
+            font-size: 7.4pt;
+            padding: 1.5px 4px;
             vertical-align: middle !important;
-            line-height: 1.25 !important;
+            line-height: 1.15;
         }
         td.num-cell, td.text-right, .tabular-nums {
             font-variant-numeric: tabular-nums !important;

@@ -12817,3 +12817,19 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - Si un registro histórico en `selected_options._physical_instruction` contiene un número de 6 o más dígitos pegado a `gr` (ej. `"1 Unidad 203519 gr"` producto de un código PLU), `resolvePhysicalInstruction` lo descarta automáticamente (`/\b\d{6,}\s*(?:gr|g|gramos)\b/i`), retornando `null` y preservando la línea como producto estándar a granel (`1 Kg`).
   4. **Supresión de Ruido PLU en Badges de Características (`resolveProductCharacteristicsBadges`):**
      - Los códigos `PLU` y la palabra `granel` se excluyen de las píldoras de características personalizadas (`✨`), garantizando que en el modal de detalle de pedido, sábana de alistamiento y planilla de compras el ítem se visualice 100% limpio (`Champiñon — 1 Kg`).
+
+---
+
+### Escenario 336: Consolidación Monofolio en Hoja Carta de Remisiones de hasta 36 Productos y Erradicación de Partición 50/50 Prematura (SDD v1.9.318)
+- **Given** la emisión e impresión de Remisiones de Entrega en /admin/orders/contingency-print?mode=remissions, donde pedidos medianos como la **Remisión #2710_1213 (El Corral Gourmet Floresta — 23 productos)** o **Colegio San Jorge de Inglaterra (26 productos)** se partían artificialmente por la mitad en 2 hojas (Pág. 1 de 2 con 12 productos y media hoja en blanco, y Pág. 2 de 2 con 11 productos) debido a SINGLE_PAGE_MAX = 18 y Math.ceil(remaining.length / 2), sumado a la sobrescritura !important de padding: 4px 6px !important en GoldenPrintStyles.tsx y printViaNewWindow.ts,
+- **When** el jefe de despacho o facturación visualiza, descarga en PDF o imprime las remisiones de entrega en tamaño Carta (215.9 mm × 279.4 mm):
+- **Then** el sistema aplica las siguientes reglas canónicas de aprovechamiento de papel y fidelidad de impresión:
+  1. **Capacidad Monofolio Completa hasta 36 Productos (SINGLE_PAGE_MAX = 36):**
+     - Todo pedido con 1 a 36 productos se renderiza e imprime estrictamente en **1 sola hoja Carta (1 folio por copia)** incluyendo membrete, datos de sucursal, tabla completa, control de canastillas, liquidación financiera y firmas con código QR.
+     - Se elimina la división artificial Math.ceil(remaining.length / 2). Cuando un pedido supera los 36 ítems (ej. 40 a 46 productos), la Página 1 se llena a capacidad (INTERMEDIATE_PAGE_MAX = 38) dejando el remanente más el bloque de totales y firmas en la Página 2.
+  2. **Escalonamiento Progresivo de Densidad Visual:**
+     - 1 a 16 ítems: Densidad estándar (padding: 1.8px 3px, fuente 7.8pt - 8pt).
+     - 17 a 25 ítems (isDense): Densidad compacta (padding: 1px 3px, fuente 7.2pt - 7.4pt, pie de firmas compacto).
+     - 26 a 36 ítems (isUltraDense): Ultra-densidad calibrada (padding: 0.6px 3px, fuente 6.9pt - 7pt, pie de firmas compacto).
+  3. **Respeto Estricto de Densidad Inline en @media print (GoldenPrintStyles.tsx & printViaNewWindow.ts):**
+     - Se remueve el modificador !important sobre padding y ont-size de 	able, 	h y 	d en las hojas de estilo globales de impresión, así como el min-height: 265mm !important en @media print, garantizando que las tablas compactas mantengan su altura exacta sin provocar saltos de página fantasma.

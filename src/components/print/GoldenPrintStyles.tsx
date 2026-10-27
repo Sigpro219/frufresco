@@ -171,10 +171,10 @@ export default function GoldenPrintStyles({
             .letterhead-container table {
                 width: 100% !important;
                 border-collapse: collapse !important;
-                margin-top: 0.35rem !important;
-                margin-bottom: 0.55rem !important;
-                font-size: 7.2pt !important;
-                line-height: 1.2 !important;
+                margin-top: 0.25rem;
+                margin-bottom: 0.4rem;
+                font-size: 7.2pt;
+                line-height: 1.15;
                 position: relative;
                 z-index: 1;
             }
@@ -195,13 +195,13 @@ export default function GoldenPrintStyles({
             .letterhead-container th {
                 background-color: var(--print-primary) !important;
                 color: #FFFFFF !important;
-                font-size: 6.8pt !important;
+                font-size: 6.8pt;
                 font-weight: 800 !important;
                 text-transform: uppercase !important;
-                letter-spacing: 0.05em !important;
-                padding: 2.5px 5px !important;
+                letter-spacing: 0.04em;
+                padding: 2px 4px;
                 border: 1px solid var(--print-primary) !important;
-                text-align: left !important;
+                text-align: left;
                 vertical-align: middle !important;
             }
 
@@ -218,14 +218,14 @@ export default function GoldenPrintStyles({
             }
 
             .letterhead-container td {
-                padding: 1.8px 4px !important;
-                font-size: 7.2pt !important;
+                padding: 1.5px 4px;
+                font-size: 7.2pt;
                 border-bottom: 1px solid #E2E8F0 !important;
                 border-left: 1px solid #F1F5F9 !important;
                 border-right: 1px solid #F1F5F9 !important;
-                color: #1E293B !important;
+                color: #1E293B;
                 vertical-align: middle !important;
-                line-height: 1.15 !important;
+                line-height: 1.15;
             }
 
             .letterhead-container tbody tr:nth-child(even) {
@@ -285,7 +285,7 @@ export default function GoldenPrintStyles({
                 }
                 .letterhead-container {
                     width: 100% !important;
-                    min-height: ${pageSize.includes('legal') ? '335mm' : '265mm'} !important;
+                    min-height: 0 !important;
                     height: auto !important;
                     overflow: visible !important;
                     display: flex !important;
@@ -343,15 +343,15 @@ export default function GoldenPrintStyles({
                     line-height: 1.35 !important;
                 }
                 .letterhead-container table {
-                    font-size: 8.5pt !important;
+                    font-size: 7.5pt;
                 }
                 .letterhead-container th {
-                    font-size: 8pt !important;
-                    padding: 4px 6px !important;
+                    font-size: 7pt;
+                    padding: 2px 4px;
                 }
                 .letterhead-container td {
-                    font-size: 8.5pt !important;
-                    padding: 4px 6px !important;
+                    font-size: 7.4pt;
+                    padding: 1.5px 4px;
                 }
                 .page-break {
                     page-break-after: always !important;
