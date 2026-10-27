@@ -7,7 +7,7 @@
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 313 Escenarios BDD Ininterrumpidos (1..313)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 314 Escenarios BDD Ininterrumpidos (1..314)
 
 ---
 
@@ -12416,3 +12416,28 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Se garantiza el soporte multilínea (si un cliente pidió diferentes presentaciones del mismo SKU en un pedido, ninguna se omite) y filtrado reactivo desde el Omnibox superior por cliente, pedido o zona.
   4. **Exportación Canónica a Excel (.xlsx):**
      - El botón **`Descargar Excel (.xlsx)`** genera de forma nativa e instantánea el archivo `Reporte_Comercial_BI_[FECHA]_drilldown.xlsx` conteniendo todos los registros visibles con formato numérico y monetario limpio para análisis comercial sin reprocesos.
+
+
+---
+
+### Escenario 319: Indicador e Histograma Temporal de Reposiciones & Garantías en Torre de Control - Costo Monetario, Kilaje, Línea de Tendencia Lean y Modal Auditable (Gemba Hallazgo 10) (SDD v1.9.297)
+- **Given** la Torre de Control Estratégico (`/admin/strategy`) en sus subpestañas *1. Comercial & Finanzas* (*Histórico Temporal & Comportamiento Diario*) y *2. Cadena de Suministro & Inventario*, donde previamente el indicador de reposiciones solo reflejaba kilos de bodega sin cuantificar el impacto monetario real ($ COP), se omitían devoluciones de `billing_returns` y no existía un histograma temporal para determinar si las fallas de calidad iban en aumento o descenso,
+- **When** la dirección general, comercial y de operaciones audita la fuga de inventario y margen por concepto de garantías de calidad,
+- **Then** el sistema ratifica e implementa los siguientes cinco (5) estándares de inteligencia operativa y control estadístico Lean:
+  1. **Ingesta Integral y Cuantificación de Costo Real ($ COP):**
+     - Cruza en tiempo real todos los pedidos de reposición autorizados (`origin_source = 'customer_service'`, `payment_method = 'reposicion_garantia'` o notas de reposición de garantía a $0 COP) junto con las devoluciones físicas de `billing_returns`.
+     - Valoriza cada producto cedido contra `commercial_cost_matrix` (costo real de adquisición pagado por FruFresco), reportando la cifra consolidada histórica de **$11.987.555 COP en costo de inventario cedido**, **3.718,1 Kg repuestos** y **17 despachos a $0 COP**.
+  2. **Modo Histograma en Histórico Temporal (*1. Comercial & Finanzas*):**
+     - Añade la quinta píldora interactiva **`[Garantías & Reposiciones ($)]`** en la barra de métricas del panel *Histórico Temporal & Comportamiento Diario*.
+     - Al seleccionarla, transforma la gráfica de línea continua en un **Histograma SVG de Barras Verticales** con código de color semántico por severidad:
+       - 🟢 Verde Clínico (`#059669`): Días con $0 o garantías bajo control.
+       - 🟡 Ámbar Preventivo (`#D97706`): Garantías moderadas (hasta $200.000 COP).
+       - 🔴 Rojo Crítico (`#DC2626`): Picos de contingencia (> $200.000 COP).
+  3. **Línea de Tendencia Lean (Trendline Moving Average):**
+     - Traza una curva de tendencia suavizada sobre las barras del histograma y calcula la pendiente de los últimos 7 días frente a los 7 días previos.
+     - Proyecta la insignia de telemetría: `↘ -X% Calidad Bajo Control (Lean Mejora)` o `↗ +X% Alerta de Fuga en Aumento` junto con la cinta de resumen `Fuga Total de Inventario: $11.987.555 (3.718,1 Kg en 17 despachos)`.
+  4. **Tooltip Interactivo de Alta Densidad:**
+     - Al posar el cursor sobre cada barra del histograma, expone: Fecha, Costo Cedido ($), Casos registrados, Kilaje repuesto y los nombres de los clientes institucionales afectados (e.g. Colsubsidio, Wok, Barús, Hotel Tryp).
+  5. **Modal / Drawer de Historial Forense con Exportación a Excel:**
+     - Dispone del botón interactivo **`[Ver Historial Auditable]`** que abre una ventana modal con el desglose cronológico completo (Folio `#PED-XXXX`, Fecha, Cliente, Kilaje, Costo Asumido y Motivo/Pedido Padre amparado).
+     - Incorpora el botón **`Descargar Excel`** que genera nativamente el archivo `Frufresco_Garantias_Reposiciones_[FECHA].xlsx`.

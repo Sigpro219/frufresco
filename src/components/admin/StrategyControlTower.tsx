@@ -13,6 +13,9 @@ import {
     Users,
     AlertTriangle,
     ShieldCheck,
+    ShieldAlert,
+    History,
+    X,
     Download,
     Calendar,
     Filter,
@@ -56,7 +59,9 @@ export default function StrategyControlTower() {
     const [exporting, setExporting] = useState(false);
 
     // View metric selector inside Commercial Timeline
-    const [commercialTimelineMetric, setCommercialTimelineMetric] = useState<'sales' | 'kg' | 'orders' | 'profit'>('sales');
+    const [commercialTimelineMetric, setCommercialTimelineMetric] = useState<'sales' | 'kg' | 'orders' | 'profit' | 'warranties'>('sales');
+    const [billingReturns, setBillingReturns] = useState<any[]>([]);
+    const [showWarrantyHistoryModal, setShowWarrantyHistoryModal] = useState(false);
     const [paretoSort, setParetoSort] = useState<'spend' | 'profit' | 'margin' | 'volume'>('spend');
     const [matrixSort, setMatrixSort] = useState<'volume' | 'total_profit' | 'revenue' | 'spread'>('volume');
     const [productRankingSort, setProductRankingSort] = useState<'volume' | 'profit' | 'revenue'>('volume');
@@ -108,7 +113,7 @@ export default function StrategyControlTower() {
             // Build orders query with date filtering (including origin_source and admin_notes for SAC warranty tracking)
             let ordersQuery = supabase
                 .from('orders')
-                .select('id, profile_id, total, status, type, delivery_date, delivery_slot, shipping_address, latitude, longitude, created_at, subtotal, tax, total_weight_kg, sequence_id, origin_source, admin_notes')
+                .select('id, profile_id, total, status, type, delivery_date, delivery_slot, shipping_address, latitude, longitude, created_at, subtotal, tax, total_weight_kg, sequence_id, origin_source, admin_notes, payment_method')
                 .neq('status', 'cancelled')
                 .limit(5000);
 
@@ -137,7 +142,8 @@ export default function StrategyControlTower() {
                 productsRes1,
                 productsRes2,
                 leadsRes,
-                pricesRes
+                pricesRes,
+                returnsRes
             ] = await Promise.all([
                 ordersQuery,
                 Promise.all(
@@ -184,10 +190,15 @@ export default function StrategyControlTower() {
                     .from('pricing_model_prices')
                     .select('product_id, price')
                     .eq('model_id', GENERAL_INSTITUCIONAL_ID)
-                    .limit(5000)
+                    .limit(5000),
+                supabase
+                    .from('billing_returns')
+                    .select('id, order_id, product_id, quantity_returned, status, reason, notes, created_at, calculated_amount')
+                    .limit(2000)
             ]);
 
             setOrders(ordersRes.data || []);
+            setBillingReturns((returnsRes as any)?.data || []);
             const allFetchedItems = Array.isArray(itemsRes)
                 ? itemsRes.flatMap((r: any) => r.data || [])
                 : ((itemsRes as any).data || []);
@@ -405,15 +416,81 @@ export default function StrategyControlTower() {
         };
     }, [filteredOrders, profileMap, orderItems, costMap, priceMap, productMap, productRankingSort]);
 
-    // Historical Time Series Grouping (by Day) for Commercial Timeline
+    // Reposiciones y Garantías Reales ($0 COP / origin_source = customer_service / payment_method = reposicion_garantia)
+    const repositionOrdersList = useMemo(() => {
+        return orders.filter(o => {
+            const notesUpper = (o.admin_notes || '').toUpperCase();
+            const payUpper = (o.payment_method || '').toUpperCase();
+            const srcUpper = (o.origin_source || '').toUpperCase();
+            return (
+                srcUpper === 'CUSTOMER_SERVICE' ||
+                payUpper.includes('REPOSICION') ||
+                payUpper.includes('GARANTIA') ||
+                (Number(o.total || 0) === 0 && (
+                    notesUpper.includes('[REPOSICIÓN DE GARANTÍA') ||
+                    notesUpper.includes('[REPOSICION DE GARANTIA') ||
+                    notesUpper.includes('REPOSICIÓN') ||
+                    notesUpper.includes('REPOSICION')
+                ))
+            );
+        }).map(o => {
+            const client = profileMap.get(o.profile_id);
+            const clientName = client?.company_name || client?.contact_name || 'Cliente Institucional';
+            const items = orderItems.filter(it => it.order_id === o.id);
+            let orderCost = 0;
+            let itemsWeight = 0;
+            items.forEach(it => {
+                const q = Number(it.quantity) || 0;
+                itemsWeight += q;
+                const c = costMap.get(it.product_id) || 0;
+                orderCost += q * c;
+            });
+            const finalWeight = Number(o.total_weight_kg) || itemsWeight;
+            return {
+                id: o.id,
+                sequence_id: o.sequence_id,
+                date: o.created_at,
+                displayDate: new Date(o.created_at).toLocaleDateString('es-CO'),
+                clientName,
+                weightKg: finalWeight,
+                estimatedCost: orderCost,
+                itemsCount: items.length,
+                adminNotes: o.admin_notes || 'Reposición por garantía de calidad'
+            };
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [orders, orderItems, profileMap, costMap]);
+
+    // Historical Time Series Grouping (by Day) for Commercial Timeline & Warranty Histogram
     const commercialTimeSeries = useMemo(() => {
-        const dayMap = new Map<string, { date: string; displayDate: string; sales: number; kg: number; orders: number; profit: number }>();
+        const dayMap = new Map<string, {
+            date: string;
+            displayDate: string;
+            sales: number;
+            kg: number;
+            orders: number;
+            profit: number;
+            warrantyCost: number;
+            warrantyKg: number;
+            warrantyOrders: number;
+            warrantyClients: string[];
+        }>();
 
         filteredOrders.forEach(o => {
             const d = new Date(o.created_at);
             const key = d.toISOString().split('T')[0]; // YYYY-MM-DD
             const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
-            const existing = dayMap.get(key) || { date: key, displayDate, sales: 0, kg: 0, orders: 0, profit: 0 };
+            const existing = dayMap.get(key) || {
+                date: key,
+                displayDate,
+                sales: 0,
+                kg: 0,
+                orders: 0,
+                profit: 0,
+                warrantyCost: 0,
+                warrantyKg: 0,
+                warrantyOrders: 0,
+                warrantyClients: []
+            };
             
             const sales = Number(o.total) || 0;
             const kg = Number(o.total_weight_kg) || 0;
@@ -428,9 +505,102 @@ export default function StrategyControlTower() {
             });
         });
 
+        // Add reposition orders to dayMap
+        repositionOrdersList.forEach(repo => {
+            if (!repo.date) return;
+            const d = new Date(repo.date);
+            const key = d.toISOString().split('T')[0];
+            const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
+            const existing = dayMap.get(key) || {
+                date: key,
+                displayDate,
+                sales: 0,
+                kg: 0,
+                orders: 0,
+                profit: 0,
+                warrantyCost: 0,
+                warrantyKg: 0,
+                warrantyOrders: 0,
+                warrantyClients: []
+            };
+
+            dayMap.set(key, {
+                ...existing,
+                warrantyCost: existing.warrantyCost + repo.estimatedCost,
+                warrantyKg: existing.warrantyKg + repo.weightKg,
+                warrantyOrders: existing.warrantyOrders + 1,
+                warrantyClients: existing.warrantyClients.includes(repo.clientName)
+                    ? existing.warrantyClients
+                    : [...existing.warrantyClients, repo.clientName]
+            });
+        });
+
+        // Add billing_returns to dayMap
+        billingReturns.forEach(ret => {
+            if (!ret.created_at) return;
+            const d = new Date(ret.created_at);
+            const key = d.toISOString().split('T')[0];
+            const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
+            const existing = dayMap.get(key) || {
+                date: key,
+                displayDate,
+                sales: 0,
+                kg: 0,
+                orders: 0,
+                profit: 0,
+                warrantyCost: 0,
+                warrantyKg: 0,
+                warrantyOrders: 0,
+                warrantyClients: []
+            };
+
+            const q = Number(ret.quantity_returned) || 0;
+            const c = costMap.get(ret.product_id) || 0;
+            const retCost = Number(ret.calculated_amount) || (q * c);
+
+            dayMap.set(key, {
+                ...existing,
+                warrantyCost: existing.warrantyCost + retCost,
+                warrantyKg: existing.warrantyKg + q
+            });
+        });
+
         const sorted = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
         return sorted;
-    }, [filteredOrders]);
+    }, [filteredOrders, repositionOrdersList, billingReturns, costMap]);
+
+    // Trend calculation for warranties & repositions
+    const warrantyTrend = useMemo(() => {
+        const totalCost = repositionOrdersList.reduce((acc, r) => acc + r.estimatedCost, 0);
+        const totalKg = repositionOrdersList.reduce((acc, r) => acc + r.weightKg, 0);
+        const totalCases = repositionOrdersList.length;
+
+        const activeDays = commercialTimeSeries.filter(d => (d.warrantyCost || 0) > 0 || (d.sales || 0) > 0);
+        const last7 = activeDays.slice(-7);
+        const prev7 = activeDays.slice(-14, -7);
+        const costLast7 = last7.reduce((acc, d) => acc + (d.warrantyCost || 0), 0);
+        const costPrev7 = prev7.reduce((acc, d) => acc + (d.warrantyCost || 0), 0);
+
+        let pct = 0;
+        let direction: 'down' | 'up' | 'flat' = 'flat';
+        if (costPrev7 > 0) {
+            pct = Math.round(((costLast7 - costPrev7) / costPrev7) * 100);
+            direction = pct < 0 ? 'down' : pct > 0 ? 'up' : 'flat';
+        } else if (costLast7 > 0) {
+            pct = 100;
+            direction = 'up';
+        }
+
+        return {
+            totalCost,
+            totalKg,
+            totalCases,
+            direction,
+            pct: Math.abs(pct),
+            costLast7,
+            costPrev7
+        };
+    }, [repositionOrdersList, commercialTimeSeries]);
 
     // Metrics calculations for Inventory / Supply Chain Area (connected to real inventory_group, costMap, real min_inventory_level & SAC warranty orders)
     const inventoryMetrics = useMemo(() => {
@@ -496,17 +666,10 @@ export default function StrategyControlTower() {
         let inboundQty = 0;
         let outboundQty = 0;
 
-        // Conectar reposiciones reales de garantía autorizadas por SAC ($0 COP / origin_source = 'customer_service')
-        orders.forEach(o => {
-            const notesUpper = (o.admin_notes || '').toUpperCase();
-            const isSacReposition =
-                o.origin_source === 'customer_service' ||
-                (Number(o.total || 0) === 0 && (notesUpper.includes('[REPOSICIÓN DE GARANTÍA') || notesUpper.includes('[REPOSICION DE GARANTIA')));
-            if (isSacReposition) {
-                repositionsOrdersCount += 1;
-                repositionsQty += Number(o.total_weight_kg) || 0;
-            }
-        });
+        // Conectar reposiciones reales de garantía autorizadas por SAC ($0 COP / origin_source = 'customer_service' / payment_method = 'reposicion_garantia')
+        repositionsOrdersCount = repositionOrdersList.length;
+        repositionsQty = repositionOrdersList.reduce((acc, r) => acc + r.weightKg, 0);
+        const repositionsCost = repositionOrdersList.reduce((acc, r) => acc + r.estimatedCost, 0);
 
         const dailyMovementsMap = new Map<string, { date: string; displayDate: string; inbound: number; outbound: number; waste: number }>();
 
@@ -592,6 +755,7 @@ export default function StrategyControlTower() {
             repositionsOrdersCount,
             returnsQty,
             wasteQty,
+            repositionsCost,
             inboundQty,
             outboundQty,
             wasteRatePct: commercialMetrics.totalKg > 0 ? ((wasteQty / commercialMetrics.totalKg) * 100).toFixed(1) : '0.0',
@@ -1142,12 +1306,13 @@ export default function StrategyControlTower() {
                             </div>
 
                             {/* Metric Selector Buttons */}
-                            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '8px', flexWrap: 'wrap' }}>
                                 {[
                                     { id: 'sales', label: 'Facturación ($)' },
                                     { id: 'kg', label: 'Volumen (Kg)' },
                                     { id: 'orders', label: 'Órdenes' },
-                                    { id: 'profit', label: 'Utilidad ($)' }
+                                    { id: 'profit', label: 'Utilidad ($)' },
+                                    { id: 'warranties', label: 'Garantías & Reposiciones ($)' }
                                 ].map(m => (
                                     <button
                                         key={m.id}
@@ -1170,7 +1335,56 @@ export default function StrategyControlTower() {
                             </div>
                         </div>
 
-                        {/* Interactive SVG Chart Component */}
+                        {commercialTimelineMetric === 'warranties' && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '0.65rem 1rem', borderRadius: '10px', marginBottom: '1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 850, color: '#92400E' }}>
+                                        <ShieldAlert size={16} color="#D97706" />
+                                        <span>Fuga Total de Inventario: {formatMoney(warrantyTrend.totalCost)}</span>
+                                    </div>
+                                    <span style={{ fontSize: '0.74rem', color: '#78350F', fontWeight: 600 }}>
+                                        ({formatNumber(warrantyTrend.totalKg, 1)} Kg cedidos en {warrantyTrend.totalCases} despachos a $0 COP)
+                                    </span>
+                                    <span style={{
+                                        fontSize: '0.74rem',
+                                        fontWeight: 850,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        padding: '2px 8px',
+                                        borderRadius: '6px',
+                                        backgroundColor: warrantyTrend.direction === 'down' ? '#ECFDF5' : warrantyTrend.direction === 'up' ? '#FEF2F2' : '#F1F5F9',
+                                        color: warrantyTrend.direction === 'down' ? '#065F46' : warrantyTrend.direction === 'up' ? '#DC2626' : '#475569',
+                                        border: `1px solid ${warrantyTrend.direction === 'down' ? '#A7F3D0' : warrantyTrend.direction === 'up' ? '#FECACA' : '#E2E8F0'}`
+                                    }}>
+                                        {warrantyTrend.direction === 'down' ? <ArrowDownRight size={13} /> : warrantyTrend.direction === 'up' ? <ArrowUpRight size={13} /> : <Minus size={13} />}
+                                        Tendencia 7D: {warrantyTrend.direction === 'down' ? `↘ -${warrantyTrend.pct}% Calidad Bajo Control (Lean Mejora)` : warrantyTrend.direction === 'up' ? `↗ +${warrantyTrend.pct}% Alerta de Fuga en Aumento` : '→ Frecuencia Estable'}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setShowWarrantyHistoryModal(true)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        backgroundColor: '#0D7A57',
+                                        color: '#FFFFFF',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        padding: '0.35rem 0.75rem',
+                                        fontSize: '0.74rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 3px rgba(13, 122, 87, 0.2)'
+                                    }}
+                                >
+                                    <History size={14} />
+                                    Ver Historial Auditable ({warrantyTrend.totalCases})
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Interactive SVG Chart / Histogram Component */}
                         <BITimeSeriesChart
                             data={commercialTimeSeries}
                             metric={commercialTimelineMetric}
@@ -1286,12 +1500,12 @@ export default function StrategyControlTower() {
                         />
                         <AreaKPICard
                             title="Reposiciones & Garantías"
-                            value={`${formatNumber(inventoryMetrics.repositionsQty, 1)} Kg`}
-                            subtitle={`${inventoryMetrics.repositionsOrdersCount} garantías SAC ($0) • ${formatNumber(inventoryMetrics.returnsQty, 1)} Kg retornos`}
-                            icon={<ShieldCheck size={20} color="#047857" />}
-                            badgeText="Garantía SAC"
-                            badgeBg="#ECFDF5"
-                            badgeColor="#047857"
+                            value={formatMoney(inventoryMetrics.repositionsCost || warrantyTrend.totalCost)}
+                            subtitle={`${inventoryMetrics.repositionsOrdersCount} garantías SAC ($0) • ${formatNumber(inventoryMetrics.repositionsQty, 1)} Kg cedidos`}
+                            icon={<ShieldAlert size={20} color="#DC2626" />}
+                            badgeText="Costo Inventario"
+                            badgeBg="#FEF2F2"
+                            badgeColor="#DC2626"
                         />
                         <AreaKPICard
                             title="Alertas de Stock Mínimo"
@@ -2023,6 +2237,166 @@ export default function StrategyControlTower() {
                     />
                 </div>
             )}
+
+            {/* Modal de Historial Auditable de Reposiciones y Garantías */}
+            {showWarrantyHistoryModal && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 9999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1.5rem'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '900px',
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+                        border: '1px solid #E2E8F0',
+                        overflow: 'hidden'
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '1.25rem 1.5rem',
+                            borderBottom: '1px solid #E2E8F0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            backgroundColor: '#F8FAFC'
+                        }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <ShieldAlert size={18} color="#DC2626" />
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 850, color: '#0F172A' }}>
+                                        Historial Forense de Reposiciones & Garantías ($0 COP)
+                                    </h3>
+                                </div>
+                                <p style={{ margin: '3px 0 0 0', fontSize: '0.76rem', color: '#64748B' }}>
+                                    Trazabilidad de {repositionOrdersList.length} despachos autorizados por calidad valorizados a costo de inventario real.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowWarrantyHistoryModal(false)}
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    border: 'none',
+                                    color: '#64748B',
+                                    cursor: 'pointer',
+                                    padding: '4px',
+                                    borderRadius: '6px'
+                                }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Summary Ribbon */}
+                        <div style={{
+                            display: 'flex',
+                            gap: '12px',
+                            padding: '0.85rem 1.5rem',
+                            backgroundColor: '#FFFBEB',
+                            borderBottom: '1px solid #FDE68A',
+                            flexWrap: 'wrap',
+                            alignItems: 'center'
+                        }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#92400E' }}>
+                                Costo Cedido Total: {formatMoney(warrantyTrend.totalCost)}
+                            </div>
+                            <div style={{ fontSize: '0.76rem', color: '#78350F' }}>
+                                • Volumen: {formatNumber(warrantyTrend.totalKg, 1)} Kg
+                            </div>
+                            <div style={{ fontSize: '0.76rem', color: '#78350F' }}>
+                                • {warrantyTrend.totalCases} Pedidos a $0 COP
+                            </div>
+                            <div style={{ marginLeft: 'auto' }}>
+                                <button
+                                    onClick={async () => {
+                                        const XLSX = await import('xlsx');
+                                        const wb = XLSX.utils.book_new();
+                                        const data = repositionOrdersList.map(r => ({
+                                            'Consecutivo': `#PED-${r.sequence_id}`,
+                                            'Fecha': r.displayDate,
+                                            'Cliente': r.clientName,
+                                            'Kilaje Repuesto (Kg)': r.weightKg,
+                                            'Costo Estimado ($ COP)': r.estimatedCost,
+                                            'Ítems': r.itemsCount,
+                                            'Notas / Amparo': r.adminNotes
+                                        }));
+                                        const ws = XLSX.utils.json_to_sheet(data);
+                                        XLSX.utils.book_append_sheet(wb, ws, 'Garantias');
+                                        XLSX.writeFile(wb, `Frufresco_Garantias_Reposiciones_${new Date().toISOString().split('T')[0]}.xlsx`);
+                                    }}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        backgroundColor: '#15803D',
+                                        color: '#FFFFFF',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        padding: '0.35rem 0.75rem',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <FileSpreadsheet size={14} />
+                                    Descargar Excel
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Modal Body Table */}
+                        <div style={{ padding: '1rem 1.5rem', overflowY: 'auto', flex: 1 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '2px solid #E2E8F0', textAlign: 'left', color: '#64748B' }}>
+                                        <th style={{ padding: '0.5rem' }}>Folio</th>
+                                        <th style={{ padding: '0.5rem' }}>Fecha</th>
+                                        <th style={{ padding: '0.5rem' }}>Cliente</th>
+                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Kilaje</th>
+                                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Costo Asumido</th>
+                                        <th style={{ padding: '0.5rem' }}>Motivo / Amparo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {repositionOrdersList.map((r, idx) => (
+                                        <tr key={r.id || idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                            <td style={{ padding: '0.6rem 0.5rem', fontWeight: 800, color: '#0D7A57' }}>
+                                                #PED-{r.sequence_id}
+                                            </td>
+                                            <td style={{ padding: '0.6rem 0.5rem', color: '#64748B' }}>
+                                                {r.displayDate}
+                                            </td>
+                                            <td style={{ padding: '0.6rem 0.5rem', fontWeight: 700, color: '#0F172A' }}>
+                                                {r.clientName}
+                                            </td>
+                                            <td style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: 700 }}>
+                                                {formatNumber(r.weightKg, 1)} Kg
+                                            </td>
+                                            <td style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: 850, color: '#DC2626' }}>
+                                                {formatMoney(r.estimatedCost)}
+                                            </td>
+                                            <td style={{ padding: '0.6rem 0.5rem', color: '#475569', fontSize: '0.72rem', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.adminNotes}>
+                                                {r.adminNotes}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -2033,8 +2407,19 @@ function BITimeSeriesChart({
     data,
     metric
 }: {
-    data: { date: string; displayDate: string; sales: number; kg: number; orders: number; profit: number }[];
-    metric: 'sales' | 'kg' | 'orders' | 'profit';
+    data: {
+        date: string;
+        displayDate: string;
+        sales: number;
+        kg: number;
+        orders: number;
+        profit: number;
+        warrantyCost?: number;
+        warrantyKg?: number;
+        warrantyOrders?: number;
+        warrantyClients?: string[];
+    }[];
+    metric: 'sales' | 'kg' | 'orders' | 'profit' | 'warranties';
 }) {
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -2047,8 +2432,9 @@ function BITimeSeriesChart({
         );
     }
 
-    const values = data.map(d => d[metric]);
-    const maxVal = Math.max(...values, 1);
+    const isHistogram = metric === 'warranties';
+    const values = data.map(d => isHistogram ? (d.warrantyCost || 0) : d[metric]);
+    const maxVal = Math.max(...values, isHistogram ? 100000 : 1);
     const minVal = 0;
     const height = 180;
     const width = 800;
@@ -2056,24 +2442,43 @@ function BITimeSeriesChart({
     const paddingY = 25;
 
     const points = data.map((d, i) => {
+        const val = isHistogram ? (d.warrantyCost || 0) : d[metric];
         const x = paddingX + (i / Math.max(data.length - 1, 1)) * (width - paddingX * 2);
-        const y = height - paddingY - ((d[metric] - minVal) / (maxVal - minVal)) * (height - paddingY * 2);
-        return { x, y, item: d };
+        const y = height - paddingY - ((val - minVal) / (maxVal - minVal)) * (height - paddingY * 2);
+        return { x, y, item: d, val };
     });
 
     const pathD = points.length > 1
         ? `M ${points[0].x} ${points[0].y} ` + points.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ')
         : `M ${paddingX} ${height / 2} L ${width - paddingX} ${height / 2}`;
 
-    const areaD = points.length > 1
+    const areaD = points.length > 1 && !isHistogram
         ? `${pathD} L ${points[points.length - 1].x} ${height - paddingY} L ${points[0].x} ${height - paddingY} Z`
         : '';
 
+    // Trendline calculation for histogram (moving average window 5)
+    const trendlinePoints = (!isHistogram || points.length < 2)
+        ? []
+        : points.map((p, idx) => {
+            const start = Math.max(0, idx - 2);
+            const end = Math.min(points.length, idx + 3);
+            const slice = points.slice(start, end);
+            const avgY = slice.reduce((acc, curr) => acc + curr.y, 0) / slice.length;
+            return { x: p.x, y: avgY };
+        });
+
+    const trendlinePath = trendlinePoints.length > 1
+        ? `M ${trendlinePoints[0].x} ${trendlinePoints[0].y} ` + trendlinePoints.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ')
+        : '';
+
     const formatVal = (v: number) => {
-        if (metric === 'sales' || metric === 'profit') return formatMoney(v);
+        if (metric === 'sales' || metric === 'profit' || metric === 'warranties') return formatMoney(v);
         if (metric === 'kg') return `${formatNumber(v, 1)} Kg`;
         return `${formatNumber(v, 0)} ord`;
     };
+
+    const stepWidth = (width - paddingX * 2) / Math.max(data.length - 1, 1);
+    const barWidth = Math.max(6, Math.min(22, stepWidth * 0.75));
 
     return (
         <div style={{ position: 'relative', width: '100%', overflowX: 'auto' }}>
@@ -2102,34 +2507,85 @@ function BITimeSeriesChart({
                     );
                 })}
 
-                {/* Area under curve */}
-                {areaD && <path d={areaD} fill="url(#biAreaGrad)" />}
+                {/* Linear Chart Mode (Sales, Kg, Orders, Profit) */}
+                {!isHistogram && (
+                    <>
+                        {areaD && <path d={areaD} fill="url(#biAreaGrad)" />}
+                        <path d={pathD} fill="none" stroke="#0D7A57" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                        {points.map((p, i) => (
+                            <g key={i}>
+                                <circle
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r={hoverIndex === i ? 6 : 3.5}
+                                    fill={hoverIndex === i ? '#0D7A57' : '#FFFFFF'}
+                                    stroke="#0D7A57"
+                                    strokeWidth="2.5"
+                                    style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                                    onMouseEnter={() => setHoverIndex(i)}
+                                    onMouseLeave={() => setHoverIndex(null)}
+                                />
+                                {(data.length <= 15 || i % Math.ceil(data.length / 10) === 0) && (
+                                    <text x={p.x} y={height - 5} textAnchor="middle" fontSize="9" fill="#64748B" fontWeight="600">
+                                        {p.item.displayDate}
+                                    </text>
+                                )}
+                            </g>
+                        ))}
+                    </>
+                )}
 
-                {/* Main Curve Line */}
-                <path d={pathD} fill="none" stroke="#0D7A57" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                {/* Histogram Mode (Warranties & Repositions Cost) */}
+                {isHistogram && (
+                    <>
+                        {/* Bars */}
+                        {points.map((p, i) => {
+                            const val = p.val;
+                            const barH = Math.max(3, height - paddingY - p.y);
+                            const barY = height - paddingY - barH;
+                            const isHigh = val > 200000;
+                            const isMid = val > 0 && val <= 200000;
+                            const barFill = val === 0 ? '#E2E8F0' : isHigh ? '#DC2626' : '#D97706';
+                            const isHovered = hoverIndex === i;
 
-                {/* Interactive Points */}
-                {points.map((p, i) => (
-                    <g key={i}>
-                        <circle
-                            cx={p.x}
-                            cy={p.y}
-                            r={hoverIndex === i ? 6 : 3.5}
-                            fill={hoverIndex === i ? '#0D7A57' : '#FFFFFF'}
-                            stroke="#0D7A57"
-                            strokeWidth="2.5"
-                            style={{ cursor: 'pointer', transition: 'all 0.15s' }}
-                            onMouseEnter={() => setHoverIndex(i)}
-                            onMouseLeave={() => setHoverIndex(null)}
-                        />
-                        {/* X-Axis Dates */}
-                        {(data.length <= 15 || i % Math.ceil(data.length / 10) === 0) && (
-                            <text x={p.x} y={height - 5} textAnchor="middle" fontSize="9" fill="#64748B" fontWeight="600">
-                                {p.item.displayDate}
-                            </text>
+                            return (
+                                <g key={i}>
+                                    <rect
+                                        x={p.x - barWidth / 2}
+                                        y={barY}
+                                        width={barWidth}
+                                        height={barH}
+                                        rx={Math.min(4, barWidth / 2)}
+                                        fill={barFill}
+                                        fillOpacity={isHovered ? 1 : 0.85}
+                                        stroke={isHovered ? '#0F172A' : 'none'}
+                                        strokeWidth={1.5}
+                                        style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                                        onMouseEnter={() => setHoverIndex(i)}
+                                        onMouseLeave={() => setHoverIndex(null)}
+                                    />
+                                    {(data.length <= 15 || i % Math.ceil(data.length / 10) === 0) && (
+                                        <text x={p.x} y={height - 5} textAnchor="middle" fontSize="9" fill="#64748B" fontWeight="600">
+                                            {p.item.displayDate}
+                                        </text>
+                                    )}
+                                </g>
+                            );
+                        })}
+
+                        {/* Trendline over histogram */}
+                        {trendlinePath && (
+                            <path
+                                d={trendlinePath}
+                                fill="none"
+                                stroke="#991B1B"
+                                strokeWidth="2.5"
+                                strokeDasharray="4 3"
+                                strokeLinecap="round"
+                            />
                         )}
-                    </g>
-                ))}
+                    </>
+                )}
             </svg>
 
             {/* Hover Tooltip */}
@@ -2151,12 +2607,21 @@ function BITimeSeriesChart({
                     zIndex: 10
                 }}>
                     <div style={{ color: '#94A3B8', fontSize: '0.65rem' }}>Fecha: {points[hoverIndex].item.date}</div>
-                    <div style={{ color: '#34D399', fontSize: '0.85rem', fontWeight: '900', marginTop: '2px' }}>
-                        {formatVal(points[hoverIndex].item[metric])}
+                    <div style={{ color: isHistogram ? '#FCA5A5' : '#34D399', fontSize: '0.85rem', fontWeight: '900', marginTop: '2px' }}>
+                        {isHistogram
+                            ? `Costo Fuga: ${formatMoney(points[hoverIndex].item.warrantyCost || 0)}`
+                            : formatVal(points[hoverIndex].item[metric])}
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#E2E8F0', marginTop: '2px' }}>
-                        {points[hoverIndex].item.orders} pedidos • {formatNumber(points[hoverIndex].item.kg, 1)} Kg
+                        {isHistogram
+                            ? `${points[hoverIndex].item.warrantyOrders || 0} garantías • ${formatNumber(points[hoverIndex].item.warrantyKg || 0, 1)} Kg cedidos`
+                            : `${points[hoverIndex].item.orders} pedidos • ${formatNumber(points[hoverIndex].item.kg, 1)} Kg`}
                     </div>
+                    {isHistogram && points[hoverIndex].item.warrantyClients && points[hoverIndex].item.warrantyClients.length > 0 && (
+                        <div style={{ fontSize: '0.62rem', color: '#CBD5E1', marginTop: '3px', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {points[hoverIndex].item.warrantyClients.slice(0, 2).join(', ')}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
