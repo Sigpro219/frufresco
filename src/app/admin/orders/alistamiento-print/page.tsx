@@ -60,7 +60,7 @@ interface ProductInCell {
     displayName: string;
     totalKg: number;
     inventoryKg: number | null;
-    orderDemand: Record<string, { kgQuantity: number; displayQty: string; unit: string; note?: string }>;
+    orderDemand: Record<string, { kgQuantity: number; displayQty: string; unit: string; note?: string; pickingNote?: string }>;
 }
 
 const KNOWN_CELLS = [
@@ -695,12 +695,25 @@ export default function AlistamientoSabanaPrintPage() {
             const prodRec = groups[cell].productsMap.get(pId)!;
             prodRec.totalKg += norm.kgQty;
 
+            const rawPickingNote = (
+                it.selected_options?.nota_alistamiento ||
+                it.selected_options?.['Nota alistamiento'] ||
+                it.selected_options?.['Nota de alistamiento'] ||
+                it.selected_options?.picking_note ||
+                it.selected_options?.nota_picking ||
+                null
+            );
+            const cleanPickingNote = typeof rawPickingNote === 'string' && rawPickingNote.trim().length > 0
+                ? rawPickingNote.trim()
+                : null;
+
             if (!prodRec.orderDemand[it.order_id]) {
                 prodRec.orderDemand[it.order_id] = {
                     kgQuantity: norm.kgQty,
                     displayQty: norm.displayQty,
                     unit: norm.unitStr,
-                    note: combinedNote
+                    note: combinedNote,
+                    pickingNote: cleanPickingNote || undefined
                 };
             } else {
                 prodRec.orderDemand[it.order_id].kgQuantity += norm.kgQty;
@@ -711,6 +724,9 @@ export default function AlistamientoSabanaPrintPage() {
 
                 if (combinedNote && !prodRec.orderDemand[it.order_id].note?.includes(combinedNote)) {
                     prodRec.orderDemand[it.order_id].note = `${prodRec.orderDemand[it.order_id].note || ''} ${combinedNote}`.trim();
+                }
+                if (cleanPickingNote && !prodRec.orderDemand[it.order_id].pickingNote?.includes(cleanPickingNote)) {
+                    prodRec.orderDemand[it.order_id].pickingNote = `${prodRec.orderDemand[it.order_id].pickingNote || ''} ${cleanPickingNote}`.trim();
                 }
             }
         });
@@ -1194,6 +1210,13 @@ export default function AlistamientoSabanaPrintPage() {
                                                                     {demand.note && (
                                                                         <div style={{ fontSize: '6.8pt', color: '#1E293B', lineHeight: '1.15', marginTop: '2px', fontWeight: 700, backgroundColor: '#FEF3C7', padding: '1px 3px', borderRadius: '3px', display: 'inline-block' }}>
                                                                             {demand.note}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Badge 2: Nota Excepcional de Alistamiento Fisico */}
+                                                                    {demand.pickingNote && (
+                                                                        <div style={{ fontSize: '6.5pt', color: '#0F172A', lineHeight: '1.15', marginTop: '2px', fontWeight: 800, backgroundColor: '#F1F5F9', border: '1px solid #94A3B8', padding: '1px 4px', borderRadius: '3px', display: 'inline-block' }}>
+                                                                            {demand.pickingNote}
                                                                         </div>
                                                                     )}
                                                                 </td>

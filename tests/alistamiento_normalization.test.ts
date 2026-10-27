@@ -332,5 +332,40 @@ test('Alistamiento Print: Normalización Canónica de Unidades en Fila 1', async
         assert.match(tomorrow, /^\d{4}-\d{2}-\d{2}$/);
         assert.notStrictEqual(today, tomorrow);
     });
+
+    await t.test('Escenario 326: Doble Badge y Captura Excepcional de Notas Físicas de Alistamiento (Batavia y Empaques)', () => {
+        // 1. formatStructuredSpecification debe procesar atributos culinarios estructurados y NO mezclar la nota física
+        const bataviaItem = {
+            product_name: 'Lechuga batavia',
+            quantity: 6.4,
+            unit: 'Kg',
+            selected_options: {
+                'Maduración': 'Verde',
+                'nota_alistamiento': '400-600gr / 8u'
+            }
+        };
+
+        const structuredNote = formatStructuredSpecification(bataviaItem);
+        // 'Verde' es el atributo estructurado, nota_alistamiento queda libre para Badge 2
+        assert.strictEqual(structuredNote, 'Verde', 'La especificación estructurada debe contener solo atributos maestros');
+
+        // 2. Extracción de Badge 2 (pickingNote): debe recuperar la nota física exacta ingresada de forma excepcional
+        const rawPickingNote = bataviaItem.selected_options?.nota_alistamiento || null;
+        assert.strictEqual(rawPickingNote, '400-600gr / 8u', 'Badge 2 debe capturar con precisión la nota de alistamiento de bodega');
+
+        // 3. VariantLabel no debe contaminarse con la nota de alistamiento
+        const selectedOptions: Record<string, string> = {
+            'Presentación': 'Unidad',
+            'nota_alistamiento': 'Limpia'
+        };
+        const sortedOptionKeys = Object.keys(selectedOptions)
+            .filter(k => !k.startsWith('_') && k !== 'nota_alistamiento' && k !== 'Nota alistamiento' && k !== 'Nota de alistamiento')
+            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        const optionValues = sortedOptionKeys.filter(k => selectedOptions[k]).map(k => selectedOptions[k]);
+        const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
+
+        assert.strictEqual(variantLabel, 'Unidad', 'El variantLabel comercial debe permanecer limpio sin incluir la nota interna de alistamiento');
+    });
 });
+
 

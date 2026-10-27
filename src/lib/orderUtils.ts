@@ -430,7 +430,7 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
     });
 
     // 2.1 Extraer y normalizar Nota de Alistamiento / Tamaño (Mapeo: Grande=Cero, Mediana=Mediana, Pequeño=Richy)
-    const pickingKeys = ['Nota alistamiento', 'Nota de alistamiento', 'nota_alistamiento', 'Tamaño', 'Tamano', 'tamano', 'Size'];
+    const pickingKeys = ['Tamaño', 'Tamano', 'tamano', 'Size'];
     let foundPickingNote = false;
     for (const pk of pickingKeys) {
         if (opts[pk] && typeof opts[pk] === 'string' && opts[pk].trim()) {

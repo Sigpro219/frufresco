@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.308 (Capítulo 44: Protocolo Canónico de Apagado del ERP Legado & Radar Cíclico de Escasez y Abastecimiento — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.309 (Capítulo 44: Protocolo Canónico de Apagado del ERP Legado & Doble Badge de Notas Físicas Excepcionales — 76/76 Pantallas Certificadas)
 > **Fecha:** 27 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 326 Escenarios BDD Ininterrumpidos (1..326)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 327 Escenarios BDD Ininterrumpidos (1..327)
 
 ---
 
@@ -12564,10 +12564,11 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 │ OBJETIVO ESTRATÉGICO │ Apagado Definitivo del ERP Legado (Legacy Cutover).                   │
 │ DOMINIO EN LA MIRA   │ Dominio 5 (WMS Bodega) & Dominio 3 (Alistamiento & Inventarios).      │
 │ EXPEDIENTE GEMBA     │ "Feedback_sabana_alistamiento.docx" (Resolución quirúrgica 1 a 1).    │
-│ FOCO LÁSER ACTUAL    │ Hallazgo 5: Gobernanza Dual de Inventario (Modo Transición vs Estricto)│
+│ FOCO LÁSER ACTUAL    │ Hallazgo 7: Restricción estricta de catálogo a productos del acuerdo.  │
 ├──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ EN LA CÁMARA (NEXT)  │ • Hallazgo 6: Visibilidad de características en Batavia ([P19]).       │
-│                      │ • Hallazgo 7: Restricción estricta de catálogo a productos del acuerdo.│
+│ COMPLETADOS RECIENTE │ • Hallazgo 5: Gobernanza Dual de Inventario (Modo Transición/Estricto) │
+│                      │ • Hallazgo 6: Doble badge de alistamiento y notas físicas excepcionales│
+│ EN LA CÁMARA (NEXT)  │ • Hallazgo 7: Restricción estricta de catálogo a productos del acuerdo.│
 │                      │ • Hallazgo 8: Impresión de características fijas en moras/empaque.     │
 │ COLA POST-DOCUMENTO  │ • Switch-Off Gate: Activación de Modo Estricto de Inventarios.         │
 └──────────────────────┴────────────────────────────────────────────────────────────────────────┘
@@ -12598,7 +12599,7 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 | Dominio Operativo | Reemplaza del ERP Viejo | Estado Paridad | Criterio de Apagado (Switch-Off Gate) |
 | :--- | :--- | :---: | :--- |
 | **1. Comercial & Pedidos** | Toma de pedidos manual y digitación ciega | 🟢 **95%** | [x] 100% pedidos ingresan por Checkout B2B, landing o admin con modelos corporativos y descuentos automatizados. |
-| **2. Bodega & Alistamiento (WMS)** | Planillas planas desordenadas | 🟢 **92%** | [x] Sábana con bahías secuenciales 1..150, zebra striping, supresión de 'Maduro' y gramajes reales. |
+| **2. Bodega & Alistamiento (WMS)** | Planillas planas desordenadas | 🟢 **94%** | [x] Sábana con bahías secuenciales 1..150, zebra striping, supresión de 'Maduro', gramajes reales y doble badge de notas físicas excepcionales. |
 | **3. Abastecimiento (JIT)** | Cálculo manual de compras | 🟢 **88%** | [ ] Planilla de compras neteada contra inventario en marcha blanca fluida. |
 | **4. Inventarios (Masa)** | Kardex tradicional en diferido | 🟡 **En Pilotaje** | [ ] Operación dual en Modo Transición $\rightarrow$ Listo para candado obligatorio diario en Modo Estricto. |
 | **5. Facturación & Cartera** | Facturación externa desincronizada | 🟢 **90%** | [x] Prefijo FV DIAN, Dock de Comprobantes, notas crédito por PQR y cruce de deducciones de nómina. |
@@ -12641,3 +12642,21 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - Integra los SKUs bloqueados en el Control de Escasez Comercial (`scarcity_locked_skus`) y los productos con novedades explícitas de escasez o faltante en despachos/PQR (`PRODUCTO ESCASO`, `PRODUCTOS FALTANTES Y ESCASOS`, `pedido_incompleto_faltante` en `billing_returns`), además de alertas de stock físico en bodega.
   3. **Filtros Interactivos, Buscador Instantáneo y Modal Forense de Curva Mensual:**
      - Provee píldoras de filtrado rápido (`Escasez & Carestía`, `Reportados Despacho`, `En Abundancia`, `Ver Todos`), buscador instantáneo por nombre/código/grupo y un modal interactivo al hacer clic en cualquier producto que grafica su curva mensual histórica de precios (resaltando los meses de escasez en rojo `#DC2626` y los meses de cosecha en verde `#0D7A57`) junto con el detalle de reportes operativos de despacho.
+
+
+---
+
+### Escenario 327: Arquitectura de Doble Badge y Captura Excepcional de Notas Físicas de Alistamiento (Gemba Feedback Sábana: Hallazgo 6 - Batavia y Empaques Especiales) (SDD v1.9.309)
+- **Given** el módulo de captura de pedidos (`/admin/orders/create` y `/admin/orders/loading`), la planilla maestra de alistamiento de bodega (`/admin/orders/alistamiento-print`) y las solicitudes operacionales de clientes institucionales (como El Corral en `batavia_feedback_image7.png` vs `batavia_feedback_image8.png`) que requieren especificaciones físicas no catalogadas (ej. *"Limpia"*, *"400-600gr / 8u"*, *"Plana"*, *"UndX300-370Gs-plana"*),
+- **When** el operador digita o edita un pedido desde el modal de personalización del producto y posteriormente se emite la sábana física de alistamiento para el equipo de suelo:
+- **Then** el sistema ejecuta las siguientes reglas canónicas de preservación y doble visualización:
+  1. **Principio Anti-Contaminación de Catálogo (Zero Raw Ingestion Noise):**
+     - Queda terminantemente prohibido volcar cadenas de texto libre no estructuradas del correo o de archivos ODS/Excel dentro de `options_config` del catálogo maestro de productos. Dichas cadenas contaminan el diccionario maestro, corrompen la consolidación de compras mayoristas (`procurementNetting`) y saturan la base de datos con variantes efímeras.
+  2. **Captura Excepcional en Modal de Pedidos (`selected_options.nota_alistamiento`):**
+     - Tanto en Creación de Pedidos (`create/page.tsx`) como en Torre de Control (`loading/page.tsx`), se provee un campo exclusivo **"Nota de Alistamiento (Excepcional)"** con placeholder informativo (*"Ej: Limpia, 400-600gr / 8u, plana..."*).
+     - Esta nota se almacena de forma aislada dentro del JSONB `order_items.selected_options.nota_alistamiento`.
+     - **Poka-Yoke Comercial:** La nota física de alistamiento se filtra estrictamente de `variantLabel`, garantizando que las facturas de venta, remisiones comerciales y reportes contables no desplieguen textos operativos internos de bodega.
+  3. **Arquitectura de Doble Badge en Planilla de Alistamiento (`alistamiento-print/page.tsx`):**
+     - **Badge 1 (Especificación Culinaria Estructurada):** Despliega atributos maestros formales (`12 und de 2 kg`, maduración diferencial, calibres estándar) con fondo ámbar (`#FEF3C7`) y texto oscuro (`#1E293B`).
+     - **Badge 2 (Nota Excepcional de Alistamiento Físico de Bodega):** Cuando el pedido contiene `nota_alistamiento` (o alias equivalentes como `picking_note`), se renderiza como una pastilla secundaria diferenciada con fondo pizarra (`#F1F5F9`), borde sutil (`#94A3B8`) y tipografía negrita (`#0F172A`, 6.5pt), situada inmediatamente debajo de la cantidad principal y del Badge 1.
+     - Esta separación otorga a los operarios de planta visibilidad total sobre las instrucciones físicas de empaque y selección sin degradar la normalización canónica del WMS.

@@ -2172,7 +2172,9 @@ function CreateOrderContent() {
 
     const confirmModalAdd = (overrideQty?: string | number | React.MouseEvent) => {
         if (!selectedProductForModal) return;
-        const sortedOptionKeys = Object.keys(selectedOptions).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        const sortedOptionKeys = Object.keys(selectedOptions)
+            .filter(k => !k.startsWith('_') && k !== 'nota_alistamiento' && k !== 'Nota alistamiento' && k !== 'Nota de alistamiento')
+            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         const optionValues = sortedOptionKeys.filter(k => selectedOptions[k]).map(k => selectedOptions[k]);
         const variantLabel = optionValues.length > 0 ? optionValues.map(v => String(v).includes('|') ? `${String(v).split('|')[0]} (${String(v).split('|')[1]} gr)` : v).join(', ') : undefined;
         const rawQtyVal = (typeof overrideQty === 'string' || typeof overrideQty === 'number') ? overrideQty : modalQuantity;
@@ -11226,6 +11228,50 @@ ${primaryAdminNotes}`.trim();
                                         />
                                     )}
                                 </div>
+                            </div>
+
+                            {/* Campo Excepcional de Nota de Alistamiento Físico */}
+                            <div style={{ textAlign: 'left', marginBottom: '1.25rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                        Nota de Alistamiento (Excepcional)
+                                    </label>
+                                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '500' }}>
+                                        Solo para bodega (no altera catálogo)
+                                    </span>
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Ej: Limpia, 400-600gr / 8u, plana..."
+                                    value={selectedOptions['nota_alistamiento'] || ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSelectedOptions(prev => ({
+                                            ...prev,
+                                            nota_alistamiento: val
+                                        }));
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.65rem 0.8rem',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #CBD5E1',
+                                        fontSize: '0.88rem',
+                                        backgroundColor: '#F8FAFC',
+                                        outline: 'none',
+                                        transition: 'all 0.2s ease-in-out'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = '#3B82F6';
+                                        e.target.style.backgroundColor = 'white';
+                                        e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = '#CBD5E1';
+                                        e.target.style.backgroundColor = '#F8FAFC';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
+                                />
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
