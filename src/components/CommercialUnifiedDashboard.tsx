@@ -1098,7 +1098,7 @@ export default function CommercialUnifiedDashboard({
                 p.sharePct = Math.round((p.quantity / topQty) * 100);
             });
 
-            setTopProducts(rankedProducts.slice(0, 10));
+            setTopProducts(rankedProducts.slice(0, 20));
 
                         // Top 20 Low Margin / Profit Products (Productos de Menor Utilidad / Margen Crítico)
             const lowMarginList = [...rankedProducts]
@@ -3242,57 +3242,63 @@ export default function CommercialUnifiedDashboard({
             {/* 4. PRODUCT INTELLIGENCE: TOP ROTATION VS SLOW MOVERS (INDICADORES 3, 4 & 5 DE IMAGEN 2) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: '1.5rem' }}>
                 
-                {/* PANEL A: TOP 10 PRODUCTOS MAS CONSUMIDOS (PARETO 80/20) */}
+                {/* PANEL A: MATRIZ DE RENTABILIDAD TOP 20 VOLUMEN Y RENTABILIDAD VALOR TOTAL */}
                 <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                         <div>
                             <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Award size={18} color="#D97706" /> Top 10 Productos Más Consumidos
+                                <Award size={18} color="#0D7A57" /> Top 20 Volumen &amp; Rentabilidad Valor Total
                             </h3>
                             <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary }}>
-                                Ranking Pareto por volumen físico (Kg) y facturación acumulada.
+                                Matriz de los 20 productos de mayor volumen físico (Kg), facturación y utilidad total ($).
                             </p>
                         </div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#FEF3C7', color: '#B45309', padding: '3px 8px', borderRadius: '12px' }}>
-                            Pareto 80/20
+                        <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#ECFDF5', color: '#065F46', padding: '3px 8px', borderRadius: '12px', border: '1px solid #A7F3D0' }}>
+                            Top 20 Volumen
                         </span>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, maxHeight: '680px', overflowY: 'auto', paddingRight: '4px' }}>
                         {topProducts.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
                                 Sin datos de rotación en este periodo.
                             </div>
                         ) : (
-                            topProducts.map((p, index) => (
-                                <div key={p.id || index} style={{ padding: '0.65rem 0.85rem', borderRadius: '8px', backgroundColor: '#F8FAFC', border: '1px solid #F1F5F9' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: index < 3 ? '#FEF3C7' : '#E2E8F0', color: index < 3 ? '#B45309' : '#475569', fontSize: '0.7rem', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                {index + 1}
-                                            </span>
-                                            <span style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
-                                                {p.name}
-                                            </span>
-                                            <span style={{ fontSize: '0.68rem', color: '#64748B', backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: '6px' }}>
-                                                {p.category}
-                                            </span>
+                            topProducts.map((p, index) => {
+                                const profit = p.profit ?? (p.revenue - p.cost);
+                                return (
+                                    <div key={p.id || index} style={{ padding: '0.65rem 0.85rem', borderRadius: '8px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                                <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: index < 3 ? '#ECFDF5' : '#E2E8F0', color: index < 3 ? '#065F46' : '#475569', fontSize: '0.7rem', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    {index + 1}
+                                                </span>
+                                                <span style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {p.name}
+                                                </span>
+                                                <span style={{ fontSize: '0.68rem', color: '#64748B', backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: '6px', flexShrink: 0 }}>
+                                                    {p.category}
+                                                </span>
+                                            </div>
+                                            <div style={{ textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                                                <span title={`${formatNumber(p.quantity, 1)} ${p.unit} exactos`} style={{ fontWeight: '800', color: THEME.colors.primary, fontSize: '0.86rem' }}>
+                                                    {p.unit?.toLowerCase().includes('kg') ? formatVolumeTon(p.quantity) : `${formatNumber(p.quantity, 1)} ${p.unit}`}
+                                                </span>
+                                                <span title={`Venta: ${formatMoney(p.revenue)}`} style={{ fontSize: '0.73rem', color: '#475569', marginLeft: '6px', fontWeight: '600' }}>
+                                                    • Venta: {formatCompactMoney(p.revenue)}
+                                                </span>
+                                                <span title={`Rentabilidad Valor Total: ${formatMoney(profit)}`} style={{ fontSize: '0.75rem', color: profit >= 0 ? '#065F46' : '#DC2626', marginLeft: '6px', fontWeight: '800' }}>
+                                                    • Util: {formatCompactMoney(profit)} ({p.marginPct}%)
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <span title={`${formatNumber(p.quantity, 1)} ${p.unit} exactos`} style={{ fontWeight: '800', color: THEME.colors.primary, fontSize: '0.88rem' }}>
-                                                {p.unit?.toLowerCase().includes('kg') ? formatVolumeTon(p.quantity) : `${formatNumber(p.quantity, 1)} ${p.unit}`}
-                                            </span>
-                                            <span title={`${formatMoney(p.revenue)} COP exactos`} style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '8px' }}>
-                                                ({formatCompactMoney(p.revenue)})
-                                            </span>
+                                        {/* Share visual bar */}
+                                        <div style={{ width: '100%', height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${p.sharePct}%`, height: '100%', backgroundColor: index < 3 ? '#0D7A57' : '#059669', borderRadius: '3px' }} />
                                         </div>
                                     </div>
-                                    {/* Share visual bar */}
-                                    <div style={{ width: '100%', height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-                                        <div style={{ width: `${p.sharePct}%`, height: '100%', backgroundColor: index < 3 ? '#0D7A57' : '#10B981', borderRadius: '3px' }} />
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>

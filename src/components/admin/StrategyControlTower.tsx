@@ -58,6 +58,8 @@ export default function StrategyControlTower() {
     // View metric selector inside Commercial Timeline
     const [commercialTimelineMetric, setCommercialTimelineMetric] = useState<'sales' | 'kg' | 'orders' | 'profit'>('sales');
     const [paretoSort, setParetoSort] = useState<'spend' | 'profit' | 'margin' | 'volume'>('spend');
+    const [matrixSort, setMatrixSort] = useState<'volume' | 'total_profit' | 'revenue' | 'spread'>('volume');
+    const [productRankingSort, setProductRankingSort] = useState<'volume' | 'profit' | 'revenue'>('volume');
 
     // Data State
     const [orders, setOrders] = useState<any[]>([]);
@@ -138,10 +140,14 @@ export default function StrategyControlTower() {
                 pricesRes
             ] = await Promise.all([
                 ordersQuery,
-                supabase
-                    .from('order_items')
-                    .select('id, order_id, product_id, quantity, unit_price, unit')
-                    .limit(10000),
+                Promise.all(
+                    Array.from({ length: 10 }, (_, idx) =>
+                        supabase
+                            .from('order_items')
+                            .select('id, order_id, product_id, quantity, unit_price, unit')
+                            .range(idx * 1000, idx * 1000 + 999)
+                    )
+                ),
                 supabase
                     .from('profiles')
                     .select('id, company_name, contact_name, role, latitude, longitude, address, nit, logistics_data, payment_days, created_at')
@@ -182,7 +188,10 @@ export default function StrategyControlTower() {
             ]);
 
             setOrders(ordersRes.data || []);
-            setOrderItems(itemsRes.data || []);
+            const allFetchedItems = Array.isArray(itemsRes)
+                ? itemsRes.flatMap((r: any) => r.data || [])
+                : ((itemsRes as any).data || []);
+            setOrderItems(allFetchedItems);
             setProfiles(profilesRes.data || []);
             setStocks([...(stocksRes1.data || []), ...(stocksRes2.data || [])]);
             setMovements(movementsRes.data || []);
@@ -299,9 +308,14 @@ export default function StrategyControlTower() {
         orderItems.forEach(item => {
             if (!orderIdSet.has(item.order_id)) return;
             const q = Number(item.quantity) || 0;
-            const unitPrice = Number(item.unit_price) || 0;
+            if (q <= 0) return;
+            const rawPrice = Number(item.unit_price) || 0;
+            const listPrice = priceMap.get(item.product_id) || 0;
+            const rawCost = costMap.get(item.product_id) || 0;
+            const unitPrice = rawPrice > 0 ? rawPrice : (listPrice > 0 ? listPrice : (rawCost > 0 ? Math.round(rawCost / 0.78) : 0));
             const sub = q * unitPrice;
-            const c = costMap.get(item.product_id) || (unitPrice * 0.78); // 22% margin default fallback
+            // Si el costo heredado de variante supera desproporcionadamente el precio unitario (>1.8x), usar 78% del precio unitario
+            const c = (rawCost > 0 && (unitPrice === 0 || rawCost <= unitPrice * 1.6)) ? rawCost : Math.round(unitPrice * 0.78);
             const itemCost = c * q;
             totalEstimatedCost += itemCost;
             calculatedItemsKg += q;
@@ -340,16 +354,17 @@ export default function StrategyControlTower() {
         const b2bAvgTicket = b2bOrdersCount > 0 ? Math.round(b2bSales / b2bOrdersCount) : 0;
         const b2cAvgTicket = b2cOrdersCount > 0 ? Math.round(b2cSales / b2cOrdersCount) : 0;
 
-        // Top 10 products
+        // Top 20 products (Matriz de Volumen y Rentabilidad Valor Total)
         const topProducts = Array.from(productVolumeMap.entries())
             .map(([pid, val]) => {
                 const prod = productMap.get(pid);
-                const margin = val.revenue > 0 ? Math.round(((val.revenue - val.cost) / val.revenue) * 100) : 22;
+                const margin = val.revenue > 0 ? Number((((val.revenue - val.cost) / val.revenue) * 100).toFixed(1)) : 22;
                 return {
                     id: pid,
                     name: prod?.name || 'Producto FruFresco',
-                    sku: prod?.sku || 'SKU',
-                    category: prod?.category || 'General',
+                    accountingId: prod?.accounting_id || '—',
+                    unit: prod?.unit_of_measure || 'Kg',
+                    category: prod?.inventory_group || 'General',
                     qty: val.qty,
                     revenue: val.revenue,
                     cost: val.cost,
@@ -357,8 +372,12 @@ export default function StrategyControlTower() {
                     profit: val.revenue - val.cost
                 };
             })
-            .sort((a, b) => b.revenue - a.revenue)
-            .slice(0, 10);
+            .sort((a, b) => {
+                if (productRankingSort === 'volume') return b.qty - a.qty;
+                if (productRankingSort === 'profit') return b.profit - a.profit;
+                return b.revenue - a.revenue;
+            })
+            .slice(0, 20);
 
         return {
             totalSales,
@@ -384,7 +403,7 @@ export default function StrategyControlTower() {
             marginPct,
             topProducts
         };
-    }, [filteredOrders, profileMap, orderItems, costMap, productMap]);
+    }, [filteredOrders, profileMap, orderItems, costMap, priceMap, productMap, productRankingSort]);
 
     // Historical Time Series Grouping (by Day) for Commercial Timeline
     const commercialTimeSeries = useMemo(() => {
@@ -713,26 +732,84 @@ export default function StrategyControlTower() {
             else expiredSkus++;
         });
 
+        // Consolidar volumen vendido, facturación total y rentabilidad valor total ($) por producto
+        const orderIdSet = new Set(filteredOrders.map(o => o.id));
+        const salesByProductMap = new Map<string, { qty: number; revenue: number; cost: number }>();
+
+        orderItems.forEach(item => {
+            if (!orderIdSet.has(item.order_id)) return;
+            const q = Number(item.quantity) || 0;
+            if (q <= 0) return;
+            const rawPrice = Number(item.unit_price) || 0;
+            const listPrice = priceMap.get(item.product_id) || 0;
+            const rawCost = costMap.get(item.product_id) || 0;
+            const unitPrice = rawPrice > 0 ? rawPrice : (listPrice > 0 ? listPrice : (rawCost > 0 ? Math.round(rawCost / 0.78) : 0));
+            const sub = q * unitPrice;
+            const unitCost = (rawCost > 0 && (unitPrice === 0 || rawCost <= unitPrice * 1.6)) ? rawCost : Math.round(unitPrice * 0.78);
+            const itemCost = q * unitCost;
+            const prev = salesByProductMap.get(item.product_id) || { qty: 0, revenue: 0, cost: 0 };
+            salesByProductMap.set(item.product_id, {
+                qty: prev.qty + q,
+                revenue: prev.revenue + sub,
+                cost: prev.cost + itemCost
+            });
+        });
+
         const priceComparisonList = products
             .map(p => {
-                const matrixCost = costMap.get(p.id) || 0;
-                const basePrice = priceMap.get(p.id) || 0;
-                const estimatedCorabastos = matrixCost > 0 ? Math.round(matrixCost * 1.06) : (basePrice > 0 ? Math.round(basePrice * 0.82) : 0);
-                const spreadPct = basePrice > 0 && matrixCost > 0 ? Math.round(((basePrice - matrixCost) / basePrice) * 100) : 22;
+                const sales = salesByProductMap.get(p.id) || { qty: 0, revenue: 0, cost: 0 };
+                const soldQty = sales.qty;
+                const totalRevenue = Math.round(sales.revenue);
+                const totalCost = Math.round(sales.cost);
+                const totalProfit = Math.round(sales.revenue - sales.cost);
+
+                const avgUnitCost = soldQty > 0 ? Math.round(sales.cost / soldQty) : (costMap.get(p.id) || 0);
+                const avgUnitPrice = soldQty > 0 ? Math.round(sales.revenue / soldQty) : (priceMap.get(p.id) || 0);
+                const matrixCost = avgUnitCost;
+                const basePrice = avgUnitPrice;
+
+                const spreadPct = sales.revenue > 0
+                    ? Number((((sales.revenue - sales.cost) / sales.revenue) * 100).toFixed(1))
+                    : (basePrice > 0 && matrixCost > 0
+                        ? Number((((basePrice - matrixCost) / basePrice) * 100).toFixed(1))
+                        : 22);
+
                 return {
                     id: p.id,
                     name: p.name,
-                    sku: p.sku,
-                    category: p.inventory_group || 'General',
+                    accountingId: p.accounting_id || '—',
+                    unit: p.unit_of_measure || 'Kg',
+                    category: (p.inventory_group || 'SIN CLASIFICAR').toUpperCase(),
+                    soldQty,
                     matrixCost,
                     basePrice,
-                    estimatedCorabastos,
+                    totalRevenue,
+                    totalCost,
+                    totalProfit,
                     spreadPct
                 };
             })
-            .filter(p => p.matrixCost > 0 || p.basePrice > 0)
-            .sort((a, b) => b.spreadPct - a.spreadPct)
-            .slice(0, 10);
+            .filter(p => p.soldQty > 0 || p.matrixCost > 0 || p.basePrice > 0)
+            .sort((a, b) => {
+                if (matrixSort === 'volume') {
+                    if (b.soldQty !== a.soldQty) return b.soldQty - a.soldQty;
+                    return b.totalProfit - a.totalProfit;
+                }
+                if (matrixSort === 'total_profit') {
+                    if (b.totalProfit !== a.totalProfit) return b.totalProfit - a.totalProfit;
+                    return b.soldQty - a.soldQty;
+                }
+                if (matrixSort === 'revenue') {
+                    if (b.totalRevenue !== a.totalRevenue) return b.totalRevenue - a.totalRevenue;
+                    return b.soldQty - a.soldQty;
+                }
+                return b.spreadPct - a.spreadPct;
+            })
+            .slice(0, 20);
+
+        const totalTop20Volume = priceComparisonList.reduce((acc, p) => acc + p.soldQty, 0);
+        const totalTop20Revenue = priceComparisonList.reduce((acc, p) => acc + p.totalRevenue, 0);
+        const totalTop20Profit = priceComparisonList.reduce((acc, p) => acc + p.totalProfit, 0);
 
         return {
             totalMatrixSkus,
@@ -740,9 +817,12 @@ export default function StrategyControlTower() {
             acceptableSkus,
             expiredSkus,
             freshnessPct: totalMatrixSkus > 0 ? Math.round((freshSkus / totalMatrixSkus) * 100) : 85,
-            priceComparisonList
+            priceComparisonList,
+            totalTop20Volume,
+            totalTop20Revenue,
+            totalTop20Profit
         };
-    }, [costMatrix, products, costMap, priceMap]);
+    }, [costMatrix, products, costMap, priceMap, filteredOrders, orderItems, matrixSort]);
 
     // ── MASTER EXCEL EXPORT (1-CLIC) ──
     const handleExportExcel = async (areaKey: StrategyArea) => {
@@ -816,20 +896,20 @@ export default function StrategyControlTower() {
                 const ws = XLSX.utils.json_to_sheet(crmData);
                 XLSX.utils.book_append_sheet(wb, ws, 'Directorio_Clientes');
             } else if (areaKey === 'procurement') {
-                const procData = products.map(p => {
-                    const c = costMap.get(p.id) || 0;
-                    const listPrice = priceMap.get(p.id) || 0;
-                    return {
-                        'ID Contable': p.accounting_id || '—',
-                        'Producto': p.name,
-                        'SKU': p.sku,
-                        'Costo Matriz Actual ($)': c,
-                        'Precio General Institucional ($)': listPrice,
-                        'Margen Bruto Proyectado (%)': listPrice > 0 ? Math.round(((listPrice - c) / listPrice) * 100) : 0
-                    };
-                });
+                const procData = procurementMetrics.priceComparisonList.map(p => ({
+                    'ID Contable': p.accountingId,
+                    'Producto': p.name,
+                    'Grupo de Inventario': p.category,
+                    'Unidad': p.unit,
+                    'Volumen Vendido': Number(p.soldQty.toFixed(1)),
+                    'Costo Unitario Compra ($)': p.matrixCost,
+                    'Precio Venta Base ($)': p.basePrice,
+                    'Facturación Total ($)': p.totalRevenue,
+                    'Rentabilidad Valor Total ($)': p.totalProfit,
+                    'Margen Rentabilidad (%)': p.spreadPct
+                }));
                 const ws = XLSX.utils.json_to_sheet(procData);
-                XLSX.utils.book_append_sheet(wb, ws, 'Matriz_Costos_Precios');
+                XLSX.utils.book_append_sheet(wb, ws, 'Matriz_Rentabilidad_Top20');
             }
 
             const fileName = `FruFresco_BI_${areaKey.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -1128,27 +1208,48 @@ export default function StrategyControlTower() {
                             </div>
                         </div>
 
-                        {/* Ranking Top 10 Productos Más Consumidos & Rentables */}
+                        {/* Ranking Top 20 Productos Más Consumidos & Rentabilidad Valor Total */}
                         <div style={{
                             backgroundColor: '#FFFFFF',
                             borderRadius: '16px',
                             border: '1px solid #E2E8F0',
                             padding: '1.25rem 1.5rem',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
                         }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.4rem' }}>
                                 <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '850', color: '#0F172A' }}>
-                                    Top Productos Más Consumidos &amp; Margen
+                                    Top 20 Productos: Volumen &amp; Rentabilidad Valor Total
                                 </h3>
-                                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#15803D', backgroundColor: '#DCFCE7', padding: '2px 8px', borderRadius: '6px' }}>
-                                    Pareto 80/20
-                                </span>
+                                <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                    {[
+                                        { id: 'volume', label: 'Top Volumen' },
+                                        { id: 'profit', label: 'Rentabilidad ($)' },
+                                        { id: 'revenue', label: 'Facturación ($)' }
+                                    ].map(opt => (
+                                        <button
+                                            key={opt.id}
+                                            onClick={() => setProductRankingSort(opt.id as any)}
+                                            style={{
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                padding: '3px 8px',
+                                                fontSize: '0.68rem',
+                                                fontWeight: productRankingSort === opt.id ? '800' : '600',
+                                                backgroundColor: productRankingSort === opt.id ? '#0D7A57' : 'transparent',
+                                                color: productRankingSort === opt.id ? '#FFFFFF' : '#64748B',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            <p style={{ margin: '0 0 1rem 0', fontSize: '0.76rem', color: '#64748B' }}>
-                                Ranking por volumen de facturación con indicador de margen individual.
+                            <p style={{ margin: '0 0 0.85rem 0', fontSize: '0.76rem', color: '#64748B' }}>
+                                Matriz Top 20 por volumen movilizado, facturación acumulada y rentabilidad bruta en valor total ($).
                             </p>
 
-                            <BIProductParetoRanking products={commercialMetrics.topProducts} />
+                            <BIProductParetoRanking products={commercialMetrics.topProducts} sortBy={productRankingSort} />
                         </div>
                     </div>
 
@@ -1671,7 +1772,7 @@ export default function StrategyControlTower() {
                 </div>
             )}
 
-            {/* ── ÁREA 4: ABASTECIMIENTO & PRECIOS (BI DE COSTOS & BENCHMARK) ── */}
+            {/* ── ÁREA 4: ABASTECIMIENTO & PRECIOS (BI DE COSTOS & MATRIZ TOP 20 VOLUMEN Y RENTABILIDAD VALOR TOTAL) ── */}
             {activeArea === 'procurement' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
@@ -1679,7 +1780,7 @@ export default function StrategyControlTower() {
                             title="Frescura de Matriz"
                             value={`${procurementMetrics.freshnessPct}%`}
                             subtitle={`${procurementMetrics.freshSkus} productos con costo vigente (<3 días)`}
-                            icon={<ShieldCheck size={20} color="#059669" />}
+                            icon={<ShieldCheck size={20} color="#0D7A57" />}
                             badgeText="SLA Precios"
                             badgeBg="#ECFDF5"
                             badgeColor="#065F46"
@@ -1687,29 +1788,29 @@ export default function StrategyControlTower() {
                         <AreaKPICard
                             title="Costos por Recotizar"
                             value={procurementMetrics.expiredSkus}
-                            subtitle="SKUs que requieren actualización de compra en Corabastos"
+                            subtitle="Productos que requieren actualización de compra en Corabastos"
                             icon={<AlertTriangle size={20} color="#DC2626" />}
                             badgeText="Vencidos (>7d)"
-                            badgeBg="#FEE2E2"
-                            badgeColor="#991B1B"
+                            badgeBg="#FEF2F2"
+                            badgeColor="#DC2626"
                         />
                         <AreaKPICard
-                            title="Matriz de Costos"
-                            value={`${procurementMetrics.totalMatrixSkus} SKUs`}
-                            subtitle="Productos con costo de adquisición autorizado"
-                            icon={<Scale size={20} color="#2563EB" />}
-                            badgeText="Catálogo"
-                            badgeBg="#EFF6FF"
-                            badgeColor="#1E40AF"
+                            title="Rentabilidad Top 20"
+                            value={formatMoney(procurementMetrics.totalTop20Profit)}
+                            subtitle={`Utilidad bruta acumulada en ${formatNumber(procurementMetrics.totalTop20Volume, 0)} Kg`}
+                            icon={<DollarSign size={20} color="#065F46" />}
+                            badgeText="Valor Total ($)"
+                            badgeBg="#ECFDF5"
+                            badgeColor="#065F46"
                         />
                         <AreaKPICard
-                            title="Margen Promedio Matriz"
+                            title="Margen Promedio Real"
                             value={`${commercialMetrics.marginPct}%`}
-                            subtitle="Diferencial proyectado precio base vs costo compra"
-                            icon={<TrendingUp size={20} color={THEME.colors.primary} />}
-                            badgeText="Proyección"
-                            badgeBg="#DCFCE7"
-                            badgeColor="#15803D"
+                            subtitle={`Sobre ${procurementMetrics.totalMatrixSkus} productos en matriz de costos`}
+                            icon={<TrendingUp size={20} color="#0D7A57" />}
+                            badgeText="Consolidado"
+                            badgeBg="#ECFDF5"
+                            badgeColor="#065F46"
                         />
                     </div>
 
@@ -1719,7 +1820,7 @@ export default function StrategyControlTower() {
                         borderRadius: '16px',
                         border: '1px solid #E2E8F0',
                         padding: '1.25rem 1.5rem',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
                     }}>
                         <h3 style={{ margin: '0 0 0.4rem 0', fontSize: '0.98rem', fontWeight: '850', color: '#0F172A' }}>
                             SLA de Frescura de Costos de Compra (Antigüedad de Matriz)
@@ -1729,98 +1830,186 @@ export default function StrategyControlTower() {
                         </p>
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                            <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#15803D', fontWeight: '800', fontSize: '0.75rem' }}>
+                            <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#065F46', fontWeight: '800', fontSize: '0.75rem' }}>
                                     <CheckCircle size={15} /> Óptimo (&lt;3 días)
                                 </div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#14532D', marginTop: '4px' }}>
-                                    {procurementMetrics.freshSkus} SKUs
+                                <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#065F46', marginTop: '4px', fontVariantNumeric: 'tabular-nums' }}>
+                                    {procurementMetrics.freshSkus} Productos
                                 </div>
-                                <div style={{ fontSize: '0.7rem', color: '#166534', marginTop: '2px' }}>Precios frescos validados</div>
+                                <div style={{ fontSize: '0.7rem', color: '#047857', marginTop: '2px' }}>Precios frescos validados</div>
                             </div>
 
-                            <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#FEFCE8', border: '1px solid #FEF08A' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#A16207', fontWeight: '800', fontSize: '0.75rem' }}>
+                            <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#92400E', fontWeight: '800', fontSize: '0.75rem' }}>
                                     <Clock size={15} /> Precaución (4-7 días)
                                 </div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#713F12', marginTop: '4px' }}>
-                                    {procurementMetrics.acceptableSkus} SKUs
+                                <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#92400E', marginTop: '4px', fontVariantNumeric: 'tabular-nums' }}>
+                                    {procurementMetrics.acceptableSkus} Productos
                                 </div>
-                                <div style={{ fontSize: '0.7rem', color: '#854D0E', marginTop: '2px' }}>Revisar posibles alzas</div>
+                                <div style={{ fontSize: '0.7rem', color: '#B45309', marginTop: '2px' }}>Revisar posibles alzas</div>
                             </div>
 
                             <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B91C1C', fontWeight: '800', fontSize: '0.75rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#DC2626', fontWeight: '800', fontSize: '0.75rem' }}>
                                     <XCircle size={15} /> Desactualizado (&gt;7 días)
                                 </div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#7F1D1D', marginTop: '4px' }}>
-                                    {procurementMetrics.expiredSkus} SKUs
+                                <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#991B1B', marginTop: '4px', fontVariantNumeric: 'tabular-nums' }}>
+                                    {procurementMetrics.expiredSkus} Productos
                                 </div>
-                                <div style={{ fontSize: '0.7rem', color: '#991B1B', marginTop: '2px' }}>Requiere cotización Corabastos</div>
+                                <div style={{ fontSize: '0.7rem', color: '#DC2626', marginTop: '2px' }}>Requiere cotización Corabastos</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* ── BI SECTION 2: COMPARATIVO DE COSTOS VS PRECIOS DE VENTA ── */}
+                    {/* ── BI SECTION 2: MATRIZ DE RENTABILIDAD TOP 20 VOLUMEN Y RENTABILIDAD VALOR TOTAL ── */}
                     <div style={{
                         backgroundColor: '#FFFFFF',
                         borderRadius: '16px',
                         border: '1px solid #E2E8F0',
                         padding: '1.25rem 1.5rem',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                            <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '850', color: '#0F172A' }}>
-                                Matriz de Rentabilidad &amp; Spread por Producto
-                            </h3>
-                            <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748B' }}>
-                                Costo vs. Precio Base
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.45rem' }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.02rem', fontWeight: '850', color: '#0F172A' }}>
+                                    Matriz de Rentabilidad — Top 20 Volumen &amp; Rentabilidad Valor Total
+                                </h3>
+                                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.76rem', color: '#64748B' }}>
+                                    Consolidado de los 20 productos líderes con volumen movilizado real, costo unitario, precio venta, facturación acumulada y utilidad bruta total en pesos ($).
+                                </p>
+                            </div>
+
+                            {/* Selector Multi-Criterio Top 20 */}
+                            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F8FAFC', padding: '3px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                {[
+                                    { id: 'volume', label: 'Top 20 Volumen (Kg)' },
+                                    { id: 'total_profit', label: 'Rentabilidad Valor Total ($)' },
+                                    { id: 'revenue', label: 'Facturación Total ($)' },
+                                    { id: 'spread', label: '% Margen' }
+                                ].map(opt => (
+                                    <button
+                                        key={opt.id}
+                                        onClick={() => setMatrixSort(opt.id as any)}
+                                        style={{
+                                            padding: '0.32rem 0.7rem',
+                                            fontSize: '0.72rem',
+                                            fontWeight: matrixSort === opt.id ? '800' : '600',
+                                            backgroundColor: matrixSort === opt.id ? '#0D7A57' : 'transparent',
+                                            color: matrixSort === opt.id ? '#FFFFFF' : '#475569',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Totales Resumen Top 20 */}
+                        <div style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '1rem',
+                            padding: '0.65rem 0.9rem',
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: '10px',
+                            border: '1px solid #E2E8F0',
+                            marginBottom: '0.9rem',
+                            fontSize: '0.75rem',
+                            color: '#475569',
+                            fontVariantNumeric: 'tabular-nums'
+                        }}>
+                            <span>
+                                Volumen Top 20: <strong style={{ color: '#0F172A' }}>{formatNumber(procurementMetrics.totalTop20Volume, 1)} Kg</strong>
+                            </span>
+                            <span style={{ color: '#CBD5E1' }}>•</span>
+                            <span>
+                                Facturación Top 20: <strong style={{ color: '#0F172A' }}>{formatMoney(procurementMetrics.totalTop20Revenue)}</strong>
+                            </span>
+                            <span style={{ color: '#CBD5E1' }}>•</span>
+                            <span>
+                                Rentabilidad Valor Total Top 20: <strong style={{ color: '#065F46' }}>{formatMoney(procurementMetrics.totalTop20Profit)}</strong>
                             </span>
                         </div>
-                        <p style={{ margin: '0 0 1rem 0', fontSize: '0.76rem', color: '#64748B' }}>
-                            Diferencial de margen proyectado sobre los productos líderes del catálogo.
-                        </p>
 
                         <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', fontVariantNumeric: 'tabular-nums' }}>
                                 <thead>
-                                    <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#64748B', textAlign: 'left' }}>
-                                        <th style={{ padding: '0.6rem 0.5rem', fontWeight: '800' }}>Producto</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', fontWeight: '800' }}>Grupo de Inventario</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Costo Compra ($)</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Ref. Corabastos ($)</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Precio Base ($)</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', fontWeight: '800', textAlign: 'center' }}>Margen Proyectado</th>
+                                    <tr style={{ borderBottom: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#475569', textAlign: 'left', fontSize: '0.71rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', width: '36px' }}>#</th>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800' }}>Producto</th>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800' }}>Grupo de Inventario</th>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Volumen Movilizado</th>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Costo Unit. ($)</th>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Precio Venta ($)</th>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Facturación Total ($)</th>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Rentabilidad Valor Total ($)</th>
+                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'center' }}>% Margen</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {procurementMetrics.priceComparisonList.map((p, idx) => (
-                                        <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                            <td style={{ padding: '0.65rem 0.5rem', fontWeight: '800', color: '#0F172A' }}>{p.name}</td>
-                                            <td style={{ padding: '0.65rem 0.5rem', color: '#64748B' }}>{p.category}</td>
-                                            <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#334155' }}>
-                                                {formatMoney(p.matrixCost)}
-                                            </td>
-                                            <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', color: '#64748B' }}>
-                                                {formatMoney(p.estimatedCorabastos)}
-                                            </td>
-                                            <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#059669' }}>
-                                                {formatMoney(p.basePrice)}
-                                            </td>
-                                            <td style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
-                                                <span style={{
-                                                    fontWeight: '850',
-                                                    padding: '2px 8px',
-                                                    borderRadius: '6px',
-                                                    fontSize: '0.72rem',
-                                                    backgroundColor: p.spreadPct >= 20 ? '#DCFCE7' : p.spreadPct >= 10 ? '#FEF9C3' : '#FEE2E2',
-                                                    color: p.spreadPct >= 20 ? '#15803D' : p.spreadPct >= 10 ? '#854D0E' : '#991B1B'
+                                    {procurementMetrics.priceComparisonList.map((p, idx) => {
+                                        const isPositiveProfit = p.totalProfit >= 0;
+                                        const marginBadgeBg = p.spreadPct >= 20 ? '#ECFDF5' : p.spreadPct >= 10 ? '#FFFBEB' : '#FEF2F2';
+                                        const marginBadgeColor = p.spreadPct >= 20 ? '#065F46' : p.spreadPct >= 10 ? '#92400E' : '#DC2626';
+                                        const marginBadgeBorder = p.spreadPct >= 20 ? '#A7F3D0' : p.spreadPct >= 10 ? '#FDE68A' : '#FECACA';
+
+                                        return (
+                                            <tr key={p.id || idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                <td style={{ padding: '0.65rem 0.5rem', fontWeight: '800', color: idx < 3 ? '#0D7A57' : '#64748B' }}>
+                                                    {idx + 1}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.5rem' }}>
+                                                    <div style={{ fontWeight: '800', color: '#0F172A' }}>{p.name}</div>
+                                                    {p.accountingId !== '—' && (
+                                                        <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '600' }}>
+                                                            Cód: {p.accountingId}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.5rem', color: '#475569', fontSize: '0.71rem', fontWeight: '600' }}>
+                                                    {p.category.replace(/^INVENTARIO DE /i, '')}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
+                                                    {formatNumber(p.soldQty, 1)} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>{p.unit}</span>
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>
+                                                    {formatMoney(p.matrixCost)}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#0F172A' }}>
+                                                    {formatMoney(p.basePrice)}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
+                                                    {formatMoney(p.totalRevenue)}
+                                                </td>
+                                                <td style={{
+                                                    padding: '0.65rem 0.5rem',
+                                                    textAlign: 'right',
+                                                    fontWeight: '900',
+                                                    color: isPositiveProfit ? '#065F46' : '#DC2626'
                                                 }}>
-                                                    {p.spreadPct}%
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                    {formatMoney(p.totalProfit)}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
+                                                    <span style={{
+                                                        fontWeight: '850',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.72rem',
+                                                        backgroundColor: marginBadgeBg,
+                                                        color: marginBadgeColor,
+                                                        border: `1px solid ${marginBadgeBorder}`
+                                                    }}>
+                                                        {p.spreadPct}%
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -2191,36 +2380,48 @@ function BIChannelPerformanceMatrix({ metrics }: { metrics: any }) {
     );
 }
 
-function BIProductParetoRanking({ products }: { products: any[] }) {
+function BIProductParetoRanking({ products, sortBy = 'volume' }: { products: any[]; sortBy?: 'volume' | 'profit' | 'revenue' }) {
     if (!products || products.length === 0) {
         return <div style={{ fontSize: '0.8rem', color: '#94A3B8' }}>No hay ventas registradas en el período</div>;
     }
 
-    const maxRev = Math.max(...products.map(p => p.revenue), 1);
+    const maxMetric = Math.max(
+        ...products.map(p => sortBy === 'volume' ? p.qty : sortBy === 'profit' ? Math.max(p.profit, 0) : p.revenue),
+        1
+    );
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '340px', overflowY: 'auto', paddingRight: '4px', fontVariantNumeric: 'tabular-nums' }}>
             {products.map((p, idx) => {
-                const widthPct = Math.round((p.revenue / maxRev) * 100);
+                const metricVal = sortBy === 'volume' ? p.qty : sortBy === 'profit' ? Math.max(p.profit, 0) : p.revenue;
+                const widthPct = Math.max(Math.round((metricVal / maxMetric) * 100), 4);
                 return (
-                    <div key={idx}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', marginBottom: '3px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: '#F1F5F9', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '800' }}>
+                    <div key={p.id || idx}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem', marginBottom: '3px', gap: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                                <span style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: idx < 3 ? '#ECFDF5' : '#F1F5F9', color: idx < 3 ? '#065F46' : '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.64rem', fontWeight: '800', flexShrink: 0 }}>
                                     {idx + 1}
                                 </span>
-                                <span style={{ fontWeight: '800', color: '#0F172A' }}>{p.name}</span>
-                                <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>({formatNumber(p.qty, 0)} Kg)</span>
+                                <span style={{ fontWeight: '800', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                                <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: '700', flexShrink: 0 }}>
+                                    {formatNumber(p.qty, 1)} {p.unit || 'Kg'}
+                                </span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontWeight: '900', color: '#0F172A' }}>{formatMoney(p.revenue)}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }} title="Facturación Total">
+                                    Venta: {formatMoney(p.revenue)}
+                                </span>
+                                <span style={{ fontWeight: '900', color: p.profit >= 0 ? '#065F46' : '#DC2626', fontSize: '0.73rem' }} title="Rentabilidad Valor Total ($)">
+                                    Util: {formatMoney(p.profit)}
+                                </span>
                                 <span style={{
                                     fontSize: '0.65rem',
                                     fontWeight: '850',
                                     padding: '1px 6px',
                                     borderRadius: '4px',
-                                    backgroundColor: p.marginPct >= 20 ? '#DCFCE7' : '#FEF3C7',
-                                    color: p.marginPct >= 20 ? '#15803D' : '#B45309'
+                                    backgroundColor: p.marginPct >= 20 ? '#ECFDF5' : p.marginPct >= 10 ? '#FFFBEB' : '#FEF2F2',
+                                    color: p.marginPct >= 20 ? '#065F46' : p.marginPct >= 10 ? '#92400E' : '#DC2626',
+                                    border: `1px solid ${p.marginPct >= 20 ? '#A7F3D0' : p.marginPct >= 10 ? '#FDE68A' : '#FECACA'}`
                                 }}>
                                     {p.marginPct}%
                                 </span>
@@ -2231,7 +2432,7 @@ function BIProductParetoRanking({ products }: { products: any[] }) {
                             <div style={{
                                 height: '100%',
                                 width: `${widthPct}%`,
-                                backgroundColor: idx < 3 ? '#0D7A57' : idx < 6 ? '#059669' : '#10B981',
+                                backgroundColor: idx < 3 ? '#0D7A57' : idx < 10 ? '#047857' : '#059669',
                                 borderRadius: '999px'
                             }} />
                         </div>
