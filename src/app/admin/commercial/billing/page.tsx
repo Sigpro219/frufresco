@@ -75,6 +75,7 @@ import {
 } from 'lucide-react';
 import { downloadWorldOfficeExcel, downloadCreditNotesExcel, CreditNoteReportItem, resolveWorldOfficeBranch, resolveWorldOfficeNote } from '@/lib/worldOfficeExport';
 import { cleanHumanResolutionNotes, parseRcaFromRecord } from '@/lib/rcaTaxonomy';
+import CadenaRadianReconciliationSubmodule from '@/components/admin/billing/CadenaRadianReconciliationSubmodule';
 
 interface BillingCut {
     id: string;
@@ -676,7 +677,7 @@ export default function BillingDashboard() {
     const [pendingOrders, setPendingOrders] = useState<any[]>([]);
     const [parentProfilesMap, setParentProfilesMap] = useState<Map<string, any>>(new Map());
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'invoicing' | 'portfolio' | 'configuration'>('invoicing');
+    const [activeTab, setActiveTab] = useState<'invoicing' | 'cadena_radian' | 'portfolio' | 'configuration'>('invoicing');
     const [subTab, setSubTab] = useState<'pending' | 'batch_accumulated' | 'cuts' | 'returns'>('pending');
     const [returnsViewMode, setReturnsViewMode] = useState<'credit_notes' | 'pending_review' | 'all'>('credit_notes');
     const [batchAccumulatedOrders, setBatchAccumulatedOrders] = useState<any[]>([]);
@@ -3851,6 +3852,27 @@ export default function BillingDashboard() {
                                 </button>
                             )}
 
+                            <button
+                                onClick={() => setActiveTab('cadena_radian')}
+                                style={{ 
+                                    padding: '0.28rem 0.65rem', 
+                                    borderRadius: '6px', 
+                                    border: 'none', 
+                                    background: activeTab === 'cadena_radian' ? '#0D7A57' : 'transparent', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.74rem', 
+                                    cursor: 'pointer', 
+                                    color: activeTab === 'cadena_radian' ? 'white' : '#64748B', 
+                                    boxShadow: activeTab === 'cadena_radian' ? '0 1px 4px rgba(13, 122, 87, 0.2)' : 'none',
+                                    transition: 'all 0.15s ease',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                <ShieldCheck size={12} /> Conciliación Cadena & RADIAN
+                            </button>
+
                             {hasPortfolioAccess && (
                                 <button
                                     onClick={() => setActiveTab('portfolio')}
@@ -7022,6 +7044,11 @@ export default function BillingDashboard() {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* CADENA & RADIAN RECONCILIATION SUBMODULE */}
+                {activeTab === 'cadena_radian' && (
+                    <CadenaRadianReconciliationSubmodule onSyncComplete={fetchData} />
                 )}
 
                 {/* CUT PREVIEW MODAL */}

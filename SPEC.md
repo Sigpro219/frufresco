@@ -12709,3 +12709,31 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
        - **Mesa General:** Badge neutro: `Radicó: Mesa SAC`.
   2. **Búsqueda Instantánea Omnibox por Persona:**
      - El buscador superior (`searchTerm`) indexa automáticamente `registeredByDisplay`, `colleagueName`, `authorName` y `clientContact`. Al escribir el nombre de cualquier colaborador (ej. *"Angidailed"*, *"Rivas"*, etc.) o contacto de cliente, la tabla filtra inmediatamente todos los casos radicados por dicha persona en tiempo real.
+
+---
+
+### Escenario 331: Submódulo de Conciliación de Facturación Ciclo Completo, Instructivo Operativo y Trazabilidad Cadena / RADIAN (Poka-Yoke Anti-Facturas Huérfanas) (SDD v1.9.313)
+- **Given** la operación comercial y de cartera en el Módulo de Facturación (`/admin/commercial/billing`), donde existía un vacío operativo entre la exportación de cortes en FruFresco y la emisión física/fiscal de facturas electrónicas en Cadena S.A. / WorldOffice, derivando en pedidos entregados que se presumían facturados pero que nunca fueron emitidos ante la DIAN o radicados ante el cliente,
+- **When** el área contable o de facturación accede al nuevo submódulo **«Conciliación Cadena & RADIAN»** o carga un reporte oficial de emisión (`.xlsx` o `.csv`):
+- **Then** el sistema aplica las siguientes reglas inviolables de arquitectura y control de ciclo completo:
+  1. **Instructivo Didáctico e Integrado (Zero Confusion Standard):**
+     - El submódulo incorpora una pestaña permanente **📖 Instructivo Operativo** que explica con diagramas claros y lenguaje de negocio:
+       - **La Causa Raíz de la "Caja Negra":** El desfase entre exportar a Excel y los 4 pasos externos (WorldOffice, transmisión a Cadena, validación DIAN y radicación/acuse del cliente).
+       - **Fundamento Legal RADIAN (Resolución DIAN 000085/2022):** El significado y obligatoriedad de los eventos DIAN para constituir la factura en Título Valor exigible: Evento 030 (*Acuse de Recibo de Factura*), Evento 032 (*Recibo de Mercancías/Servicios*) y Evento 033/034 (*Aceptación Expresa / Tácita*).
+       - **Manual Operativo Paso a Paso:** Procedimiento estandarizado de 4 pasos para que el auxiliar contable descargue el reporte de Cadena, lo cruce en vivo y gestione las discrepancias el mismo día.
+       - **Descarga de Plantilla Oficial de Ejemplo:** Botón para generar y descargar un archivo `.xlsx` estructurado con la arquitectura canónica de columnas de Cadena S.A.
+  2. **Algoritmo de Cruce Poka-Yoke Multi-Criterio (Resiliencia a Formatos):**
+     - Procesamiento en el cliente mediante import dinámico (`await import('xlsx')`).
+     - Normalización fonética y de caracteres especiales de encabezados (ignora tildes, mayúsculas, espacios y caracteres de puntuación).
+     - Cruce en cascada jerárquica:
+       - **Prioridad 1:** Coincidencia por ID de Pedido de FruFresco (`#e1161fc2`) o número de remisión en las observaciones/notas del archivo.
+       - **Prioridad 2:** Coincidencia por Consecutivo Fiscal Oficial asignado en FruFresco (`SETT-10001` o numérico `10001`).
+       - **Prioridad 3:** Cruce heurístico por NIT de cliente + Valor total del pedido ($\pm 1\%$ o margen de redondeo de $\$500$ COP) + Fecha de entrega cercana ($\pm 3$ días).
+  3. **Bandejas Operativas en Tiempo Real y Semáforo de Riesgo:**
+     - 🔴 **FALTANTES EN CADENA / RIESGO MÁXIMO:** Remisiones físicas entregadas que NO figuran emitidas en el archivo de Cadena. Muestra cliente, fecha, valor total y días de retraso.
+     - 🟡 **RECHAZADAS / ERROR DIAN:** Facturas rebotadas por la DIAN con el código y mensaje de error reportado por el proveedor tecnológico.
+     - 🟢 **CONCILIADAS EXITOSAMENTE:** Facturas cruzadas con número fiscal oficial, fecha de emisión y CUFE validado.
+     - 🟣 **TRAZABILIDAD RADIAN (TÍTULO VALOR):** Auditoría visual de los eventos 030 (Acuse), 032 (Recibo de Mercancía) y 033/034 (Aceptación legal).
+  4. **Acciones Operativas y Persistencia Auditada:**
+     - **Exportación Inmediata de Faltantes a Excel:** Genera el reporte filtrado con las remisiones pendientes para que facturación las expida de urgencia.
+     - **Aplicación de Conciliación en Base de Datos:** Guarda los números de factura, CUFE, fecha de emisión y eventos RADIAN en `orders.logistics_data.cadena_reconciliation` y actualiza `billing_invoices.worldoffice_sync_status = 'reconciled_cadena'`, registrando la bitácora en `app_settings.cadena_reconciliations_history`.
