@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.311 (Capítulo 44: Inyección Automática de Características Fijas de Alistamiento desde product_nicknames — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.312 (Capítulo 44: Inyección Automática de Características Fijas & Trazabilidad de Radicación de PQRS por Persona — 76/76 Pantallas Certificadas)
 > **Fecha:** 27 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 329 Escenarios BDD Ininterrumpidos (1..329)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 330 Escenarios BDD Ininterrumpidos (1..330)
 
 ---
 
@@ -12698,3 +12698,19 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - Si no hay nota manual, se aplica la nota fija de la sucursal (`profile_id + product_id`).
      - Si la sucursal carece de instrucción propia, hereda la nota fija de la matriz corporativa (`parent_profile_id + product_id`).
 
+
+
+---
+
+### Escenario 330: Trazabilidad Canónica de Radicación de PQRS por Persona y Búsqueda Instantánea en Consola SAC (`/admin/customer-service`) (SDD v1.9.312)
+- **Given** la Consola de Calidad, PQRS & Devoluciones (`/admin/customer-service`), donde previamente en la columna *Cliente & Canal* solo se visualizaba la empresa y el rol corporativo genérico sin identificar visualmente qué colaborador o cliente específico abrió la reclamación,
+- **When** el equipo de operaciones, auditoría de calidad o gerencia consulta la tabla maestra de casos o utiliza el buscador omnibox:
+- **Then** el sistema aplica las siguientes reglas canónicas de trazabilidad humana y auditoría:
+  1. **Visualización de Radicador con Distinción Semántica:**
+     - En la tercera fila de la columna *Cliente & Canal*, se renderiza una micro-píldora con ícono `<User size={10} />` que identifica con precisión el origen y la persona:
+       - **Colaborador Interno FruFresco:** Badge institucional violeta (`#F3E8FF`, border `#DDD6FE`, texto `#7C3AED`): `Radicó: {Nombre Colaborador} ({Área})`.
+       - **Cliente vía Portal / QR de Remisión:** Badge esmeralda (`#ECFDF5`, border `#A7F3D0`, texto `#065F46`): `Radicó: {Contacto Cliente} (QR / B2B)`.
+       - **Conductor en Ruta:** Badge azul (`#EFF6FF`, border `#BFDBFE`, texto `#1D4ED8`): `Reportó: Conductor en Ruta`.
+       - **Mesa General:** Badge neutro: `Radicó: Mesa SAC`.
+  2. **Búsqueda Instantánea Omnibox por Persona:**
+     - El buscador superior (`searchTerm`) indexa automáticamente `registeredByDisplay`, `colleagueName`, `authorName` y `clientContact`. Al escribir el nombre de cualquier colaborador (ej. *"Angidailed"*, *"Rivas"*, etc.) o contacto de cliente, la tabla filtra inmediatamente todos los casos radicados por dicha persona en tiempo real.

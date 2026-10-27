@@ -396,6 +396,10 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                     p.subject?.toLowerCase().includes(term) ||
                     p.description?.toLowerCase().includes(term) ||
                     author.clientDisplayName.toLowerCase().includes(term) ||
+                    author.authorName?.toLowerCase().includes(term) ||
+                    author.registeredByDisplay?.toLowerCase().includes(term) ||
+                    author.colleagueName?.toLowerCase().includes(term) ||
+                    author.clientContact?.toLowerCase().includes(term) ||
                     author.nit?.toLowerCase().includes(term) ||
                     orderSeq.toLowerCase().includes(term) ||
                     pqrFolio.toLowerCase().includes(term) ||
@@ -1033,8 +1037,36 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                     </>
                                                                 )}
                                                             </div>
-                                                            <div style={{ fontSize: '0.65rem', color: author.isInternalCase ? '#7C3AED' : '#94A3B8', fontWeight: author.isInternalCase ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {author.isInternalCase ? 'NOVEDAD INTERNA PLANTA / RRHH' : (pqr.profiles?.corporate_role ? pqr.profiles.corporate_role.toUpperCase() : 'CANAL INSTITUCIONAL')}
+                                                            {/* Fila 3: Persona que radicó / Canal */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                                                                {author.registeredByBadge ? (
+                                                                    <span
+                                                                        style={{
+                                                                            fontSize: '0.64rem',
+                                                                            fontWeight: '800',
+                                                                            padding: '1px 6px',
+                                                                            borderRadius: '4px',
+                                                                            backgroundColor: author.registeredByBadge.bg,
+                                                                            color: author.registeredByBadge.color,
+                                                                            border: `1px solid ${author.registeredByBadge.border}`,
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '3px',
+                                                                            maxWidth: '100%',
+                                                                            overflow: 'hidden',
+                                                                            textOverflow: 'ellipsis',
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}
+                                                                        title={author.registeredByDisplay || author.authorName}
+                                                                    >
+                                                                        <User size={10} style={{ flexShrink: 0 }} />
+                                                                        <span>{author.registeredByBadge.label}</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <span style={{ fontSize: '0.65rem', color: author.isInternalCase ? '#7C3AED' : '#94A3B8', fontWeight: author.isInternalCase ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {author.isInternalCase ? 'NOVEDAD INTERNA PLANTA / RRHH' : (pqr.profiles?.corporate_role ? pqr.profiles.corporate_role.toUpperCase() : 'CANAL INSTITUCIONAL')}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
