@@ -12288,3 +12288,24 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - El KPI *Reposiciones & Garantías* integra en vivo las órdenes hijas de reposición a `$0 COP` generadas desde Servicio al Cliente (`origin_source = 'customer_service'` / `[REPOSICIÓN DE GARANTÍA $0 COP]`) junto con los movimientos de kardex de reposición y retorno.
   5. **Apego Estricto al Manual de Diseño FruFresco (`DESIGN_SYSTEM_MANUAL.md`):**
      - Se erradican los colores neón/arcoíris improvisados (`#10B981`, `#2563EB`, `#EA580C`) y se aplican los tokens semánticos oficiales: Verde Bosque Primario `#0D7A57`, Verde Clínico `#ECFDF5`/`#065F46`, Ámbar Preventivo `#FFFBEB`/`#92400E`, Rojo Crítico `#FEF2F2`/`#DC2626` y Carbón Slate `#0F172A`/`#475569` con tipografía `tabular-nums`.
+
+---
+
+### Escenario 312: Gobernanza y Consolidado Comercial de Precios Fuera de Convenio ($0) con Descarga Excel y Blindaje Anti-Fallback General Institucional (Gemba Detalles Pedidos: Hallazgo 3) (SDD v1.9.295)
+- **Given** el módulo de resolución de precios de pedidos (`/api/orders/resolve-agreement-pricing`), el módulo de facturación y cortes (`/admin/commercial/billing`) y la gestión de tarifas fuera de acuerdo (`/api/commercial/billing/assign-off-agreement-prices`),
+- **When** un cliente institucional con acuerdo comercial pactado (e.g. *El Carnal* con 26 SKUs negociados) o parametrización de lista fuera de convenio solicita un producto no incluido en su catálogo pactado (e.g. *Cebollitas ocañeras*),
+- **Then** el sistema consagra las siguientes cinco (5) reglas de negocio y gobernanza comercial:
+  1. **Blindaje Anti-Fallback de General Institucional para Clientes con Acuerdo:**
+     - En `/api/orders/resolve-agreement-pricing`, cuando un cliente B2B posee un acuerdo comercial asignado (`activeAgreement` o `candidateAgreement` en proceso de renovación o transición), queda estrictamente prohibido poblar los productos fuera de acuerdo con los precios de la lista *General Institucional* (antiguo fallback automático a $3.400 basado en compras del día anterior).
+     - El acuerdo candidato preserva los precios congelados de sus SKUs pactados (los 26 productos de *El Carnal*), mientras que cualquier producto adicional fuera del acuerdo entra de forma estricta a **`$0 COP`** en el mismo pedido, etiquetado para despacho como *Remisión Fuera de Acuerdo (Tarifa Pendiente)*.
+  2. **Cero Conflicto en Facturación y Cero Duplicación de Pedidos:**
+     - El pedido se mantiene como un **único pedido** (sin requerir la creación de un segundo pedido independiente ni generar fraccionamientos innecesarios en bodega).
+     - Durante la entrega física viaja como Remisión sin Valor para no exponer valores en cero al cliente final. En el módulo de facturación queda retenido por control de calidad hasta que el equipo Comercial asigne las tarifas definitivas.
+  3. **Descarga de Consolidado Excel de Precios $0 / Fuera de Convenio (`.xlsx`):**
+     - En el modal de gestión comercial de tarifas en Facturación y Cortes (`/admin/commercial/billing`), se incorpora el botón oficial **`Descargar Consolidado (Excel)`** (`<FileSpreadsheet size={14} />`).
+     - Al hacer clic, genera y descarga instantáneamente el archivo `Consolidado_Precios_Cero_[Fecha].xlsx` con las columnas: *Fecha_Entrega*, *Remision_No*, *Cliente*, *NIT*, *SKU*, *Producto*, *Unidad*, *Cantidad_Despachada*, *Costo_Referencia*, *Precio_General_Inst*, *Tarifa_Comercial_Fijada*, *Item_ID* y *Order_ID*.
+  4. **Fijación Ágil de Tarifas y Desbloqueo Automático a Factura Electrónica:**
+     - El modal habilita inputs numéricos por ítem con atajos rápidos de un solo toque: *Inst.* (para poblar con el precio de referencia institucional) y *+25%* (para poblar con costo + 25% de margen comercial).
+     - Al presionar **`Guardar Tarifas y Liberar Facturación`**, el backend `/api/commercial/billing/assign-off-agreement-prices` actualiza los precios unitarios, recalcula subtotales e IVA (descontando devoluciones de calidad si existieron en recepción), remueve el bloqueo de facturación y habilita de inmediato el pedido para su emisión en el corte de facturación electrónica.
+  5. **Estándar Puro de Iconografía Lucide React:**
+     - Se utilizan exclusivamente componentes vectoriales de `lucide-react` (`FileSpreadsheet`, `Save`, `CheckCircle2`, `Copy`, `X`), cumpliendo a cabalidad con la Ley Marcial #8.

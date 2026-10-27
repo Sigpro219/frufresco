@@ -295,6 +295,17 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 start_date: activeAgreement.start_date,
                 valid_until: activeAgreement.valid_until
             };
+        } else if (candidateAgreement) {
+            // SDD Escenario 312: Preservar acuerdo asignado si esta fuera de ventana estricta o en transicion
+            resolvedModel = {
+                id: candidateAgreement.id,
+                name: candidateAgreement.model_snapshot_name || `Acuerdo ${candidateAgreement.quote_number} (En transición/Renovación)`,
+                is_agreement: true,
+                quote_number: candidateAgreement.quote_number,
+                start_date: candidateAgreement.start_date,
+                valid_until: candidateAgreement.valid_until,
+                is_expired: isCandidateExpired
+            };
         } else {
             let modelId = currentProfile?.pricing_model_id || parentProfile?.pricing_model_id || null;
             if (modelId) {
@@ -331,14 +342,15 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
 
         const parallelQueries: Promise<any>[] = [];
 
-        // 6a. Quote items for active agreement
-        if (activeAgreement) {
+        // 6a. Quote items for active or candidate agreement (Escenario 312)
+        const targetAgreement = activeAgreement || candidateAgreement;
+        if (targetAgreement) {
             parallelQueries.push(
                 Promise.resolve(
                     supabase
                         .from('quote_items')
                         .select('product_id, unit_price')
-                        .eq('quote_id', activeAgreement.id)
+                        .eq('quote_id', targetAgreement.id)
                 )
             );
         } else if (resolvedModel && !resolvedModel.is_agreement && resolvedModel.id !== GENERAL_INSTITUCIONAL_ID && resolvedModel.id !== CLIENTES_HOGAR_ID) {
@@ -369,8 +381,8 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
 
         const [specificRes, genPricesMap, campTargetsRes] = await Promise.all(parallelQueries);
 
-        // Process specific agreement or model prices
-        if (activeAgreement && specificRes.data) {
+        // Process specific agreement or model prices (Escenario 312)
+        if (targetAgreement && specificRes.data) {
             (specificRes.data || []).forEach((qi: any) => {
                 if (qi.product_id) {
                     const price = Number(qi.unit_price) || 0;
@@ -393,7 +405,11 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         // SDD Escenario 221: Si el cliente tiene acuerdo vigente (activeAgreement != null), cualquier SKU fuera del acuerdo
         // (cuando allowOffAgreementPurchases === true) entra a $0 COP para despacharse en Remisión Fuera de Acuerdo,
         // prohibiéndose la auto-asignación de precios de la lista General Institucional.
-        if (isB2B && !activeAgreement) {
+        // SDD Escenario 221 & 312: Si el cliente tiene acuerdo asignado (activo o candidato),
+        // cualquier SKU fuera del acuerdo entra a $0 COP para despacharse como Remision Fuera de Acuerdo (Tarifa Pendiente).
+        // Queda ESTRICTAMENTE PROHIBIDO heredar precios automaticos de General Institucional ($3.400) para clientes con acuerdo.
+        const hasAssignedAgreement = Boolean(activeAgreement || candidateAgreement);
+        if (isB2B && !hasAssignedAgreement) {
             const castedGenPrices = (genPricesMap || {}) as Record<string, number>;
             for (const [prodId, gPrice] of Object.entries(castedGenPrices)) {
                 const numericPrice = Number(gPrice);

@@ -18,8 +18,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
-        const deliveryDate = searchParams.get('delivery_date');
-        const orderId = searchParams.get('order_id');
+        const deliveryDate = searchParams.get('delivery_date') || searchParams.get('date');
+        const orderId = searchParams.get('order_id') || searchParams.get('orderId');
 
         const supabaseAdmin = createAdminClient();
 
@@ -174,7 +174,8 @@ export async function GET(req: NextRequest) {
                 client_nit: o.profiles?.nit || 'N/A',
                 iva_responsible: Boolean(o.profiles?.iva_responsible),
                 admin_notes: o.admin_notes,
-                items
+                items,
+                unpriced_items: items // SDD Escenario 312: Alias para interoperabilidad completa de UI
             };
         });
 
@@ -194,12 +195,20 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const assignments: Array<{
+        let assignments: Array<{
             orderItemId?: string;
             orderId?: string;
             productId?: string;
             unitPrice: number;
         }> = body.assignments || [];
+
+        // SDD Escenario 312: Soporte para formato { orderIds, itemPrices: { [orderItemId]: price } }
+        if (assignments.length === 0 && body.itemPrices && typeof body.itemPrices === 'object') {
+            assignments = Object.entries(body.itemPrices).map(([orderItemId, unitPrice]) => ({
+                orderItemId,
+                unitPrice: Number(unitPrice)
+            }));
+        }
         const deliveryDate: string | undefined = body.deliveryDate;
         const assignedBy: string = body.assignedBy || 'Jefe Comercial';
 

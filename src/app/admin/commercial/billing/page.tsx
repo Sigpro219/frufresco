@@ -1591,6 +1591,60 @@ export default function BillingDashboard() {
         }
     }, [selectedBillingDate, includeAllStatuses]);
 
+        const handleDownloadOffAgreementExcel = useCallback(async () => {
+        if (!assignPriceOrders || assignPriceOrders.length === 0) {
+            showToast({ type: 'warning', message: 'No hay remisiones fuera de acuerdo para exportar.' });
+            return;
+        }
+        try {
+            const XLSX = await import('xlsx');
+            const rows: any[] = [];
+            assignPriceOrders.forEach((ord: any) => {
+                const clientLabel = ord.profiles?.company_name || ord.profiles?.razon_social || 'Cliente Institucional';
+                const clientNit = ord.profiles?.nit || '';
+                const orderSeq = ord.sequence_id || ord.id.slice(0, 8);
+                const deliveryDate = ord.delivery_date || 'Hoy';
+                const itemsList = ord.unpriced_items || ord.items || [];
+
+                itemsList.forEach((it: any) => {
+                    const billableQty = Number(it.billable_quantity ?? it.quantity ?? 0);
+                    const assignedPrice = Number(assignPriceItemInputs[it.id] || 0);
+
+                    rows.push({
+                        'Fecha_Entrega': deliveryDate,
+                        'Remision_No': orderSeq,
+                        'Cliente': clientLabel,
+                        'NIT': clientNit,
+                        'SKU': it.products?.sku || 'S/N',
+                        'Producto': it.products?.name || it.nickname || 'Producto',
+                        'Unidad': it.unit || it.products?.unit_of_measure || 'Und',
+                        'Cantidad_Despachada': billableQty,
+                        'Costo_Referencia': it.reference_cost || 0,
+                        'Precio_General_Inst': it.reference_general_price || 0,
+                        'Tarifa_Comercial_Fijada': assignedPrice > 0 ? assignedPrice : '',
+                        'Item_ID': it.id,
+                        'Order_ID': ord.id
+                    });
+                });
+            });
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Precios_Cero_Fuera_Acuerdo');
+            const fileName = `Consolidado_Precios_Cero_${selectedBillingDate || 'General'}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            showToast({
+                type: 'success',
+                title: 'Consolidado Exportado',
+                message: `Se descargó ${fileName} con éxito para fijación de tarifas.`
+            });
+        } catch (err: any) {
+            console.error('Error exporting off-agreement excel:', err);
+            showToast({ type: 'error', message: `Error al exportar Excel: ${err.message}` });
+        }
+    }, [assignPriceOrders, assignPriceItemInputs, selectedBillingDate, showToast]);
+
     const handleOpenAssignPriceModal = useCallback(async (targetOrderId?: string, overrideDate?: string) => {
         setIsAssignPriceModalOpen(true);
         setLoadingAssignPriceOrders(true);
