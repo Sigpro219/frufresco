@@ -2026,53 +2026,13 @@ export default function StrategyControlTower() {
                             justifyContent: 'space-between'
                         }}>
                             <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.45rem', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '850', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            Alerta Temprana de Abastecimiento &amp; Escasez
-                                        </h3>
-                                        <p style={{ margin: '3px 0 0 0', fontSize: '0.74rem', color: '#64748B' }}>
-                                            Inteligencia cíclica de mercado (escasez vs. cosecha en historial 2025-2026) y productos reportados escasos en despacho.
-                                        </p>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                        <span style={{
-                                            fontSize: '0.66rem',
-                                            fontWeight: '800',
-                                            color: '#DC2626',
-                                            backgroundColor: '#FEF2F2',
-                                            border: '1px solid #FECACA',
-                                            padding: '2px 8px',
-                                            borderRadius: '6px',
-                                            fontVariantNumeric: 'tabular-nums'
-                                        }}>
-                                            En Escasez / Carestía: {inventoryMetrics.scarcityCycleCount}
-                                        </span>
-                                        <span style={{
-                                            fontSize: '0.66rem',
-                                            fontWeight: '800',
-                                            color: '#92400E',
-                                            backgroundColor: '#FFFBEB',
-                                            border: '1px solid #FDE68A',
-                                            padding: '2px 8px',
-                                            borderRadius: '6px',
-                                            fontVariantNumeric: 'tabular-nums'
-                                        }}>
-                                            Reportados Faltantes: {inventoryMetrics.reportedShortageCount}
-                                        </span>
-                                        <span style={{
-                                            fontSize: '0.66rem',
-                                            fontWeight: '800',
-                                            color: '#065F46',
-                                            backgroundColor: '#ECFDF5',
-                                            border: '1px solid #BBF7D0',
-                                            padding: '2px 8px',
-                                            borderRadius: '6px',
-                                            fontVariantNumeric: 'tabular-nums'
-                                        }}>
-                                            En Cosecha / Abundancia: {inventoryMetrics.abundanceCycleCount}
-                                        </span>
-                                    </div>
+                                <div style={{ marginBottom: '0.65rem' }}>
+                                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '850', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        Alerta Temprana de Abastecimiento &amp; Escasez
+                                    </h3>
+                                    <p style={{ margin: '3px 0 0 0', fontSize: '0.74rem', color: '#64748B' }}>
+                                        Inteligencia cíclica de mercado (escasez vs. cosecha en historial 2025-2026) y productos reportados escasos en despacho.
+                                    </p>
                                 </div>
 
                                 {/* Selector de Vista Cíclica + Buscador */}
