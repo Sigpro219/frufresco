@@ -285,7 +285,7 @@ export default function GoldenPrintStyles({
                 }
                 .letterhead-container {
                     width: 100% !important;
-                    min-height: 0 !important;
+                    min-height: ${pageSize.includes('legal') ? '335mm' : '262mm'} !important;
                     height: auto !important;
                     overflow: visible !important;
                     display: flex !important;

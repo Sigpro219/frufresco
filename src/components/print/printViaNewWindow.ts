@@ -100,14 +100,14 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            min-height: 0 !important;
+            min-height: ${paperSize === 'oficio' || paperSize === 'legal' ? '335mm' : '262mm'} !important;
             height: auto !important;
             overflow: visible !important;
             position: relative !important;
             background: transparent !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: flex-start !important;
+            justify-content: space-between !important;
             box-sizing: border-box !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
@@ -117,6 +117,7 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             flex-grow: 1 !important;
             display: flex !important;
             flex-direction: column !important;
+            justify-content: space-between !important;
         }
 
         /* Tipografía legible para el encabezado corporativo */
