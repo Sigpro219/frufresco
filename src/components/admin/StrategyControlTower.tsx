@@ -28,6 +28,9 @@ import {
     Building2,
     Home,
     FileSpreadsheet,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
     Compass,
     Award,
     Clock,
@@ -64,6 +67,10 @@ export default function StrategyControlTower() {
     const [showWarrantyHistoryModal, setShowWarrantyHistoryModal] = useState(false);
     const [paretoSort, setParetoSort] = useState<'spend' | 'profit' | 'margin' | 'volume'>('spend');
     const [matrixSort, setMatrixSort] = useState<'volume' | 'total_profit' | 'revenue' | 'spread'>('volume');
+    const [matrixSearch, setMatrixSearch] = useState('');
+    const [matrixSortColumn, setMatrixSortColumn] = useState<'index' | 'name' | 'category' | 'soldQty' | 'matrixCost' | 'basePrice' | 'totalRevenue' | 'totalProfit' | 'spreadPct'>('soldQty');
+    const [matrixSortDir, setMatrixSortDir] = useState<'asc' | 'desc'>('desc');
+    const [matrixShowAll, setMatrixShowAll] = useState(false);
     const [productRankingSort, setProductRankingSort] = useState<'volume' | 'profit' | 'revenue'>('volume');
 
     // Data State
@@ -919,7 +926,7 @@ export default function StrategyControlTower() {
             });
         });
 
-        const priceComparisonList = products
+        const allProductsList = products
             .map(p => {
                 const sales = salesByProductMap.get(p.id) || { qty: 0, revenue: 0, cost: 0 };
                 const soldQty = sales.qty;
@@ -971,6 +978,24 @@ export default function StrategyControlTower() {
             })
             .slice(0, 20);
 
+        const priceComparisonList = [...allProductsList]
+            .sort((a, b) => {
+                if (matrixSort === 'volume') {
+                    if (b.soldQty !== a.soldQty) return b.soldQty - a.soldQty;
+                    return b.totalProfit - a.totalProfit;
+                }
+                if (matrixSort === 'total_profit') {
+                    if (b.totalProfit !== a.totalProfit) return b.totalProfit - a.totalProfit;
+                    return b.soldQty - a.soldQty;
+                }
+                if (matrixSort === 'revenue') {
+                    if (b.totalRevenue !== a.totalRevenue) return b.totalRevenue - a.totalRevenue;
+                    return b.soldQty - a.soldQty;
+                }
+                return b.spreadPct - a.spreadPct;
+            })
+            .slice(0, 20);
+
         const totalTop20Volume = priceComparisonList.reduce((acc, p) => acc + p.soldQty, 0);
         const totalTop20Revenue = priceComparisonList.reduce((acc, p) => acc + p.totalRevenue, 0);
         const totalTop20Profit = priceComparisonList.reduce((acc, p) => acc + p.totalProfit, 0);
@@ -982,11 +1007,99 @@ export default function StrategyControlTower() {
             expiredSkus,
             freshnessPct: totalMatrixSkus > 0 ? Math.round((freshSkus / totalMatrixSkus) * 100) : 85,
             priceComparisonList,
+            allProductsList,
             totalTop20Volume,
             totalTop20Revenue,
             totalTop20Profit
         };
     }, [costMatrix, products, costMap, priceMap, filteredOrders, orderItems, matrixSort]);
+
+    // ── LÓGICA DE SUPERBUSCADOR & ORDENADORES MATRIZ DE RENTABILIDAD ──
+    const handleMatrixHeaderSort = (column: 'index' | 'name' | 'category' | 'soldQty' | 'matrixCost' | 'basePrice' | 'totalRevenue' | 'totalProfit' | 'spreadPct') => {
+        if (matrixSortColumn === column) {
+            setMatrixSortDir(prev => prev === 'desc' ? 'asc' : 'desc');
+        } else {
+            setMatrixSortColumn(column);
+            if (column === 'name' || column === 'category') {
+                setMatrixSortDir('asc');
+            } else {
+                setMatrixSortDir('desc');
+            }
+        }
+    };
+
+    const handleMatrixQuickPill = (id: 'volume' | 'total_profit' | 'revenue' | 'spread' | 'all') => {
+        if (id === 'all') {
+            setMatrixShowAll(true);
+            return;
+        }
+        setMatrixShowAll(false);
+        setMatrixSort(id);
+        if (id === 'volume') {
+            setMatrixSortColumn('soldQty');
+            setMatrixSortDir('desc');
+        } else if (id === 'total_profit') {
+            setMatrixSortColumn('totalProfit');
+            setMatrixSortDir('desc');
+        } else if (id === 'revenue') {
+            setMatrixSortColumn('totalRevenue');
+            setMatrixSortDir('desc');
+        } else if (id === 'spread') {
+            setMatrixSortColumn('spreadPct');
+            setMatrixSortDir('desc');
+        }
+    };
+
+    const filteredAndSortedMatrixList = useMemo(() => {
+        const sourceList = [...(procurementMetrics.allProductsList || procurementMetrics.priceComparisonList || [])];
+        const query = matrixSearch.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+        let list = sourceList;
+        if (query) {
+            list = list.filter(p => {
+                const nameNorm = String(p.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const catNorm = String(p.category || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const codeNorm = String(p.accountingId || '').toLowerCase();
+                const unitNorm = String(p.unit || '').toLowerCase();
+                return nameNorm.includes(query) || catNorm.includes(query) || codeNorm.includes(query) || unitNorm.includes(query);
+            });
+        }
+
+        // Ordenamiento dinámico
+        list.sort((a, b) => {
+            if (matrixSortColumn === 'name') {
+                const aName = String(a.name || '').toLowerCase();
+                const bName = String(b.name || '').toLowerCase();
+                return matrixSortDir === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+            }
+            if (matrixSortColumn === 'category') {
+                const aCat = String(a.category || '').toLowerCase();
+                const bCat = String(b.category || '').toLowerCase();
+                return matrixSortDir === 'asc' ? aCat.localeCompare(bCat) : bCat.localeCompare(aCat);
+            }
+
+            const valA = Number(a[matrixSortColumn] ?? 0);
+            const valB = Number(b[matrixSortColumn] ?? 0);
+            return matrixSortDir === 'asc' ? valA - valB : valB - valA;
+        });
+
+        if (!query && !matrixShowAll) {
+            return list.slice(0, 20);
+        }
+
+        return list;
+    }, [procurementMetrics, matrixSearch, matrixSortColumn, matrixSortDir, matrixShowAll]);
+
+    const matrixVisibleSummary = useMemo(() => {
+        return filteredAndSortedMatrixList.reduce(
+            (acc, p) => ({
+                volume: acc.volume + p.soldQty,
+                revenue: acc.revenue + p.totalRevenue,
+                profit: acc.profit + p.totalProfit
+            }),
+            { volume: 0, revenue: 0, profit: 0 }
+        );
+    }, [filteredAndSortedMatrixList]);
 
     // ── MASTER EXCEL EXPORT (1-CLIC) ──
     const handleExportExcel = async (areaKey: StrategyArea) => {
@@ -2084,146 +2197,486 @@ export default function StrategyControlTower() {
                         padding: '1.25rem 1.5rem',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.45rem' }}>
+                        {/* Cabecera & Selector Multi-Criterio */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.85rem' }}>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: '1.02rem', fontWeight: '850', color: '#0F172A' }}>
-                                    Matriz de Rentabilidad — Top 20 Volumen &amp; Rentabilidad Valor Total
-                                </h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <h3 style={{ margin: 0, fontSize: '1.02rem', fontWeight: '850', color: '#0F172A' }}>
+                                        Matriz de Rentabilidad — Top 20 Volumen &amp; Rentabilidad Valor Total
+                                    </h3>
+                                    <span style={{
+                                        fontSize: '0.68rem',
+                                        fontWeight: '800',
+                                        backgroundColor: '#ECFDF5',
+                                        color: '#065F46',
+                                        border: '1px solid #A7F3D0',
+                                        padding: '2px 8px',
+                                        borderRadius: '9999px'
+                                    }}>
+                                        BI V2 · Sticky &amp; Omnibox
+                                    </span>
+                                </div>
                                 <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.76rem', color: '#64748B' }}>
-                                    Consolidado de los 20 productos líderes con volumen movilizado real, costo unitario, precio venta, facturación acumulada y utilidad bruta total en pesos ($).
+                                    Consolidado de productos líderes con volumen movilizado real, costo unitario, precio venta, facturación acumulada y utilidad bruta en pesos ($).
                                 </p>
                             </div>
 
-                            {/* Selector Multi-Criterio Top 20 */}
-                            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F8FAFC', padding: '3px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                            {/* Selector Multi-Criterio de Píldoras Rápidas */}
+                            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F8FAFC', padding: '3px', borderRadius: '8px', border: '1px solid #E2E8F0', flexWrap: 'wrap' }}>
                                 {[
                                     { id: 'volume', label: 'Top 20 Volumen (Kg)' },
-                                    { id: 'total_profit', label: 'Rentabilidad Valor Total ($)' },
+                                    { id: 'total_profit', label: 'Rentabilidad Total ($)' },
                                     { id: 'revenue', label: 'Facturación Total ($)' },
-                                    { id: 'spread', label: '% Margen' }
-                                ].map(opt => (
-                                    <button
-                                        key={opt.id}
-                                        onClick={() => setMatrixSort(opt.id as any)}
-                                        style={{
-                                            padding: '0.32rem 0.7rem',
-                                            fontSize: '0.72rem',
-                                            fontWeight: matrixSort === opt.id ? '800' : '600',
-                                            backgroundColor: matrixSort === opt.id ? '#0D7A57' : 'transparent',
-                                            color: matrixSort === opt.id ? '#FFFFFF' : '#475569',
-                                            border: 'none',
-                                            borderRadius: '6px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.15s'
-                                        }}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
+                                    { id: 'spread', label: '% Margen' },
+                                    { id: 'all', label: `Ver Todos (${procurementMetrics.allProductsList?.length || 0})` }
+                                ].map(opt => {
+                                    const isActive = opt.id === 'all' ? matrixShowAll : (!matrixShowAll && matrixSort === opt.id);
+                                    return (
+                                        <button
+                                            key={opt.id}
+                                            onClick={() => handleMatrixQuickPill(opt.id as any)}
+                                            style={{
+                                                padding: '0.32rem 0.7rem',
+                                                fontSize: '0.72rem',
+                                                fontWeight: isActive ? '800' : '600',
+                                                backgroundColor: isActive ? '#0D7A57' : 'transparent',
+                                                color: isActive ? '#FFFFFF' : '#475569',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s'
+                                            }}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
-                        {/* Totales Resumen Top 20 */}
+                        {/* Superbuscador Omnibox Universal */}
                         <div style={{
                             display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.75rem',
+                            marginBottom: '0.85rem',
+                            backgroundColor: '#F8FAFC',
+                            padding: '0.65rem 0.85rem',
+                            borderRadius: '10px',
+                            border: '1px solid #E2E8F0',
+                            flexWrap: 'wrap'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: '260px', position: 'relative' }}>
+                                <Search size={16} color="#64748B" style={{ position: 'absolute', left: '10px', pointerEvents: 'none' }} />
+                                <input
+                                    type="text"
+                                    value={matrixSearch}
+                                    onChange={(e) => setMatrixSearch(e.target.value)}
+                                    placeholder="Buscar por producto, código contable Siigo, grupo de inventario o unidad..."
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.45rem 2rem 0.45rem 2.1rem',
+                                        fontSize: '0.78rem',
+                                        border: '1px solid #CBD5E1',
+                                        borderRadius: '8px',
+                                        backgroundColor: '#FFFFFF',
+                                        color: '#0F172A',
+                                        outline: 'none',
+                                        transition: 'border-color 0.15s'
+                                    }}
+                                />
+                                {matrixSearch && (
+                                    <button
+                                        onClick={() => setMatrixSearch('')}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '8px',
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            color: '#94A3B8',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: '2px'
+                                        }}
+                                        title="Limpiar búsqueda"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Badge de conteo de resultados */}
+                            <div style={{
+                                fontSize: '0.74rem',
+                                color: '#475569',
+                                fontWeight: '700',
+                                fontVariantNumeric: 'tabular-nums',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                Mostrando <strong style={{ color: '#0F172A' }}>{filteredAndSortedMatrixList.length}</strong> de <strong style={{ color: '#64748B' }}>{procurementMetrics.allProductsList?.length || procurementMetrics.priceComparisonList.length}</strong> SKUs
+                            </div>
+                        </div>
+
+                        {/* KPI Strip Resumen Dinámico */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
                             flexWrap: 'wrap',
                             gap: '1rem',
-                            padding: '0.65rem 0.9rem',
+                            padding: '0.6rem 0.9rem',
                             backgroundColor: '#F8FAFC',
                             borderRadius: '10px',
                             border: '1px solid #E2E8F0',
-                            marginBottom: '0.9rem',
-                            fontSize: '0.75rem',
+                            marginBottom: '0.85rem',
+                            fontSize: '0.74rem',
                             color: '#475569',
                             fontVariantNumeric: 'tabular-nums'
                         }}>
                             <span>
-                                Volumen Top 20: <strong style={{ color: '#0F172A' }}>{formatNumber(procurementMetrics.totalTop20Volume, 1)} Kg</strong>
+                                Volumen Visible: <strong style={{ color: '#0F172A' }}>{formatNumber(matrixVisibleSummary.volume, 1)} Kg</strong>
                             </span>
                             <span style={{ color: '#CBD5E1' }}>•</span>
                             <span>
-                                Facturación Top 20: <strong style={{ color: '#0F172A' }}>{formatMoney(procurementMetrics.totalTop20Revenue)}</strong>
+                                Facturación Visible: <strong style={{ color: '#0F172A' }}>{formatMoney(matrixVisibleSummary.revenue)}</strong>
                             </span>
                             <span style={{ color: '#CBD5E1' }}>•</span>
                             <span>
-                                Rentabilidad Valor Total Top 20: <strong style={{ color: '#065F46' }}>{formatMoney(procurementMetrics.totalTop20Profit)}</strong>
+                                Rentabilidad Valor Total: <strong style={{ color: '#065F46' }}>{formatMoney(matrixVisibleSummary.profit)}</strong>
                             </span>
+                            {matrixSortColumn && (
+                                <>
+                                    <span style={{ color: '#CBD5E1' }}>•</span>
+                                    <span style={{ fontSize: '0.71rem', color: '#64748B' }}>
+                                        Orden: <strong style={{ color: '#0D7A57' }}>{matrixSortColumn.toUpperCase()}</strong> ({matrixSortDir === 'desc' ? 'Mayor a menor ↓' : 'Menor a mayor ↑'})
+                                    </span>
+                                </>
+                            )}
                         </div>
 
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', fontVariantNumeric: 'tabular-nums' }}>
+                        {/* Contenedor con Scroll y Sticky Headers */}
+                        <div style={{
+                            maxHeight: '580px',
+                            overflowY: 'auto',
+                            overflowX: 'auto',
+                            borderRadius: '12px',
+                            border: '1px solid #E2E8F0'
+                        }}>
+                            <table style={{
+                                width: '100%',
+                                borderCollapse: 'separate',
+                                borderSpacing: 0,
+                                fontSize: '0.78rem',
+                                fontVariantNumeric: 'tabular-nums'
+                            }}>
                                 <thead>
-                                    <tr style={{ borderBottom: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#475569', textAlign: 'left', fontSize: '0.71rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', width: '36px' }}>#</th>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800' }}>Producto</th>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800' }}>Grupo de Inventario</th>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Volumen Movilizado</th>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Costo Unit. ($)</th>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Precio Venta ($)</th>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Facturación Total ($)</th>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'right' }}>Rentabilidad Valor Total ($)</th>
-                                        <th style={{ padding: '0.65rem 0.5rem', fontWeight: '800', textAlign: 'center' }}>% Margen</th>
+                                    <tr style={{ backgroundColor: '#F8FAFC', color: '#475569', fontSize: '0.71rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('index')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                width: '40px',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                <span>#</span>
+                                                {matrixSortColumn === 'index' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('name')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                userSelect: 'none',
+                                                minWidth: '180px'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span>Producto</span>
+                                                {matrixSortColumn === 'name' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('category')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                userSelect: 'none',
+                                                minWidth: '140px'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span>Grupo Inventario</span>
+                                                {matrixSortColumn === 'category' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('soldQty')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                textAlign: 'right',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Volumen</span>
+                                                {matrixSortColumn === 'soldQty' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('matrixCost')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                textAlign: 'right',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Costo Unit. ($)</span>
+                                                {matrixSortColumn === 'matrixCost' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('basePrice')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                textAlign: 'right',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Precio Venta ($)</span>
+                                                {matrixSortColumn === 'basePrice' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('totalRevenue')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                textAlign: 'right',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Facturación ($)</span>
+                                                {matrixSortColumn === 'totalRevenue' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('totalProfit')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                textAlign: 'right',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                <span>Rentabilidad ($)</span>
+                                                {matrixSortColumn === 'totalProfit' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        <th
+                                            onClick={() => handleMatrixHeaderSort('spreadPct')}
+                                            style={{
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: '2px solid #CBD5E1',
+                                                padding: '0.65rem 0.5rem',
+                                                fontWeight: '800',
+                                                textAlign: 'center',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                <span>% Margen</span>
+                                                {matrixSortColumn === 'spreadPct' ? (
+                                                    matrixSortDir === 'desc' ? <ArrowDown size={12} color="#0D7A57" /> : <ArrowUp size={12} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} color="#94A3B8" />
+                                                )}
+                                            </div>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {procurementMetrics.priceComparisonList.map((p, idx) => {
-                                        const isPositiveProfit = p.totalProfit >= 0;
-                                        const marginBadgeBg = p.spreadPct >= 20 ? '#ECFDF5' : p.spreadPct >= 10 ? '#FFFBEB' : '#FEF2F2';
-                                        const marginBadgeColor = p.spreadPct >= 20 ? '#065F46' : p.spreadPct >= 10 ? '#92400E' : '#DC2626';
-                                        const marginBadgeBorder = p.spreadPct >= 20 ? '#A7F3D0' : p.spreadPct >= 10 ? '#FDE68A' : '#FECACA';
+                                    {filteredAndSortedMatrixList.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={9} style={{ padding: '2.5rem 1rem', textAlign: 'center', color: '#64748B' }}>
+                                                No se encontraron productos que coincidan con la búsqueda.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredAndSortedMatrixList.map((p, idx) => {
+                                            const isPositiveProfit = p.totalProfit >= 0;
+                                            const marginBadgeBg = p.spreadPct >= 20 ? '#ECFDF5' : p.spreadPct >= 10 ? '#FFFBEB' : '#FEF2F2';
+                                            const marginBadgeColor = p.spreadPct >= 20 ? '#065F46' : p.spreadPct >= 10 ? '#92400E' : '#DC2626';
+                                            const marginBadgeBorder = p.spreadPct >= 20 ? '#A7F3D0' : p.spreadPct >= 10 ? '#FDE68A' : '#FECACA';
 
-                                        return (
-                                            <tr key={p.id || idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                <td style={{ padding: '0.65rem 0.5rem', fontWeight: '800', color: idx < 3 ? '#0D7A57' : '#64748B' }}>
-                                                    {idx + 1}
-                                                </td>
-                                                <td style={{ padding: '0.65rem 0.5rem' }}>
-                                                    <div style={{ fontWeight: '800', color: '#0F172A' }}>{p.name}</div>
-                                                    {p.accountingId !== '—' && (
-                                                        <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '600' }}>
-                                                            Cód: {p.accountingId}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: '0.65rem 0.5rem', color: '#475569', fontSize: '0.71rem', fontWeight: '600' }}>
-                                                    {p.category.replace(/^INVENTARIO DE /i, '')}
-                                                </td>
-                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
-                                                    {formatNumber(p.soldQty, 1)} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>{p.unit}</span>
-                                                </td>
-                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>
-                                                    {formatMoney(p.matrixCost)}
-                                                </td>
-                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#0F172A' }}>
-                                                    {formatMoney(p.basePrice)}
-                                                </td>
-                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
-                                                    {formatMoney(p.totalRevenue)}
-                                                </td>
-                                                <td style={{
-                                                    padding: '0.65rem 0.5rem',
-                                                    textAlign: 'right',
-                                                    fontWeight: '900',
-                                                    color: isPositiveProfit ? '#065F46' : '#DC2626'
-                                                }}>
-                                                    {formatMoney(p.totalProfit)}
-                                                </td>
-                                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
-                                                    <span style={{
-                                                        fontWeight: '850',
-                                                        padding: '2px 8px',
-                                                        borderRadius: '6px',
-                                                        fontSize: '0.72rem',
-                                                        backgroundColor: marginBadgeBg,
-                                                        color: marginBadgeColor,
-                                                        border: `1px solid ${marginBadgeBorder}`
+                                            return (
+                                                <tr
+                                                    key={p.id || idx}
+                                                    style={{
+                                                        borderBottom: '1px solid #F1F5F9',
+                                                        backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FBFDFB',
+                                                        transition: 'background-color 0.12s'
+                                                    }}
+                                                >
+                                                    <td style={{
+                                                        padding: '0.65rem 0.5rem',
+                                                        fontWeight: '800',
+                                                        color: idx < 3 ? '#0D7A57' : '#64748B',
+                                                        borderBottom: '1px solid #F1F5F9'
                                                     }}>
-                                                        {p.spreadPct}%
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                                        {idx + 1}
+                                                    </td>
+                                                    <td style={{ padding: '0.65rem 0.5rem', borderBottom: '1px solid #F1F5F9' }}>
+                                                        <div style={{ fontWeight: '800', color: '#0F172A' }}>{p.name}</div>
+                                                        {p.accountingId !== '—' && (
+                                                            <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '600' }}>
+                                                                Cód: {p.accountingId}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '0.65rem 0.5rem', color: '#475569', fontSize: '0.71rem', fontWeight: '600', borderBottom: '1px solid #F1F5F9' }}>
+                                                        {p.category.replace(/^INVENTARIO DE /i, '')}
+                                                    </td>
+                                                    <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', borderBottom: '1px solid #F1F5F9' }}>
+                                                        {formatNumber(p.soldQty, 1)} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>{p.unit}</span>
+                                                    </td>
+                                                    <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#475569', borderBottom: '1px solid #F1F5F9' }}>
+                                                        {formatMoney(p.matrixCost)}
+                                                    </td>
+                                                    <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#0F172A', borderBottom: '1px solid #F1F5F9' }}>
+                                                        {formatMoney(p.basePrice)}
+                                                    </td>
+                                                    <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', borderBottom: '1px solid #F1F5F9' }}>
+                                                        {formatMoney(p.totalRevenue)}
+                                                    </td>
+                                                    <td style={{
+                                                        padding: '0.65rem 0.5rem',
+                                                        textAlign: 'right',
+                                                        fontWeight: '900',
+                                                        color: isPositiveProfit ? '#065F46' : '#DC2626',
+                                                        borderBottom: '1px solid #F1F5F9'
+                                                    }}>
+                                                        {formatMoney(p.totalProfit)}
+                                                    </td>
+                                                    <td style={{ padding: '0.65rem 0.5rem', textAlign: 'center', borderBottom: '1px solid #F1F5F9' }}>
+                                                        <span style={{
+                                                            fontWeight: '850',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '6px',
+                                                            fontSize: '0.72rem',
+                                                            backgroundColor: marginBadgeBg,
+                                                            color: marginBadgeColor,
+                                                            border: `1px solid ${marginBadgeBorder}`
+                                                        }}>
+                                                            {p.spreadPct}%
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
                                 </tbody>
                             </table>
                         </div>

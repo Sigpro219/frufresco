@@ -12441,3 +12441,40 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   5. **Modal / Drawer de Historial Forense con Exportación a Excel:**
      - Dispone del botón interactivo **`[Ver Historial Auditable]`** que abre una ventana modal con el desglose cronológico completo (Folio `#PED-XXXX`, Fecha, Cliente, Kilaje, Costo Asumido y Motivo/Pedido Padre amparado).
      - Incorpora el botón **`Descargar Excel`** que genera nativamente el archivo `Frufresco_Garantias_Reposiciones_[FECHA].xlsx`.
+---
+
+### Escenario 319: Ergonomía y Legibilidad de Alto Contraste en Sábana de Alistamiento Impresa (Zebra Striping Industrial & Tipografía Lean de Planta) (Gemba Feedback Sábana: Hallazgo 1) (SDD v1.9.301)
+- **Given** el módulo de impresión de la Sábana de Alistamiento Nocturno (`/admin/orders/alistamiento-print`) utilizado por los líderes de cuadrilla y alistadores en las células de bodega,
+- **When** se genera la matriz física para despacho y picking en papel de formato horizontal (Landscape),
+- **Then** el sistema garantiza los siguientes cuatro (4) estándares de legibilidad, contraste y ergonomía operativa:
+  1. **Zebra Striping Industrial de Alto Contraste:**
+     - Se sustituye el sombreado casi invisible previo (`#FFFFFF` vs `#F9FAFB`) por una alternancia nítida y visible en cualquier condición de iluminación y fotocopiado: filas pares en blanco puro (`#FFFFFF`) y filas impares en gris pizarra industrial suave (`#F1F5F9`).
+     - Las cuadrículas internas se refuerzan con bordes nítidos de 1px en `#64748B` para que el operario pueda seguir visualmente la línea de izquierda a derecha sin cruzarse de renglón.
+  2. **Escala Tipográfica Operativa Prominente:**
+     - **Cantidades a Alistar:** Elevadas a **`9.5pt`** con peso ultra-negrita (`fontWeight: 900`), asegurando lectura instantánea de kilos o unidades a más de 50 cm de distancia.
+     - **Sucursal / Cliente:** Elevado a **`8.5pt`** con `fontWeight: 800` para identificación inmediata del destino del producto.
+     - **Lugar / Bahía en Suelo (`LUGAR`):** Elevado a **`9.5pt`** centrado con `fontWeight: 900` en color `#0F172A`.
+     - **Encabezados de Tabla:** Elevados a **`8pt`** sobre fondo sólido de contraste `#E2E8F0` con borde inferior reforzado de 2px.
+  3. **Resalte Visual de Notas y Especificaciones Culinarias:**
+     - Las observaciones críticas del cliente (ej. *"Maduro"*, *"Pintón"*, *"5 und de 500 gr"*) pasan de ser textos diminutos de 5.5pt a píldoras de alto contraste en **`6.8pt`** (`fontWeight: 700`, fondo ámbar `#FEF3C7` y texto oscuro `#1E293B`), erradicando omisiones de calidad durante el alistamiento.
+  4. **Ergonomía de Marcación Física:**
+     - Las celdas aumentan su altura útil (mínimo 30px) y su padding vertical (3px - 5px), dejando espacio holgado para que el alistador marque físicamente con bolígrafo la casilla Lean `[  ]` sin invadir ni tachar las cantidades numéricas.
+
+---
+
+### Escenario 320: Estandarización de Matriz de Rentabilidad en Torre de Control — Encabezados Sticky Docked, Superbuscador Omnibox y Ordenadores Dinámicos en Columnas (Gemba Galería 4) (SDD v1.9.298)
+- **Given** la tabla *Matriz de Rentabilidad — Top 20 Volumen & Rentabilidad Valor Total* dentro de la subpestaña *4. Abastecimiento & Precios* de la Torre de Control Estratégico (`/admin/strategy`), donde previamente los encabezados se desvanecían al hacer scroll vertical, no existía un mecanismo de búsqueda para localizar productos fuera del top 20 predefinido, y las columnas carecían de ordenadores interactivos bidireccionales,
+- **When** la dirección de compras, abastecimiento y finanzas analiza el catálogo de productos para identificar márgenes atípicos, costos unitarios y utilidades brutas en pesos ($),
+- **Then** el sistema ratifica e implementa los siguientes cuatro (4) estándares de la skill `estandar-galerias-frufresco` y `galeria-sticky-industrial`:
+  1. **Encabezados Sticky Magnéticos Docked (Chromium Safe):**
+     - Se confina la tabla en un contenedor scrolleable de altura óptima (`maxHeight: 580px`, `overflowY: 'auto'`, borde de 1px en `#E2E8F0` y radio de 12px).
+     - Se aplica la regla Chromium de precisión: `borderCollapse: 'separate'`, `borderSpacing: 0` y `position: 'sticky'`, `top: 0`, `zIndex: 20` con fondo 100% opaco `#F8FAFC` y borde inferior divisorio de 2px (`#CBD5E1`) en todos los `<th>`, erradicando el bug de deslizamiento de filas sobre los títulos.
+  2. **Superbuscador Omnibox Universal:**
+     - Barra de búsqueda reactiva con icono Lucide `Search`, botón de limpieza instantánea `[✕]` y filtrado tokenizado acento-insensible (NFD).
+     - Escaneo simultáneo sobre el 100% del catálogo en: Nombre de producto, Código contable Siigo (`Cód: {accountingId}`), Grupo de inventario (`p.category`) y Unidad de medida (`p.unit`).
+     - Insignia de telemetría dinámica: *"Mostrando X de Y SKUs"* con recálculo en tiempo real del *Volumen Visible*, *Facturación Visible* y *Rentabilidad Valor Total*.
+  3. **Ordenadores Bidireccionales en Todos los Encabezados (Sort ASC / DESC):**
+     - Cada columna (`#`, `Producto`, `Grupo Inventario`, `Volumen`, `Costo Unit. ($)`, `Precio Venta ($)`, `Facturación ($)`, `Rentabilidad ($)`, `% Margen`) es clickeable para ordenar de mayor a menor o menor a mayor.
+     - Indicador visual semántico con iconos Lucide: `ArrowDown` (verde corporativo `#0D7A57`), `ArrowUp` (verde corporativo `#0D7A57`) o `ArrowUpDown` (`#94A3B8`) en estado pasivo.
+  4. **Píldoras de Acceso Rápido Sincronizadas:**
+     - Botones de selección rápida (*Top 20 Volumen (Kg)*, *Rentabilidad Total ($)*, *Facturación Total ($)*, *% Margen* y *Ver Todos ({totalSKUs})*) que sincronizan automáticamente la columna activa y la dirección del ordenamiento.
