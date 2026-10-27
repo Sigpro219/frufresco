@@ -1846,6 +1846,10 @@ function CreateOrderContent() {
                 delete initialOptions[k];
             }
         });
+        // Escenario 329: Inyectar nota de alistamiento fija del cliente si existe
+        if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim() && !initialOptions.nota_alistamiento) {
+            initialOptions.nota_alistamiento = exc.picking_note.trim();
+        }
         setSelectedOptions(initialOptions);
 
         // Always open the product modal to specify quantity, unit, or options
@@ -3439,6 +3443,10 @@ function CreateOrderContent() {
                             Object.entries(exc.preferred_options).forEach(([k, v]) => {
                                 if (v) opts[k] = String(v);
                             });
+                        }
+                        // Escenario 329: Cargar nota fija de alistamiento del cliente (ej. empaque moras, freson)
+                        if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+                            opts.nota_alistamiento = exc.picking_note.trim();
                         }
                         // 2. Mapear unidad de presentación detectada si aplica
                         if (detectedUnit && match?.options_config) {

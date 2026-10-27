@@ -37,6 +37,7 @@ interface OrderItem {
 interface OrderInfo {
     id: string;
     profile_id?: string;
+    parent_profile_id?: string;
     sequence_id?: number;
     delivery_date: string;
     delivery_slot?: string;
@@ -402,6 +403,7 @@ export default function AlistamientoSabanaPrintPage() {
     const [generationTime, setGenerationTime] = useState<string>('');
     const [inventoryMap, setInventoryMap] = useState<Record<string, number>>({});
     const [parentNames, setParentNames] = useState<Record<string, string>>({});
+    const [fixedNotesMap, setFixedNotesMap] = useState<Record<string, string>>({});
     const printDocRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -507,6 +509,31 @@ export default function AlistamientoSabanaPrintPage() {
             }
             setParentNames(newParentNames);
 
+            // Recolectar IDs de clientes (y matrices) para cargar notas fijas de alistamiento desde product_nicknames (Escenario 329)
+            const allProfileIds = Array.from(new Set(
+                (rawOrders || []).flatMap((o: any) => [
+                    o.profile_id,
+                    o.profiles?.id,
+                    o.profiles?.parent_id
+                ]).filter(Boolean)
+            )) as string[];
+
+            const newFixedNotesMap: Record<string, string> = {};
+            if (allProfileIds.length > 0) {
+                const { data: nickRows } = await supabase
+                    .from('product_nicknames')
+                    .select('customer_id, product_id, picking_note')
+                    .in('customer_id', allProfileIds)
+                    .not('picking_note', 'is', null);
+
+                (nickRows || []).forEach((nr: { customer_id: string; product_id: string; picking_note: string }) => {
+                    if (nr.picking_note && nr.picking_note.trim()) {
+                        newFixedNotesMap[`${nr.customer_id}_${nr.product_id}`] = nr.picking_note.trim();
+                    }
+                });
+            }
+            setFixedNotesMap(newFixedNotesMap);
+
             const parsedOrders: OrderInfo[] = [];
             const parsedItems: OrderItem[] = [];
 
@@ -532,6 +559,7 @@ export default function AlistamientoSabanaPrintPage() {
                 parsedOrders.push({
                     id: o.id,
                     profile_id: pid,
+                    parent_profile_id: o.profiles?.parent_id || undefined,
                     sequence_id: o.sequence_id,
                     delivery_date: o.delivery_date,
                     delivery_slot: o.delivery_slot,
@@ -636,6 +664,9 @@ export default function AlistamientoSabanaPrintPage() {
             activeOrders: OrderInfo[];
         }> = {};
 
+        const ordersMap = new Map<string, OrderInfo>();
+        orders.forEach(o => ordersMap.set(o.id, o));
+
         const normalizeCell = (raw?: string | null) => {
             if (!raw || !raw.trim()) return 'SIN ASIGNAR';
             const clean = raw.trim();
@@ -707,13 +738,24 @@ export default function AlistamientoSabanaPrintPage() {
                 ? rawPickingNote.trim()
                 : null;
 
+            // Escenario 329: Fallback a notas fijas registradas en product_nicknames (ej. Moras, Freson)
+            const oInfo = ordersMap.get(it.order_id);
+            const parentProdId = it.product?.parent_id;
+            const fixedNote = (oInfo?.profile_id ? fixedNotesMap[`${oInfo.profile_id}_${it.product_id}`] : null)
+                           || (parentProdId && oInfo?.profile_id ? fixedNotesMap[`${oInfo.profile_id}_${parentProdId}`] : null)
+                           || (oInfo?.parent_profile_id ? fixedNotesMap[`${oInfo.parent_profile_id}_${it.product_id}`] : null)
+                           || (parentProdId && oInfo?.parent_profile_id ? fixedNotesMap[`${oInfo.parent_profile_id}_${parentProdId}`] : null)
+                           || null;
+
+            const effectivePickingNote = cleanPickingNote || fixedNote || undefined;
+
             if (!prodRec.orderDemand[it.order_id]) {
                 prodRec.orderDemand[it.order_id] = {
                     kgQuantity: norm.kgQty,
                     displayQty: norm.displayQty,
                     unit: norm.unitStr,
                     note: combinedNote,
-                    pickingNote: cleanPickingNote || undefined
+                    pickingNote: effectivePickingNote
                 };
             } else {
                 prodRec.orderDemand[it.order_id].kgQuantity += norm.kgQty;
@@ -725,8 +767,8 @@ export default function AlistamientoSabanaPrintPage() {
                 if (combinedNote && !prodRec.orderDemand[it.order_id].note?.includes(combinedNote)) {
                     prodRec.orderDemand[it.order_id].note = `${prodRec.orderDemand[it.order_id].note || ''} ${combinedNote}`.trim();
                 }
-                if (cleanPickingNote && !prodRec.orderDemand[it.order_id].pickingNote?.includes(cleanPickingNote)) {
-                    prodRec.orderDemand[it.order_id].pickingNote = `${prodRec.orderDemand[it.order_id].pickingNote || ''} ${cleanPickingNote}`.trim();
+                if (effectivePickingNote && !prodRec.orderDemand[it.order_id].pickingNote?.includes(effectivePickingNote)) {
+                    prodRec.orderDemand[it.order_id].pickingNote = `${prodRec.orderDemand[it.order_id].pickingNote || ''} ${effectivePickingNote}`.trim();
                 }
             }
         });
@@ -746,7 +788,7 @@ export default function AlistamientoSabanaPrintPage() {
         });
 
         return groups;
-    }, [items, orders, inventoryMap, parentNames]);
+    }, [items, orders, inventoryMap, parentNames, fixedNotesMap]);
 
     const availableCellNames = useMemo(() => {
         return Object.keys(cellGroups).sort();

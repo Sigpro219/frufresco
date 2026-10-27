@@ -165,6 +165,8 @@ export interface PqrAuthorInfo {
     isClient: boolean;
     isColleagueLogged: boolean;
     colleagueName?: string;
+    registeredByDisplay?: string;
+    registeredByBadge?: { label: string; bg: string; color: string; border: string; icon: 'user' | 'mobile' | 'truck' };
     isInternalCase?: boolean;
     internalArea?: string;
     internalSubscopeLabel?: string;
@@ -207,6 +209,14 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
             isClient: false,
             isColleagueLogged: true,
             colleagueName: reporterName,
+            registeredByDisplay: reporterName,
+            registeredByBadge: {
+                label: `Radicó: ${reporterName.split(' ')[0]} (Planta)`,
+                bg: '#F0F9FF',
+                color: '#0369A1',
+                border: '#BAE6FD',
+                icon: 'user'
+            },
             isInternalCase: true,
             internalArea: internalMeta.area,
             internalSubscopeLabel: internalMeta.subscopeLabel,
@@ -258,7 +268,15 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
             isDriver: false,
             isClient: false,
             isColleagueLogged: true,
-            colleagueName: collabRaw
+            colleagueName: collabRaw,
+            registeredByDisplay: collabRaw,
+            registeredByBadge: {
+                label: `Radicó: ${collabRaw}`,
+                bg: '#F3E8FF',
+                color: '#7C3AED',
+                border: '#DDD6FE',
+                icon: 'user'
+            }
         };
     }
 
@@ -287,7 +305,15 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
             isPhoneValid: phoneParsed.isValid,
             isDriver: true,
             isClient: false,
-            isColleagueLogged: false
+            isColleagueLogged: false,
+            registeredByDisplay: 'Conductor en Ruta',
+            registeredByBadge: {
+                label: 'Reportó: Conductor en Ruta',
+                bg: '#EFF6FF',
+                color: '#1D4ED8',
+                border: '#BFDBFE',
+                icon: 'truck'
+            }
         };
     }
 
@@ -316,7 +342,15 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
             isPhoneValid: phoneParsed.isValid,
             isDriver: false,
             isClient: true,
-            isColleagueLogged: false
+            isColleagueLogged: false,
+            registeredByDisplay: `${contact || 'Cliente'} (Portal B2B)`,
+            registeredByBadge: {
+                label: `Radicó: ${contact && contact !== 'Ecónomo / Contacto en Sitio' ? contact.split(' ')[0] : 'Cliente'} (B2B)`,
+                bg: '#ECFDF5',
+                color: '#065F46',
+                border: '#A7F3D0',
+                icon: 'mobile'
+            }
         };
     }
 
@@ -346,7 +380,53 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
             isPhoneValid: phoneParsed.isValid,
             isDriver: false,
             isClient: true,
-            isColleagueLogged: false
+            isColleagueLogged: false,
+            registeredByDisplay: `${b2cName} (Tienda B2C)`,
+            registeredByBadge: {
+                label: `Radicó: ${b2cName.split(' ')[0]} (B2C)`,
+                bg: '#EFF6FF',
+                color: '#1E40AF',
+                border: '#BFDBFE',
+                icon: 'mobile'
+            }
+        };
+    }
+
+    // Portal Móvil SAC / QR de Remisión
+    const isMobileQr = desc.includes('Portal Móvil SAC') || desc.includes('QR Remisión') || desc.includes('QR de Remisión');
+    if (isMobileQr) {
+        return {
+            channel: 'portal_b2b',
+            channelLabel: 'Portal Móvil SAC / QR',
+            channelBadgeColor: '#0D7A57',
+            channelBadgeBg: '#ECFDF5',
+            channelBadgeBorder: '#BBF7D0',
+            authorTitle: 'Radicado vía QR de Remisión',
+            authorName: contact || clientDisplayName,
+            authorRole: `Receptor en Sitio (${company})`,
+            authorInitials: getClientInitials(company),
+            receptionChannel: 'Portal Móvil SAC / QR de Remisión',
+            companyName: company,
+            clientDisplayName,
+            sedeOrBranch,
+            clientContact: contact,
+            nit,
+            email,
+            phone: phoneParsed.display || rawPhone,
+            phoneRaw: rawPhone,
+            phoneParsed,
+            isPhoneValid: phoneParsed.isValid,
+            isDriver: false,
+            isClient: true,
+            isColleagueLogged: false,
+            registeredByDisplay: `${contact && contact !== 'Ecónomo / Contacto en Sitio' ? contact : 'Cliente'} (QR Remisión)`,
+            registeredByBadge: {
+                label: `Radicó: ${contact && contact !== 'Ecónomo / Contacto en Sitio' ? contact.split(' ')[0] : 'Cliente'} (QR)`,
+                bg: '#F0FDF4',
+                color: '#15803D',
+                border: '#BBF7D0',
+                icon: 'mobile'
+            }
         };
     }
 
@@ -374,7 +454,15 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
         isPhoneValid: phoneParsed.isValid,
         isDriver: false,
         isClient: false,
-        isColleagueLogged: false
+        isColleagueLogged: false,
+        registeredByDisplay: 'Mesa SAC / Operaciones',
+        registeredByBadge: {
+            label: 'Radicó: Mesa SAC',
+            bg: '#F3E8FF',
+            color: '#7C3AED',
+            border: '#DDD6FE',
+            icon: 'user'
+        }
     };
 };
 
