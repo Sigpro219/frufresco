@@ -351,8 +351,9 @@ export default function CheckoutPage() {
     const missingForFreeShipping = Math.max(0, minOrder - foodItemsTotalPrice);
     const freeShippingProgress = minOrder > 0 ? Math.min(100, Math.round((foodItemsTotalPrice / minOrder) * 100)) : 100;
 
-    // Beneficio Canónico Colaborador FruFresco: 5% de descuento en alimentos frescos (Escenario 229 SDD)
-    const collaboratorDiscountAmount = isCollaborator ? Math.round(foodItemsTotalPrice * 0.05) : 0;
+    // Beneficio Canónico Colaborador FruFresco: 5% base + 5% adicional por pago en efectivo contra entrega (Escenarios 228 y 229 SDD)
+    const collaboratorDiscountPct = isCollaborator ? (paymentMethod === 'contra_entrega' ? 10 : 5) : 0;
+    const collaboratorDiscountAmount = isCollaborator ? Math.round(foodItemsTotalPrice * (collaboratorDiscountPct / 100)) : 0;
 
     // Redondear el total final de compra hacia abajo al próximo múltiplo de 50 (beneficio al usuario)
     const rawTotal = Math.max(0, (totalPrice - collaboratorDiscountAmount) + packagingFeeAmount + deliveryFeeAmount);
@@ -1358,7 +1359,7 @@ export default function CheckoutPage() {
                 profile_id: isValidUuid(matchedProfileId) ? matchedProfileId : null,
                 payment_method: paymentMethod,
                 payment_status: paymentMethod === 'payroll_deduction' ? 'payroll_authorized' : 'Pendiente',
-                special_notes: `${paymentMethod === 'payroll_deduction' ? '[NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA]\n' : ''}${clientNotesHeader}${deliveryNoteTag}${packagingNoteTag}\n[ORIGIN: web]${isCollaborator ? `\n[COLABORADOR FRUFRESCO: ${collaboratorInfo?.contact_name || name} (Doc: ${collaboratorInfo?.document_id || finalIdentification}) - Beneficio 5% Descuento Aplicado]` : ''}${specialNotes ? `\n[RECOMENDACIÓN / NOTA DE ENTREGA: ${specialNotes}]` : ''}`
+                special_notes: `${paymentMethod === 'payroll_deduction' ? '[NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA]\n' : ''}${clientNotesHeader}${deliveryNoteTag}${packagingNoteTag}\n[ORIGIN: web]${isCollaborator ? `\n[COLABORADOR FRUFRESCO: ${collaboratorInfo?.contact_name || name} (Doc: ${collaboratorInfo?.document_id || finalIdentification}) - Beneficio ${collaboratorDiscountPct}% Descuento Aplicado${paymentMethod === 'contra_entrega' ? ' (5% Base + 5% Efectivo)' : ' (Nómina)'}]` : ''}${specialNotes ? `\n[RECOMENDACIÓN / NOTA DE ENTREGA: ${specialNotes}]` : ''}`
             };
 
             const orderItemsData = items.map(item => ({
@@ -1821,21 +1822,11 @@ export default function CheckoutPage() {
                                             Colaborador FruFresco — Beneficio Activo
                                         </div>
                                         <div style={{ fontSize: '0.68rem', color: '#047857', fontWeight: '600' }}>
-                                            {collaboratorInfo?.contact_name || name} {collaboratorInfo?.role ? `• ${collaboratorInfo.role}` : ''} | <strong>5% de descuento directo</strong> aplicado en tus alimentos
+                                            {collaboratorInfo?.contact_name || name} {collaboratorInfo?.role ? `• ${collaboratorInfo.role}` : ''} | <strong>{collaboratorDiscountPct}% de descuento directo</strong> aplicado en tus alimentos{paymentMethod === "contra_entrega" ? " (5% Base + 5% Efectivo)" : ""}
                                         </div>
                                     </div>
                                 </div>
-                                <span style={{
-                                    backgroundColor: '#059669',
-                                    color: '#FFFFFF',
-                                    fontSize: '0.68rem',
-                                    fontWeight: '900',
-                                    padding: '2px 8px',
-                                    borderRadius: '6px',
-                                    letterSpacing: '0.03em'
-                                }}>
-                                    -5% DTO
-                                </span>
+                                <span style={{ backgroundColor: '#059669', color: '#FFFFFF', fontSize: '0.68rem', fontWeight: '900', padding: '2px 8px', borderRadius: '6px', letterSpacing: '0.03em' }}>-{collaboratorDiscountPct}% DTO</span>
                             </div>
                         )}
 
@@ -2863,7 +2854,7 @@ export default function CheckoutPage() {
                                         <p style={{ margin: 0, fontSize: '0.7rem', color: isCodExceeded ? '#DC2626' : '#64748B' }}>
                                             {isCodExceeded 
                                                 ? (locale === 'es' ? `Tope superado (Máx $${maxOrderHogarCod.toLocaleString('es-CO')}). Paga online.` : 'Limit exceeded.')
-                                                : (locale === 'es' ? 'Pagas en efectivo o transferencia al recibir en puerta.' : 'Pay on delivery.')}
+                                                : isCollaborator ? (locale === 'es' ? '¡Pagas en efectivo al recibir y obtienes +5% de descuento adicional (10% total)!' : 'Pay cash on delivery and get +5% additional discount (10% total)!') : (locale === 'es' ? 'Pagas en efectivo o transferencia al recibir en puerta.' : 'Pay on delivery.')}
                                         </p>
                                     </div>
                                 );
@@ -3080,7 +3071,7 @@ export default function CheckoutPage() {
                                 }}>
                                     <span style={{ color: '#065F46', fontWeight: '800', fontSize: '0.76rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <Sparkles size={13} color="#059669" />
-                                        {locale === 'es' ? 'Descuento Colaborador (5%)' : 'Employee Discount (5%)'}
+                                        {locale === 'es' ? `Descuento Colaborador (${collaboratorDiscountPct}%)` : `Employee Discount (${collaboratorDiscountPct}%)`}
                                     </span>
                                     <span style={{ fontWeight: '900', color: '#059669', fontSize: '0.82rem' }}>
                                         -${collaboratorDiscountAmount.toLocaleString('es-CO')}
