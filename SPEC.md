@@ -12367,3 +12367,19 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Queda estrictamente prohibida la emisión de Factura Electrónica previa al despacho para no detener la salida de vehículos ni comprometer el control de consecutivos contables/DIAN; la valorización y facturación electrónica se difiere al corte contable regular.
   5. **Estándar Puro Lucide React:**
      - La interfaz de pedidos pendientes erradica caracteres unicode ocultos o emojis rotos, empleando exclusivamente iconos vectoriales de `lucide-react` (`Phone`, `Copy`, `ShoppingCart`, `CheckCircle2`, `AlertTriangle`).
+
+---
+
+### Escenario 316: Estandarización, Confidencialidad y Gobernanza del Modelo Corporativo (Costo Preferencial Presidencia / Socios) (Gemba Detalles Pedidos: Hallazgo 7) (SDD v1.9.298)
+- **Given** el ecosistema maestro de modelos de precios (`pricing_models`), el resolvedor transaccional de pedidos (`/api/orders/resolve-agreement-pricing`), la matriz de costo diario (`commercial_cost_matrix`) y la ficha administrativa de clientes (`ClientsModule.tsx`),
+- **When** la dirección general o gerencia vincula cuentas preferenciales directas autorizadas por la presidencia (Sr. Camilo Cortés, familia y socios estratégicos),
+- **Then** el sistema ratifica e implementa los siguientes cuatro (4) estándares corporativos y de confidencialidad:
+  1. **Adopción Oficial del Nombre "Modelo Corporativo":**
+     - Se sustituye y erradica de forma definitiva la denominación informal *"Familia Cortés - Costo Puro (0% Margen)"*, adoptando el título canónico institucional: **`Modelo Corporativo`** (ID `31c6d356-2d52-488f-81d6-abffaed295cf`), con descripción formal: *"Tarifa preferencial para cuentas corporativas directas y presidencia."*
+  2. **Blindaje de Confidencialidad y Secretos de Negocio:**
+     - Queda estrictamente prohibido exponer apellidos de directivos, nombres familiares o leyendas financieras de margen cero (*0% utilidad / costo puro*) en insignias de pantalla, selectores desplegables, resúmenes de pedidos o documentos impresos/PDF.
+     - Operativamente, en la mesa de pedidos y alistamiento se exhibe exclusivamente la categoría neutral y profesional `Modelo Corporativo`.
+  3. **Liquidación a Costo Real del Día sin Margen Comercial:**
+     - Los productos liquidados bajo el `Modelo Corporativo` toman directamente la tarifa de abastecimiento oficial registrada en `commercial_cost_matrix.manual_cost` (costo de plaza Corabastos), sin recargos de margen comercial ordinario, asegurando la instrucción de costo del día para los pedidos vinculados.
+  4. **Gobernanza y Vinculación Asistida en Ficha de Clientes (`ClientsModule.tsx`):**
+     - En el modal de edición de matriz o sucursal (`/admin/clients`), el selector de *Lista de Precios* permite asociar en 1 clic el `Modelo Corporativo` a cualquier cuenta creada o autorizada por el Sr. Camilo, heredando automáticamente la tarifa corporativa en todos sus pedidos.
