@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { useAuth } from '@/lib/authContext';
+import SpecialClientBadge from '@/components/SpecialClientBadge';
+import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/specialClientAttention';
 import { 
     Calendar, 
     GraduationCap, 
@@ -49,6 +51,7 @@ interface PickingTask {
     items: PickingItem[];
     status: 'pending' | 'partial' | 'ready';
     hasAlert?: boolean;
+    special_attention?: SpecialAttentionState | null;
 }
 
 export default function PickingExecutionPage() {
@@ -89,8 +92,8 @@ export default function PickingExecutionPage() {
             let query = supabase
                 .from('orders')
                 .select(`
-                    id, status, warehouse_spaces, crates_count,
-                    profiles:profiles(id, company_name, contact_name, role, id_zr),
+                                        id, status, warehouse_spaces, crates_count, delivery_date, created_at, profile_id, logistics_data,
+                    profiles:profiles(id, company_name, contact_name, role, id_zr, logistics_data),
                     order_items (
                         id, product_id, quantity, picked_quantity, quality_status, quality_notes, nickname, variant_label,
                         products (name, category, unit_of_measure, buying_team)
@@ -130,6 +133,40 @@ export default function PickingExecutionPage() {
                 console.error('Database Error (orders):', orderError.message);
                 return;
             }
+
+            // Build Special Client Attention Map for Logistics & Picking
+            const profileIds = Array.from(new Set((activeOrders || []).map((o: any) => o.profile_id || o.profiles?.id).filter(Boolean)));
+            const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+            const [histOrdersRes, histPqrsRes] = await Promise.all([
+                profileIds.length > 0
+                    ? supabase.from('orders').select('id, profile_id, status, delivery_date, created_at, total, subtotal, logistics_data').in('profile_id', profileIds).gte('delivery_date', sixtyDaysAgo)
+                    : Promise.resolve({ data: [] }),
+                profileIds.length > 0
+                    ? supabase.from('customer_service_pqrs').select('id, client_id, order_id, subject, created_at, status, primary_photo_url').in('client_id', profileIds).gte('created_at', sixtyDaysAgo)
+                    : Promise.resolve({ data: [] })
+            ]);
+
+            const profilesByProfileId: Record<string, any> = {};
+            (activeOrders || []).forEach((o: any) => {
+                const pid = o.profile_id || o.profiles?.id;
+                if (pid && o.profiles) {
+                    profilesByProfileId[pid] = {
+                        ...o.profiles,
+                        logistics_data: {
+                            ...(o.profiles?.logistics_data || {}),
+                            ...(o.logistics_data?.special_attention ? { special_attention: o.logistics_data.special_attention } : {})
+                        }
+                    };
+                }
+            });
+
+            const specialAttentionMap = buildSpecialAttentionByProfileMap(
+                profileIds as string[],
+                (histOrdersRes.data || []) as any[],
+                (histPqrsRes.data || []) as any[],
+                profilesByProfileId
+            );
 
             // Fetch inventory stocks for all products in active orders
             const productIds = Array.from(new Set(
@@ -283,9 +320,10 @@ export default function PickingExecutionPage() {
                             assigned_space: order.warehouse_spaces && order.warehouse_spaces.length > 0
                                 ? order.warehouse_spaces.join(', ')
                                 : '-',
-                            zone: zone,
+                                                        zone: zone,
                             items: itemsInCategory,
-                            status: 'pending'
+                            status: 'pending',
+                            special_attention: ((order as any).profiles?.id || order.profile_id) ? specialAttentionMap[(order as any).profiles?.id || order.profile_id] : null
                         };
                     }
                 });
@@ -1021,7 +1059,10 @@ export default function PickingExecutionPage() {
                                         <div style={{ fontSize: '1.4rem', lineHeight: 1 }}>{task.assigned_space}</div>
                                     </div>
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '1rem', fontWeight: '800', color: '#F8FAFC' }}>{task.company_name?.toUpperCase() || 'CLIENTE SIN NOMBRE'}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#F8FAFC' }}>{task.company_name?.toUpperCase() || 'CLIENTE SIN NOMBRE'}</div>
+                                                    <SpecialClientBadge state={task.special_attention} darkMode />
+                                                </div>
                                         {task.zone && <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'bold' }}>RUTA: {task.zone.toUpperCase()}</div>}
                                     </div>
                                     <button 

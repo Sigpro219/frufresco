@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.288 (Certificación Plena de Acuerdos Comerciales B2B — Revisión Acuerdo 1: 8/8 Hallazgos Certificados, Poka-Yoke Anti-Colisión, Higiene de BD y Consecutivo World Office — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.293 (Atención Especial Logística Dual Auto/Manual en Cadena WMS, Blindaje Transparente de Remisiones y Gobernanza de Clientes — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 306 Escenarios BDD Ininterrumpidos (1..306)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 310 Escenarios BDD Ininterrumpidos (1..310)
 
 ---
 
@@ -12229,3 +12229,23 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Cintillo dinámico de lectura estratégica que sintetiza en una sola frase el aporte porcentual del canal preponderante a la utilidad operativa y el margen comparado.
   4. **Erradicación de Espacio Muerto:**
      - Ajuste milimétrico de altura que empareja armoniosamente con la tarjeta de *Top Productos Más Consumidos & Margen*, garantizando una interfaz industrial de alta densidad sin áreas vacías.
+
+---
+
+### Escenario 310: Marcación de Cliente Especial en Cadena Logística (Modo Automático y Manual), Visibilidad Integral WMS y Blindaje Estricto de Remisiones B2B (Gemba Detalles Pedidos: Hallazgo 1) (SDD v1.9.293)
+- **Given** el ecosistema de gestión de clientes (`/admin/clients`), mesa de alistamiento de pedidos (`/admin/orders/loading`), cola general de picking (`/ops/picking`), mesa táctil de alistamiento (`/ops/picking/cliente/[id]`) y generación de documentos (`contingency-print`),
+- **When** un cliente institucional o de hogar presenta motivos de atención especial (cliente nuevo en sus primeras 3 entregas, cliente recurrente en PQRs de calidad, cliente en seguimiento por bajo consumo o instrucción manual personalizada de la gerencia comercial),
+- **Then** el sistema consagra los siguientes cinco (5) pilares operativos:
+  1. **Blindaje de Remisiones B2B (Confidencialidad y Transparencia Absoluta):**
+     - Queda estrictamente erradicada cualquier etiqueta, sello (`print-stamp`) o texto alusivo a "PQR Recurrente", "Bajo Consumo" o "Cliente Nuevo" en las remisiones impresas o digitales (`contingency-print?mode=remissions` e `InvoiceDocumentModal.tsx`), tanto en la copia original como en copias de entrega. El documento entregado al cliente final permanece 100% limpio y profesional.
+  2. **Gobernanza y Activación en Modo Manual (`ClientsModule.tsx`):**
+     - En el modal de edición de Casa Matriz y Sucursal (`/admin/clients`), se incorpora la tarjeta interactiva **"ATENCIÓN ESPECIAL LOGÍSTICA (CALIDAD & WMS)"** con persistencia directa en `logistics_data.special_attention`.
+     - Permite conmutar fluidamente entre modos: `Automático` (por historial de pedidos y PQRs vivas), `Cliente Nuevo`, `Crítico PQR / Calidad`, `Bajo Consumo`, `Manual / Personalizado` y `Desactivado`.
+     - Proporciona checkboxes para las cuatro directivas operativas canónicas: *Canastillas Limpias / Higienizadas*, *Selección 1A (Sin Magulladuras)*, *Peso Exacto en Báscula* y *Calibre y Madurez Exacta*, junto con un campo de notas de cuidado especial dirigidas al bodeguero.
+     - En la galería y tabla de clientes (`ClientCard` y `ClientListRow`), se visualiza el badge de atención especial junto al nombre de la razón social.
+  3. **Visibilidad en Cola de Picking WMS (`/ops/picking`):**
+     - La lista general de pedidos y tareas de picking proyecta reactivamente el componente `SpecialClientBadge` en modo oscuro junto a la razón social de cada cliente, permitiendo que el equipo de bodega identifique de un vistazo qué pedidos en la cola requieren higienización previa de canastillas o empaque prioritario antes de abrir la tarea.
+  4. **Banner Poka-Yoke en Estación de Picking Físico (`/ops/picking/cliente/[id]`):**
+     - Al ingresar a la pantalla táctil de alistamiento de la célula de picking, se despliega en la parte superior un banner prominente de advertencia operativa con borde y fondo carmesí (`#EF4444`), detallando el motivo de la atención especial y las directivas obligatorias que el alistador debe verificar en báscula y empaque.
+  5. **Banner Operativo en Cargue de Pedidos (`/admin/orders/loading`):**
+     - En el modal de inspección y edición de pedidos (`selectedOrder`), se proyecta una tarjeta de alerta operativa para los despachadores y supervisores de mesa, asegurando sincronía total entre el área de Servicio al Cliente, Comercial y Bodega.

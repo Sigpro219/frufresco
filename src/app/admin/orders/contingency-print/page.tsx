@@ -1415,30 +1415,6 @@ function ContingencyPrintContent() {
                                         </div>
                                     )}
 
-                                    {/* Regla de Confidencialidad Comercial: Solo visible en COPIA - TRANSPORTADOR / CONTABILIDAD (isCopy === true), JAMÁS en ORIGINAL - CLIENTE */}
-                                    {copyInfo.isCopy && order.special_attention?.isActive && (
-                                        <div style={{
-                                            backgroundColor: '#F8FAFC',
-                                            border: '1.2px solid #0F172A',
-                                            padding: '3px 8px',
-                                            borderRadius: '4px',
-                                            marginBottom: '4px',
-                                            fontSize: '6.6pt',
-                                            color: '#0F172A',
-                                            fontWeight: 800,
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center'
-                                        }}>
-                                            <span>
-                                                [{order.special_attention.printCode}] {order.special_attention.title.toUpperCase()} ({order.special_attention.progressLabel}) &bull; USO INTERNO: {order.special_attention.reasonText}
-                                            </span>
-                                            <span style={{ fontWeight: 900, whiteSpace: 'nowrap' }}>
-                                                CUIDADO: SELECCIÓN 1A &bull; PESO EXACTO &bull; CANASTILLA LIMPIA
-                                            </span>
-                                        </div>
-                                    )}
-
                                     {/* Client & Route Micro-Grid */}
                                     <div style={{
                                         display: 'grid',

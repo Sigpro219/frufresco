@@ -11,7 +11,8 @@ import {
     AlertTriangle, 
     XCircle, 
     X,
-    Scale
+    Scale,
+    ShieldAlert
 } from 'lucide-react';
 import { evaluateSpecialClientAttention, SpecialAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
@@ -199,6 +200,49 @@ function PickingClientContent() {
                     <p style={{ margin: 0, fontSize: '0.8rem', color: '#9CA3AF' }}>Célula: {category}</p>
                 </div>
             </div>
+
+            {/* Operational Special Care Banner */}
+            {specialAttention?.isActive && (
+                <div style={{
+                    margin: '1rem 1rem 0 1rem',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '14px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    border: '1.5px solid #EF4444',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#FCA5A5', fontWeight: '900', fontSize: '0.85rem' }}>
+                            <ShieldAlert size={18} strokeWidth={2.4} />
+                            <span>ATENCIÓN ESPECIAL AL CLIENTE: {specialAttention.title.toUpperCase()}</span>
+                        </div>
+                        <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#EF4444', color: '#FFFFFF' }}>
+                            {specialAttention.progressLabel}
+                        </span>
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: '#E2E8F0', lineHeight: 1.3 }}>
+                        {specialAttention.subtitle}
+                    </div>
+                    {/* Directives */}
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                        {specialAttention.directives.map((d) => (
+                            <span key={d.key} style={{
+                                fontSize: '0.66rem',
+                                fontWeight: '800',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                color: '#F8FAFC',
+                                border: '1px solid rgba(255, 255, 255, 0.2)'
+                            }}>
+                                ✓ {d.label}: {d.detail}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* List */}
             <div style={{ padding: '1rem', display: 'grid', gap: '1rem' }}>
