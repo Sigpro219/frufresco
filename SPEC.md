@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.312 (Capítulo 44: Inyección Automática de Características Fijas & Trazabilidad de Radicación de PQRS por Persona — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.312 (Capítulo 44: Principio del Operador como Guardián Humano & Trazabilidad de Radicación de PQRS por Persona — 76/76 Pantallas Certificadas)
 > **Fecha:** 27 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -12598,7 +12598,7 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 | Dominio Operativo | Reemplaza del ERP Viejo | Estado Paridad | Criterio de Apagado (Switch-Off Gate) |
 | :--- | :--- | :---: | :--- |
 | **1. Comercial & Pedidos** | Toma de pedidos manual y digitación ciega | 🟢 **97%** | [x] 100% pedidos ingresan con catálogo cerrado en clientes de convenio y Poka-Yoke anti-digitación ciega. |
-| **2. Bodega & Alistamiento (WMS)** | Planillas planas desordenadas | 🟢 **94%** | [x] Sábana con bahías secuenciales 1..150, zebra striping, supresión de 'Maduro', gramajes reales y doble badge de notas físicas excepcionales. |
+| **2. Bodega & Alistamiento (WMS)** | Planillas planas desordenadas | 🟢 **100%** | [x] 100% de los 8 hallazgos del feedback de alistamiento resueltos (bahías 1..150, zebra striping, supresión 'Maduro', gramajes reales, inventario de fecha, doble badge y guardián humano anti-ruido). |
 | **3. Abastecimiento (JIT)** | Cálculo manual de compras | 🟢 **88%** | [ ] Planilla de compras neteada contra inventario en marcha blanca fluida. |
 | **4. Inventarios (Masa)** | Kardex tradicional en diferido | 🟡 **En Pilotaje** | [ ] Operación dual en Modo Transición $\rightarrow$ Listo para candado obligatorio diario en Modo Estricto. |
 | **5. Facturación & Cartera** | Facturación externa desincronizada | 🟢 **90%** | [x] Prefijo FV DIAN, Dock de Comprobantes, notas crédito por PQR y cruce de deducciones de nómina. |
