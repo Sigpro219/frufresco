@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.294 (Formato Universal de Obsequio B2B/B2C con Registro de Precio Interno y Remisión sin Precios en Puerta — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.296 (Matriz de Rentabilidad Top 20 Volumen y Rentabilidad Valor Total en Torre de Control Estratégico — 76/76 Pantallas Certificadas)
 > **Fecha:** 26 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 311 Escenarios BDD Ininterrumpidos (1..311)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 313 Escenarios BDD Ininterrumpidos (1..313)
 
 ---
 
@@ -12309,3 +12309,40 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Al presionar **`Guardar Tarifas y Liberar Facturación`**, el backend `/api/commercial/billing/assign-off-agreement-prices` actualiza los precios unitarios, recalcula subtotales e IVA (descontando devoluciones de calidad si existieron en recepción), remueve el bloqueo de facturación y habilita de inmediato el pedido para su emisión en el corte de facturación electrónica.
   5. **Estándar Puro de Iconografía Lucide React:**
      - Se utilizan exclusivamente componentes vectoriales de `lucide-react` (`FileSpreadsheet`, `Save`, `CheckCircle2`, `Copy`, `X`), cumpliendo a cabalidad con la Ley Marcial #8.
+
+---
+
+### Escenario 313: Matriz de Rentabilidad — Top 20 Volumen y Rentabilidad Valor Total en Torre de Control Estratégico (Gemba Hallazgo 18) (SDD v1.9.296)
+- **Given** la Torre de Control Estratégico (`/admin/strategy`) en sus subpestañas *4. Abastecimiento & Precios* (*Matriz de Rentabilidad & Spread por Producto*) y *1. Comercial & Finanzas* (*Top Productos*), donde previamente la matriz se limitaba a 10 registros con precios unitarios teóricos y un estimado ficticio de Corabastos (`matrixCost * 1.06`) sin cruzar el volumen físico realmente movilizado ni la rentabilidad acumulada en valor total ($ COP),
+- **When** la gerencia comercial y de abastecimiento audita los productos líderes del catálogo,
+- **Then** el sistema certifica e implementa los siguientes cuatro (4) estándares analíticos:
+  1. **Ampliación a Top 20 con Cruce Transaccional en Vivo (`procurementMetrics.priceComparisonList`):**
+     - La matriz en *4. Abastecimiento & Precios* se expande de 10 a **Top 20 productos** (`.slice(0, 20)`), cruzando el catálogo maestro y `commercial_cost_matrix` contra las líneas de pedido reales (`order_items` de `filteredOrders`).
+     - Se elimina la columna ficticia *Ref. Corabastos ($)* y se incorporan las columnas operativas reales: **Volumen Movilizado (`Kg / Un`)**, **Costo Unit. Compra (`$`)**, **Precio Venta (`$`)**, **Facturación Total (`$`)**, **Rentabilidad Valor Total (`$`)** (Utilidad Bruta acumulada en pesos: `Ingreso Total - Costo Total`) y **% Margen**.
+  2. **Ordenamiento Multi-Criterio Interactivo y Cinta de Totales Top 20:**
+     - Incorpora píldoras de ordenamiento instantáneo: **`[Top 20 Volumen (Kg)]`** (predeterminado), **`[Rentabilidad Valor Total ($)]`**, **`[Facturación Total ($)]`** y **`[% Margen]`**.
+     - Exhibe una cinta resumen superior con la sumatoria consolidada del Top 20: *Volumen Top 20 (Kg)*, *Facturación Top 20 ($)* y *Rentabilidad Valor Total Top 20 ($)*.
+  3. **Sincronización en *1. Comercial & Finanzas* (`BIProductParetoRanking`):**
+     - La tarjeta de ranking de productos en la pestaña Comercial también se amplía a **Top 20** con selector entre *Top Volumen*, *Rentabilidad ($)* y *Facturación ($)*, exhibiendo explícitamente la utilidad en valor total (`Util: $...`) junto a la venta y el porcentaje de margen.
+  4. **Cero SKUs Legacy & Exportación Excel Enriquecida:**
+     - Se erradica toda referencia o columna `SKU` en la vista y en el exportador Excel de Abastecimiento (`Matriz_Rentabilidad_Top20`), utilizando exclusivamente el código contable (`Cód: {accounting_id}`) y el Grupo Oficial de Inventario (`inventory_group`) bajo la paleta semántica de `DESIGN_SYSTEM_MANUAL.md`.
+
+---
+
+### Escenario 313: Gobernanza Estricta de Calendario de Despachos, Bloqueo de Fechas Pasadas, Domingos y Festivos, y Días Habilitados para Hogares (B2C) (Gemba Detalles Pedidos: Hallazgo 4) (SDD v1.9.296)
+- **Given** el módulo administrativo de creación de pedidos (`/admin/orders/create`), el checkout público de la tienda (`/checkout`), la configuración operativa (`/admin/settings`) y el motor de festivos de Colombia (`colombianHolidays.ts`),
+- **When** un usuario administrativo o cliente particular selecciona una fecha de entrega en el calendario,
+- **Then** el sistema impone las siguientes cinco (5) reglas inviolables de control de fechas:
+  1. **Bloqueo Inviolable de Fechas Pasadas:**
+     - En todos los canales (`orders/create` y `checkout`), el atributo `min` del input de fecha se ancla estrictamente a la fecha presente de Bogotá (`today`) o a la fecha mínima según reglas de corte (`minDeliveryDate`).
+     - Queda terminantemente prohibido agendar o digitar pedidos con fechas anteriores al día presente; cualquier intento se bloquea automáticamente ajustando el valor al mínimo permitido y notificando al usuario.
+  2. **Tope Máximo de Agendamiento Futuro (`maxFutureDays`):**
+     - Se parametriza el atributo `max` del calendario con base en la configuración `max_future_delivery_days` (30 días por defecto), evitando la digitación accidental de años venideros o meses distantes que descuadren la proyección de compras en planta.
+  3. **Cierre Obligatorio de Domingos y 19 Festivos de Colombia:**
+     - El selector rechaza entregas en días domingo (salvo autorización de guardia dominical activa) y en cualquiera de los 19 días festivos oficiales de Colombia (Ley Emiliani y Computus de Pascua) o periodos de receso operativo / Semana Santa (`store_vacation_config`).
+     - Al seleccionar un domingo o festivo, el sistema salta de forma autónoma al próximo día hábil de reparto y presenta la justificación en pantalla.
+  4. **Gobernanza de Días Habilitados de Entrega para Hogares (B2C):**
+     - En `/admin/settings`, se habilita el panel interactivo **"DÍAS DE ENTREGA HABILITADOS — LÍNEA HOGAR (B2C)"** (`b2c_delivery_allowed_days`), permitiendo activar o desactivar días específicos de reparto (Lunes, Martes, Miércoles, Jueves, Viernes, Sábado).
+     - Cuando el pedido pertenece al canal Hogar (`clientType === 'B2C'`), el calendario bloquea automáticamente los días no cubiertos por las rutas de hogar y adelanta la fecha al día habilitado más cercano.
+  5. **Estándar Puro Lucide React y Cero Emojis:**
+     - Todos los indicadores, selectores de días y badges de configuración utilizan exclusivamente componentes de `lucide-react` (`Calendar`, `CalendarClock`, `CalendarX`, `CheckCircle2`, `Sparkles`), erradicando cualquier emoji unicode en los paneles operativos.

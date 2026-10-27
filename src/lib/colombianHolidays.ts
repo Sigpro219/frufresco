@@ -215,7 +215,8 @@ export function isValidDeliveryDate(
     dateVal: Date | string,
     allowSundays: boolean = false,
     allowHolidays: boolean = false,
-    vacationConfig?: StoreVacationConfig | null
+    vacationConfig?: StoreVacationConfig | null,
+    allowedDaysOfWeek?: number[] | null
 ): { valid: boolean; reason?: string; isVacationRecess?: boolean } {
     let d: Date;
     if (typeof dateVal === 'string') {
@@ -252,6 +253,18 @@ export function isValidDeliveryDate(
         return { valid: false, reason: `El día elegido es festivo en Colombia (${holidayName}). No hay entregas disponibles.` };
     }
 
+    if (allowedDaysOfWeek && allowedDaysOfWeek.length > 0) {
+        const dayOfWeek = d.getDay();
+        if (!allowedDaysOfWeek.includes(dayOfWeek)) {
+            const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const allowedNames = allowedDaysOfWeek.map(i => dayNames[i]).join(', ');
+            return {
+                valid: false,
+                reason: `El día seleccionado (${dayNames[dayOfWeek]}) no tiene ruta de entrega habilitada. Días disponibles: ${allowedNames}.`
+            };
+        }
+    }
+
     return { valid: true };
 }
 
@@ -262,7 +275,8 @@ export function getNextValidDeliveryDate(
     startDate: Date | string,
     allowSundays: boolean = false,
     allowHolidays: boolean = false,
-    vacationConfig?: StoreVacationConfig | null
+    vacationConfig?: StoreVacationConfig | null,
+    allowedDaysOfWeek?: number[] | null
 ): Date {
     let current: Date;
     if (typeof startDate === 'string') {
@@ -278,7 +292,7 @@ export function getNextValidDeliveryDate(
 
     // Buscar hasta un máximo de 30 días adelante (soporta recesos largos como Semana Santa o Fin de Año)
     for (let i = 0; i < 30; i++) {
-        const check = isValidDeliveryDate(current, allowSundays, allowHolidays, vacationConfig);
+        const check = isValidDeliveryDate(current, allowSundays, allowHolidays, vacationConfig, allowedDaysOfWeek);
         if (check.valid) {
             return current;
         }
@@ -385,3 +399,12 @@ export function isB2BSameDayExpressAvailable(
 
 
 
+
+/**
+ * Retorna la fecha máxima futura permitida para toma de pedidos (por defecto 30 días).
+ */
+export function getMaxFutureDeliveryDate(daysAhead: number = 30): string {
+    const now = getBogotaNow();
+    now.setDate(now.getDate() + daysAhead);
+    return formatDateToYYYYMMDD(now);
+}

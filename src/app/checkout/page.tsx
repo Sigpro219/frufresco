@@ -61,7 +61,7 @@ import {
     BookmarkCheck
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
-import { getNextValidDeliveryDate, isValidDeliveryDate, parseStoreVacationConfig, StoreVacationConfig } from '@/lib/colombianHolidays';
+import { getNextValidDeliveryDate, isValidDeliveryDate, parseStoreVacationConfig, StoreVacationConfig, getMaxFutureDeliveryDate } from '@/lib/colombianHolidays';
 import dynamic from 'next/dynamic';
 import GooglePlacesAddressInput from '@/components/checkout/GooglePlacesAddressInput';
 
@@ -90,6 +90,7 @@ export default function CheckoutPage() {
     const [maxOrderHogarCod, setMaxOrderHogarCod] = useState(400000);
     const [storeStatus, setStoreStatus] = useState<'open' | 'vacation_preorder' | 'closed'>('open');
     const [vacationConfig, setVacationConfig] = useState<StoreVacationConfig | null>(null);
+    const [b2cAllowedDays, setB2cAllowedDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
     const [allowSundays, setAllowSundays] = useState(false);
     const [allowHolidays, setAllowHolidays] = useState(false);
     const [cartSavedForReopen, setCartSavedForReopen] = useState(false);
@@ -385,7 +386,7 @@ export default function CheckoutPage() {
             const mm = String(current.getUTCMonth() + 1).padStart(2, '0');
             const dd = String(current.getUTCDate()).padStart(2, '0');
             const str = `${yyyy}-${mm}-${dd}`;
-            if (isValidDeliveryDate(str, allowSundays, allowHolidays, vacationConfig)) {
+            if (isValidDeliveryDate(str, allowSundays, allowHolidays, vacationConfig, b2cAllowedDays)) {
                 const dayName = current.toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { weekday: 'short', timeZone: 'UTC' });
                 const monthDay = current.toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' });
                 dates.push({
@@ -398,7 +399,7 @@ export default function CheckoutPage() {
             count++;
         }
         return dates;
-    }, [minDeliveryDate, locale, allowSundays, allowHolidays, vacationConfig]);
+    }, [minDeliveryDate, locale, allowSundays, allowHolidays, vacationConfig, b2cAllowedDays]);
 
     // Manejador unificado de resolución satelital Google Places
     const handleCoordinatesResolved = (lat: number, lng: number, formattedAddress: string) => {
@@ -1036,6 +1037,17 @@ export default function CheckoutPage() {
                 setAllowSundays(sundaysAllowed);
                 setAllowHolidays(holidaysAllowed);
                 setVacationConfig(parsedVac);
+                const b2cDaysRaw = settingsData?.find(s => s.key === 'b2c_delivery_allowed_days')?.value;
+                let activeB2cDays: number[] = [1, 2, 3, 4, 5, 6];
+                if (b2cDaysRaw) {
+                    try {
+                        const parsed = JSON.parse(b2cDaysRaw);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            activeB2cDays = parsed.map(n => Number(n));
+                            setB2cAllowedDays(activeB2cDays);
+                        }
+                    } catch {}
+                }
                 if (rawStatus === 'closed' || rawStatus === 'vacation_preorder' || rawStatus === 'open') {
                     setStoreStatus(rawStatus);
                 }
@@ -1049,11 +1061,11 @@ export default function CheckoutPage() {
                 const baseTarget = new Date(bogotaNow);
                 baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
 
-                const validDate = getNextValidDeliveryDate(baseTarget, sundaysAllowed, holidaysAllowed, parsedVac);
+                const validDate = getNextValidDeliveryDate(baseTarget, sundaysAllowed, holidaysAllowed, parsedVac, activeB2cDays);
                 const dateStr = validDate.toISOString().split('T')[0];
 
                 setMinDeliveryDate(dateStr);
-                setDate(prev => (!prev || prev < dateStr || !isValidDeliveryDate(prev, sundaysAllowed, holidaysAllowed, parsedVac)) ? dateStr : prev);
+                setDate(prev => (!prev || prev < dateStr || !isValidDeliveryDate(prev, sundaysAllowed, holidaysAllowed, parsedVac, activeB2cDays)) ? dateStr : prev);
             } catch (err) {
                 console.error("Error initializing delivery date in checkout:", err);
             }
@@ -2485,6 +2497,7 @@ export default function CheckoutPage() {
                                                 }
                                             }}
                                             min={minDeliveryDate}
+                                            max={getMaxFutureDeliveryDate(30)}
                                             className="checkout-input-modern"
                                             style={{ width: '100%', padding: '0.45rem 0.5rem 0.45rem 1.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer' }}
                                         />

@@ -73,7 +73,7 @@ import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
-import { getNextValidDeliveryDate, isValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow, parseStoreVacationConfig, StoreVacationConfig, isB2BSameDayExpressAvailable } from '@/lib/colombianHolidays';
+import { getNextValidDeliveryDate, isValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow, parseStoreVacationConfig, StoreVacationConfig, isB2BSameDayExpressAvailable, getMaxFutureDeliveryDate } from '@/lib/colombianHolidays';
 import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 export const normalizeDocUnit = (unitStr: string): string => {
@@ -762,7 +762,7 @@ function CreateOrderContent() {
                 const { data: settingsData } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_cutoff_rules', 'cutoff_hour_admin', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'max_order_hogar_cod', 'store_vacation_config']);
+                    .in('key', ['enable_cutoff_rules', 'cutoff_hour_admin', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'max_order_hogar_cod', 'store_vacation_config', 'b2c_delivery_allowed_days', 'max_future_delivery_days']);
 
                 const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
                 const cutoffHourAdminSetting = settingsData?.find(s => s.key === 'cutoff_hour_admin')?.value;
@@ -798,6 +798,8 @@ function CreateOrderContent() {
     const [manualDeliveryMargin, setManualDeliveryMargin] = useState(15);
     const [manualDeliveryNote, setManualDeliveryNote] = useState('');
     const [dayRestrictionExceptionDate, setDayRestrictionExceptionDate] = useState<string | null>(null);
+    const [b2cAllowedDays, setB2cAllowedDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
+    const [maxFutureDays, setMaxFutureDays] = useState<number>(30);
 
     // Estilos para ocultar flechas del input number
     const hideSpinnersStyle = `
@@ -9739,30 +9741,45 @@ ${primaryAdminNotes}`.trim();
                                                 );
                                             })()}
                                         </div>
-                                        <input
-                                            type="date"
-                                            min={isSameDayExpress ? isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig).targetDeliveryDate : (cutoffRulesEnabled ? minDeliveryDate : undefined)}
-                                            value={deliveryDate}
-                                            onChange={e => {
-                                                const newDate = e.target.value;
-                                                if (newDate) {
-                                                    if (newDate < minDeliveryDate && cutoffRulesEnabled) {
-                                                        showToast(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`, 'error');
-                                                        setDeliveryDate(minDeliveryDate);
-                                                        return;
-                                                    }
-                                                    const check = isValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig);
-                                                    if (!check.valid) {
-                                                        showToast(`${check.reason || 'Día no habilitado para entregas.'}`, 'error');
-                                                        const nextValid = getNextValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig);
-                                                        setDeliveryDate(formatDateToYYYYMMDD(nextValid));
-                                                        return;
-                                                    }
-                                                    setDayRestrictionExceptionDate(null);
-                                                    setDeliveryDate(newDate);
-                                                }
-                                            }}
-                                            style={{
+                                        {(() => {
+                                            const todayBogota = formatDateToYYYYMMDD(getBogotaNow());
+                                            const effectiveMinDate = isSameDayExpress 
+                                                ? (isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig).targetDeliveryDate || todayBogota)
+                                                : (cutoffRulesEnabled && minDeliveryDate > todayBogota ? minDeliveryDate : todayBogota);
+                                            const effectiveMaxDate = getMaxFutureDeliveryDate(maxFutureDays || 30);
+
+                                            return (
+                                                <input
+                                                    type="date"
+                                                    min={effectiveMinDate}
+                                                    max={effectiveMaxDate}
+                                                    value={deliveryDate}
+                                                    onChange={e => {
+                                                        const newDate = e.target.value;
+                                                        if (newDate) {
+                                                            if (newDate < effectiveMinDate) {
+                                                                showToast(`Fecha no permitida: No se pueden registrar pedidos en fechas pasadas o antes de ${effectiveMinDate}.`, 'error');
+                                                                setDeliveryDate(effectiveMinDate);
+                                                                return;
+                                                            }
+                                                            if (newDate > effectiveMaxDate) {
+                                                                showToast(`Fecha no permitida: Excede la ventana máxima de agendamiento (${effectiveMaxDate}).`, 'error');
+                                                                setDeliveryDate(effectiveMaxDate);
+                                                                return;
+                                                            }
+                                                            const allowedDaysForClient = clientType === 'B2C' ? b2cAllowedDays : null;
+                                                            const check = isValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig, allowedDaysForClient);
+                                                            if (!check.valid) {
+                                                                showToast(`${check.reason || 'Día no habilitado para entregas.'}`, 'error');
+                                                                const nextValid = getNextValidDeliveryDate(newDate, allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig, allowedDaysForClient);
+                                                                setDeliveryDate(formatDateToYYYYMMDD(nextValid));
+                                                                return;
+                                                            }
+                                                            setDayRestrictionExceptionDate(null);
+                                                            setDeliveryDate(newDate);
+                                                        }
+                                                    }}
+                                                    style={{
                                                 width: '100%',
                                                 height: '36px',
                                                 padding: '0 0.5rem',
@@ -9777,6 +9794,8 @@ ${primaryAdminNotes}`.trim();
                                                 outline: 'none'
                                             }}
                                         />
+                                            );
+                                        })()}
                                         {isSameDayExpress && (
                                             <div style={{ marginTop: '4px', fontSize: '0.62rem', fontWeight: '800', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                 <Zap size={10} strokeWidth={2.5} /> Pedido Express Extemporáneo: Solo Remisión Oficial.

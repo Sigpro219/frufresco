@@ -28,6 +28,7 @@ import {
     PackageCheck,
     Percent,
     CalendarX,
+    Calendar,
     CalendarClock,
     Store,
     BookmarkCheck,
@@ -290,6 +291,8 @@ export default function AdminSettingsPage() {
             { key: 'cutoff_hour_public', value: '17', description: 'Hora de corte para tienda web pública B2C (24h)' },
             { key: 'allow_sunday_deliveries', value: 'false', description: '¿Permitir entregas los Domingos?' },
             { key: 'allow_holiday_deliveries', value: 'false', description: '¿Permitir entregas los Días Festivos (19 Días Colombia)?' },
+            { key: 'b2c_delivery_allowed_days', value: JSON.stringify(['1', '2', '3', '4', '5', '6']), description: 'Días de entrega habilitados para Hogares B2C (1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb, 0=Dom)' },
+            { key: 'max_future_delivery_days', value: '30', description: 'Ventana máxima en días para agendamiento futuro de pedidos' },
             { key: 'enable_b2b_lead_capture', value: 'true', description: 'Canal de registro para nuevos clientes institucionales (B2B)' },
             { key: 'inbox_email_orders', value: 'pedidos@frufresco.com', description: 'Correo de Ingesta de Pedidos (AI)' },
             { key: 'inbox_email_commercial', value: 'contacto@investmentscortes.com', description: 'Correo Comercial de Negociaciones' },
@@ -668,7 +671,7 @@ export default function AdminSettingsPage() {
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
                             {(() => {
-                                const opKeys = ['store_status', 'store_vacation_config', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
+                                const opKeys = ['store_status', 'store_vacation_config', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'b2c_delivery_allowed_days', 'max_future_delivery_days', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
                                 return settings
                                     .filter(s => opKeys.includes(s.key))
                                     .sort((a, b) => opKeys.indexOf(a.key) - opKeys.indexOf(b.key))
@@ -894,7 +897,7 @@ export default function AdminSettingsPage() {
                                                                     color: '#64748B',
                                                                     lineHeight: '1.35'
                                                                 }}>
-                                                                    📌 <strong>Efecto en planta:</strong> A esta hora el sistema genera el consolidado de compras nocturnas en Corabastos. Si el corte está activo, pedidos posteriores se agendan para D+2.
+                                                                    <CheckCircle2 size={13} style={{ color: "#0D7A57", display: "inline", verticalAlign: "middle", marginRight: "4px" }} /><strong>Efecto en planta:</strong> A esta hora el sistema genera el consolidado de compras nocturnas en Corabastos. Si el corte está activo, pedidos posteriores se agendan para D+2.
                                                                 </div>
                                                             </div>
 
@@ -972,7 +975,7 @@ export default function AdminSettingsPage() {
                                                                     color: '#64748B',
                                                                     lineHeight: '1.35'
                                                                 }}>
-                                                                    🛒 <strong>Efecto en checkout:</strong> Pasada esta hora, el selector de fecha en la tienda desactiva el día siguiente para evitar comprometer entregas sin abastecimiento.
+                                                                    <CheckCircle2 size={13} style={{ color: "#D97706", display: "inline", verticalAlign: "middle", marginRight: "4px" }} /><strong>Efecto en checkout:</strong> Pasada esta hora, el selector de fecha en la tienda desactiva el día siguiente para evitar comprometer entregas sin abastecimiento.
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -988,7 +991,7 @@ export default function AdminSettingsPage() {
                                             padding: '1rem', 
                                             border: `1px solid ${THEME.colors.border}`,
                                             boxShadow: THEME.shadow.sm,
-                                            gridColumn: (setting.key === 'packaging_fee_note' || setting.key === 'store_vacation_config') ? '1 / -1' : 'span 1'
+                                            gridColumn: (setting.key === 'packaging_fee_note' || setting.key === 'store_vacation_config' || setting.key === 'b2c_delivery_allowed_days') ? '1 / -1' : 'span 1'
                                         }}>
                                             <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 {setting.key === 'delivery_fee' ? 'Costo de Envío' :
@@ -1005,6 +1008,8 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'cutoff_hour_public' ? <><Clock size={14} style={{ color: '#D97706' }} /> HORA CORTE TIENDA PÚBLICA (B2C)</> :
                                                  setting.key === 'allow_sunday_deliveries' ? <><CalendarX size={14} style={{ color: 'var(--primary)' }} /> ENTREGAS LOS DOMINGOS</> :
                                                  setting.key === 'allow_holiday_deliveries' ? <><Sparkles size={14} style={{ color: '#D97706' }} /> ENTREGAS EN FESTIVOS (19 DÍAS COLOMBIA)</> :
+                                                 setting.key === 'b2c_delivery_allowed_days' ? <><Calendar size={14} style={{ color: 'var(--primary)' }} /> DÍAS DE ENTREGA HABILITADOS — LÍNEA HOGAR (B2C)</> :
+                                                 setting.key === 'max_future_delivery_days' ? <><CalendarClock size={14} style={{ color: '#0D7A57' }} /> TOPE MÁXIMO DE DÍAS FUTUROS PARA AGENDAR</> :
                                                  setting.key === 'packaging_fee_enabled' ? <><PackageCheck size={14} style={{ color: 'var(--primary)' }} /> Cobro Empaque Plástico (Checkout)</> :
                                                  setting.key === 'packaging_fee_percentage' ? <><Percent size={14} style={{ color: 'var(--primary)' }} /> PORCENTAJE EMPAQUE</> :
                                                  setting.key === 'packaging_fee_note' ? <><FileText size={14} style={{ color: 'var(--primary)' }} /> Explicación de Empaque (Nota Cliente)</> :
@@ -1270,6 +1275,88 @@ export default function AdminSettingsPage() {
                                                         </div>
                                                     );
                                                 })()
+                                            ) : setting.key === 'b2c_delivery_allowed_days' ? (
+                                                (() => {
+                                                    let activeDays: string[] = ['1', '2', '3', '4', '5', '6'];
+                                                    try {
+                                                        const parsed = JSON.parse(setting.value || '["1","2","3","4","5","6"]');
+                                                        if (Array.isArray(parsed)) activeDays = parsed.map(String);
+                                                    } catch {}
+                                                    const dayOptions = [
+                                                        { id: '1', label: 'Lunes' },
+                                                        { id: '2', label: 'Martes' },
+                                                        { id: '3', label: 'Miércoles' },
+                                                        { id: '4', label: 'Jueves' },
+                                                        { id: '5', label: 'Viernes' },
+                                                        { id: '6', label: 'Sábado' },
+                                                        { id: '0', label: 'Domingo' }
+                                                    ];
+                                                    const toggleDay = (dayId: string) => {
+                                                        const next = activeDays.includes(dayId)
+                                                            ? activeDays.filter(d => d !== dayId)
+                                                            : [...activeDays, dayId];
+                                                        if (next.length === 0) return;
+                                                        handleUpdateSetting(setting.key, JSON.stringify(next));
+                                                    };
+                                                    return (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                            <p style={{ margin: 0, fontSize: '0.74rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>
+                                                                Selecciona los días habilitados para entregas de clientes particulares o de hogar. Los días desmarcados se bloquearán automáticamente en el checkout y en el agendamiento manual.
+                                                            </p>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+                                                                {dayOptions.map(day => {
+                                                                    const isChecked = activeDays.includes(day.id);
+                                                                    return (
+                                                                        <button
+                                                                            key={day.id}
+                                                                            type="button"
+                                                                            onClick={() => toggleDay(day.id)}
+                                                                            style={{
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '6px',
+                                                                                padding: '6px 12px',
+                                                                                borderRadius: '6px',
+                                                                                border: isChecked ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                                backgroundColor: isChecked ? '#ECFDF5' : '#F8FAFC',
+                                                                                color: isChecked ? '#065F46' : '#64748B',
+                                                                                fontSize: '0.78rem',
+                                                                                fontWeight: '800',
+                                                                                cursor: 'pointer'
+                                                                            }}
+                                                                        >
+                                                                            {isChecked && <CheckCircle2 size={13} color="#0D7A57" />}
+                                                                            <span>{day.label}</span>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()
+                                            ) : setting.key === 'max_future_delivery_days' ? (
+                                                <div>
+                                                    <input
+                                                        type="number"
+                                                        min="7"
+                                                        max="90"
+                                                        defaultValue={setting.value || '30'}
+                                                        onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '8px 12px',
+                                                            borderRadius: THEME.radius.sm,
+                                                            border: `1px solid ${THEME.colors.borderActive}`,
+                                                            fontWeight: '700',
+                                                            fontSize: '0.85rem',
+                                                            color: THEME.colors.textMain,
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.72rem', color: THEME.colors.textSecondary }}>
+                                                        Ventana máxima permitida (ej: 30 días). Evita que se agenden pedidos con fechas del próximo año o meses distantes.
+                                                    </p>
+                                                </div>
                                             ) : setting.key === 'enable_b2b_lead_capture' || setting.key === 'allow_sunday_deliveries' || setting.key === 'allow_holiday_deliveries' || setting.key === 'packaging_fee_enabled' ? (
                                                 <select 
                                                     value={setting.value} 
