@@ -106,7 +106,10 @@ export default function ManualDispatchWizardModal({
                     manual_delivery_time: o.manual_delivery_time || '',
                     is_manual_delivery: o.is_manual_delivery || false,
                     total_weight_kg: totalKg > 0 ? totalKg : 15,
-                    existing_spaces: []
+                    existing_spaces: [],
+                    delivery_restrictions: o.profiles?.delivery_restrictions || o.delivery_restrictions || null,
+                    profile_logistics_data: o.profiles?.logistics_data || null,
+                    logistics_data: o.logistics_data || null
                 };
             });
             const autoAssigned = allocateStagingSpacesGeographically(rawInputs, {
@@ -158,7 +161,10 @@ export default function ManualDispatchWizardModal({
                 manual_delivery_time: o.manual_delivery_time || '',
                 is_manual_delivery: o.is_manual_delivery || false,
                 total_weight_kg: totalKg > 0 ? totalKg : 15,
-                existing_spaces: manualSpacesMap[o.id] || o.warehouse_spaces || []
+                existing_spaces: manualSpacesMap[o.id] || o.warehouse_spaces || [],
+                delivery_restrictions: o.profiles?.delivery_restrictions || o.delivery_restrictions || null,
+                profile_logistics_data: o.profiles?.logistics_data || null,
+                logistics_data: o.logistics_data || null
             };
         });
     }, [selectedOrdersList, manualSpacesMap]);
@@ -646,8 +652,8 @@ export default function ManualDispatchWizardModal({
             <div style={{
                 backgroundColor: '#FFFFFF',
                 borderRadius: '24px',
-                width: '96%',
-                maxWidth: '1120px',
+                width: '96vw',
+                maxWidth: '1560px',
                 maxHeight: '94vh',
                 overflowY: 'auto',
                 padding: '2rem 2.25rem',
@@ -830,13 +836,13 @@ export default function ManualDispatchWizardModal({
                                     <thead style={{ position: 'sticky', top: 0, backgroundColor: '#0F172A', color: '#FFFFFF', zIndex: 10 }}>
                                         <tr>
                                             <th style={{ padding: '8px 10px', textAlign: 'left', width: '4%' }}>#Seq</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '25%' }}>Cliente / Sede</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '20%' }}>Dirección / Zona</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '13%' }}>Ventana Entrega</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'right', width: '9%' }}>Kilos</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '7%' }}>Can.</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '10%', backgroundColor: '#1E293B' }}>Muelles Req.</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '12%', backgroundColor: '#0F172A' }}>Bahía (1-150)</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '24%' }}>Cliente / Sede</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '24%' }}>Dirección / Zona</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '14%' }}>Ventana Entrega</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'right', width: '8%' }}>Kilos</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '6%' }}>Can.</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '9%', backgroundColor: '#1E293B' }}>Muelles Req.</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '11%', backgroundColor: '#0F172A' }}>Bahía (1-150)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -852,7 +858,7 @@ export default function ManualDispatchWizardModal({
                                                         {item.customer_name}
                                                     </td>
                                                     <td style={{ padding: '6px 10px', color: '#475569', fontSize: '0.70rem' }}>
-                                                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '210px' }}>
+                                                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '360px' }}>
                                                             {item.shipping_address}
                                                         </div>
                                                         <span style={{ fontSize: '0.62rem', color: '#0369A1', fontWeight: '700' }}>{item.zone_name}</span>

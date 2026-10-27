@@ -27,6 +27,9 @@ export interface OrderStagingInput {
     manual_delivery_time?: string;
     is_manual_delivery?: boolean;
     clientType?: 'hogar' | 'institucional';
+    delivery_restrictions?: string | null;
+    logistics_data?: any;
+    profile_logistics_data?: any;
 }
 
 export interface StagingAllocationResult {
@@ -115,7 +118,21 @@ export function formatSpaceLabel(spaces: number[]): string {
  * Parsea y normaliza la hora de entrega a minutos del día (0..1439)
  * para contrastar la asignación de bahías con la ventana horaria (LIFO de cargue)
  */
+function normalizeTimeTo24h(timeStr: string, ampm?: string): string {
+    const parts = timeStr.trim().split(':');
+    let h = parseInt(parts[0], 10);
+    let m = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+    if (isNaN(m)) m = 0;
+    if (ampm) {
+        const isPm = ampm.toLowerCase() === 'pm';
+        if (isPm && h < 12) h += 12;
+        if (!isPm && h === 12) h = 0;
+    }
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 export function parseDeliveryWindowMinutes(order: OrderStagingInput): { minutes: number; label: string } {
+    // 1. Prioridad: Hora manual pactada en el pedido
     if (order.manual_delivery_time) {
         const parts = order.manual_delivery_time.split(':').map(Number);
         if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -126,9 +143,42 @@ export function parseDeliveryWindowMinutes(order: OrderStagingInput): { minutes:
         }
     }
 
+    // 2. Restricción Logística estructurada del cliente (logistics_data.windows / start_time / end_time)
+    const logData = order.profile_logistics_data || order.logistics_data;
+    if (logData?.start_time && logData?.end_time) {
+        const [sh, sm] = logData.start_time.split(':').map(Number);
+        return {
+            minutes: (!isNaN(sh) ? sh * 60 : 7 * 60) + (!isNaN(sm) ? sm : 0),
+            label: `${logData.start_time} - ${logData.end_time}`
+        };
+    }
+    if (Array.isArray(logData?.windows) && logData.windows.length > 0 && logData.windows[0]?.startTime && logData.windows[0]?.endTime) {
+        const [sh, sm] = logData.windows[0].startTime.split(':').map(Number);
+        return {
+            minutes: (!isNaN(sh) ? sh * 60 : 7 * 60) + (!isNaN(sm) ? sm : 0),
+            label: `${logData.windows[0].startTime} - ${logData.windows[0].endTime}`
+        };
+    }
+
+    // 3. Restricción Logística en texto libre (delivery_restrictions)
+    const rawRestr = order.delivery_restrictions;
+    if (rawRestr && typeof rawRestr === 'string' && rawRestr.trim() !== '' && rawRestr.trim() !== '[]') {
+        const matchRange = rawRestr.match(/(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*(?:-|a|hasta)\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?/i);
+        if (matchRange) {
+            const startStr = normalizeTimeTo24h(matchRange[1], matchRange[2]);
+            const endStr = normalizeTimeTo24h(matchRange[3], matchRange[4] || matchRange[2]);
+            const [sh, sm] = startStr.split(':').map(Number);
+            return {
+                minutes: sh * 60 + (sm || 0),
+                label: `${startStr} - ${endStr}`
+            };
+        }
+    }
+
+    // 4. Fallback a delivery_slot del pedido si no hay restricción
     const slot = (order.delivery_slot || '').trim();
     if (!slot) {
-        return { minutes: 7 * 60, label: 'Flexible (07:00)' };
+        return { minutes: 7 * 60, label: '07:00 AM (Flexible)' };
     }
 
     const matchTime = slot.match(/(\d{1,2}):(\d{2})/);
@@ -140,13 +190,13 @@ export function parseDeliveryWindowMinutes(order: OrderStagingInput): { minutes:
 
     const upper = slot.toUpperCase();
     if (upper.includes('MADRUGADA') || upper.includes('05:') || upper.includes('06:')) {
-        return { minutes: 5 * 60 + 30, label: slot || 'Madrugada (05:30)' };
+        return { minutes: 5 * 60 + 30, label: slot || '05:30 AM' };
     }
     if (upper === 'AM' || upper.includes('MAÑANA')) {
-        return { minutes: 7 * 60, label: 'AM (07:00)' };
+        return { minutes: 7 * 60, label: '07:00 AM (Flexible)' };
     }
     if (upper === 'PM' || upper.includes('TARDE')) {
-        return { minutes: 14 * 60, label: 'PM (14:00)' };
+        return { minutes: 14 * 60, label: '02:00 PM (Flexible)' };
     }
 
     return { minutes: 7 * 60, label: slot };
