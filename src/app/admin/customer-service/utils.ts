@@ -678,3 +678,123 @@ export const buildCaseResolutionWhatsAppSummary = (pqr: PQR): string => {
 };
 
 
+
+
+// ── TELEMETRÍA DE TEMPORIZADOR Y SLA (2 HORAS) PARA PQRS ──
+export interface PqrSlaTelemetry {
+    statusType: 'active' | 'resolved' | 'rejected';
+    isOverdue: boolean;
+    progressPct: number;
+    progressBarBg: string;
+    textColor: string;
+    label: string;
+    tooltip: string;
+    elapsedMin: number;
+    remainingMin: number;
+    elapsedFormatted: string;
+}
+
+export const calculatePqrSla = (pqr: PQR, nowMs: number = Date.now()): PqrSlaTelemetry => {
+    const SLA_MINUTES = 120; // 2 horas SLA para dictamen de PQR
+    const SLA_MS = SLA_MINUTES * 60 * 1000;
+
+    const createdMs = pqr.created_at ? new Date(pqr.created_at).getTime() : nowMs;
+    const resolvedMs = pqr.resolved_at ? new Date(pqr.resolved_at).getTime() : null;
+
+    const formatDuration = (mins: number) => {
+        const absM = Math.abs(mins);
+        const h = Math.floor(absM / 60);
+        const m = absM % 60;
+        if (h > 0) {
+            return `${h}h ${String(m).padStart(2, '0')}m`;
+        }
+        return `${m}m`;
+    };
+
+    // 1. Caso Cerrado: Resuelto
+    if (pqr.status === 'resolved') {
+        const resolutionTimeMs = resolvedMs ? Math.max(0, resolvedMs - createdMs) : 0;
+        const resolutionMin = Math.round(resolutionTimeMs / 60000);
+        const wasInSla = resolutionMin <= SLA_MINUTES;
+
+        return {
+            statusType: 'resolved',
+            isOverdue: !wasInSla,
+            progressPct: 100,
+            progressBarBg: wasInSla ? '#10B981' : '#F59E0B',
+            textColor: wasInSla ? '#065F46' : '#B45309',
+            label: resolutionMin > 0 
+                ? (wasInSla ? `Cerrado en ${formatDuration(resolutionMin)} (En SLA)` : `Cerrado en ${formatDuration(resolutionMin)} (Fuera SLA)`)
+                : 'Cerrado en SLA',
+            tooltip: `PQR resuelta. Tiempo de ciclo: ${formatDuration(resolutionMin)}. Meta SLA: 2 horas.`,
+            elapsedMin: resolutionMin,
+            remainingMin: 0,
+            elapsedFormatted: formatDuration(resolutionMin)
+        };
+    }
+
+    // 2. Caso Cerrado: Rechazado / Desestimado
+    if (pqr.status === 'rejected') {
+        const rejectionTimeMs = resolvedMs ? Math.max(0, resolvedMs - createdMs) : 0;
+        const rejectionMin = Math.round(rejectionTimeMs / 60000);
+        return {
+            statusType: 'rejected',
+            isOverdue: false,
+            progressPct: 100,
+            progressBarBg: '#94A3B8',
+            textColor: '#64748B',
+            label: 'Desestimado',
+            tooltip: 'PQR rechazada o desestimada tras auditoría de Calidad.',
+            elapsedMin: rejectionMin,
+            remainingMin: 0,
+            elapsedFormatted: formatDuration(rejectionMin)
+        };
+    }
+
+    // 3. Caso Activo (Pendiente o En Auditoría)
+    const elapsedMs = Math.max(0, nowMs - createdMs);
+    const elapsedMin = Math.floor(elapsedMs / 60000);
+    const remainingMs = SLA_MS - elapsedMs;
+    const remainingMin = Math.ceil(remainingMs / 60000);
+    const progressPct = Math.min(100, Math.max(8, Math.round((elapsedMs / SLA_MS) * 100)));
+
+    if (remainingMin > 0) {
+        let progressBarBg = '#0D7A57'; // Verde FruFresco (> 60m)
+        let textColor = '#065F46';
+
+        if (remainingMin <= 30) {
+            progressBarBg = '#EA580C'; // Naranja urgente (<= 30m)
+            textColor = '#C2410C';
+        } else if (remainingMin <= 60) {
+            progressBarBg = '#D97706'; // Ámbar preventivo (31-60m)
+            textColor = '#B45309';
+        }
+
+        return {
+            statusType: 'active',
+            isOverdue: false,
+            progressPct,
+            progressBarBg,
+            textColor,
+            label: `${formatDuration(remainingMin)} restantes (SLA 2h)`,
+            tooltip: `PQR en curso. Creada hace ${formatDuration(elapsedMin)}. Ventana de respuesta: 2 horas. Restan ${formatDuration(remainingMin)}.`,
+            elapsedMin,
+            remainingMin,
+            elapsedFormatted: formatDuration(elapsedMin)
+        };
+    } else {
+        const overdueMin = Math.abs(remainingMin);
+        return {
+            statusType: 'active',
+            isOverdue: true,
+            progressPct: 100,
+            progressBarBg: '#DC2626', // Rojo alerta
+            textColor: '#DC2626',
+            label: `SLA Vencido (+${formatDuration(overdueMin)})`,
+            tooltip: `¡Alerta SLA excedido! Esta PQR supera la ventana máxima de 2 horas (tiempo transcurrido: ${formatDuration(elapsedMin)}). Requiere dictamen inmediato.`,
+            elapsedMin,
+            remainingMin,
+            elapsedFormatted: formatDuration(elapsedMin)
+        };
+    }
+};

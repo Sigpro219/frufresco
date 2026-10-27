@@ -12443,7 +12443,7 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Incorpora el botón **`Descargar Excel`** que genera nativamente el archivo `Frufresco_Garantias_Reposiciones_[FECHA].xlsx`.
 ---
 
-### Escenario 319: Ergonomía y Legibilidad de Alto Contraste en Sábana de Alistamiento Impresa (Zebra Striping Industrial & Tipografía Lean de Planta) (Gemba Feedback Sábana: Hallazgo 1) (SDD v1.9.301)
+### Escenario 320: Ergonomía y Legibilidad de Alto Contraste en Sábana de Alistamiento Impresa (Zebra Striping Industrial & Tipografía Lean de Planta) (Gemba Feedback Sábana: Hallazgo 1) (SDD v1.9.301)
 - **Given** el módulo de impresión de la Sábana de Alistamiento Nocturno (`/admin/orders/alistamiento-print`) utilizado por los líderes de cuadrilla y alistadores en las células de bodega,
 - **When** se genera la matriz física para despacho y picking en papel de formato horizontal (Landscape),
 - **Then** el sistema garantiza los siguientes cuatro (4) estándares de legibilidad, contraste y ergonomía operativa:
@@ -12462,7 +12462,7 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
 
 ---
 
-### Escenario 320: Estandarización de Matriz de Rentabilidad en Torre de Control — Encabezados Sticky Docked, Superbuscador Omnibox y Ordenadores Dinámicos en Columnas (Gemba Galería 4) (SDD v1.9.298)
+### Escenario 321: Estandarización de Matriz de Rentabilidad en Torre de Control — Encabezados Sticky Docked, Superbuscador Omnibox y Ordenadores Dinámicos en Columnas (Gemba Galería 4) (SDD v1.9.302)
 - **Given** la tabla *Matriz de Rentabilidad — Top 20 Volumen & Rentabilidad Valor Total* dentro de la subpestaña *4. Abastecimiento & Precios* de la Torre de Control Estratégico (`/admin/strategy`), donde previamente los encabezados se desvanecían al hacer scroll vertical, no existía un mecanismo de búsqueda para localizar productos fuera del top 20 predefinido, y las columnas carecían de ordenadores interactivos bidireccionales,
 - **When** la dirección de compras, abastecimiento y finanzas analiza el catálogo de productos para identificar márgenes atípicos, costos unitarios y utilidades brutas en pesos ($),
 - **Then** el sistema ratifica e implementa los siguientes cuatro (4) estándares de la skill `estandar-galerias-frufresco` y `galeria-sticky-industrial`:
@@ -12478,3 +12478,52 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - Indicador visual semántico con iconos Lucide: `ArrowDown` (verde corporativo `#0D7A57`), `ArrowUp` (verde corporativo `#0D7A57`) o `ArrowUpDown` (`#94A3B8`) en estado pasivo.
   4. **Píldoras de Acceso Rápido Sincronizadas:**
      - Botones de selección rápida (*Top 20 Volumen (Kg)*, *Rentabilidad Total ($)*, *Facturación Total ($)*, *% Margen* y *Ver Todos ({totalSKUs})*) que sincronizan automáticamente la columna activa y la dirección del ordenamiento.
+---
+
+### Escenario 322: Garantía Universal de Asignación y Orden Físico Secuencial de Bahías de Muelle en Sábana de Alistamiento (Gemba Feedback Sábana: Hallazgo 2) (SDD v1.9.303)
+- **Given** el reporte de la mesa de operaciones de bodega donde los pedidos se imprimían en la sábana de alistamiento con el identificador de muelle vacío (`S/A` - Sin Asignar) y en orden no coincidente con el recorrido físico en suelo (`Feedback_sabana_alistamiento.docx`, Hallazgo 2),
+- **When** se compila y genera la matriz de alistamiento para cualquier jornada de despacho en `/admin/orders/alistamiento-print`:
+- **Then** el sistema ratifica e impone los siguientes tres (3) estándares operativos:
+  1. **Asignación Universal Automática de Bahías (`ensureUniversalStagingSpaces`):**
+     - Toda orden que arribe a la sábana de alistamiento sin bahía física previa ejecuta el motor de asignación volumétrica por cubicaje de canastillas (`calculateCratesAndSpaces`) y clúster geográfico de ruta (`deduceGeographicZone`), asignando slots contiguos (del 1 al 150).
+     - Queda estrictamente erradicada la presencia de leyendas `S/A` (Sin Asignar) en la columna `LUGAR` para pedidos activos en jornada de despacho.
+  2. **Ordenamiento Ascendente Secuencial por Bahía en Suelo:**
+     - La sábana de alistamiento nocturno organiza todos los pedidos de forma estrictamente ascendente según su primera bahía física (`first_space`: 1, 2, 3, 4, 5...), permitiendo que los operarios alisten en línea recta por el pasillo de muelle sin retrocesos ni cruces entre cuadrillas.
+  3. **Inmunidad en Hojas Multicélula:**
+     - En cada hoja (`printableSheets`), los pedidos filtrados con demanda activa preservan idéntica secuencia física de muelle, garantizando que el alistador de aguacates, hortalizas o frutas recorra exactamente las mismas bahías en idéntico orden que el alistador de secos y procesados.
+
+---
+
+### Escenario 323: Ratificación Canónica y Blindaje Anti-Doble-Conversión Dual-Unit en Gramajes de Sábana de Alistamiento (Gemba Feedback Sábana: Hallazgo 3) (SDD v1.9.304)
+- **Given** el reporte de la mesa de operaciones de bodega donde se evidenció una discrepancia en el cálculo de kilogramos al imprimir presentaciones de gramaje fraccionado (ej. *"5 Unidades de 500g"* figuraban como `1,25 KG` para BATEA S.A.S. en lugar de los `2,5 KG` matemáticos reales, mientras que para BARUS SAS *"20 und de 500 gr"* calculaban correctamente `10 KG`, `Feedback_sabana_alistamiento.docx`, Hallazgo 3),
+- **When** se audita forensemente la base de datos histórica y el motor de normalización en `/admin/orders/alistamiento-print`:
+- **Then** el sistema ratifica e impone las siguientes tres (3) certezas de arquitectura:
+  1. **Evidencia Forense de Causa Raíz en BD:**
+     - La captura del reporte físico correspondió al pedido histórico #1041 de BATEA S.A.S. (del 08 de octubre de 2026), el cual fue almacenado en `order_items` con `quantity = 2.5` y `unit = 'Kg'`, pero con metadatos heredados en texto `selected_options: { Presentación: 'Unidad 500 gr' }` y `variant_label: 'und de 500 gr'` sin los campos estructurados del Dual-Unit Engine (`_original_qty`, `_unit_weight_gr`).
+     - En contraste, el pedido #1040 de BARUS SAS sí contenía `_original_qty: 20`, por lo que el motor dual-unit calculó directamente `20 * 0.5 = 10 KG`.
+  2. **Ratificación de la Corrección Preventiva (Commit 75d9fa84 / Escenario 282):**
+     - La causa raíz del fallo en Batea radicaba en que versiones previas a la actualización del viernes 23 de octubre re-multiplicaban la cantidad por el peso unitario (`2.5 * 0.5 = 1.25 KG`) al detectar la palabra `"und"` en la etiqueta de presentación, ignorando que el ítem ya se encontraba expresado en kilogramos (`unit === 'Kg'`).
+     - Dicha anomalía quedó resuelta mediante el guardrail `isRawAlreadyKg`, el cual prohíbe re-multiplicar cuando `rawUnit` ya es `'kg'`, `'kilo'` o `'kilogramo'`, garantizando que `effectiveKg = quantity` (`2,5 KG`).
+  3. **Certificación de Ejecución Vigente:**
+     - El pedido #1241 de BATEA S.A.S. y cualquier pedido posterior con ítems en kilogramos y especificaciones de presentación fraccionada evalúan estrictamente a su masa neta real (`2,5 KG`), y la especificación complementaria en píldora Lean muestra de forma transparente `5 und de 500 gr`, erradicando discrepancias de pesaje en las células de alistamiento.
+
+---
+
+### Escenario 321: Temporizador SLA de 2 Horas y Barra de Cuenta Regresiva Dinámica en Consola de PQRs (Servicio al Cliente & Calidad) (Gemba Hallazgo 17 / P24) (SDD v1.9.299)
+- **Given** la Consola de Casos del módulo de Servicio al Cliente y Calidad (`/admin/customer-service`), donde previamente las PQRs pendientes carecían de un indicador visual de tiempo de respuesta y los operadores no podían priorizar los reclamos que se encontraban próximos a vencer el acuerdo de nivel de servicio (SLA),
+- **When** se recibe un reclamo o queja tras la entrega del pedido y el equipo de calidad y SAC debe emitir dictamen formal,
+- **Then** el sistema ratifica e implementa los siguientes estándares canónicos de telemetría operativa y control de tiempos (idénticos a la experiencia del módulo de Facturación):
+  1. **Ventana Canónica SLA de 2 Horas (120 Minutos):**
+     - Se establece una ventana estricta de **2 horas (120 minutos)** desde la hora de radicación de la PQR (`created_at`) para emitir dictamen y clasificar causa raíz (RCA).
+  2. **Barra de Progreso y Cuenta Regresiva Visual (Ghost Track 9999px):**
+     - Debajo del badge de estado en la columna *ESTADO*, se integra una barra de progreso horizontal (ancho máximo 86px, altura 4px, pista traslúcida y bordes redondeados).
+     - **Estados Semánticos por Umbral de Tiempo:**
+       - 🟢 **Verde FruFresco (`#0D7A57`):** Cuando restan más de 60 minutos del SLA (ej. *"1h 45m restantes (SLA 2h)"*).
+       - 🟡 **Ámbar Preventivo (`#D97706`):** Cuando restan entre 31 y 60 minutos (ej. *"45m restantes (SLA 2h)"*).
+       - 🟠 **Naranja Urgente (`#EA580C`):** Cuando restan 30 minutos o menos (ej. *"15m restantes (SLA 2h)"*).
+       - 🔴 **Rojo Crítico / Alerta Vencido (`#DC2626`):** Cuando supera las 2 horas sin dictamen (barra llena al 100% con insignia *"SLA Vencido (+Xh Ym)"* y badge *Pendiente* en rojo).
+  3. **Trazabilidad en Casos Cerrados (Resueltos / Rechazados):**
+     - En casos resueltos (`status === 'resolved'`), la barra se consolida en verde (`#10B981`) reportando el tiempo total de ciclo: *"✓ Cerrado en Xm (En SLA)"* o *"⏱ Cerrado en Xh Ym (Fuera SLA)"*.
+     - En casos desestimados (`status === 'rejected'`), se proyecta la barra neutral gris (`#94A3B8`) con leyenda *"Desestimado"*.
+  4. **Refresco Reactivo en Tiempo Real:**
+     - El componente actualiza su reloj de referencia cada 30 segundos de forma asíncrona y no invasiva, permitiendo que la barra y el tiempo restante avancen sin requerir recarga manual de la página.

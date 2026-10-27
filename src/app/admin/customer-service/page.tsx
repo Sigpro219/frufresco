@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 import {
     ShieldAlert, ShieldCheck, AlertCircle, AlertTriangle, CheckCircle2,
-    Clock, Search, Plus, Trash2, Loader2, ArrowRight, Eye, FileText,
+    Clock, Timer, Search, Plus, Trash2, Loader2, ArrowRight, Eye, FileText,
     Camera, Truck, BarChart2, Sparkles, HelpCircle, Store, Warehouse,
     Layers, User, Building2, ChevronDown, ChevronUp, RefreshCw,
     Maximize2, MessageCircle, ExternalLink, X, DollarSign, Percent,
@@ -34,7 +34,9 @@ import {
     getPqrAuthorInfo,
     getReplacementOrderUrl,
     buildPqrWhatsAppMessage,
-    buildCaseResolutionWhatsAppSummary
+    buildCaseResolutionWhatsAppSummary,
+    calculatePqrSla,
+    PqrSlaTelemetry
 } from './utils';
 
 import PqrAuditModal from './components/PqrAuditModal';
@@ -48,6 +50,14 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
     const [pqrs, setPqrs] = useState<PQR[]>([]);
     const [novelties, setNovelties] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(Date.now());
+        }, 30000);
+        return () => clearInterval(timer);
+    }, []);
     const [actionLoading, setActionLoading] = useState(false);
     const [totalOrdersCount, setTotalOrdersCount] = useState<number | null>(null);
     const [deliveredOrdersCount, setDeliveredOrdersCount] = useState<number | null>(null);
@@ -933,6 +943,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                 {filteredPqrs.length > 0 ? (
                                     filteredPqrs.map((pqr, idx) => {
                                         const author = getPqrAuthorInfo(pqr);
+                                        const sla = calculatePqrSla(pqr, currentTime);
                                         const photos = getPqrPhotos(pqr);
                                         const rca = parseRcaFromRecord(pqr);
                                         const typeStyle = getTypeBadgeStyle(pqr.type);
@@ -1294,7 +1305,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                     })()}
                                                 </td>
 
-                                                {/* 7. Estado & Resolución (3 Filas) */}
+                                                {/* 7. Estado & Resolución con Temporizador SLA 2h */}
                                                 <td style={{ padding: '8px 10px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
                                                         {pqr.status === 'resolved' ? (
@@ -1334,14 +1345,15 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 <span style={{ fontSize: '0.66rem', color: '#64748B', paddingLeft: '2px' }}>
                                                                     Revisión en curso
                                                                 </span>
-                                                                <span style={{ fontSize: '0.64rem', color: '#94A3B8', paddingLeft: '2px' }}>
-                                                                    En investigación
+                                                                <span style={{ fontSize: '0.64rem', color: '#475569', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px', paddingLeft: '2px' }}>
+                                                                    <User size={10} color="#64748B" />
+                                                                    <span>{rca.auditedBy ? `Asig: ${rca.auditedBy.split(' ')[0]}` : 'Por asignar'}</span>
                                                                 </span>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A' }}>
-                                                                    <AlertTriangle size={12} />
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: sla.isOverdue ? '#FEF2F2' : '#FFFBEB', color: sla.isOverdue ? '#991B1B' : '#B45309', border: `1px solid ${sla.isOverdue ? '#FECACA' : '#FDE68A'}` }}>
+                                                                    {sla.isOverdue ? <AlertCircle size={12} /> : <AlertTriangle size={12} />}
                                                                     <span>Pendiente</span>
                                                                 </span>
                                                                 <span style={{ fontSize: '0.66rem', color: '#94A3B8', paddingLeft: '2px' }}>
@@ -1352,6 +1364,68 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                                 </span>
                                                             </>
                                                         )}
+
+                                                        {/* BARRA DE TEMPORIZADOR SLA (2 HORAS) — IDÉNTICA A MÓDULO DE FACTURACIÓN */}
+                                                        <div 
+                                                            title={sla.tooltip}
+                                                            style={{ 
+                                                                marginTop: '4px', 
+                                                                display: 'flex', 
+                                                                flexDirection: 'column', 
+                                                                gap: '2px', 
+                                                                width: '100%', 
+                                                                maxWidth: '86px' 
+                                                            }}
+                                                        >
+                                                            <div style={{
+                                                                width: '100%',
+                                                                height: '4px',
+                                                                borderRadius: '9999px',
+                                                                backgroundColor: 'rgba(226, 232, 240, 0.85)',
+                                                                overflow: 'hidden',
+                                                                position: 'relative',
+                                                                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)',
+                                                                border: '1px solid rgba(203, 213, 225, 0.6)'
+                                                            }}>
+                                                                <div style={{
+                                                                    width: `${sla.progressPct}%`,
+                                                                    height: '100%',
+                                                                    backgroundColor: sla.progressBarBg,
+                                                                    borderRadius: '9999px',
+                                                                    transition: 'width 0.4s ease'
+                                                                }} />
+                                                            </div>
+
+                                                            {/* Micro-telemetría explicativa */}
+                                                            <div style={{
+                                                                fontSize: '0.58rem',
+                                                                color: sla.textColor,
+                                                                fontWeight: '750',
+                                                                lineHeight: '1.1',
+                                                                whiteSpace: 'nowrap',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                fontVariantNumeric: 'tabular-nums'
+                                                            }}>
+                                                                {pqr.status === 'resolved' ? (
+                                                                    <>
+                                                                        <CheckCircle2 size={9} style={{ color: sla.progressBarBg, flexShrink: 0 }} />
+                                                                        <span>{sla.label}</span>
+                                                                    </>
+                                                                ) : sla.isOverdue ? (
+                                                                    <>
+                                                                        <AlertCircle size={9} style={{ color: '#DC2626', flexShrink: 0 }} />
+                                                                        <span>{sla.label}</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Timer size={9} style={{ color: sla.progressBarBg, flexShrink: 0 }} />
+                                                                        <span>{sla.label}</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </td>
 
