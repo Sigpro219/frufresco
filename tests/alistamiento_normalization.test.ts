@@ -236,7 +236,8 @@ test('Alistamiento Print: Normalización Canónica de Unidades en Fila 1', async
                 _original_unit: 'Unidad'
             }
         });
-        assert.strictEqual(papayaSpec, '12 und de 2 kg; Maduro', 'Papaya debe conservar Maduro y peso');
+        // SDD v1.9.305 (Escenario 324): Maduro se suprime por ser línea base estándar
+        assert.strictEqual(papayaSpec, '12 und de 2 kg', 'Papaya debe conservar peso suprimiendo Maduro (Escenario 324)');
 
         // 4. Mango tommy con "Pintón" debe conservarse
         const mangoSpec = formatStructuredSpecification({

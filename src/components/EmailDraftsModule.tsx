@@ -2239,9 +2239,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         opts[presOpt.name] = hasClientPref ? (exc.preferred_options[presOpt.name] || exc.preferred_options['Presentación'] || exc.preferred_options['Presentacion']) : kgVal;
       }
     }
-    // SDD v1.9.177: 'Maduro' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
+    // SDD v1.9.177 / v1.9.305 (Escenario 324): 'Maduro'/'Madura' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
     Object.keys(opts).forEach(k => {
-      if (k.toLowerCase().includes('madura') && String(opts[k]).toLowerCase().trim() === 'maduro') {
+      const cleanK = (String(opts[k]).includes('|') ? String(opts[k]).split('|')[0] : String(opts[k])).toLowerCase().trim();
+      if (k.toLowerCase().includes('madura') && (cleanK === 'maduro' || cleanK === 'madura')) {
         delete opts[k];
       }
     });
@@ -11200,10 +11201,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
                       const explicitOpts = Object.entries(opts).filter(([k, v]) => {
                         if (k.startsWith('_') || !v || typeof v !== 'string') return false;
-                        const cleanVal = v.trim().toLowerCase();
+                        const cleanVal = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
                         const cleanKey = k.trim().toLowerCase();
                         if (cleanVal === 'estandar' || cleanVal === 'estándar') return false;
-                        if (cleanKey.includes('madura') && cleanVal === 'maduro') return false;
+                        if (cleanKey.includes('madura') && (cleanVal === 'maduro' || cleanVal === 'madura')) return false;
                         if (prod?.name && isRedundantAttribute(v, prod.name)) return false;
                         return true;
                       });
@@ -11880,10 +11881,13 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       return { ...opt, values: ['Estándar', ...values] };
                     }
                   }
-                  // SDD v1.9.177: Retiro canónico de "Maduro" en toma de pedidos B2B
+                  // SDD v1.9.177 / v1.9.305 (Escenario 324): Retiro canónico de "Maduro" y "Madura" en toma de pedidos B2B
                   const isRipeness = (opt.name || '').toLowerCase().includes('madura');
                   if (isRipeness) {
-                    const filteredValues = (opt.values || []).filter((v: string) => v.toLowerCase().trim() !== 'maduro');
+                    const filteredValues = (opt.values || []).filter((v: string) => {
+                      const clean = (v.includes('|') ? v.split('|')[0] : v).toLowerCase().trim();
+                      return clean !== 'maduro' && clean !== 'madura';
+                    });
                     return { ...opt, values: filteredValues };
                   }
                   return opt;

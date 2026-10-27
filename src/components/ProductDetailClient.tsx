@@ -139,9 +139,29 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             })
             .reduce((acc: any, opt: any) => {
                 let values = opt.values || [];
+                // SDD v1.9.177 / v1.9.305 (Escenario 324): "Maduro" es el estándar implícito; se suprime de selectores
+                if (opt.name.toLowerCase().includes('madura')) {
+                    values = values.filter((v: string) => {
+                        const clean = (v.includes('|') ? v.split('|')[0] : v).toLowerCase().trim();
+                        return clean !== 'maduro' && clean !== 'madura';
+                    });
+                }
+                if (values.length === 0) return acc;
                 return { ...acc, [opt.name]: values };
             }, {})
-        : product.options || {};
+        : (() => {
+            const rawOpts = { ...(product.options || {}) };
+            Object.keys(rawOpts).forEach(k => {
+                if (k.toLowerCase().includes('madura') && Array.isArray(rawOpts[k])) {
+                    rawOpts[k] = rawOpts[k].filter((v: string) => {
+                        const clean = (v.includes('|') ? v.split('|')[0] : v).toLowerCase().trim();
+                        return clean !== 'maduro' && clean !== 'madura';
+                    });
+                    if (rawOpts[k].length === 0) delete rawOpts[k];
+                }
+            });
+            return rawOpts;
+        })();
 
     if (isBaseInKg) {
         const presKey = Object.keys(displayOptions).find(k => k.toLowerCase().includes('presentaci'));

@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.296 (Matriz de Rentabilidad Top 20 Volumen y Rentabilidad Valor Total en Torre de Control Estratégico — 76/76 Pantallas Certificadas)
-> **Fecha:** 26 de Octubre, 2026  
+> **Versión:** 1.9.305 (Erradicación Poka-Yoke de 'Maduro' en Selectores B2B y Sábana de Alistamiento + Ratificación de Gramajes y Bahías de Muelle — 76/76 Pantallas Certificadas)
+> **Fecha:** 27 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 314 Escenarios BDD Ininterrumpidos (1..314)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 324 Escenarios BDD Ininterrumpidos (1..324)
 
 ---
 
@@ -12527,3 +12527,20 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
      - En casos desestimados (`status === 'rejected'`), se proyecta la barra neutral gris (`#94A3B8`) con leyenda *"Desestimado"*.
   4. **Refresco Reactivo en Tiempo Real:**
      - El componente actualiza su reloj de referencia cada 30 segundos de forma asíncrona y no invasiva, permitiendo que la barra y el tiempo restante avancen sin requerir recarga manual de la página.
+
+---
+
+### Escenario 324: Erradicación Poka-Yoke de la Característica Redundante 'Maduro' en Selectores de Pedidos y Sábana de Alistamiento (Gemba Feedback Sábana: Hallazgo 4) (SDD v1.9.305)
+- **Given** el reporte de la mesa de operaciones de bodega donde se evidenció que en la sábana de alistamiento nocturno continuaba apareciendo la palabra *"Maduro"* como nota de característica debajo de las cantidades (ej. `COLSUBSIDIO - CATERING` con `20 KG / Maduro`, `Feedback_sabana_alistamiento.docx`, Hallazgo 4), generando confusión entre los alistadores que interpretaban una solicitud atípica de sobremaduración inmediata,
+- **When** se evalúa la regla agronómica de FruFresco frente al dogma del SDD (Deuda Técnica 15 y Escenarios 76, 79 y 177) donde todo producto de catálogo se despacha por defecto en maduración comercial estándar (*"Maduro"*):
+- **Then** el sistema ratifica e impone los siguientes tres (3) estándares inviolables:
+  1. **Prohibición Absoluta de 'Maduro' y 'Madura' como Opción Seleccionable:**
+     - En todos los canales de captura y montaje de pedidos (`/admin/orders/create`, `EmailDraftsModule`, catálogo web `QuickViewModal` y checkout B2B), queda terminantemente prohibido exponer *"Maduro"* o *"Madura"* como opción en selectores de maduración.
+     - El filtrado de opciones normaliza rigurosamente valores compuestos por tuberías (`value.split('|')[0]`) y erradica de forma insensible a mayúsculas/minúsculas tanto *"maduro"* como *"madura"*.
+     - La condición madura es la línea base biológica implícita por contrato. Únicamente se parametrizan y exponen desviaciones agronómicas diferenciales requeridas expresamente por cocina: **`Pintón`**, **`Verde`**, **`Biche`** y **`Listo para tajar`**.
+  2. **Supresión Canónica de Impresión en Documentación Operativa (`formatStructuredSpecification`):**
+     - En el motor de especificaciones estructuradas (`src/lib/orderUtils.ts`) que alimenta la Sábana de Alistamiento (`/admin/orders/alistamiento-print`), remisiones y planillas de bodega, queda estrictamente vetada la emisión de la palabra *"Maduro"* o *"Madura"*.
+     - La supresión en `formatStructuredSpecification` aplica sobre cualquier llave agronómica o de alistamiento (`Maduración`, `Punto`, `Nota alistamiento`, etc.), despojando sufijos técnicos (`|`) y depurando la entrada de notas informales.
+     - Si un ítem histórico o externo arriba con `selected_options.Maduración = "Maduro"`, el atributo se suprime en silencio, garantizando que la celda se imprima limpia con su masa neta (`20 KG`) sin ruido visual.
+  3. **Preservación Exclusiva de Notas Diferenciales y Físicas:**
+     - Solo se imprimen en la píldora ámbar de alto contraste aquellas especificaciones culinarias que representan una desviación física verificable en muelle: puntos diferenciales (`Pintón`, `Verde`, `Biche`, `Listo para tajar`), cortes especiales (`Juliana`, `Cubos`) o desgloses de gramaje fraccionado (`5 und de 500 gr`).

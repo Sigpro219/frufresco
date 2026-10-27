@@ -413,9 +413,17 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
     knownKeys.forEach(k => {
         if (opts[k] && typeof opts[k] === 'string' && opts[k].trim()) {
             const val = opts[k].trim();
-            if (!/^\d+$/.test(val) && val.toLowerCase() !== 'estandar' && val.toLowerCase() !== 'estándar') {
-                if (!isRedundantAttribute(val, prodName)) {
-                    attributeParts.push(val);
+            const cleanVal = (val.includes('|') ? val.split('|')[0] : val).trim();
+            const lowerClean = cleanVal.toLowerCase();
+            // SDD v1.9.76 / v1.9.177 / v1.9.305 (Escenario 324):
+            // "Maduro" es la norma biológica y estándar por defecto de cualquier producto en FruFresco.
+            // Queda estrictamente prohibido imprimir "Maduro" / "Madura" en la documentación operativa o sábana de alistamiento.
+            if (lowerClean === 'maduro' || lowerClean === 'madura') {
+                return;
+            }
+            if (!/^\d+$/.test(cleanVal) && lowerClean !== 'estandar' && lowerClean !== 'estándar') {
+                if (!isRedundantAttribute(cleanVal, prodName)) {
+                    attributeParts.push(cleanVal);
                 }
             }
         }
@@ -427,13 +435,23 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
     for (const pk of pickingKeys) {
         if (opts[pk] && typeof opts[pk] === 'string' && opts[pk].trim()) {
             const rawVal = opts[pk].trim();
+            const cleanRaw = (rawVal.includes('|') ? rawVal.split('|')[0] : rawVal).trim().toLowerCase();
+            if (cleanRaw === 'maduro' || cleanRaw === 'madura') {
+                continue;
+            }
             const normalized = normalizePickingNote(rawVal);
-            if (normalized && !isRedundantAttribute(normalized, prodName)) {
-                if (!attributeParts.includes(normalized)) {
-                    attributeParts.push(normalized);
+            if (normalized) {
+                const normLower = normalized.toLowerCase().trim();
+                if (normLower === 'maduro' || normLower === 'madura') {
+                    continue;
                 }
-                foundPickingNote = true;
-                break;
+                if (!isRedundantAttribute(normalized, prodName)) {
+                    if (!attributeParts.includes(normalized)) {
+                        attributeParts.push(normalized);
+                    }
+                    foundPickingNote = true;
+                    break;
+                }
             }
         }
     }

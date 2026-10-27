@@ -1117,9 +1117,10 @@ function CreateOrderContent() {
                 });
             }
 
-            // SDD v1.9.177: 'Maduro' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
+            // SDD v1.9.177 / v1.9.305 (Escenario 324): 'Maduro'/'Madura' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
             Object.keys(initialOptions).forEach(k => {
-                if (k.toLowerCase().includes('madura') && String(initialOptions[k]).toLowerCase().trim() === 'maduro') {
+                const cleanK = (String(initialOptions[k]).includes('|') ? String(initialOptions[k]).split('|')[0] : String(initialOptions[k])).toLowerCase().trim();
+                if (k.toLowerCase().includes('madura') && (cleanK === 'maduro' || cleanK === 'madura')) {
                     delete initialOptions[k];
                 }
             });
@@ -1829,7 +1830,7 @@ function CreateOrderContent() {
                 if (!initialOptions[opt.name] && Array.isArray(opt.values)) {
                     const matchedVal = opt.values.find((val: string) => {
                         const vClean = (val.includes('|') ? val.split('|')[0] : val).trim().toLowerCase();
-                        if (vClean === 'maduro') return false; // SDD v1.9.177: Maduro nunca se preselecciona
+                        if (vClean === 'maduro' || vClean === 'madura') return false; // SDD v1.9.177 / v1.9.305: Maduro nunca se preselecciona
                         return noteClean.includes(vClean) || vClean.includes(noteClean);
                     });
                     if (matchedVal) {
@@ -1838,9 +1839,10 @@ function CreateOrderContent() {
                 }
             });
         }
-        // SDD v1.9.177: 'Maduro' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
+        // SDD v1.9.177 / v1.9.305: 'Maduro'/'Madura' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
         Object.keys(initialOptions).forEach(k => {
-            if (k.toLowerCase().includes('madura') && String(initialOptions[k]).toLowerCase().trim() === 'maduro') {
+            const cleanK = (String(initialOptions[k]).includes('|') ? String(initialOptions[k]).split('|')[0] : String(initialOptions[k])).toLowerCase().trim();
+            if (k.toLowerCase().includes('madura') && (cleanK === 'maduro' || cleanK === 'madura')) {
                 delete initialOptions[k];
             }
         });
@@ -2410,6 +2412,7 @@ function CreateOrderContent() {
                 if (!mergedOptions[opt.name] && Array.isArray(opt.values)) {
                     const matchedVal = opt.values.find((val: string) => {
                         const vClean = (val.includes('|') ? val.split('|')[0] : val).trim().toLowerCase();
+                        if (vClean === 'maduro' || vClean === 'madura') return false; // SDD v1.9.177 / v1.9.305
                         return noteClean.includes(vClean) || vClean.includes(noteClean);
                     });
                     if (matchedVal) {
@@ -2418,6 +2421,13 @@ function CreateOrderContent() {
                 }
             });
         }
+        // SDD v1.9.177 / v1.9.305: 'Maduro'/'Madura' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
+        Object.keys(mergedOptions).forEach(k => {
+            const cleanK = (String(mergedOptions[k]).includes('|') ? String(mergedOptions[k]).split('|')[0] : String(mergedOptions[k])).toLowerCase().trim();
+            if (k.toLowerCase().includes('madura') && (cleanK === 'maduro' || cleanK === 'madura')) {
+                delete mergedOptions[k];
+            }
+        });
         setSelectedOptions(mergedOptions);
         
         const stagedItem = stagedItems.find(item => item.id === stagedId);
@@ -10421,10 +10431,13 @@ ${primaryAdminNotes}`.trim();
                         }
                     }
 
-                    // SDD v1.9.177: Retiro canónico de "Maduro" en toma de pedidos B2B
+                    // SDD v1.9.177 / v1.9.305: Retiro canónico de "Maduro" y "Madura" en toma de pedidos B2B
                     const isRipeness = opt.name.toLowerCase().includes('madura');
                     if (isRipeness) {
-                        values = values.filter((v: string) => v.toLowerCase().trim() !== 'maduro');
+                        values = values.filter((v: string) => {
+                            const clean = (v.includes('|') ? v.split('|')[0] : v).toLowerCase().trim();
+                            return clean !== 'maduro' && clean !== 'madura';
+                        });
                     }
                     
                     const sortedValues = values.slice().sort((valA: string, valB: string) => {
