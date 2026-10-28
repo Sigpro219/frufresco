@@ -1,137 +1,40 @@
 # 🏛️ MATRIZ MAESTRA DE DEUDA TÉCNICA & HOJA DE RUTA DE ESCALABILIDAD
 ## FruFresco SCOS (Supply Chain Operating System)
 
-> **Estado:** 🟢 Mitigado (Grupo A Riesgo Cero Activo en Producción — SDD v1.9.208)  
-> **Fecha de Actualización:** 16 de Octubre, 2026  
+> **Estado:** 🟢 Inventario Maestro Unificado (Auditoría Forense Multidisciplinaria SDD v1.9.320)  
+> **Fecha de Actualización:** 28 de Octubre, 2026  
 > **Aprobado por:** Dirección General & Arquitectura de Software  
-> **Referencia Contractual:** `SPEC.md` Capítulo 43 & Escenario 239 (Apéndice de Deuda Técnica y Resiliencia)
+> **Referencia Contractual:** `SPEC.md` Capítulo 43 (§43.2 y §43.3)
 
 ---
 
 ## 1. Contexto de Ingeniería & Principio de Estabilidad
 
-Con la certificación satisfactoria de las **76 pantallas físicas** del ecosistema FruFresco (100% de cobertura operativa, 0 errores de compilación TypeScript y 152 pruebas unitarias pasando limpiamente), la plataforma ha demostrado estabilidad funcional en el ciclo de pruebas.
-
-Bajo el protocolo de **Seguridad Total (Grupo A: Riesgo Cero con Fallback Automático)** ejecutado en `SDD v1.9.208`, se han resuelto las deudas críticas de concurrencia de inventario (`DEBT-001`), límite de 1.000 filas (`DEBT-002`), resiliencia ante micro-cortes 3G/4G en muelle (`DEBT-004`) y optimización de RAM/CPU *in-place* en los 4 archivos mayores (`DEBT-003`), preservando intacta la operación en vivo.
+Con la certificación de las **76 pantallas físicas** del ecosistema FruFresco y **337 escenarios BDD** en `SPEC.md`, toda deuda técnica pendiente (tanto histórica como los nuevos hallazgos detectados en la Auditoría Forense Multidisciplinaria No Destructiva) se consolida en este **Tablero Maestro Unificado (`DT-01` a `DT-10`)** con identificadores canónicos, prioridad, archivos clave y esfuerzo estimado para ejecutarse una a una según disponibilidad.
 
 ---
 
-## 2. Tablero de Priorización Ejecutiva
+## 2. Tablero Maestro Unificado de Deuda Técnica Activa (`DT-01` a `DT-10`)
 
-| Código | Nivel | Componente Afectado | Estado Actual (SDD v1.9.208) | Solución Aplicada |
-| :---: | :---: | :--- | :---: | :--- |
-| **DEBT-001** | 🟢 **RESUELTO** | Inventario / Deducción de Stock | ✅ **Mitigado con Fallback** | RPC `adjust_inventory_stock_atomic` & `deduct_inventory_atomic` (`FOR UPDATE`) + Fallback JIT en [`src/lib/supabase.ts`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/supabase.ts) |
-| **DEBT-002** | 🟢 **RESUELTO** | Reportes & Consultas > 1.000 Filas | ✅ **Mitigado** | Paginador transparente `fetchAllRows<T>` en [`src/lib/supabase.ts`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/supabase.ts) (1 viaje si `<1.000`, auto-rango si `>=1.000`) |
-| **DEBT-003** | 🟢 **FASE 1 OK** | 4 Archivos Monstruo (>10k LOC) | ✅ **RAM/CPU Optimizada In-Place** | Diccionarios $O(1)$ (`Map`) y `useMemo` aplicados *in-place* sin riesgo de ruptura de archivos |
-| **DEBT-004** | 🟢 **RESUELTO** | Conectividad Móvil `/ops/*` | ✅ **Mitigado** | Interceptor `fetchWithGembaRetry` con Backoff Exponencial (`450ms`, `1000ms`) ante micro-cortes 3G/4G |
-| **DEBT-005** | 🟢 **P2** | Torre de Control y Carga Muelle | 🟡 **Backlog Ergonomía** | Selector opcional "Modo Gemba Limpio" para ventana futura de diseño |
-
----
-
-## 3. Fichas Técnicas de Deuda y Plan de Mitigación
-
-### 🔴 DEBT-001: Deducción Atómica de Inventario en Base de Datos (P0)
-
-* **Diagnóstico Actual:**  
-  La validación de disponibilidad y el descuento de inventario ocurren actualmente en la capa del navegador (`'use client'`). El componente consulta el stock actual de un SKU o lote en Supabase, resta la cantidad solicitada en la memoria de React y envía una mutación `UPDATE inventory_batches`.
-* **Riesgo en Producción:**  
-  Bajo concurrencia (dos clientes institucionales confirmando pedidos simultáneos o un alistamiento en bodega cruzado con una venta en mostrador), ambas sesiones leen el mismo saldo disponible. Esto permite sobrevender inventario físico y genera saldos negativos (`-30 kg`).
-* **Solución Técnica / Blueprint:**  
-  Migrar la deducción a una función RPC transaccional en PostgreSQL con bloqueo pesimista de fila:
-  ```sql
-  CREATE OR REPLACE FUNCTION deduct_inventory_atomic(
-      p_order_id UUID,
-      p_items JSONB
-  ) RETURNS JSONB AS $$
-  DECLARE
-      v_item RECORD;
-      v_current_stock NUMERIC;
-  BEGIN
-      -- Iterar sobre los ítems del payload
-      FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS (sku_id UUID, quantity NUMERIC)
-      LOOP
-          -- Bloqueo pesimista de fila (FOR UPDATE)
-          SELECT quantity_available INTO v_current_stock
-          FROM inventory_items
-          WHERE id = v_item.sku_id
-          FOR UPDATE;
-
-          IF v_current_stock < v_item.quantity THEN
-              RAISE EXCEPTION 'Stock insuficiente para el SKU %: disponible %, solicitado %', 
-                  v_item.sku_id, v_current_stock, v_item.quantity;
-          END IF;
-
-          UPDATE inventory_items
-          SET quantity_available = quantity_available - v_item.quantity
-          WHERE id = v_item.sku_id;
-      END LOOP;
-
-      RETURN jsonb_build_object('success', true, 'order_id', p_order_id);
-  END;
-  $$ LANGUAGE plpgsql;
-  ```
+| ID | Prioridad | Módulo / Dominio | Hallazgo Técnico y Operativo | Archivos / Tablas Clave | Esfuerzo Estimado | Estado |
+| :---: | :---: | :--- | :--- | :--- | :---: | :---: |
+| **DT-01** | 🔴 **P0** (Financiero) | **Precios & Triggers SQL** (`pricing_model_prices`, `pricing_rules`) | **Dualidad de Motor SQL vs. TS y 43 SKUs al 0% de Margen:**<br>1. La función SQL legada `recalculate_model_prices()` (disparada por `trigger_rules_pricing_sync` y `trigger_models_pricing_sync`) lee `commercial_overrides` en vez de `commercial_cost_matrix`, ignora merma (`theoretical_shrinkage_pct`), aplica IVA a modelos B2B y borra (`DELETE`) lo calculado por `pricingUtils.ts`.<br>2. En `General institucional dinámico` (`base_margin_percent = 0`), existen **43 SKUs** con costo en matriz pero sin regla en `pricing_rules`, quedando al **0% de margen** (y a pérdida de -1% a -3% en modelos Pequeño/Mediano/Grande), además de dejar solo 280 de 430 productos materializados en `pricing_model_prices`. | `supabase/migrations/20260609_pricing_model_prices.sql`, `src/lib/pricingUtils.ts` | **~20 min** | ⏳ Pendiente |
+| **DT-02** | 🔴 **P0** (Escalabilidad) | **Consultas PostgREST > 1.000 Filas** (`purchases`, `order_items`) | **Truncamiento Silencioso a 1.000 Filas en 6 Consultas Críticas:**<br>La tabla `purchases` ya alcanza **3.165 filas** y `order_items` **9.649 filas**. Aunque existe `fetchAllRows`, 6 módulos siguen haciendo `.select()` directo sin paginar ni filtrar por ventana de fecha, leyendo solo las primeras 1.000 filas. | `commercial/settings/page.tsx:298`, `api/b2b/quote/route.ts:276`, `api/products/sync-prices/route.ts:199`, `CommercialUnifiedDashboard.tsx:622`, `ops/compras/page.tsx:689`, `admin/audit/page.tsx:544` | **~25 min** | ⏳ Pendiente |
+| **DT-03** | 🟠 **P1** (Rendimiento API) | **Endpoints de Facturación y Pedidos** (`/api/*`) | **Bucles Secuenciales `N+1` (`await supabase` dentro de `for`):**<br>En 4 endpoints críticos se actualizan ítems fila por fila dentro de un bucle `for` secuencial en lugar de ejecutar `Promise.all` por lotes o `upsert` masivo, aumentando la latencia en pedidos de > 40 productos. | `api/commercial/billing/assign-off-agreement-prices/route.ts`, `api/commercial/billing/liquidate-open-order/route.ts`, `api/orders/email-drafts/approve/route.ts`, `api/b2b/quote/route.ts` | **~25 min** | ⏳ Pendiente |
+| **DT-04** *(Ex DT-19)* | 🟠 **P1** (Integridad Inventario) | **Bodega vs. Balance Diario 24 Col.** (`/ops/inventory` $\to$ Col. T) | **Cable Frágil por Regex en Conteo Ciego de Fin de Turno:**<br>`/ops/inventory` guarda el conteo físico incrustado en el texto libre `notes` (`"Contado: Y"`) e `InventoryDailyBalanceTab.tsx:714` lo extrae con regex (`/Contado:\s*([0-9.,]+)/i`). Si el texto cambia, cae en fallback al stock teórico ocultando descuadres reales. Además falta el badge *"Conteo Enviado a Auditoría Comercial - Pendiente Cierre Oficial"*. | `src/app/ops/inventory/page.tsx:668`, `src/components/InventoryDailyBalanceTab.tsx:714` | **~20 min** | ⏳ Pendiente |
+| **DT-05** *(Ex DT-20)* | 🟠 **P1** (Control Muelle-Pagos) | **Supervisor Recepción vs. Tesorería** (`/ops/recepcion/supervisor`) | **Conciliación de Diferencias de Báscula en Muelle vs. Pago a Proveedores:**<br>Cuando el supervisor aprueba un excedente de peso o rechaza parte de un lote en muelle, el inventario físico se ajusta vía RPC, pero Tesorería/Compras carece de una bandeja/alerta que resalte las compras donde `picked_up_quantity !== quantity` antes de desembolsar al proveedor. | `src/app/ops/recepcion/supervisor/page.tsx`, `src/app/admin/procurement/treasury/page.tsx` | **~30 min** | ⏳ Pendiente |
+| **DT-06** *(Ex COM-36)* | 🟡 **P2** (Comercial) | **Campañas Comerciales** (`/admin/commercial/campaigns`) | **Fase de Pulido Táctico de Campañas (4 Brechas §7.10.D):**<br>1. Modal de edición in-situ y extensión de fechas (`handleEditCampaign`).<br>2. Botón de pausa/reanudación en 1 clic (`status: 'paused'`).<br>3. Telemetría de ROI cruzando pedidos reales contra `campaign_items` (kg vendidos y margen cedido).<br>4. Duplicación rápida (`duplicateCampaign`). | `src/app/admin/commercial/campaigns/page.tsx` | **~35 min** | ⏳ Pendiente |
+| **DT-07** *(Ex DEBT-003)* | 🟡 **P2** (Mantenibilidad) | **6 Archivos Monstruo (> 8.000 LOC)** | **Desmantelamiento Quirúrgico Modular (Fase 2 y 3):**<br>Extraer sub-modales y custom hooks de los 6 archivos mayores sin alterar lógica: `EmailDraftsModule.tsx` (13.877 LOC), `orders/create/page.tsx` (12.894 LOC), `CommercialAgreementsModule.tsx` (11.956 LOC), `ClientsModule.tsx` (11.427 LOC), `orders/loading/page.tsx` (8.912 LOC) y `commercial/billing/page.tsx` (8.599 LOC). | 6 componentes principales (ejecutable por archivo individual) | **~30 min / archivo** | ⏳ Pendiente |
+| **DT-08** *(Ex DT-17)* | 🟢 **P3** (Consola / Maps) | **Georreferenciación Google Maps** | **Migración de `google.maps.Marker` a `AdvancedMarkerElement`:**<br>Reemplazar el marcador clásico (que emite *Deprecation Warning* en consola) por `AdvancedMarkerElement` / `<AdvancedMarker>` con `mapId` en los 7 archivos que renderizan mapas. | `ClientsModule.tsx`, `EmailDraftsModule.tsx`, `CommercialUnifiedDashboard.tsx`, `LeadGenBot.tsx`, `GeofencingManager.tsx`, `orders/create`, `orders/loading` | **~25 min** | ⏳ Pendiente |
+| **DT-09** *(Ex DEBT-005)* | 🟢 **P3** (Ergonomía Piso) | **Pantallas Operativas Muelle/Picking** | **Selector "Modo Gemba Limpio" vs. "Modo Analítico":**<br>Interruptor en cabecera de `/ops/picking/dashboard` y `/admin/orders/loading` para simplificar la vista del operario de piso a fuentes grandes y 3 datos clave. | `src/app/ops/picking/dashboard/page.tsx`, `src/app/admin/orders/loading/page.tsx` | **~30 min** | ⏳ Pendiente |
+| **DT-10** *(Ex DT-18)* | 🟢 **P3** (Ingeniería Lean) | **Cubicaje de Canastillas y Muelle** | **Densidad Volumétrica Botánica por SKU y Alerta de Apilamiento:**<br>Pasar del divisor fijo `12.5 kg/canastilla` al factor botánico (`density_factor_kg_per_crate`: 6-8 kg hojas vs. 18-22 kg tubérculos) y alerta cuando una bahía supere 24 canastillas (4 niveles). | `products`, `src/lib/orderUtils.ts`, `src/app/admin/orders/loading/page.tsx` | **~35 min** | ⏳ Estratégica |
 
 ---
 
-### 🔴 DEBT-002: Mitigación del Techo de 1.000 Filas en PostgREST (P0)
+## 3. Registro Histórico de Deudas Técnicas Resueltas y Certificadas (`✅`)
 
-* **Diagnóstico Actual:**  
-  El cliente de Supabase (`@supabase/supabase-js`) tiene un límite por omisión impuesto por el servidor PostgREST de 1.000 filas por consulta (`max-rows = 1000`). En pantallas como facturación masiva y auditoría se implementó paginación por chunks (`CHUNK_SIZE = 100/500`). Sin embargo, reportes agregados que no usen chunks podrían truncar datos históricos en silencio.
-* **Riesgo en Producción:**  
-  A partir del tercer mes de operación intensiva, las consultas analíticas de "Consumo acumulado semestral" o "Kardex anual" ignorarán todo registro por encima de la fila 1.000, proyectando cifras financieras y de masa incompletas.
-* **Solución Técnica / Blueprint:**  
-  1. Prohibir la descarga masiva de filas crudas al navegador para hacer `.reduce()` o `Math.sum()`.
-  2. Implementar funciones RPC de agregación matemática (`SUM`, `COUNT`, `AVG`) que retornen un solo número o una tabla condensada ya totalizada por el motor PostgreSQL.
-
----
-
-### 🟡 DEBT-003: Desmantelamiento Quirúrgico de los 4 Archivos Monstruo (P1)
-
-* **Diagnóstico Actual:**  
-  Existen 4 componentes con más de 10.000 líneas de código cada uno:
-  1. `src/components/EmailDraftsModule.tsx` (13.705 LOC).
-  2. `src/app/admin/orders/create/page.tsx` (12.031 LOC).
-  3. `src/components/CommercialAgreementsModule.tsx` (10.453 LOC).
-  4. `src/components/ClientsModule.tsx` (10.186 LOC).
-* **Riesgo en Producción:**  
-  - Tiempos de recarga en caliente (HMR) excesivos durante el soporte operativo.
-  - Alto consumo de memoria RAM del navegador (> 1.2 GB) en equipos de oficina antiguos.
-  - Imposibilidad de trabajar simultáneamente en equipo sin generar conflictos masivos de Git.
-* **Solución Técnica / Blueprint:**  
-  Aplicar el protocolo del skill `cirujano-refactor-legacy`:
-  - **Fase 1:** Extraer sub-modales a archivos dedicados en `src/components/orders/*`.
-  - **Fase 2:** Extraer lógica de negocio y cálculos a custom hooks (`useOrderCreationState.ts`, `useDraftTableParser.ts`).
-  - **Fase 3:** Dejar la página principal como un coordinador limpio de no más de 300 LOC.
-
----
-
-### 🟡 DEBT-004: Tolerancia Offline en Plataforma Corabastos y Muelle (P1)
-
-* **Diagnóstico Actual:**  
-  Las pantallas móviles de piso (`/ops/recepcion`, `/ops/picking`, `/ops/control-caja`) dependen de llamadas activas vía WebSockets o HTTP a Supabase. Si la señal celular oscila, las promesas pueden expirar (*timeout*).
-* **Riesgo en Producción:**  
-  En las bodegas frías o naves subterráneas de Corabastos la señal 4G es deficiente. Si una petición de pesaje o anticipo falla, el operario queda bloqueado con un spinner indefinido.
-* **Solución Técnica / Blueprint:**  
-  1. Envolver mutaciones de `/ops/*` en un gestor de reintentos con cola local (*IndexedDB / LocalStorage*).
-  2. Implementar notificaciones de reconexión (*"Sin señal - Guardado localmente, sincronizando al salir a muelle"*).
-
----
-
-### 🟢 DEBT-005: Selector "Modo Gemba Limpio" en Pantallas Operativas (P2)
-
-* **Diagnóstico Actual:**  
-  Módulos como `/admin/orders/loading` y `/ops/picking/dashboard` presentan más de 12 indicadores métricos simultáneos (bahías 1-150, discriminador B2B/B2C, kilogramos netos, estados SOLPED, códigos SKU).
-* **Riesgo en Producción:**  
-  El personal operativo de bodega sufre fatiga visual y comete errores por confusión de botones o badges similares.
-* **Solución Técnica / Blueprint:**  
-  Añadir un interruptor de densidad en la cabecera:
-  - **Modo Analítico / Coordinación:** Interfaz densa actual con todos los indicadores para gerencia.
-  - **Modo Gemba Limpio:** Interfaz simplificada con fuentes grandes, alto contraste, solo 3 campos visibles (Producto, Cantidad a Pesar, Tara) y botón verde gigante de confirmación.
-
----
-
-## 4. Compromiso de Calidad & Criterios de Aceptación para Despeje
-
-1. Ninguna intervención de deuda técnica podrá ejecutarse sin una suite previa de pruebas de regresión.
-2. Cada procedimiento RPC de PostgreSQL deberá contar con test unitario de concurrencia simulada.
-3. El proceso de desmantelamiento de los archivos monstruo deberá mantener compilación con 0 errores de TypeScript en cada commit atómico intermedio.
+1. **DEUDA TÉCNICA 1 a 16 (`SPEC.md` §4):** 100% Cerradas y en producción.
+2. **DEBT-001 (Deducción Atómica de Stock):** ✅ Mitigado con RPC `adjust_inventory_stock_atomic` & `deduct_inventory_atomic` (`FOR UPDATE`) + Fallback JIT en [`src/lib/supabase.ts`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/supabase.ts).
+3. **DEBT-002 Fase 1 (Utilidad de Paginación Automática):** ✅ Paginador transparente `fetchAllRows<T>` y conteos agregados PostgreSQL en `quote_templates`.
+4. **DEBT-003 Fase 1 (Optimización RAM/CPU In-Place):** ✅ Diccionarios $O(1)$ (`Map`) y `useMemo` aplicados *in-place* en los componentes mayores.
+5. **DEBT-004 (Resiliencia Móvil 3G/4G en Muelle `/ops/*`):** ✅ Interceptor `fetchWithGembaRetry` con Backoff Exponencial (`450ms`, `1000ms`).
