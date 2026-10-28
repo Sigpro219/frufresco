@@ -13,6 +13,8 @@
 -- =============================================================================
 
 DROP TRIGGER IF EXISTS trigger_purchases_pricing_sync ON purchases;
+DROP TRIGGER IF EXISTS trigger_rules_pricing_sync ON pricing_rules;
+DROP TRIGGER IF EXISTS trigger_models_pricing_sync ON pricing_models;
 
 DELETE FROM purchases
 WHERE payment_method = 'market_quote'

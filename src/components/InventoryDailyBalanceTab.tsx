@@ -962,16 +962,31 @@ export default function InventoryDailyBalanceTab({
                     x_foodBank += rawQty;
                     if (m.evidence_url) evidenceX.push(m.evidence_url);
                 }
-                // T: Conteo Agregado Bodega (Cruce a ciegas)
+                // T: Conteo Agregado Bodega (Cruce a ciegas) — Lectura estructurada tipada con fallback (SDD §351-352 / DT-04)
                 else if (ref === INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT || (m.notes && m.notes.includes('Cruce a ciegas'))) {
                     hasPhysical = true;
-                    // El conteo físico queda registrado en la nota o calculado
-                    const match = (m.notes || '').match(/Contado:\s*([0-9.,]+)/i);
-                    if (match) {
-                        physicalCount = parseFloat(match[1].replace(',', '.'));
+                    let resolvedCount: number | null = null;
+                    const metaMatch = (m.notes || '').match(/\[BLIND_COUNT_META:\s*(\{.*?\})\]/);
+                    if (metaMatch && metaMatch[1]) {
+                        try {
+                            const parsedMeta = JSON.parse(metaMatch[1]) as { counted_quantity?: number; countedQty?: number };
+                            const candidate = parsedMeta.counted_quantity ?? parsedMeta.countedQty;
+                            if (typeof candidate === 'number' && !isNaN(candidate)) {
+                                resolvedCount = candidate;
+                            }
+                        } catch (metaErr) {
+                            console.warn('Warning parsing BLIND_COUNT_META in InventoryDailyBalanceTab:', metaErr);
+                        }
+                    }
+                    if (resolvedCount !== null) {
+                        physicalCount = resolvedCount;
                     } else {
-                        // Stock al que quedó ajustado
-                        physicalCount = currentStock;
+                        const match = (m.notes || '').match(/Contado:\s*([0-9.,]+)/i);
+                        if (match) {
+                            physicalCount = parseFloat(match[1].replace(',', '.'));
+                        } else {
+                            physicalCount = currentStock;
+                        }
                     }
                 }
             });
@@ -1978,7 +1993,8 @@ export default function InventoryDailyBalanceTab({
                 movType = 'adjustment';
                 refType = INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT;
                 qty = 0;
-                noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Cruce a ciegas fin de turno | Contado: ${formatNumber(newVal, 2)}`;
+                const supMeta = JSON.stringify({ counted_quantity: newVal, operator: supervisorSignature });
+                noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Cruce a ciegas fin de turno | Contado: ${formatNumber(newVal, 2)} [BLIND_COUNT_META: ${supMeta}]`;
             }
 
             // Actualización optimista inmediata en memoria para recálculo instantáneo

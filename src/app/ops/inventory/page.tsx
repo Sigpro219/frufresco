@@ -374,6 +374,19 @@ export default function OpsInventoryPage() {
                     const values: Record<string, number> = {};
                     todayMovs.forEach(m => {
                         lockedIds.add(m.product_id);
+                        const metaMatch = m.notes?.match(/\[BLIND_COUNT_META:\s*(\{.*?\})\]/);
+                        if (metaMatch && metaMatch[1]) {
+                            try {
+                                const parsed = JSON.parse(metaMatch[1]) as { counted_quantity?: number; countedQty?: number };
+                                const val = parsed.counted_quantity ?? parsed.countedQty;
+                                if (typeof val === 'number' && !isNaN(val)) {
+                                    values[m.product_id] = val;
+                                    return;
+                                }
+                            } catch (parseErr) {
+                                console.warn('Warning parsing BLIND_COUNT_META in ops/inventory:', parseErr);
+                            }
+                        }
                         const match = m.notes?.match(/Contado:\s*([\d.,]+)/);
                         if (match && match[1]) {
                             values[m.product_id] = parseFloat(match[1].replace(',', '.'));
@@ -657,19 +670,24 @@ export default function OpsInventoryPage() {
 
         setSavingItem(product.id);
         try {
-            if (Math.abs(diff) > 0.0001) {
-                const { error } = await supabase.from('inventory_movements').insert([{
-                    product_id: product.id,
-                    warehouse_id: warehouseId,
-                    quantity: diff,
-                    type: 'adjustment',
-                    status_to: 'available',
-                    notes: `Cruce a ciegas fin de turno${cellInfo} | Operador: ${operatorName} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[product.id] ? ` | Obs: ${itemNotes[product.id]}` : ''),
-                    reference_type: 'blind_count_shift_close'
-                }]);
+            const structuredMeta = JSON.stringify({
+                counted_quantity: countedQty,
+                previous_quantity: currentQty,
+                diff_quantity: Number(diff.toFixed(4)),
+                cell_name: cell?.name || null,
+                operator: operatorName
+            });
+            const { error } = await supabase.from('inventory_movements').insert([{
+                product_id: product.id,
+                warehouse_id: warehouseId,
+                quantity: diff,
+                type: 'adjustment',
+                status_to: 'available',
+                notes: `Cruce a ciegas fin de turno${cellInfo} | Operador: ${operatorName} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[product.id] ? ` | Obs: ${itemNotes[product.id]}` : '') + ` [BLIND_COUNT_META: ${structuredMeta}]`,
+                reference_type: 'blind_count_shift_close'
+            }]);
 
-                if (error) throw error;
-            }
+            if (error) throw error;
 
             // Bloquear el ítem para evitar manipulaciones posteriores
             setCountedProductsToday(prev => new Set([...prev, product.id]));
@@ -739,16 +757,23 @@ export default function OpsInventoryPage() {
                 const cell = getProductCell(product) || activeSelectedCell;
                 const cellInfo = cell ? ` | Célula: ${cell.name} (Líder: ${cell.leader_name || 'Sin asignar'})` : '';
 
+                const structuredMeta = JSON.stringify({
+                    counted_quantity: countedQty,
+                    previous_quantity: currentQty,
+                    diff_quantity: Number(diff.toFixed(4)),
+                    cell_name: cell?.name || null,
+                    operator: operatorName
+                });
+                movementRows.push({
+                    product_id: prodId,
+                    warehouse_id: warehouseId,
+                    quantity: diff,
+                    type: 'adjustment',
+                    status_to: 'available',
+                    notes: `Cruce a ciegas fin de turno${cellInfo} | Operador: ${operatorName} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[prodId] ? ` | Obs: ${itemNotes[prodId]}` : '') + ` [BLIND_COUNT_META: ${structuredMeta}]`,
+                    reference_type: 'blind_count_shift_close'
+                });
                 if (Math.abs(diff) > 0.0001) {
-                    movementRows.push({
-                        product_id: prodId,
-                        warehouse_id: warehouseId,
-                        quantity: diff,
-                        type: 'adjustment',
-                        status_to: 'available',
-                        notes: `Cruce a ciegas fin de turno${cellInfo} | Operador: ${operatorName} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[prodId] ? ` | Obs: ${itemNotes[prodId]}` : ''),
-                        reference_type: 'blind_count_shift_close'
-                    });
                     adjustedCount++;
                 }
             }
@@ -1431,20 +1456,33 @@ export default function OpsInventoryPage() {
                                                                 </div>
 
                                                                 {isLocked ? (
-                                                                    <div style={{
-                                                                        fontSize: '0.75rem',
-                                                                        fontWeight: '900',
-                                                                        padding: '3px 9px',
-                                                                        borderRadius: '6px',
-                                                                        backgroundColor: '#ECFDF5',
-                                                                        color: '#065F46',
-                                                                        border: '1px solid #A7F3D0',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: '5px'
-                                                                    }}>
-                                                                        <Lock size={12} strokeWidth={2.5} />
-                                                                        <span>Registrado: {countedVal !== undefined ? countedVal.toFixed(2) : parseFloat(displayVal || '0').toFixed(2)} {child.unit_of_measure}</span>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                                                                        <div style={{
+                                                                            fontSize: '0.75rem',
+                                                                            fontWeight: '900',
+                                                                            padding: '3px 9px',
+                                                                            borderRadius: '6px',
+                                                                            backgroundColor: '#ECFDF5',
+                                                                            color: '#065F46',
+                                                                            border: '1px solid #A7F3D0',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '5px'
+                                                                        }}>
+                                                                            <Lock size={12} strokeWidth={2.5} />
+                                                                            <span>Registrado: {countedVal !== undefined ? countedVal.toFixed(2) : parseFloat(displayVal || '0').toFixed(2)} {child.unit_of_measure}</span>
+                                                                        </div>
+                                                                        <span style={{
+                                                                            fontSize: '0.62rem',
+                                                                            fontWeight: '800',
+                                                                            color: '#0369A1',
+                                                                            backgroundColor: '#E0F2FE',
+                                                                            border: '1px solid #BAE6FD',
+                                                                            padding: '2px 7px',
+                                                                            borderRadius: '5px'
+                                                                        }}>
+                                                                            Conteo Enviado a Auditoría Comercial - Pendiente Cierre Oficial
+                                                                        </span>
                                                                     </div>
                                                                 ) : hasCount ? (
                                                                     <div style={{
@@ -1643,20 +1681,33 @@ export default function OpsInventoryPage() {
                                         </div>
 
                                         {isLocked ? (
-                                            <div style={{
-                                                fontSize: '0.78rem',
-                                                fontWeight: '900',
-                                                padding: '4px 10px',
-                                                borderRadius: '8px',
-                                                backgroundColor: '#ECFDF5',
-                                                color: '#065F46',
-                                                border: '1px solid #A7F3D0',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '5px'
-                                            }}>
-                                                <Lock size={13} strokeWidth={2.5} />
-                                                <span>Registrado: {countedVal !== undefined ? countedVal.toFixed(2) : parseFloat(displayVal || '0').toFixed(2)} {standaloneProduct.unit_of_measure}</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                                <div style={{
+                                                    fontSize: '0.78rem',
+                                                    fontWeight: '900',
+                                                    padding: '4px 10px',
+                                                    borderRadius: '8px',
+                                                    backgroundColor: '#ECFDF5',
+                                                    color: '#065F46',
+                                                    border: '1px solid #A7F3D0',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px'
+                                                }}>
+                                                    <Lock size={13} strokeWidth={2.5} />
+                                                    <span>Registrado: {countedVal !== undefined ? countedVal.toFixed(2) : parseFloat(displayVal || '0').toFixed(2)} {standaloneProduct.unit_of_measure}</span>
+                                                </div>
+                                                <span style={{
+                                                    fontSize: '0.64rem',
+                                                    fontWeight: '800',
+                                                    color: '#0369A1',
+                                                    backgroundColor: '#E0F2FE',
+                                                    border: '1px solid #BAE6FD',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px'
+                                                }}>
+                                                    Conteo Enviado a Auditoría Comercial - Pendiente Cierre Oficial
+                                                </span>
                                             </div>
                                         ) : hasCount ? (
                                             <div style={{

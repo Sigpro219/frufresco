@@ -2,8 +2,37 @@
  * Utility functions for pricing model resolution and commercial rules.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 export const GENERAL_INSTITUCIONAL_ID = 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
 export const CLIENTES_HOGAR_ID = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
+export const FAMILIA_CORTES_CORPORATIVO_ID = '31c6d356-2d52-488f-81d6-abffaed295cf';
+export const DEFAULT_INSTITUTIONAL_MARGIN_PCT = 25;
+
+interface PricingProductRow {
+    id: string;
+    name?: string;
+    iva_rate?: number | null;
+    theoretical_shrinkage_pct?: number | null;
+}
+
+interface PricingRuleRow {
+    model_id: string;
+    product_id?: string;
+    margin_adjustment: number | string | null;
+}
+
+interface CostMatrixRow {
+    product_id: string;
+    manual_cost: number | string | null;
+    updated_at?: string | null;
+}
+
+interface PurchaseHistoryRow {
+    product_id: string;
+    unit_price: number | string | null;
+    created_at?: string | null;
+}
 
 export interface MinimalProfile {
     id?: string;
@@ -74,7 +103,7 @@ export interface PricingSyncResult {
  * updates pricing_model_prices, and mirrors the cost into commercial_overrides for DB triggers.
  */
 export async function recalculateAndSyncProductPrices(
-    supabaseClient: any,
+    supabaseClient: SupabaseClient,
     productId: string,
     explicitCost?: number | null
 ): Promise<PricingSyncResult> {
@@ -91,30 +120,33 @@ export async function recalculateAndSyncProductPrices(
 
         let baseCost = explicitCost;
         if (baseCost === undefined || baseCost === null || baseCost <= 0) {
-            const { data: ccm } = await supabaseClient
-                .from('commercial_cost_matrix')
-                .select('manual_cost')
-                .eq('product_id', productId)
-                .eq('is_active', true)
-                .maybeSingle();
+            const [{ data: ccm }, { data: pur }] = await Promise.all([
+                supabaseClient
+                    .from('commercial_cost_matrix')
+                    .select('manual_cost, updated_at')
+                    .eq('product_id', productId)
+                    .eq('is_active', true)
+                    .maybeSingle(),
+                supabaseClient
+                    .from('purchase_history_normalized')
+                    .select('unit_price, created_at')
+                    .eq('product_id', productId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+            ]);
 
-            if (ccm?.manual_cost && ccm.manual_cost > 0) {
-                baseCost = ccm.manual_cost;
-            }
-        }
+            const ccmCost = ccm?.manual_cost && Number(ccm.manual_cost) > 0 ? Number(ccm.manual_cost) : 0;
+            const purCost = pur?.unit_price && Number(pur.unit_price) > 0 ? Number(pur.unit_price) : 0;
 
-        // Fallback to latest purchase if no cost in cost matrix
-        if (!baseCost || baseCost <= 0) {
-            const { data: pur } = await supabaseClient
-                .from('purchase_history_normalized')
-                .select('unit_price')
-                .eq('product_id', productId)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            
-            if (pur?.unit_price && pur.unit_price > 0) {
-                baseCost = pur.unit_price;
+            if (ccmCost > 0 && purCost > 0) {
+                const ccmTime = ccm?.updated_at ? new Date(ccm.updated_at).getTime() : 0;
+                const purTime = pur?.created_at ? new Date(pur.created_at).getTime() : 0;
+                baseCost = purTime > ccmTime ? purCost : ccmCost;
+            } else if (ccmCost > 0) {
+                baseCost = ccmCost;
+            } else if (purCost > 0) {
+                baseCost = purCost;
             } else {
                 const { data: rawPur } = await supabaseClient
                     .from('purchases')
@@ -124,7 +156,7 @@ export async function recalculateAndSyncProductPrices(
                     .limit(1)
                     .maybeSingle();
                 if (rawPur?.unit_price && rawPur.unit_price > 0) {
-                    baseCost = rawPur.unit_price;
+                    baseCost = Number(rawPur.unit_price);
                 }
             }
         }
@@ -165,28 +197,34 @@ export async function recalculateAndSyncProductPrices(
             .eq('product_id', productId);
 
         const rulesMap = new Map<string, number>();
-        (rules || []).forEach((r: any) => {
+        ((rules || []) as PricingRuleRow[]).forEach((r: PricingRuleRow) => {
             rulesMap.set(r.model_id, Number(r.margin_adjustment));
         });
 
-        const baseModelRuleMargin = rulesMap.get(GENERAL_INSTITUCIONAL_ID);
+        const rawBaseRuleMargin = rulesMap.get(GENERAL_INSTITUCIONAL_ID);
+        const effectiveBaseMargin = (rawBaseRuleMargin !== undefined && rawBaseRuleMargin > 0)
+            ? rawBaseRuleMargin
+            : DEFAULT_INSTITUTIONAL_MARGIN_PCT;
 
         const ivaRate = (Number(prod.iva_rate) || 0) / 100;
         let hogarFinalPrice: number | undefined;
 
         const pmpUpdates: Array<{ model_id: string; product_id: string; price: number; updated_at: string }> = [];
 
-        models.forEach((m: any) => {
+        models.forEach((m: { id: string; name: string; base_margin_percent: number }) => {
             const explicitRuleMargin = rulesMap.get(m.id);
+            const isZeroMarginCorporate = m.id === FAMILIA_CORTES_CORPORATIVO_ID;
             let marginPct: number;
 
-            if (explicitRuleMargin !== undefined) {
+            if (isZeroMarginCorporate) {
+                marginPct = explicitRuleMargin !== undefined ? explicitRuleMargin : 0;
+            } else if (m.id === GENERAL_INSTITUCIONAL_ID) {
+                marginPct = effectiveBaseMargin;
+            } else if (explicitRuleMargin !== undefined && explicitRuleMargin > 0) {
                 marginPct = explicitRuleMargin;
-            } else if (baseModelRuleMargin !== undefined && m.id !== GENERAL_INSTITUCIONAL_ID) {
-                // Cascading delta from General Institucional baseline
-                marginPct = baseModelRuleMargin + (Number(m.base_margin_percent) || 0);
             } else {
-                marginPct = Number(m.base_margin_percent) || 0;
+                // Cascading delta from General Institucional baseline (SDD §7.11.A)
+                marginPct = effectiveBaseMargin + (Number(m.base_margin_percent) || 0);
             }
 
             // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen/Utilidad sobre Costo Efectivo (Markup Multiplicador)
@@ -221,18 +259,22 @@ export async function recalculateAndSyncProductPrices(
         // La fuente de verdad canónica para Clientes Hogar y todos los modelos reside exclusivamente en pricing_model_prices.
 
         return { success: true, hogarPrice: hogarFinalPrice, updatesCount: pmpUpdates.length };
-    } catch (err: any) {
-        return { success: false, error: err?.message || 'Unknown error' };
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
 
-async function fetchAllRows(
-    supabaseClient: any,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PostgrestFilterFn = (query: any) => any;
+
+async function fetchAllRows<T = Record<string, unknown>>(
+    supabaseClient: SupabaseClient,
     table: string,
     selectFields: string,
-    filterFn?: (query: any) => any
-): Promise<any[]> {
-    let allData: any[] = [];
+    filterFn?: PostgrestFilterFn
+): Promise<T[]> {
+    let allData: T[] = [];
     let page = 0;
     const pageSize = 1000;
     while (true) {
@@ -243,7 +285,7 @@ async function fetchAllRows(
         const { data, error } = await query;
         if (error) throw error;
         if (!data || data.length === 0) break;
-        allData = allData.concat(data);
+        allData = allData.concat(data as T[]);
         if (data.length < pageSize) break;
         page++;
     }
@@ -254,11 +296,11 @@ async function fetchAllRows(
  * Batch recalculate and sync prices for multiple products (or all active products).
  */
 export async function batchRecalculateAndSyncPrices(
-    supabaseClient: any,
+    supabaseClient: SupabaseClient,
     targetProductIds?: string[]
 ): Promise<{ success: boolean; processed: number; error?: string }> {
     try {
-        let prods: any[];
+        let prods: PricingProductRow[];
         if (targetProductIds && targetProductIds.length > 0) {
             const { data, error } = await supabaseClient
                 .from('products')
@@ -266,9 +308,9 @@ export async function batchRecalculateAndSyncPrices(
                 .eq('is_active', true)
                 .in('id', targetProductIds);
             if (error) throw error;
-            prods = data || [];
+            prods = (data || []) as PricingProductRow[];
         } else {
-            prods = await fetchAllRows(supabaseClient, 'products', 'id, name, iva_rate, theoretical_shrinkage_pct', q => q.eq('is_active', true));
+            prods = await fetchAllRows<PricingProductRow>(supabaseClient, 'products', 'id, name, iva_rate, theoretical_shrinkage_pct', q => q.eq('is_active', true));
         }
 
         if (!prods || prods.length === 0) {
@@ -283,36 +325,42 @@ export async function batchRecalculateAndSyncPrices(
             return { success: false, processed: 0, error: 'No pricing models found' };
         }
 
-        // Fetch cost matrix with pagination
-        const ccmList = await fetchAllRows(supabaseClient, 'commercial_cost_matrix', 'product_id, manual_cost', q => q.eq('is_active', true));
+        // Fetch cost matrix with pagination (including updated_at for chronological precedence)
+        const ccmList = await fetchAllRows<CostMatrixRow>(supabaseClient, 'commercial_cost_matrix', 'product_id, manual_cost, updated_at', q => q.eq('is_active', true));
 
-        const costMap = new Map<string, number>();
-        (ccmList || []).forEach((c: any) => {
-            if (c.manual_cost && c.manual_cost > 0) {
-                costMap.set(c.product_id, Number(c.manual_cost));
+        const costMap = new Map<string, { cost: number; updatedAt: number }>();
+        (ccmList || []).forEach((c: CostMatrixRow) => {
+            if (c.manual_cost && Number(c.manual_cost) > 0) {
+                costMap.set(c.product_id, {
+                    cost: Number(c.manual_cost),
+                    updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : 0
+                });
             }
         });
 
-        // Fetch latest purchases for fallback with full pagination across purchase_history_normalized
-        const phnList = await fetchAllRows(
+        // Fetch latest purchases for chronological comparison / fallback across purchase_history_normalized
+        const phnList = await fetchAllRows<PurchaseHistoryRow>(
             supabaseClient,
             'purchase_history_normalized',
             'product_id, unit_price, created_at',
             q => q.order('created_at', { ascending: false })
         );
 
-        const purchaseMap = new Map<string, number>();
-        (phnList || []).forEach((p: any) => {
-            if (!purchaseMap.has(p.product_id) && p.unit_price > 0) {
-                purchaseMap.set(p.product_id, Number(p.unit_price));
+        const purchaseMap = new Map<string, { cost: number; createdAt: number }>();
+        (phnList || []).forEach((p: PurchaseHistoryRow) => {
+            if (!purchaseMap.has(p.product_id) && Number(p.unit_price) > 0) {
+                purchaseMap.set(p.product_id, {
+                    cost: Number(p.unit_price),
+                    createdAt: p.created_at ? new Date(p.created_at).getTime() : 0
+                });
             }
         });
 
         // Fetch all pricing rules with pagination
-        const rules = await fetchAllRows(supabaseClient, 'pricing_rules', 'model_id, product_id, margin_adjustment');
+        const rules = await fetchAllRows<PricingRuleRow>(supabaseClient, 'pricing_rules', 'model_id, product_id, margin_adjustment');
 
         const rulesMap = new Map<string, number>();
-        (rules || []).forEach((r: any) => {
+        (rules || []).forEach((r: PricingRuleRow) => {
             rulesMap.set(`${r.model_id}:${r.product_id}`, Number(r.margin_adjustment));
         });
 
@@ -322,7 +370,16 @@ export async function batchRecalculateAndSyncPrices(
         let processed = 0;
 
         for (const prod of prods) {
-            const baseCost = costMap.get(prod.id) || purchaseMap.get(prod.id);
+            const ccmEntry = costMap.get(prod.id);
+            const purEntry = purchaseMap.get(prod.id);
+            let baseCost = 0;
+            if (ccmEntry && purEntry) {
+                baseCost = purEntry.createdAt > ccmEntry.updatedAt ? purEntry.cost : ccmEntry.cost;
+            } else if (ccmEntry) {
+                baseCost = ccmEntry.cost;
+            } else if (purEntry) {
+                baseCost = purEntry.cost;
+            }
             if (!baseCost || baseCost <= 0) continue;
 
             overridesBatch.push({
@@ -339,20 +396,25 @@ export async function batchRecalculateAndSyncPrices(
                 : baseCost;
 
             const ivaRate = (Number(prod.iva_rate) || 0) / 100;
-            let hogarPrice: number | undefined;
-            const baseRuleMargin = rulesMap.get(`${GENERAL_INSTITUCIONAL_ID}:${prod.id}`);
+            const rawBaseRuleMargin = rulesMap.get(`${GENERAL_INSTITUCIONAL_ID}:${prod.id}`);
+            const effectiveBaseMargin = (rawBaseRuleMargin !== undefined && rawBaseRuleMargin > 0)
+                ? rawBaseRuleMargin
+                : DEFAULT_INSTITUTIONAL_MARGIN_PCT;
 
             for (const m of models) {
                 const explicitRuleMargin = rulesMap.get(`${m.id}:${prod.id}`);
+                const isZeroMarginCorporate = m.id === FAMILIA_CORTES_CORPORATIVO_ID;
                 let marginPct: number;
 
-                if (explicitRuleMargin !== undefined) {
+                if (isZeroMarginCorporate) {
+                    marginPct = explicitRuleMargin !== undefined ? explicitRuleMargin : 0;
+                } else if (m.id === GENERAL_INSTITUCIONAL_ID) {
+                    marginPct = effectiveBaseMargin;
+                } else if (explicitRuleMargin !== undefined && explicitRuleMargin > 0) {
                     marginPct = explicitRuleMargin;
-                } else if (baseRuleMargin !== undefined && m.id !== GENERAL_INSTITUCIONAL_ID) {
-                    // Cascading delta from General Institucional baseline
-                    marginPct = baseRuleMargin + (Number(m.base_margin_percent) || 0);
                 } else {
-                    marginPct = Number(m.base_margin_percent) || 0;
+                    // Cascading delta from General Institucional baseline (SDD §7.11.A)
+                    marginPct = effectiveBaseMargin + (Number(m.base_margin_percent) || 0);
                 }
 
                 // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen/Utilidad sobre Costo Efectivo (Markup Multiplicador)
@@ -364,7 +426,6 @@ export async function batchRecalculateAndSyncPrices(
                 if (m.id === CLIENTES_HOGAR_ID) {
                     const priceWithTax = priceBeforeTax * (1 + ivaRate);
                     finalPrice = Math.ceil(priceWithTax / 50) * 50;
-                    hogarPrice = finalPrice;
                 }
 
                 pmpBatch.push({
@@ -378,9 +439,9 @@ export async function batchRecalculateAndSyncPrices(
             processed++;
         }
 
-        // Upsert overrides in chunks
-        for (let i = 0; i < overridesBatch.length; i += 50) {
-            const chunk = overridesBatch.slice(i, i + 50);
+        // Upsert overrides in chunks of 250
+        for (let i = 0; i < overridesBatch.length; i += 250) {
+            const chunk = overridesBatch.slice(i, i + 250);
             try {
                 await supabaseClient.from('commercial_overrides').upsert(chunk, { onConflict: 'product_id' });
             } catch (coChunkErr) {
@@ -388,17 +449,18 @@ export async function batchRecalculateAndSyncPrices(
             }
         }
 
-        // Upsert PMP in chunks
-        for (let i = 0; i < pmpBatch.length; i += 50) {
-            const chunk = pmpBatch.slice(i, i + 50);
+        // Upsert PMP in chunks of 250
+        for (let i = 0; i < pmpBatch.length; i += 250) {
+            const chunk = pmpBatch.slice(i, i + 250);
             await supabaseClient.from('pricing_model_prices').upsert(chunk, { onConflict: 'model_id,product_id' });
         }
 
         // SPEC.md §7.2: Supresión total de escritura a products.base_price en sincronización masiva.
 
         return { success: true, processed };
-    } catch (err: any) {
-        return { success: false, processed: 0, error: err?.message || 'Unknown batch error' };
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown batch error';
+        return { success: false, processed: 0, error: message };
     }
 }
 
