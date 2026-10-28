@@ -25,13 +25,20 @@ export async function POST(req: NextRequest) {
         }
 
         const nowIso = new Date().toISOString();
-        const cleanUpdates = updates.map((item: any) => ({
+        const rawUpdates = updates.map((item: any) => ({
             product_id: item.product_id,
             manual_cost: Number(item.manual_cost),
             updated_at: item.updated_at || nowIso,
             updated_by: item.updated_by || 'EXCEL-IMPORT',
             is_active: item.is_active !== undefined ? item.is_active : true
         })).filter((item: any) => item.product_id && !isNaN(item.manual_cost) && item.manual_cost > 0);
+
+        // Deduplicar por product_id conservando la última fila del Excel para evitar error 21000 en ON CONFLICT DO UPDATE
+        const dedupedMap = new Map<string, any>();
+        for (const item of rawUpdates) {
+            dedupedMap.set(item.product_id, item);
+        }
+        const cleanUpdates = Array.from(dedupedMap.values());
 
         if (cleanUpdates.length === 0) {
             return NextResponse.json({ error: 'Ninguno de los registros contiene product_id y costo válidos.' }, { status: 400 });
@@ -57,30 +64,8 @@ export async function POST(req: NextRequest) {
 
         const file = fileName || 'Archivo Excel';
 
-        // Ingestar cada recotización autorizada como una observación real con sello temporal en purchases
-        // Esto alimenta la serie temporal del Motor Adaptativo FruFresco
-        const purchaseRecords = cleanUpdates.map((item: any) => ({
-            product_id: item.product_id,
-            quantity: 1,
-            unit_price: item.manual_cost,
-            total_cost: item.manual_cost,
-            payment_method: 'market_quote',
-            raw_data_source: `RECOTIZACION_MERCADO_EXCEL (${file})`,
-            purchase_unit: 'Kg',
-            notes: `Recotización de mercado autorizada (${file})`,
-            created_at: item.updated_at || nowIso,
-            status: 'completed'
-        }));
-
-        for (let i = 0; i < purchaseRecords.length; i += BATCH_SIZE) {
-            const pBatch = purchaseRecords.slice(i, i + BATCH_SIZE);
-            const { error: purErr } = await supabaseAdmin.from('purchases').insert(pBatch);
-            if (purErr) {
-                console.warn('[Bulk Import Cost Matrix] Warning: Could not insert purchase signal:', purErr);
-            }
-        }
-
-        // Propagar inmediatamente los nuevos costos a los 5 modelos de precios y catálogo de venta
+        // Propagar inmediatamente los nuevos costos a los modelos de precios y catálogo de venta
+        // (SDD v1.9.319: No se insertan compras ficticias de 1 Kg en `purchases`; `commercial_cost_matrix` gobierna por fecha)
         const productIds = cleanUpdates.map((item: any) => item.product_id);
         try {
             await batchRecalculateAndSyncPrices(supabaseAdmin, productIds);

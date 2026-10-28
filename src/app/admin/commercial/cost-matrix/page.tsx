@@ -876,8 +876,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 purchaseUnit: h.purchase_unit,
                 quantity: h.quantity || null
             }));
-            const shrinkagePct = quotingProduct.theoretical_shrinkage_pct || 0;
-            const newSmartCost = calculateAdaptiveCost(obsList, costNum, { shrinkagePct });
+            const newSmartCost = calculateAdaptiveCost(obsList, costNum, { shrinkagePct: 0 });
 
             // 4. Actualizar la matriz comercial con el costo adaptativo
             await supabase
@@ -965,10 +964,12 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
     const handleResetToAdaptive = async (productId: string) => {
         try {
-            const smartCost = calculateSmartCost(productId);
+            const hist = purchaseHistory[productId] || [];
+            const latestPurchaseCost = hist[0]?.normalized_price || manualOverrides[productId]?.manual_cost || 0;
+            const smartCost = Math.round(latestPurchaseCost);
             if (smartCost <= 0) return;
 
-            const nowIso = new Date().toISOString();
+            const nowIso = hist[0]?.created_at || new Date().toISOString();
             await supabase
                 .from('commercial_cost_matrix')
                 .upsert({
@@ -1062,10 +1063,16 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
     const getProductCircuitBreaker = (productId: string): CircuitBreakerResult => {
         const hist = purchaseHistory[productId] || [];
-        const manual = manualOverrides[productId]?.manual_cost;
+        const manualObj = manualOverrides[productId];
+        const manual = manualObj?.manual_cost;
         const latestPurchase = hist[0]?.normalized_price;
         if (latestPurchase && manual && manual > 0) {
-            return checkVolatilityCircuitBreaker(latestPurchase, manual, 20);
+            const histDate = hist[0]?.created_at ? safeGetValidDate(hist[0].created_at) : null;
+            const manualDate = manualObj?.updated_at ? safeGetValidDate(manualObj.updated_at) : null;
+            // El Circuit Breaker solo se activa cuando ingresa una compra física posterior al costo autorizado en matriz
+            if (histDate && (!manualDate || histDate.getTime() > manualDate.getTime()) && manualObj?.updated_by !== 'MANUAL_OVERRIDE') {
+                return checkVolatilityCircuitBreaker(latestPurchase, manual, 20);
+            }
         }
         return { isTriggered: false, deltaPct: 0, previousPrice: manual || 0, newPrice: latestPurchase || 0, message: '' };
     };
@@ -1074,9 +1081,21 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         const history = purchaseHistory[productId] || [];
         const manual = manualOverrides[productId];
         const refCost = manual?.manual_cost;
-        const product = products.find(p => p.id === productId);
 
-        // Si la variación excede el 20%, se congela preventivamente el costo anterior (Opción A - SPEC v1.7.0)
+        if (manual && manual.updated_by === 'MANUAL_OVERRIDE' && refCost && refCost > 0) {
+            return Math.round(refCost);
+        }
+
+        const histDate = history[0]?.created_at ? safeGetValidDate(history[0].created_at) : null;
+        const manualDate = manual?.updated_at ? safeGetValidDate(manual.updated_at) : null;
+
+        // Precedencia cronológica canónica (SDD v1.9.319):
+        // Si el costo en commercial_cost_matrix es más reciente o igual a la última compra (ej. Carga Excel o Cotización), gobierna directamente
+        if (refCost && refCost > 0 && (!histDate || (manualDate && manualDate.getTime() >= histDate.getTime()))) {
+            return Math.round(refCost);
+        }
+
+        // Si la variación de una compra posterior excede el 20%, se congela preventivamente el costo anterior (Opción A - SPEC v1.7.0)
         const cb = getProductCircuitBreaker(productId);
         if (cb.isTriggered && refCost && refCost > 0) {
             return Math.round(refCost);
@@ -1093,9 +1112,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             quantity: h.quantity || null
         }));
 
-        const shrinkagePct = product?.theoretical_shrinkage_pct || 0;
-
-        return calculateAdaptiveCost(observations, refCost, { shrinkagePct });
+        // Costo base bruto sin inflar por merma (la merma se aplica una única vez en pricingUtils al calcular los modelos)
+        return calculateAdaptiveCost(observations, refCost, { shrinkagePct: 0 });
     };
 
     const getHarvestStatus = (productId: string) => {
@@ -1506,13 +1524,19 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 }
 
                 if (matchedProduct) {
-                    updatesToPerform.push({
+                    const existingIdx = updatesToPerform.findIndex(u => u.product_id === matchedProduct!.id);
+                    const payload = {
                         product_id: matchedProduct.id,
                         manual_cost: costNum,
                         updated_at: nowIso,
                         updated_by: 'EXCEL-IMPORT',
                         is_active: true
-                    });
+                    };
+                    if (existingIdx >= 0) {
+                        updatesToPerform[existingIdx] = payload;
+                    } else {
+                        updatesToPerform.push(payload);
+                    }
                 }
             }
 
@@ -2298,18 +2322,36 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                             if (h.normalized_price > 0) combinedPurchases.push(h);
                                         });
 
-                                        // Si no tiene compras registradas pero tiene costo manual en matriz, mostrarlo como referencia inicial
+                                        // Precedencia cronológica canónica en columna ÚLTIMA (SDD v1.9.319):
+                                        // Si commercial_cost_matrix tiene un costo vigente con fecha >= a la última compra (o no existen compras),
+                                        // encabeza la columna ÚLTIMA (colIdx = 0) desplazando las compras previas a COMPRA -1 ... -7.
                                         const hasManual = manual && typeof manual.manual_cost === 'number' && manual.manual_cost > 0;
-                                        if (combinedPurchases.length === 0 && hasManual) {
-                                            combinedPurchases.push({
-                                                id: `manual-${p.id}`,
-                                                product_id: p.id,
-                                                unit_price: manual.manual_cost,
-                                                purchase_unit: p.unit_of_measure || 'Kg',
-                                                normalized_price: manual.manual_cost,
-                                                created_at: manual.updated_at || new Date().toISOString(),
-                                                raw_data_source: 'Cotización Manual'
-                                            });
+                                        if (hasManual) {
+                                            const histDate = combinedPurchases[0]?.created_at ? safeGetValidDate(combinedPurchases[0].created_at) : null;
+                                            const manualDate = manual.updated_at ? safeGetValidDate(manual.updated_at) : null;
+                                            const isManualNewerOrEqual = !histDate || (manualDate && manualDate.getTime() >= histDate.getTime());
+
+                                            if (combinedPurchases.length === 0 || isManualNewerOrEqual) {
+                                                const topPurchase = combinedPurchases[0];
+                                                const isDuplicateTop = topPurchase &&
+                                                    Math.round(topPurchase.normalized_price) === Math.round(manual.manual_cost) &&
+                                                    manualDate && histDate &&
+                                                    Math.abs(manualDate.getTime() - histDate.getTime()) < 60000;
+
+                                                if (!isDuplicateTop) {
+                                                    combinedPurchases.unshift({
+                                                        id: `manual-${p.id}`,
+                                                        product_id: p.id,
+                                                        unit_price: manual.manual_cost,
+                                                        purchase_unit: p.unit_of_measure || 'Kg',
+                                                        normalized_price: manual.manual_cost,
+                                                        created_at: manual.updated_at || new Date().toISOString(),
+                                                        raw_data_source: manual.updated_by === 'EXCEL-IMPORT'
+                                                            ? 'RECOTIZACION_MERCADO_EXCEL'
+                                                            : (manual.updated_by === 'MANUAL_OVERRIDE' ? 'Forzado Manual' : 'Cotización Manual')
+                                                    });
+                                                }
+                                            }
                                         }
 
                                         // Category separator row only when not custom-sorted across categories
@@ -2636,11 +2678,17 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                         });
                                                     })()}
 
-                                                    {/* Algorithmic Base Cost Cell (Adaptive Engine Output with Manual Override) */}
+                                                    {/* Algorithmic Base Cost Cell (Adaptive Engine Output with Chronological Matrix Precedence) */}
                                                     <td style={{ padding: '0.65rem 0.8rem', backgroundColor: '#F8FAFC', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'center' }}>
                                                         {(() => {
                                                             const smartCost = calculateSmartCost(p.id);
                                                             const isManualOverridden = manual && manual.updated_by === 'MANUAL_OVERRIDE';
+                                                            const histDate = hist[0]?.created_at ? safeGetValidDate(hist[0].created_at) : null;
+                                                            const manualDate = manual?.updated_at ? safeGetValidDate(manual.updated_at) : null;
+                                                            const isManualGoverning = Boolean(
+                                                                manual && manual.manual_cost > 0 && (!histDate || (manualDate && manualDate.getTime() >= histDate.getTime()))
+                                                            );
+                                                            const isExcelImportGoverning = isManualGoverning && manual?.updated_by === 'EXCEL-IMPORT';
                                                             const displayCost = (isManualOverridden && manual.manual_cost > 0) ? manual.manual_cost : smartCost;
 
                                                             return (
@@ -2792,7 +2840,19 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                                                     transition: 'all 0.15s ease'
                                                                                 }}
                                                                             >
-                                                                                <CheckCircle2 size={9} color={smartCost > 0 ? '#059669' : '#94A3B8'} /> Último Precio Real
+                                                                                {isExcelImportGoverning ? (
+                                                                                    <>
+                                                                                        <FileSpreadsheet size={9} color="#059669" /> Carga Excel ({safeFormatDate(manual?.updated_at, 'dd MMM')})
+                                                                                    </>
+                                                                                ) : isManualGoverning ? (
+                                                                                    <>
+                                                                                        <CheckCircle2 size={9} color="#059669" /> Matriz Vigente ({safeFormatDate(manual?.updated_at, 'dd MMM')})
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <CheckCircle2 size={9} color={smartCost > 0 ? '#059669' : '#94A3B8'} /> Último Precio Real
+                                                                                    </>
+                                                                                )}
                                                                             </button>
                                                                         )}
                                                                     </div>

@@ -489,18 +489,20 @@ Las cotizaciones institucionales y propuestas B2B poseen una vigencia vinculante
 #### A. Filosofía de Transparencia y Abandono de Algoritmos Complejos
 Queda estrictamente erradicado el uso de fórmulas de alisamiento predictivo o modelos de regresión temporal (Holt-Winters, medias móviles de 8 compras) para fijar el costo base de productos agrícolas. En alimentos perecederos y Corabastos, **el costo base es el último precio real pagado en báscula o cotizado en plaza**.
 
-#### B. Los Dos Caminos Canónicos de Entrada
-1. **Camino A (Compras / Operaciones):**
-   - Precios registrados en el módulo de compras (`purchases` / `purchase_history_normalized`).
-   - Se extrae siempre el **ÚLTIMO PRECIO registrado** de compra como referencia activa.
-2. **Camino B (Carga Manual / Directa en Matriz):**
-   - Modificación directa por el área comercial o importación masiva de Excel.
-   - Genera la versión más reciente del costo y se convierte de inmediato en la **nueva realidad comercial**.
+#### B. Los Dos Caminos Canónicos de Entrada (Separación Limpia de Responsabilidades)
+1. **Camino A (Compras Reales de Abastecimiento — `purchases` / `purchase_history_normalized`):**
+   - Registra las compras físicas reales ejecutadas en Corabastos/proveedores (y cotizaciones individuales de sondeo).
+   - **Prohibición de Contaminación por Lotes Excel:** Queda terminantemente prohibido insertar filas ficticias de `1 Kg` en `purchases` durante cargas masivas de Excel en la Matriz de Costos, preservando la pureza estadística de los volúmenes comprados, los Terciles de Pareto (T1/T2/T3) y el comparador de BI (*Matriz vs. Última Compra*).
+   - **Erradicación del Trigger SQL Zombi (`trigger_purchases_pricing_sync`):** Se elimina el trigger `FOR EACH ROW` en PostgreSQL sobre `purchases` que recalculaba síncronamente los 6 modelos de precios por cada fila insertada y bloqueaba la base de datos por `statement_timeout`.
+2. **Camino B (Carga Masiva Excel o Ajuste Directo en Matriz — `commercial_cost_matrix`):**
+   - Modificación directa por el área comercial o importación masiva de Excel (`/api/commercial/cost-matrix/bulk-import`), deduplicando filas repetidas por `product_id` en el mismo archivo.
+   - Almacena siempre el **Costo Base Bruto** (antes de merma) en `commercial_cost_matrix.manual_cost` con su sello temporal `updated_at` y origen (`EXCEL-IMPORT`, `MANUAL_OVERRIDE`, `AI-DELTA-AUTO`).
+   - En la tabla de Matriz de Costos (`/admin/commercial/cost-matrix`), siempre que `commercial_cost_matrix.updated_at` sea igual o más reciente que la última compra física en `purchase_history_normalized`, dicho valor gobierna directamente la columna **`COSTO BASE FRUFRESCO`** y encabeza la columna **`ÚLTIMA`** en tiempo real.
 
-#### B.1 Pipeline Canónico de la Fuente de Verdad: Costo $\to$ Modelo $\to$ Precio Materializado
+#### B.1 Pipeline Canónico de la Fuente de Verdad: Costo Bruto $\to$ Merma Única $\to$ Modelo $\to$ Precio Materializado
 La fijación y resolución de tarifas en FruFresco sigue un flujo determinístico unidireccional estricto:
-$$\mathbf{Costo\ Oficial\ (commercial\_cost\_matrix)} \xrightarrow{+\ Merma\ Teórica} \mathbf{Costo\ Efectivo} \xrightarrow{+\ Margen\ Modelo\ (pricing\_rules)} \mathbf{Tarifa\ (pricing\_model\_prices)}$$
-1. **Fuente de Verdad del Costo Base:** La tabla `commercial_cost_matrix` (con fallback a la última compra registrada en `purchase_history_normalized`) es el **único origen autorizado de costos**. Se prohíbe taxativamente inferir costos a partir de `products.base_price`.
+$$\mathbf{Costo\ Bruto\ Oficial\ (commercial\_cost\_matrix)} \xrightarrow{+\ Merma\ Teórica\ (1\ sola\ vez)} \mathbf{Costo\ Efectivo} \xrightarrow{+\ Margen\ Modelo\ (pricing\_rules)} \mathbf{Tarifa\ (pricing\_model\_prices)}$$
+1. **Fuente de Verdad del Costo Base:** La tabla `commercial_cost_matrix` (con fallback a la última compra registrada en `purchase_history_normalized` cuando ésta sea más reciente y no dispare el Circuit Breaker $>20\%$) es el **único origen autorizado de costos**. Se prohíbe taxativamente inferir costos a partir de `products.base_price` o aplicar la merma teórica dos veces (en UI y luego en `pricingUtils.ts`).
 2. **Procesamiento por el Modelo de Precios:** Los costos vigentes se multiplican por el margen del modelo (`pricing_models`) y sus excepciones por producto (`pricing_rules`), aplicando el markup multiplicador canónico y redondeo a \$50 COP.
 3. **Materialización Reactiva (`pricing_model_prices`):** Las tarifas resultantes se sincronizan y persisten en la tabla `pricing_model_prices` para cada modelo activo (General Institucional, Grande, Mediano, Pequeño, Clientes Hogar).
 4. **Consumo Transaccional:** Los módulos de toma de pedidos (`orders/create`, `EmailDraftsModule`) consultan `pricing_model_prices` para el modelo del cliente o su fallback `General Institucional`. Si el cliente tiene un acuerdo activo (`quotes.status = 'agreement'`), los precios congelados en `quote_items` reemplazan prioritariamente a las tarifas del modelo.
@@ -2539,7 +2541,7 @@ El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico acti
 
 6. **Ergonomía Cognitiva de Encabezados con Tooltips Explicativos y Micro-Indicadores:**
    - En la galería de acuerdos especiales (SpecialAgreementsModule.tsx), los encabezados de tabla implementan documentación funcional contextual en hover.
-   - Cada columna combina: a) Rótulo claro con su función contractual (ej. SKU FRUFRESCO (HOMOLOGADO)), b) Micro-icono vectorizado <HelpCircle size={12} /> para señalizar auto-descubrimiento, y c) Atributo 	itle exhaustivo que clarifica origen del dato (ERP del cliente, Corabastos, SIPSA DANE, ML) y su impacto financiero en la negociación.
+   - Cada columna combina: a) Rótulo claro con su función contractual (ej. SKU FRUFRESCO (HOMOLOGADO)), b) Micro-icono vectorizado <HelpCircle size={12} /> para señalizar auto-descubrimiento, y c) Atributo itle exhaustivo que clarifica origen del dato (ERP del cliente, Corabastos, SIPSA DANE, ML) y su impacto financiero en la negociación.
 
 #### Escenario 6: Navegación y Búsqueda Ágil en Galería de Acuerdos
 - **Given** un operador comercial navegando en la pestaña "Acuerdos Institucionales" con más de 20 acuerdos listados.
@@ -10039,12 +10041,12 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
 ---
 
 #### Escenario 208: Sincronización Realtime en Facturación/SAC y Pre-Liquidación Automática de Devoluciones en Ajuste de Factura (SDD v1.9.176)
-- **Given** un pedido entregado (status = 'delivered', ej. Pedido #1088 por \.451.560 COP) que registra una novedad en illing_returns (status = 'pending_review', 6 Kg de Aguacate a \.000/Kg) y un ticket activo en customer_service_pqrs.
+- **Given** un pedido entregado (status = 'delivered', ej. Pedido #1088 por \.451.560 COP) que registra una novedad en illing_returns (status = 'pending_review', 6 Kg de Aguacate a \.000/Kg) y un ticket activo en customer_service_pqrs.
 - **When** el pedido cambia de estado en ruta o el inspector de Calidad abre FinancialAdjustmentModal en modo **Opción 3 (Nota Crédito)** u **Opción 4 (Ajuste de Factura)**.
 - **Then**:
-  1. La consola de Facturación (/admin/commercial/billing) y la consola de Atención al Cliente (/admin/customer-service) reflejan en tiempo real (etchData(true)) el cambio de estado y la alerta de novedad sin requerir recarga manual F5.
-  2. FinancialAdjustmentModal hidrata automáticamente los order_items y illing_returns del pedido, pre-selecciona los 6 Kg de Aguacate y proyecta de inmediato el descuento de -\.000 COP y el nuevo total neto de \.379.560 COP.
-  3. Al confirmar el ajuste, el registro existente en illing_returns transiciona en sitio de pending_review a pproved sin duplicar filas, restando la cantidad devuelta en order_items.quantity y habilitando el pedido como Listo para Corte en Facturación.
+  1. La consola de Facturación (/admin/commercial/billing) y la consola de Atención al Cliente (/admin/customer-service) reflejan en tiempo real (etchData(true)) el cambio de estado y la alerta de novedad sin requerir recarga manual F5.
+  2. FinancialAdjustmentModal hidrata automáticamente los order_items y illing_returns del pedido, pre-selecciona los 6 Kg de Aguacate y proyecta de inmediato el descuento de -\.000 COP y el nuevo total neto de \.379.560 COP.
+  3. Al confirmar el ajuste, el registro existente en illing_returns transiciona en sitio de pending_review a pproved sin duplicar filas, restando la cantidad devuelta en order_items.quantity y habilitando el pedido como Listo para Corte en Facturación.
 
 ---
 
@@ -11370,7 +11372,7 @@ Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas
   1. **Modalidad 1 — Imputación Global de PQR (Prorrateo / Cuadrilla Tradicional):**
      - Distribuye el 100% de la bolsa económica total de la PQR entre una o varias personas mediante porcentajes ponderados (sharePercent), manteniendo el comportamiento clásico para siniestros homogéneos (e.g. volcado integral del furgón o cuadrilla compartida de mesa).
   2. **Modalidad 2 — Imputación Granular por Ítem / Devolución (Multi-Responsable y Multi-Área):**
-     - Desglosa visualmente en tarjetas independientes cada producto reclamado en illing_returns (e.g. *Tomate Chonto 5 Kg* y *Papaya Maradol 4 Kg*).
+     - Desglosa visualmente en tarjetas independientes cada producto reclamado en illing_returns (e.g. *Tomate Chonto 5 Kg* y *Papaya Maradol 4 Kg*).
      - Permite asignar a cada producto devuelto su propia Causa Raíz L1/L2, su Área causante (Proveedor, Bodega, Picking, Transporte, Comercial o Cliente) y su Funcionario/Proveedor responsable nominal de forma completamente independiente.
      - **Cálculo Financiero Automático al Centavo:** La deducción imputada a cada responsable se liquida por la suma aritmética exacta de los productos asignados a su cargo (e.g. Juan Pérez asume los $25.000 COP de los tomates en Picking; Pedro Gómez asume los $20.000 COP de las papayas en Transporte), erradicando el cálculo manual de porcentajes cruzados.
      - **Retrocompatibilidad Total en RCA_METADATA:** Se persiste el tag canónico con imputationMode: 'by_item', desglosando el array itemImputations y consolidando en imputedEntities las deducciones totales agregadas por persona para que los módulos aguas abajo (Nómina, RNC PDF e Historial SAC) operen con total transparencia contractual.
@@ -12832,4 +12834,22 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - 17 a 25 ítems (isDense): Densidad compacta (padding: 1px 3px, fuente 7.2pt - 7.4pt, pie de firmas compacto).
      - 26 a 36 ítems (isUltraDense): Ultra-densidad calibrada (padding: 0.6px 3px, fuente 6.9pt - 7pt, pie de firmas compacto).
   3. **Respeto Estricto de Densidad Inline en @media print (GoldenPrintStyles.tsx & printViaNewWindow.ts):**
-     - Se remueve el modificador !important sobre padding y ont-size de 	able, 	h y 	d en las hojas de estilo globales de impresión, así como el min-height: 265mm !important en @media print, garantizando que las tablas compactas mantengan su altura exacta sin provocar saltos de página fantasma.
+     - Se remueve el modificador !important sobre padding y `font-size` de `table`, `th` y `td` en las hojas de estilo globales de impresión, así como el `min-height: 265mm !important` en `@media print`, garantizando que las tablas compactas mantengan su altura exacta sin provocar saltos de página fantasma.
+
+---
+
+### Escenario 337: Gobernanza Cronológica Canónica en Matriz Comercial de Costos, Eliminación de Inserciones Sintéticas en `purchases` y Sincronización Instantánea de Carga Masiva Excel (SDD v1.9.319)
+- **Given** el hallazgo operativo reportado en producción donde al cargar el archivo Excel `ACTUALIZACION COSTOS 2DA Q SEPTIEMBRE.xlsx` (319 filas / 314 productos únicos) en `/admin/commercial/cost-matrix`, el proceso presentaba un retraso de ~28 segundos y, pese a indicar carga exitosa y marcar los productos como `Vigente (0d)`, las columnas **`ÚLTIMA`** y **`COSTO BASE FRUFRESCO`** seguían mostrando costos antiguos en 276 productos (ej. *Pulpa de arazá* mostraba $14.100 en lugar de $15.000, *Pulpa de corozo* $12.500 en lugar de $13.000 y *Pulpa de curuba* $12.000 en lugar de $13.000),
+- **When** se realiza la auditoría forense de extremo a extremo sobre `/api/commercial/cost-matrix/bulk-import/route.ts`, `src/app/admin/commercial/cost-matrix/page.tsx` y los triggers de base de datos en Supabase:
+  1. El endpoint `bulk-import` actualizaba correctamente `commercial_cost_matrix` pero acto seguido intentaba insertar 319 compras ficticias de `1 Kg` en la tabla contable `purchases` en 4 lotes (100 + 100 + 100 + 19).
+  2. La tabla `purchases` poseía el trigger legado `trigger_purchases_pricing_sync` (`FOR EACH ROW EXECUTE FUNCTION trigger_recalculate_pricing()`), el cual recalculaba los 6 modelos comerciales sobre todo el catálogo por cada fila insertada (600 recálculos por lote), provocando que los primeros 3 lotes abortaran por `statement_timeout` (3 × 8s = 24s) y solo sobreviviera el lote final de 19 productos.
+  3. En la interfaz de la Matriz de Costos (`page.tsx`), la columna `ÚLTIMA` ignoraba `commercial_cost_matrix` siempre que existiera cualquier compra histórica en `purchases`, y la columna `COSTO BASE FRUFRESCO` ignoraba los costos con origen `EXCEL-IMPORT` o `AI-DELTA-AUTO`, reconociendo únicamente `MANUAL_OVERRIDE`.
+- **Then** se establece e implementa la arquitectura canónica simplificada para la Matriz Comercial de Costos:
+  1. **Separación Estricta de Responsabilidades (`commercial_cost_matrix` vs. `purchases`):**
+     - La carga masiva de Excel en `/api/commercial/cost-matrix/bulk-import` deduplica por `product_id` (conservando la última fila del archivo), actualiza exclusivamente `commercial_cost_matrix` y ejecuta `batchRecalculateAndSyncPrices` en bloque (< 2 segundos), sin inyectar registros sintéticos de `1 Kg` en `purchases`.
+     - Se elimina el trigger legado por fila `trigger_purchases_pricing_sync` sobre `purchases` y se depuran las 19 filas huérfanas de `RECOTIZACION_MERCADO_EXCEL`.
+  2. **Precedencia Cronológica Unificada en UI y Motor (`ÚLTIMA`, `COSTO BASE FRUFRESCO` y `VIGENCIA`):**
+     - Cuando `commercial_cost_matrix.updated_at >= purchases[0].created_at` (o no existen compras previas), el costo vigente de `commercial_cost_matrix` gobierna de forma unificada la columna **`ÚLTIMA`** (`colIdx = 0`), la columna **`COSTO BASE FRUFRESCO`** y el indicador de **`VIGENCIA`**, exhibiendo el badge de trazabilidad correspondiente (`Carga Excel`, `Forzado Manual` o `Matriz Vigente`).
+     - Cuando ingresa una compra física posterior (`purchases[0].created_at > commercial_cost_matrix.updated_at`), el sistema evalúa el Circuit Breaker (`±20%`): si la variación es `<= 20%`, adopta la nueva compra como `Último Precio Real`; si supera el `20%`, congela preventivamente el costo en `commercial_cost_matrix` y despliega los botones de aprobación para el Jefe Comercial.
+  3. **Eliminación de Doble Aplicación de Merma (`theoretical_shrinkage_pct`):**
+     - `commercial_cost_matrix.manual_cost` almacena y exhibe siempre el costo base bruto (sin inflar por merma), delegando la aplicación única del factor `1 / (1 - theoretical_shrinkage_pct / 100)` a `pricingUtils.ts` al calcular los precios netos de los 6 modelos comerciales en `pricing_model_prices`.
