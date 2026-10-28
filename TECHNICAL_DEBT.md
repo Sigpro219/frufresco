@@ -10,7 +10,7 @@
 
 ## 1. Contexto de Ingeniería & Principio de Estabilidad
 
-Con la certificación de las **76 pantallas físicas** del ecosistema FruFresco y **337 escenarios BDD** en `SPEC.md`, toda deuda técnica pendiente (tanto histórica como los nuevos hallazgos detectados en la Auditoría Forense Multidisciplinaria No Destructiva) se consolida en este **Tablero Maestro Unificado (`DT-01` a `DT-10`)** con identificadores canónicos, prioridad, archivos clave y esfuerzo estimado para ejecutarse una a una según disponibilidad.
+Con la certificación de las **76 pantallas físicas** del ecosistema FruFresco y **337 escenarios BDD** en `SPEC.md`, toda deuda técnica pendiente (tanto histórica como los nuevos hallazgos detectados en la Auditoría Forense Multidisciplinaria No Destructiva) se consolida en este **Tablero Maestro Unificado (`DT-01` a `DT-10`)** con identificadores canónicos, prioridad, archivos clave y esfuerzo estimado para ejecutarse una a una según disponibilidad. **Protocolo de Cola Viva Dinámica (.agents/rules/dynamic_tech_debt_ledger.md & scripts/tech_debt_ledger.js):** (1) Toda nueva deuda técnica detectada que no se resuelva de inmediato se agrega automáticamente a la tabla §2 con el siguiente ID (DT-11, DT-12...); (2) Al solucionarse una DT-XX, se retira de la tabla activa (§2) y pasa automáticamente al Registro Histórico de Deudas Cerradas (§3).
 
 ---
 
