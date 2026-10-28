@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { parseBlindCountQuantity } from '@/lib/pricingUtils';
 import { 
     FileSpreadsheet, 
     Calendar, 
@@ -965,29 +966,8 @@ export default function InventoryDailyBalanceTab({
                 // T: Conteo Agregado Bodega (Cruce a ciegas) — Lectura estructurada tipada con fallback (SDD §351-352 / DT-04)
                 else if (ref === INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT || (m.notes && m.notes.includes('Cruce a ciegas'))) {
                     hasPhysical = true;
-                    let resolvedCount: number | null = null;
-                    const metaMatch = (m.notes || '').match(/\[BLIND_COUNT_META:\s*(\{.*?\})\]/);
-                    if (metaMatch && metaMatch[1]) {
-                        try {
-                            const parsedMeta = JSON.parse(metaMatch[1]) as { counted_quantity?: number; countedQty?: number };
-                            const candidate = parsedMeta.counted_quantity ?? parsedMeta.countedQty;
-                            if (typeof candidate === 'number' && !isNaN(candidate)) {
-                                resolvedCount = candidate;
-                            }
-                        } catch (metaErr) {
-                            console.warn('Warning parsing BLIND_COUNT_META in InventoryDailyBalanceTab:', metaErr);
-                        }
-                    }
-                    if (resolvedCount !== null) {
-                        physicalCount = resolvedCount;
-                    } else {
-                        const match = (m.notes || '').match(/Contado:\s*([0-9.,]+)/i);
-                        if (match) {
-                            physicalCount = parseFloat(match[1].replace(',', '.'));
-                        } else {
-                            physicalCount = currentStock;
-                        }
-                    }
+                    const resolvedCount = parseBlindCountQuantity(m.notes);
+                    physicalCount = resolvedCount !== null ? resolvedCount : currentStock;
                 }
             });
 

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
+import { parseBlindCountQuantity } from '@/lib/pricingUtils';
 import { 
     Truck, 
     Package, 
@@ -374,22 +375,9 @@ export default function OpsInventoryPage() {
                     const values: Record<string, number> = {};
                     todayMovs.forEach(m => {
                         lockedIds.add(m.product_id);
-                        const metaMatch = m.notes?.match(/\[BLIND_COUNT_META:\s*(\{.*?\})\]/);
-                        if (metaMatch && metaMatch[1]) {
-                            try {
-                                const parsed = JSON.parse(metaMatch[1]) as { counted_quantity?: number; countedQty?: number };
-                                const val = parsed.counted_quantity ?? parsed.countedQty;
-                                if (typeof val === 'number' && !isNaN(val)) {
-                                    values[m.product_id] = val;
-                                    return;
-                                }
-                            } catch (parseErr) {
-                                console.warn('Warning parsing BLIND_COUNT_META in ops/inventory:', parseErr);
-                            }
-                        }
-                        const match = m.notes?.match(/Contado:\s*([\d.,]+)/);
-                        if (match && match[1]) {
-                            values[m.product_id] = parseFloat(match[1].replace(',', '.'));
+                        const parsedQty = parseBlindCountQuantity(m.notes);
+                        if (parsedQty !== null) {
+                            values[m.product_id] = parsedQty;
                         }
                     });
                     setCountedProductsToday(lockedIds);
@@ -713,9 +701,10 @@ export default function OpsInventoryPage() {
                 delete next[product.id];
                 return next;
             });
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Error desconocido';
             console.error('Error saving single item count:', err);
-            window.showToast?.(`Error al guardar: ${err?.message || 'Error desconocido'}`, 'error');
+            window.showToast?.(`Error al guardar: ${msg}`, 'error');
         } finally {
             setSavingItem(null);
         }
@@ -740,8 +729,15 @@ export default function OpsInventoryPage() {
 
         setSubmitting(true);
         try {
-            const movementRows: any[] = [];
-            let adjustedCount = 0;
+            const movementRows: Array<{
+                product_id: string;
+                warehouse_id: string | null;
+                quantity: number;
+                type: string;
+                status_to: string;
+                notes: string;
+                reference_type: string;
+            }> = [];
             const operatorName = profile?.contact_name || user?.email || 'Operador de Bodega';
 
             for (const prodId of unLockedCountedIds) {
@@ -773,9 +769,6 @@ export default function OpsInventoryPage() {
                     notes: `Cruce a ciegas fin de turno${cellInfo} | Operador: ${operatorName} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[prodId] ? ` | Obs: ${itemNotes[prodId]}` : '') + ` [BLIND_COUNT_META: ${structuredMeta}]`,
                     reference_type: 'blind_count_shift_close'
                 });
-                if (Math.abs(diff) > 0.0001) {
-                    adjustedCount++;
-                }
             }
 
             if (movementRows.length > 0) {
@@ -806,9 +799,10 @@ export default function OpsInventoryPage() {
             setCounts({});
             setItemNotes({});
             await fetchCountProducts();
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Error desconocido';
             console.error('Error saving physical count batch:', err);
-            window.showToast?.(`Error al guardar conteo: ${err?.message || 'Error desconocido'}`, 'error');
+            window.showToast?.(`Error al guardar conteo: ${msg}`, 'error');
         } finally {
             setSubmitting(false);
         }

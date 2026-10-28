@@ -265,27 +265,32 @@ export async function recalculateAndSyncProductPrices(
     }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PostgrestFilterFn = (query: any) => any;
+interface FetchAllOptions {
+    eq?: [string, string | number | boolean];
+    orderBy?: { column: string; ascending: boolean };
+}
 
 async function fetchAllRows<T = Record<string, unknown>>(
     supabaseClient: SupabaseClient,
     table: string,
     selectFields: string,
-    filterFn?: PostgrestFilterFn
+    options?: FetchAllOptions
 ): Promise<T[]> {
     let allData: T[] = [];
     let page = 0;
     const pageSize = 1000;
     while (true) {
-        let query = supabaseClient.from(table).select(selectFields).range(page * pageSize, (page + 1) * pageSize - 1);
-        if (filterFn) {
-            query = filterFn(query);
+        let query = supabaseClient.from(table).select(selectFields);
+        if (options?.eq) {
+            query = query.eq(options.eq[0], options.eq[1]);
         }
-        const { data, error } = await query;
+        if (options?.orderBy) {
+            query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending });
+        }
+        const { data, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
-        allData = allData.concat(data as T[]);
+        allData = allData.concat(data as unknown as T[]);
         if (data.length < pageSize) break;
         page++;
     }
@@ -310,7 +315,7 @@ export async function batchRecalculateAndSyncPrices(
             if (error) throw error;
             prods = (data || []) as PricingProductRow[];
         } else {
-            prods = await fetchAllRows<PricingProductRow>(supabaseClient, 'products', 'id, name, iva_rate, theoretical_shrinkage_pct', q => q.eq('is_active', true));
+            prods = await fetchAllRows<PricingProductRow>(supabaseClient, 'products', 'id, name, iva_rate, theoretical_shrinkage_pct', { eq: ['is_active', true] });
         }
 
         if (!prods || prods.length === 0) {
@@ -326,7 +331,7 @@ export async function batchRecalculateAndSyncPrices(
         }
 
         // Fetch cost matrix with pagination (including updated_at for chronological precedence)
-        const ccmList = await fetchAllRows<CostMatrixRow>(supabaseClient, 'commercial_cost_matrix', 'product_id, manual_cost, updated_at', q => q.eq('is_active', true));
+        const ccmList = await fetchAllRows<CostMatrixRow>(supabaseClient, 'commercial_cost_matrix', 'product_id, manual_cost, updated_at', { eq: ['is_active', true] });
 
         const costMap = new Map<string, { cost: number; updatedAt: number }>();
         (ccmList || []).forEach((c: CostMatrixRow) => {
@@ -338,16 +343,32 @@ export async function batchRecalculateAndSyncPrices(
             }
         });
 
-        // Fetch latest purchases for chronological comparison / fallback across purchase_history_normalized
-        const phnList = await fetchAllRows<PurchaseHistoryRow>(
-            supabaseClient,
-            'purchase_history_normalized',
-            'product_id, unit_price, created_at',
-            q => q.order('created_at', { ascending: false })
-        );
+        // Fetch latest purchases for chronological comparison / fallback across purchase_history_normalized and purchases
+        const [phnList, rawPurList] = await Promise.all([
+            fetchAllRows<PurchaseHistoryRow>(
+                supabaseClient,
+                'purchase_history_normalized',
+                'product_id, unit_price, created_at',
+                { orderBy: { column: 'created_at', ascending: false } }
+            ),
+            fetchAllRows<PurchaseHistoryRow>(
+                supabaseClient,
+                'purchases',
+                'product_id, unit_price, created_at',
+                { orderBy: { column: 'created_at', ascending: false } }
+            )
+        ]);
 
         const purchaseMap = new Map<string, { cost: number; createdAt: number }>();
         (phnList || []).forEach((p: PurchaseHistoryRow) => {
+            if (!purchaseMap.has(p.product_id) && Number(p.unit_price) > 0) {
+                purchaseMap.set(p.product_id, {
+                    cost: Number(p.unit_price),
+                    createdAt: p.created_at ? new Date(p.created_at).getTime() : 0
+                });
+            }
+        });
+        (rawPurList || []).forEach((p: PurchaseHistoryRow) => {
             if (!purchaseMap.has(p.product_id) && Number(p.unit_price) > 0) {
                 purchaseMap.set(p.product_id, {
                     cost: Number(p.unit_price),
@@ -463,4 +484,87 @@ export async function batchRecalculateAndSyncPrices(
         return { success: false, processed: 0, error: message };
     }
 }
+
+export interface BlindCountMetaPayload {
+    counted_quantity?: number | string | null;
+    countedQty?: number | string | null;
+    previous_quantity?: number | string | null;
+    diff_quantity?: number | string | null;
+    cell_name?: string | null;
+    operator?: string | null;
+}
+
+/**
+ * Extrae de manera determinista la cantidad física contada desde `inventory_movements.notes`.
+ * Prioriza el bloque estructurado `[BLIND_COUNT_META: {...}]` (soportando llaves anidadas en strings)
+ * y conserva la expresión regular `/Contado:\s*([0-9]+(?:[.,][0-9]+)?)/i` como fallback histórico
+ * (SDD §4 DEUDA TÉCNICA 19 / Escenario 338.2 — DT-04).
+ */
+export function parseBlindCountQuantity(notes?: string | null): number | null {
+    if (!notes || typeof notes !== 'string') return null;
+
+    const marker = '[BLIND_COUNT_META:';
+    const startIdx = notes.indexOf(marker);
+    if (startIdx !== -1) {
+        const jsonStart = notes.indexOf('{', startIdx + marker.length);
+        if (jsonStart !== -1) {
+            let depth = 0;
+            let inString = false;
+            let isEscaped = false;
+            let jsonEnd = -1;
+
+            for (let i = jsonStart; i < notes.length; i++) {
+                const ch = notes[i];
+                if (isEscaped) {
+                    isEscaped = false;
+                    continue;
+                }
+                if (ch === '\\' && inString) {
+                    isEscaped = true;
+                    continue;
+                }
+                if (ch === '"') {
+                    inString = !inString;
+                    continue;
+                }
+                if (!inString) {
+                    if (ch === '{') depth++;
+                    else if (ch === '}') {
+                        depth--;
+                        if (depth === 0) {
+                            jsonEnd = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (jsonEnd !== -1) {
+                try {
+                    const parsed = JSON.parse(notes.slice(jsonStart, jsonEnd + 1)) as BlindCountMetaPayload;
+                    const rawCandidate = parsed?.counted_quantity !== undefined && parsed?.counted_quantity !== null
+                        ? parsed.counted_quantity
+                        : parsed?.countedQty;
+                    if (rawCandidate !== undefined && rawCandidate !== null && String(rawCandidate).trim() !== '') {
+                        const num = Number(rawCandidate);
+                        if (Number.isFinite(num)) {
+                            return num;
+                        }
+                    }
+                } catch {
+                    // Fallback to historical regex below if JSON block is malformed
+                }
+            }
+        }
+    }
+
+    const match = notes.match(/Contado:\s*([0-9]+(?:[.,][0-9]+)?)/i);
+    if (match && match[1]) {
+        const val = parseFloat(match[1].replace(',', '.'));
+        if (Number.isFinite(val)) return val;
+    }
+
+    return null;
+}
+
 

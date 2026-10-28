@@ -15,6 +15,13 @@ import {
     evaluateCostFreshness
 } from '../../src/lib/commercial/costFreshnessPolicy';
 
+import {
+    parseBlindCountQuantity,
+    DEFAULT_INSTITUTIONAL_MARGIN_PCT,
+    GENERAL_INSTITUCIONAL_ID,
+    FAMILIA_CORTES_CORPORATIVO_ID
+} from '../../src/lib/pricingUtils';
+
 // ============================================================================
 // SUITE 1: MOTOR DE PRECIOS ADAPTATIVO (adaptivePricingEngine.ts)
 // ============================================================================
@@ -260,5 +267,33 @@ describe('TDD: Contrato de Negociación y Márgenes B2B', () => {
         assert.equal(evaluated[1].marginPct, -25);
         assert.equal(evaluated[1].requiresCounterOffer, true);
         assert.equal(evaluated[1].counterPrice, 3125, 'Contraoferta debe apuntar al 25% de markup sobre costo base');
+    });
+});
+
+// ============================================================================
+// SUITE 4: ESCENARIO 338 (SDD v1.9.321) — DT-01 & DT-04
+// ============================================================================
+describe('TDD: Escenario 338 — DT-01 (Piso 25% & Blindaje 0% Corporativo) y DT-04 (parseBlindCountQuantity)', () => {
+    it('debe extraer counted_quantity desde [BLIND_COUNT_META] incluso con llaves anidadas en strings', () => {
+        const notes = 'Cruce a ciegas fin de turno | Célula: Célula {A} | Operador: Op | Stock anterior: 12.5 -> Contado: 12.5 (Dif: 0.00) [BLIND_COUNT_META: {"counted_quantity":12.5,"previous_quantity":12.5,"diff_quantity":0,"cell_name":"Célula {A}","operator":"Op"}]';
+        assert.equal(parseBlindCountQuantity(notes), 12.5);
+    });
+
+    it('debe preservar exactamente counted_quantity = 0 cuando el conteo físico en bodega es cero', () => {
+        const notes = 'Cruce a ciegas fin de turno | Stock anterior: 5 -> Contado: 0 (Dif: -5.00) [BLIND_COUNT_META: {"counted_quantity":0,"previous_quantity":5,"diff_quantity":-5,"cell_name":"Frutas","operator":"Op"}]';
+        assert.equal(parseBlindCountQuantity(notes), 0);
+    });
+
+    it('debe aplicar fallback determinista al regex histórico /Contado:\\s*([0-9.,]+)/i si no existe bloque JSON', () => {
+        const legacyNotes = 'Cruce a ciegas fin de turno | Célula: Verduras | Operador: Juan | Stock anterior: 10 -> Contado: 18,75 (Dif: +8.75)';
+        assert.equal(parseBlindCountQuantity(legacyNotes), 18.75);
+        assert.equal(parseBlindCountQuantity(null), null);
+        assert.equal(parseBlindCountQuantity('Nota de movimiento sin conteo'), null);
+    });
+
+    it('debe verificar las constantes canónicas de piso institucional (25%) y Familia Cortés (0%)', () => {
+        assert.equal(DEFAULT_INSTITUTIONAL_MARGIN_PCT, 25);
+        assert.equal(GENERAL_INSTITUCIONAL_ID, 'd90a91e5-827c-473d-9d4f-3e28c7c91e15');
+        assert.equal(FAMILIA_CORTES_CORPORATIVO_ID, '31c6d356-2d52-488f-81d6-abffaed295cf');
     });
 });
