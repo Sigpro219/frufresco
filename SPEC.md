@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.326 (Capítulo 44: Homologación Canónica del "ÚLTIMO" Precio Vigente en Modelos de Precios y Erradicación de Lectura de Compras Históricas Superadas — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.329 (Capítulo 44: Aislamiento del Ciclo de Negociación Mensual de Grupo Nutresa SIPSA + Prima, Congelamiento de Precios en Borrador, Instructivo Operativo de 3 Pasos y Guía Visual de Vigencia 00:00 h a 23:59 h — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 343 Escenarios BDD Ininterrumpidos (1..343)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 346 Escenarios BDD Ininterrumpidos (1..346)
 
 ---
 
@@ -13034,3 +13034,33 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - El sistema compara automáticamente los `quote_items` de la versión vigente contra la versión base `v1` y estampa las píldoras de trazabilidad exacta de los productos negociados (ej. **`Habichuela: $19.450 (130%) → $16.900 (100%) [-$2.550]`**, **`Agraz seleccionado: $32.000 (100%) → $30.400 (90%) [-$1.600]`**), tanto en la línea de tiempo de la galería como en el banner superior y en las filas resaltadas de la vista de detalle (`/admin/commercial/quotes/[id]`).
   4. **Preservación de Identidad de Canasta y Márgenes Negociados en Iteraciones (`quotes/create/page.tsx`):**
      - Al generar una nueva versión desde una cotización activa (`?duplicate_from={id}`), `loadDuplicateQuote` preserva íntegramente el `model_snapshot_name` de la canasta del cliente y protege los precios/márgenes ya negociados (`has_custom_margin = true`) para que el ajuste puntual de 1 o 2 productos no sobrescriba el resto de la propuesta.
+
+
+---
+
+### Escenario 346: Aislamiento del Ciclo de Negociación Mensual de Grupo Nutresa (IRCC) Basado en SIPSA + Prima, Congelamiento de Precios en Borrador, Instructivo Operativo de 3 Pasos y Homologación del Modal de Consagración (SDD v1.9.329)
+- **Given** el módulo de **Acuerdos Especiales** (`/admin/commercial?tab=operations&subtab=agreements`, `src/components/SpecialAgreementsModule.tsx`) y el modal de aprobación en **Cotizaciones** (`src/app/admin/commercial/quotes/page.tsx`, `src/app/admin/commercial/quotes/[id]/page.tsx`), donde **Grupo Nutresa (IRCC)** (44 sedes vinculadas: *El Corral, El Corral Gourmet, Beer Station, Leños & Carbón*) opera bajo un ciclo mensual regulado por un archivo maestro de liquidación enviado por el cliente (ej. `Zona 3 - Investments Cortes.xlsx`) cuya fórmula de referencia es `Precio Propuesto = $ SIPSA + Prima $ COP`,
+- **When** el operador comercial selecciona la tarjeta **Grupo Nutresa (IRCC)** en `Acuerdos Especiales`:
+- **Then** el sistema aísla la vista y el flujo operativo de Grupo Nutresa cumpliendo las siguientes reglas contractuales:
+  1. **Instructivo Operativo Incorporado (3 Pasos del Ciclo de Vida):**
+     - Despliega en la cabecera de Grupo Nutresa un bloque colapsable con los 3 pasos del modo de trabajo:
+       - **Paso 1 — Cargar Excel de Nutresa:** Importar el archivo mensual de Nutresa (`Importar Excel`), extrayendo `$ SIPSA`, `+ Prima ($ COP)`, `Propuesta Nutresa` y la `Descripción Unificada (SIPSA)` mediante cruce por código y diccionario canónico de homologación (`NUTRESA_ALIAS_MAP`), sin alterar el precio de `Acuerdo Anterior` vigente en base de datos.
+       - **Paso 2 — Negociar y Congelar Excepciones:** Al ajustar la `Contrapropuesta` o `% Utilidad` de cualquier producto (ej. *Aguacate*), el precio queda **Congelado en Borrador** (`app_settings.key = 'nutresa_negotiation_draft'`) con distintivo visual `Congelado` y botón de restablecimiento individual o global (`Restablecer Borrador`).
+       - **Paso 3 — Consagrar y Fijar Vigencia:** Al oprimir `Consagrar Acuerdo`, se abre el modal homologado para fijar las fechas de inicio y vencimiento y propagar las tarifas a las 44 sedes de Nutresa.
+  2. **Estructura Tabular Exclusiva de 11 Columnas para Grupo Nutresa:**
+     - **Columnas suprimidas en Nutresa:** Se eliminan la columna `CADENA` (y su filtro `Todas las Marcas`) y la columna `SUGERIDO IA` (y su botón `Aplicar Sugeridos`).
+     - **Columnas activas en Nutresa:**
+       1. `CÓD` (ID contable ERP)
+       2. `PRODUCTO EN LISTA` (con la `Descripción Unificada` de SIPSA debajo del nombre maestro)
+       3. `VOLUMEN CICLO` (Kg despachados e ingreso en los últimos 30 días)
+       4. `COSTO / LISTA INST.` (Costo base vigente y precio de Lista General Institucional)
+       5. `ACUERDO ANTERIOR` (`previous_price`: tarifa unitaria consagrada en el último acuerdo vigente del mes anterior, más variación porcentual frente a la nueva propuesta)
+       6. `$ SIPSA` (`sipsa_price`: precio de referencia SIPSA extraído del Excel de Nutresa)
+       7. `+ PRIMA` (`sipsa_prima`: prima fija en `$ COP` acordada con Nutresa extraída del Excel)
+       8. `PROPUESTA NUTRESA` (`proposed_price`: precio resultante `$ SIPSA + Prima` propuesto por Nutresa y su margen sobre costo)
+       9. `% UTILIDAD` (input editable de margen sobre costo)
+       10. `CONTRAPROPUESTA` (input editable de precio final a consagrar, con indicador `Congelado` y persistencia automática en `nutresa_negotiation_draft` cuando difiere de la propuesta de Nutresa)
+       11. `VARIACIÓN / GANANCIA` (diferencial por unidad e impacto financiero proyectado en el ciclo frente al acuerdo anterior)
+  3. **Homologación del Modal Compacto `Aprobar y Congelar Acuerdo de Precios` y Guía Visual de Vigencia (`00:00 h` a `23:59 h`):**
+     - Al pulsar **`Consagrar Acuerdo`** en Grupo Nutresa, se despliega el mismo modal compacto utilizado en el módulo de Cotizaciones (`Aprobar y Congelar Acuerdo de Precios`), presentando la tarjeta verde de `GRUPO NUTRESA (IRCC)` (con acceso opcional a `Ver padrón (44)`), el contador de SKUs con precio congelado manualmente, los **Presets de Vigencia Rápida** (`15 días`, `1 mes`, `2 meses`, `3 meses`), los selectores `Fecha de Inicio` y `Fecha de Vencimiento`, y el bloque de **Ayuda Visual Reactiva de Horario de Vigencia** (que informa explícitamente si el acuerdo tiene **Activación inmediata hoy mismo** o **Activación programada a las `00:00 h` medianoche Bogotá**, rigiendo hasta las **`23:59 h`** del día de vencimiento).
+     - Al confirmar (`Confirmar y Congelar Acuerdo`), el sistema actualiza `quotes`, `quote_items` y `client_agreements` para las 44 sedes de Nutresa, persiste la metadata `nutresa_sipsa_prima_meta` y limpia el borrador `nutresa_negotiation_draft`.
