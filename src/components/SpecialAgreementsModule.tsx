@@ -98,8 +98,10 @@ export interface AgreementItem {
     prima_cop?: number; // Para Nutresa: Prima pactada en COP
     our_counterproposal: number; // Nuestra contrapropuesta / Nuevo Precio a Fijar
     suggested_price: number; // Sugerido inteligente IA
-    is_frozen_override?: boolean; // Para Nutresa: Precio ajustado y congelado manualmente durante negociación
+    is_frozen_override?: boolean; // Para Nutresa/Colsubsidio: Precio ajustado y congelado manualmente durante negociación
     unmatched_in_excel?: boolean; // Para Nutresa: SKU del padrón que no vino en la hoja cargada del Excel
+    matched_in_excel?: boolean; // Para Colsubsidio: SKU que vino explícitamente en la planilla quincenal cargada
+    excel_ant_price?: number; // Para Colsubsidio: Precio anterior (ANT PRE) declarado en el Excel del cliente para auditoría anti-fuga
     status_change?: 'SUBIÓ' | 'BAJÓ' | 'IGUAL';
     iva_rate?: number;
     notes?: string;
@@ -133,7 +135,7 @@ export interface EnrichedB2BClient {
 export type SortField = 'code' | 'name' | 'sku' | 'chain' | 'consumption' | 'cost' | 'previous' | 'sipsa' | 'prima' | 'proposed' | 'pliego_diff' | 'suggested' | 'margin' | 'counter' | 'impact';
 export type SortDirection = 'asc' | 'desc';
 export type ClientModalFilterTab = 'roster' | 'selected' | 'matrices' | 'branches' | 'all';
-export type ColsubsidioVariationFilter = 'all' | 'up' | 'down' | 'same' | 'frozen';
+export type ColsubsidioVariationFilter = 'all' | 'in_excel' | 'up' | 'down' | 'same' | 'low_margin' | 'frozen';
 
 interface DbProductRow {
     id: string;
@@ -412,6 +414,8 @@ export interface NutresaDraftEntry {
     our_counterproposal?: number;
     is_frozen_override?: boolean;
     previous_price?: number;
+    matched_in_excel?: boolean;
+    excel_ant_price?: number;
     status_change?: 'SUBIÓ' | 'BAJÓ' | 'IGUAL';
 }
 
@@ -436,6 +440,9 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const [hasNutresaDraft, setHasNutresaDraft] = useState<boolean>(false);
     const [showColsubsidioGuide, setShowColsubsidioGuide] = useState<boolean>(true);
     const [hasColsubsidioDraft, setHasColsubsidioDraft] = useState<boolean>(false);
+    const [showGeneralListGuide, setShowGeneralListGuide] = useState<boolean>(true);
+    const [hasGeneralListDraft, setHasGeneralListDraft] = useState<boolean>(false);
+    const [generalListQuickFilter, setGeneralListQuickFilter] = useState<'all' | 'with_demand' | 'low_margin' | 'frozen'>('all');
     const [nutresaQuickFilter, setNutresaQuickFilter] = useState<'all' | 'low_margin' | 'frozen' | 'unmatched_excel'>('all');
     const [nutresaExcelSheets, setNutresaExcelSheets] = useState<Record<string, Record<string, unknown>[]>>({});
     const [nutresaActiveSheet, setNutresaActiveSheet] = useState<string>('');
@@ -508,10 +515,17 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const handleSelectModel = (modelId: SpecialModelId) => {
         setSelectedClient(modelId);
         setSelectedChainFilter('all');
-        if (modelId !== 'nutresa' && (sortField === 'chain' || sortField === 'sipsa' || sortField === 'prima' || sortField === 'previous')) {
+        setColsubsidioStatusFilter('all');
+        if (modelId !== 'nutresa' && (sortField === 'chain' || sortField === 'sipsa' || sortField === 'prima')) {
             setSortField('name');
         }
-        if (modelId === 'nutresa' && (sortField === 'chain' || sortField === 'suggested')) {
+        if (modelId !== 'nutresa' && modelId !== 'colsubsidio' && (sortField === 'previous' || sortField === 'pliego_diff')) {
+            setSortField('name');
+        }
+        if (modelId === 'nutresa' && (sortField === 'chain' || sortField === 'suggested' || sortField === 'pliego_diff')) {
+            setSortField('name');
+        }
+        if (modelId === 'colsubsidio' && sortField === 'suggested') {
             setSortField('name');
         }
     };
@@ -546,6 +560,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
             const quoteIdToModelId: Record<string, SpecialModelId> = {
                 'ab9c0c14-a27e-4317-9995-dfb4ba9bcb80': 'nutresa',
+                '445c8f85-f693-4e05-a1fd-7c3a74c47162': 'colsubsidio',
                 '5afc3173-4ced-4635-a71f-56ef57e144f8': 'colsubsidio',
                 'b5a2abae-68f1-44fe-87a3-84b1817026db': 'general_quincenal',
                 '6572e7d6-4925-4576-8960-caca64a3c47f': 'general_mensual'
@@ -693,13 +708,97 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
         }
     };
 
+    const saveColsubsidioDraftToDb = async (itemsToSave: AgreementItem[]) => {
+        try {
+            const payload: Record<string, NutresaDraftEntry> = {};
+            itemsToSave.forEach(it => {
+                const key = it.quote_item_id || it.product_id || it.id;
+                payload[key] = {
+                    material_code: it.material_code || '',
+                    unified_name: it.unified_name || '',
+                    previous_price: it.previous_price || 0,
+                    client_proposed_price: it.client_proposed_price || 0,
+                    our_counterproposal: it.our_counterproposal || 0,
+                    is_frozen_override: Boolean(it.is_frozen_override),
+                    matched_in_excel: Boolean(it.matched_in_excel),
+                    excel_ant_price: it.excel_ant_price || 0,
+                    status_change: it.status_change
+                };
+            });
+            await supabase.from('app_settings').upsert({
+                key: 'colsubsidio_negotiation_draft',
+                value: JSON.stringify(payload),
+                description: 'Borrador activo de negociación quincenal Colsubsidio (Pliego cargado y precios ajustados/congelados)'
+            });
+            setHasColsubsidioDraft(true);
+        } catch (err) {
+            console.warn('Error guardando borrador de negociación Colsubsidio:', err);
+        }
+    };
+
+    const handleDiscardColsubsidioDraft = async () => {
+        try {
+            await supabase.from('app_settings').delete().eq('key', 'colsubsidio_negotiation_draft');
+            setHasColsubsidioDraft(false);
+            setColsubsidioStatusFilter('all');
+            await loadDataForModel('colsubsidio');
+            setSuccessMsg('Borrador de Colsubsidio descartado. Se restauraron los precios vigentes del acuerdo anterior (Septiembre).');
+            setTimeout(() => setSuccessMsg(null), 4000);
+        } catch (err) {
+            console.error('Error descartando borrador Colsubsidio:', err);
+        }
+    };
+
+    // Guardar borrador de negociación en curso de Lista General (15 o 30 días) en app_settings
+    const saveGeneralListDraftToDb = async (modelId: SpecialModelId, itemsToSave: AgreementItem[]) => {
+        try {
+            const draftPayload: Record<string, NutresaDraftEntry> = {};
+            itemsToSave.forEach(it => {
+                const key = it.quote_item_id || it.product_id || it.id;
+                draftPayload[key] = {
+                    sipsa_price: it.sipsa_price || 0,
+                    prima_cop: it.prima_cop || 0,
+                    unified_name: it.unified_name || '',
+                    previous_price: it.previous_price || it.client_proposed_price || 0,
+                    client_proposed_price: it.client_proposed_price || 0,
+                    our_counterproposal: it.our_counterproposal || 0,
+                    is_frozen_override: Boolean(it.is_frozen_override),
+                    status_change: it.our_counterproposal > it.client_proposed_price ? 'SUBIÓ' : (it.our_counterproposal < it.client_proposed_price ? 'BAJÓ' : 'IGUAL')
+                };
+            });
+            await supabase.from('app_settings').upsert({
+                key: `${modelId}_negotiation_draft`,
+                value: JSON.stringify(draftPayload),
+                description: `Borrador activo de precios de ${modelId} antes de consagrar`
+            });
+            setHasGeneralListDraft(true);
+        } catch (err) {
+            console.warn(`Error guardando borrador de ${modelId}:`, err);
+        }
+    };
+
+    const handleDiscardGeneralListDraft = async (modelId: SpecialModelId) => {
+        try {
+            await supabase.from('app_settings').delete().eq('key', `${modelId}_negotiation_draft`);
+            setHasGeneralListDraft(false);
+            setGeneralListQuickFilter('all');
+            await loadDataForModel(modelId);
+            setSuccessMsg(`Borrador de ${modelsMeta[modelId].name} descartado. Se restauraron los precios vigentes del ciclo anterior.`);
+            setTimeout(() => setSuccessMsg(null), 4000);
+        } catch (err) {
+            console.error(`Error descartando borrador ${modelId}:`, err);
+        }
+    };
+
     const loadDataForModel = async (modelId: SpecialModelId) => {
         setLoading(true);
+        setGeneralListQuickFilter('all');
         try {
-            // 1. Consultar 100% desde Supabase: catálogo oficial, matriz de costos, precios, reglas de Lista Institucional Dinámica y metadatos Nutresa
-            const [prodsRes, matrixRes, sipsaDictRes, instRulesRes, modelRowRes, nutresaChainsRes, nutresaMetaRes, nutresaDraftRes] = await Promise.all([
-                supabase.from('products').select('id, name, sku, accounting_id, category, unit_of_measure, base_price, iva_rate, theoretical_shrinkage_pct').eq('is_active', true),
+            // 1. Consultar 100% desde Supabase: catálogo oficial, matriz de costos + overrides, precios, reglas de Lista Institucional Dinámica y metadatos de acuerdo
+            const [prodsRes, matrixRes, overridesRes, sipsaDictRes, instRulesRes, modelRowRes, nutresaChainsRes, agreementMetaRes, agreementDraftRes] = await Promise.all([
+                supabase.from('products').select('id, name, sku, accounting_id, category, unit_of_measure, parent_id, base_price, iva_rate, theoretical_shrinkage_pct').eq('is_active', true),
                 supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true),
+                supabase.from('commercial_overrides').select('product_id, manual_cost'),
                 supabase.from('pricing_model_prices').select('product_id, price').eq('model_id', 'd90a91e5-827c-473d-9d4f-3e28c7c91e15'),
                 supabase.from('pricing_rules').select('product_id, margin_adjustment').eq('model_id', 'd90a91e5-827c-473d-9d4f-3e28c7c91e15'),
                 supabase.from('special_agreement_models').select('*').eq('id', modelId).maybeSingle(),
@@ -708,10 +807,10 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     : Promise.resolve({ data: null }),
                 modelId === 'nutresa'
                     ? supabase.from('app_settings').select('value').eq('key', 'nutresa_sipsa_prima_meta').maybeSingle()
+                    : modelId === 'colsubsidio'
+                    ? supabase.from('app_settings').select('value').eq('key', 'colsubsidio_agreement_meta').maybeSingle()
                     : Promise.resolve({ data: null }),
-                modelId === 'nutresa'
-                    ? supabase.from('app_settings').select('value').eq('key', 'nutresa_negotiation_draft').maybeSingle()
-                    : Promise.resolve({ data: null })
+                supabase.from('app_settings').select('value').eq('key', `${modelId}_negotiation_draft`).maybeSingle()
             ]);
 
             let nutresaChainMap: Record<string, string> = {};
@@ -723,32 +822,39 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 }
             }
 
-            let nutresaSavedMeta: Record<string, NutresaDraftEntry> = {};
-            if (nutresaMetaRes.data?.value) {
+            let savedAgreementMeta: Record<string, NutresaDraftEntry> = {};
+            if (agreementMetaRes.data?.value) {
                 try {
-                    nutresaSavedMeta = JSON.parse(String(nutresaMetaRes.data.value)) as Record<string, NutresaDraftEntry>;
+                    savedAgreementMeta = JSON.parse(String(agreementMetaRes.data.value)) as Record<string, NutresaDraftEntry>;
                 } catch (err) {
-                    console.warn('Error parseando nutresa_sipsa_prima_meta:', err);
+                    console.warn('Error parseando metadatos de acuerdo:', err);
                 }
             }
 
-            let nutresaActiveDraft: Record<string, NutresaDraftEntry> | null = null;
-            if (nutresaDraftRes.data?.value) {
+            let activeDraftMap: Record<string, NutresaDraftEntry> | null = null;
+            if (agreementDraftRes.data?.value) {
                 try {
-                    const parsedDraft = JSON.parse(String(nutresaDraftRes.data.value)) as Record<string, NutresaDraftEntry>;
+                    const parsedDraft = JSON.parse(String(agreementDraftRes.data.value)) as Record<string, NutresaDraftEntry>;
                     if (parsedDraft && Object.keys(parsedDraft).length > 0) {
-                        nutresaActiveDraft = parsedDraft;
+                        activeDraftMap = parsedDraft;
                     }
                 } catch (err) {
-                    console.warn('Error parseando nutresa_negotiation_draft:', err);
+                    console.warn('Error parseando borrador de negociación:', err);
                 }
             }
             if (modelId === 'nutresa') {
-                setHasNutresaDraft(Boolean(nutresaActiveDraft));
+                setHasNutresaDraft(Boolean(activeDraftMap));
+            } else if (modelId === 'colsubsidio') {
+                setHasColsubsidioDraft(Boolean(activeDraftMap));
+            } else {
+                setHasGeneralListDraft(Boolean(activeDraftMap));
             }
 
             const dbProducts = (prodsRes.data || []) as DbProductRow[];
             const costMap = new Map<string, number>();
+            ((overridesRes.data || []) as DbCostMatrixRow[]).forEach((o) => {
+                if (Number(o.manual_cost) > 0) costMap.set(o.product_id, Number(o.manual_cost));
+            });
             ((matrixRes.data || []) as DbCostMatrixRow[]).forEach((m) => {
                 if (Number(m.manual_cost) > 0) costMap.set(m.product_id, Number(m.manual_cost));
             });
@@ -839,15 +945,17 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
             const mappedFromDb: AgreementItem[] = dbQuoteItems.map((qi, idx) => {
                 const prod = prodById.get(qi.product_id) || prodByNormName.get(normalizeSearchStr(qi.product_name));
                 const currentPrice = Number(qi.unit_price) || 0;
-                const realCost = (prod && costMap.get(prod.id)) || (Number(qi.cost_basis) > 0 ? Number(qi.cost_basis) : 0);
+                const directCost = prod ? costMap.get(prod.id) : undefined;
+                const parentCost = (!directCost && prod?.parent_id) ? costMap.get(prod.parent_id) : undefined;
+                const realCost = directCost || parentCost || (Number(qi.cost_basis) > 0 ? Number(qi.cost_basis) : 0) || Number(prod?.base_price) || 0;
 
-                // Regla de Utilidad Institucional específica del SKU desde pricing_rules en Supabase.
-                const explicitRule = prod ? instRuleMap.get(prod.id) : undefined;
+                // Regla de Utilidad Institucional específica del SKU (o heredada del padre) desde pricing_rules en Supabase.
+                const explicitRule = prod ? (instRuleMap.get(prod.id) ?? (prod.parent_id ? instRuleMap.get(prod.parent_id) : undefined)) : undefined;
                 const instRuleMargin = explicitRule !== undefined
                     ? Number(explicitRule)
                     : (realCost > 0 && currentPrice > realCost
                         ? Math.round(((currentPrice - realCost) / realCost) * 100)
-                        : 0);
+                        : 25);
 
                 // Precio vivo de Lista Institucional Dinámica (Costo Matriz * (1 + % Regla Inst.) redondeado a $50 COP)
                 const instDynamicPrice = realCost > 0
@@ -865,14 +973,14 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     : currentPrice;
                 const suggested = Math.ceil(rawTechnicalSuggested / 50) * 50;
 
-                const statusChange: 'SUBIÓ' | 'BAJÓ' | 'IGUAL' = suggested > currentPrice ? 'SUBIÓ' : (suggested < currentPrice ? 'BAJÓ' : 'IGUAL');
                 const resolvedProductId = qi.product_id || prod?.id || '';
                 const demandRec = demandMap.get(resolvedProductId) || { volume: 0, ordersCount: 0, revenue: 0 };
                 const demandVol = Math.round(demandRec.volume * 10) / 10;
 
                 const itemKey = qi.id || resolvedProductId || `${modelId}-${idx}`;
-                const savedMeta = modelId === 'nutresa' ? (nutresaSavedMeta[qi.id] || nutresaSavedMeta[resolvedProductId]) : undefined;
-                const draftEntry = modelId === 'nutresa' && nutresaActiveDraft ? (nutresaActiveDraft[qi.id] || nutresaActiveDraft[resolvedProductId]) : undefined;
+                const isIsolatedModel = modelId === 'nutresa' || modelId === 'colsubsidio';
+                const savedMeta = isIsolatedModel ? (savedAgreementMeta[qi.id] || savedAgreementMeta[resolvedProductId]) : undefined;
+                const draftEntry = activeDraftMap ? (activeDraftMap[qi.id] || activeDraftMap[resolvedProductId]) : undefined;
 
                 const sipsaVal = draftEntry?.sipsa_price !== undefined
                     ? draftEntry.sipsa_price
@@ -883,13 +991,22 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 const unifiedVal = draftEntry?.unified_name !== undefined
                     ? draftEntry.unified_name
                     : (savedMeta?.unified_name ?? '');
-                const prevAgreementPrice = currentPrice;
+                const materialVal = draftEntry?.material_code !== undefined
+                    ? draftEntry.material_code
+                    : (savedMeta?.material_code ?? '');
+                const prevAgreementPrice = draftEntry?.previous_price && draftEntry.previous_price > 0
+                    ? draftEntry.previous_price
+                    : currentPrice;
                 const proposedPrice = draftEntry?.client_proposed_price && draftEntry.client_proposed_price > 0
                     ? draftEntry.client_proposed_price
                     : currentPrice;
                 const counterPrice = draftEntry?.our_counterproposal && draftEntry.our_counterproposal > 0
                     ? draftEntry.our_counterproposal
-                    : (currentPrice > 0 ? currentPrice : suggested);
+                    : (currentPrice > 0 ? currentPrice : instDynamicPrice);
+
+                const statusChange: 'SUBIÓ' | 'BAJÓ' | 'IGUAL' = modelId === 'colsubsidio'
+                    ? (proposedPrice > prevAgreementPrice ? 'SUBIÓ' : (proposedPrice < prevAgreementPrice ? 'BAJÓ' : 'IGUAL'))
+                    : (counterPrice > proposedPrice ? 'SUBIÓ' : (counterPrice < proposedPrice ? 'BAJÓ' : 'IGUAL'));
 
                 return {
                     id: itemKey,
@@ -897,6 +1014,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     product_id: resolvedProductId,
                     client_code: prod?.accounting_id || prod?.sku || (idx + 1),
                     accounting_id: prod?.accounting_id ?? prod?.sku ?? (idx + 1),
+                    material_code: materialVal || undefined,
                     raw_name: qi.product_name || prod?.name || 'Producto',
                     unified_name: unifiedVal,
                     mapped_sku: prod?.sku || (prod?.accounting_id ? String(prod.accounting_id) : ''),
@@ -918,6 +1036,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     suggested_price: suggested,
                     our_counterproposal: counterPrice,
                     is_frozen_override: Boolean(draftEntry?.is_frozen_override),
+                    matched_in_excel: Boolean(draftEntry?.matched_in_excel),
+                    excel_ant_price: draftEntry?.excel_ant_price && draftEntry.excel_ant_price > 0 ? draftEntry.excel_ant_price : undefined,
                     status_change: statusChange,
                     iva_rate: Number(prod?.iva_rate ?? qi.iva_rate ?? 0)
                 };
@@ -1094,25 +1214,41 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
         setTimeout(() => setSuccessMsg(null), 6500);
     };
 
-    // Copiar resumen ejecutivo de SKUs con excepción negociada (para WhatsApp / Correo a Nutresa)
+    // Copiar resumen ejecutivo de SKUs con excepción negociada (para WhatsApp / Correo a Nutresa o Colsubsidio)
     const handleCopyNutresaExceptions = async () => {
         const exceptionItems = agreementItems.filter(
             i => i.is_frozen_override || i.our_counterproposal !== i.client_proposed_price
         );
         if (exceptionItems.length === 0) return;
 
-        const header = `Buen día equipo Grupo Nutresa (${nutresaActiveSheet || activePeriod}).\nRevisada la planilla del periodo, estamos de acuerdo con los precios de referencia excepto en las siguientes ${exceptionItems.length} referencia(s) ajustada(s):`;
-        const lines = exceptionItems.map(item => {
-            const diff = item.our_counterproposal - item.client_proposed_price;
-            const sign = diff >= 0 ? '+' : '';
-            return `• ${item.raw_name} (Cód ${item.client_code}): Propuesta ${formatMoney(item.client_proposed_price)} → Contrapropuesta ${formatMoney(item.our_counterproposal)} (${sign}${formatMoney(diff)})`;
-        });
-        const fullText = `${header}\n${lines.join('\n')}`;
+        let fullText = '';
+        if (selectedClient === 'colsubsidio') {
+            const header = `Buen día equipo Colsubsidio (${activePeriod}).\nRevisada la planilla quincenal de precios, confirmamos acuerdo en la lista general excepto en las siguientes ${exceptionItems.length} referencia(s) que requieren ajuste por estructura de costo:`;
+            const lines = exceptionItems.map(item => {
+                const prev = item.previous_price && item.previous_price > 0 ? item.previous_price : item.client_proposed_price;
+                const diff = item.our_counterproposal - item.client_proposed_price;
+                const sign = diff >= 0 ? '+' : '';
+                const sapLabel = item.material_code ? `SAP ${item.material_code}` : `Cód ${item.client_code}`;
+                const descLabel = item.unified_name || item.raw_name;
+                return `• ${sapLabel} | ${descLabel}: Propuesta Colsubsidio ${formatMoney(item.client_proposed_price)} → Contrapropuesta FruFresco ${formatMoney(item.our_counterproposal)} (${sign}${formatMoney(diff)} | Acuerdo ant: ${formatMoney(prev)})`;
+            });
+            fullText = `${header}\n${lines.join('\n')}`;
+        } else {
+            const header = `Buen día equipo Grupo Nutresa (${nutresaActiveSheet || activePeriod}).\nRevisada la planilla del periodo, estamos de acuerdo con los precios de referencia excepto en las siguientes ${exceptionItems.length} referencia(s) ajustada(s):`;
+            const lines = exceptionItems.map(item => {
+                const diff = item.our_counterproposal - item.client_proposed_price;
+                const sign = diff >= 0 ? '+' : '';
+                return `• ${item.raw_name} (Cód ${item.client_code}): Propuesta ${formatMoney(item.client_proposed_price)} → Contrapropuesta ${formatMoney(item.our_counterproposal)} (${sign}${formatMoney(diff)})`;
+            });
+            fullText = `${header}\n${lines.join('\n')}`;
+        }
 
         try {
             await navigator.clipboard.writeText(fullText);
             setCopiedExceptionsSuccess(true);
-            setSuccessMsg(`Resumen de ${exceptionItems.length} excepción(es) copiado al portapapeles para enviar a Nutresa.`);
+            setSuccessMsg(
+                `Resumen de ${exceptionItems.length} excepción(es) copiado al portapapeles para enviar a ${selectedClient === 'colsubsidio' ? 'Colsubsidio' : 'Nutresa'}.`
+            );
             setTimeout(() => {
                 setCopiedExceptionsSuccess(false);
                 setSuccessMsg(null);
@@ -1135,6 +1271,164 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
+
+                // MODO ESPECIAL COLSUBSIDIO (1Q/2Q): Lector matricial inmune a fila de título ("NIT: 901393217 INVESTMENTS CORTES SAS")
+                if (selectedClient === 'colsubsidio') {
+                    const matrix = XLSX.utils.sheet_to_json<Array<string | number>>(ws, { header: 1, defval: '' });
+                    if (!matrix || matrix.length === 0) {
+                        alert('El archivo de Colsubsidio no contiene filas válidas.');
+                        return;
+                    }
+
+                    let headerIdx = -1;
+                    for (let i = 0; i < Math.min(12, matrix.length); i++) {
+                        const rowStr = (matrix[i] || []).map(c => normalizeSearchStr(c)).join(' | ');
+                        if (rowStr.includes('material') && rowStr.includes('descrip')) {
+                            headerIdx = i;
+                            break;
+                        }
+                    }
+
+                    interface ColsubsidioParsedRow {
+                        material: string;
+                        descripcion: string;
+                        normDesc: string;
+                        um: string;
+                        antPre: number;
+                        finalProposed: number;
+                        counterExplicit: number;
+                        estado: 'SUBIÓ' | 'BAJÓ' | 'IGUAL';
+                    }
+
+                    const colRows: ColsubsidioParsedRow[] = [];
+                    if (headerIdx !== -1) {
+                        const headers = (matrix[headerIdx] || []).map(h => normalizeSearchStr(h));
+                        const matCol = headers.findIndex(h => h.includes('material') || h === 'codigo');
+                        const descCol = headers.findIndex(h => h.includes('descrip') || h.includes('producto'));
+                        const umCol = headers.findIndex(h => h.includes('u m') || h.includes('u em') || h === 'um');
+                        const antCol = headers.findIndex(h => h.includes('ant pre') || h.includes('pre ant') || h.includes('acuerdo anterior'));
+                        const estCol = headers.findIndex(h => h.includes('estado') || h.includes('variacion'));
+                        const counterCol = headers.findIndex(h => h.includes('contrapropuesta'));
+
+                        for (let rIdx = headerIdx + 1; rIdx < matrix.length; rIdx++) {
+                            const r = matrix[rIdx] || [];
+                            const mat = String(r[matCol >= 0 ? matCol : 0] ?? '').trim();
+                            const desc = String(r[descCol >= 0 ? descCol : 1] ?? '').trim();
+                            if (!mat && !desc) continue;
+                            if (mat && !/^\d+$/.test(mat) && normalizeSearchStr(mat).includes('material')) continue;
+
+                            const nuePre1 = Number(r[3]) || 0;
+                            const antPre = antCol >= 0 ? (Number(r[antCol]) || 0) : (Number(r[4]) || 0);
+                            const estRaw = estCol >= 0 ? String(r[estCol] ?? '').toUpperCase() : String(r[7] ?? '').toUpperCase();
+                            const nuePre2 = Number(r[8]) || 0;
+                            const col9 = Number(r[9]) || 0;
+                            const counterExplicit = counterCol >= 0 ? (Number(r[counterCol]) || 0) : 0;
+
+                            // En los pliegos de Colsubsidio (Septiembre / Octubre), la última columna numérica (>0) contiene el NUEVO PRE / PRECIO oficial propuesto por Colsubsidio
+                            const finalProposed = col9 > 0
+                                ? Math.round(col9)
+                                : (nuePre2 > 0 ? Math.round(nuePre2) : Math.round(nuePre1));
+
+                            if (finalProposed <= 0 && antPre <= 0) continue;
+
+                            const estado: 'SUBIÓ' | 'BAJÓ' | 'IGUAL' = estRaw.includes('SUBI')
+                                ? 'SUBIÓ'
+                                : (estRaw.includes('BAJ')
+                                    ? 'BAJÓ'
+                                    : (antPre > 0
+                                        ? (finalProposed > antPre ? 'SUBIÓ' : (finalProposed < antPre ? 'BAJÓ' : 'IGUAL'))
+                                        : 'IGUAL'));
+
+                            colRows.push({
+                                material: mat,
+                                descripcion: desc,
+                                normDesc: normalizeSearchStr(desc),
+                                um: String(r[umCol >= 0 ? umCol : 2] ?? 'KG').trim(),
+                                antPre: Math.round(antPre),
+                                finalProposed,
+                                counterExplicit: Math.round(counterExplicit),
+                                estado
+                            });
+                        }
+                    }
+
+                    const byKey = new Map<string, ColsubsidioParsedRow>();
+                    colRows.forEach(cr => {
+                        if (cr.normDesc && !byKey.has(cr.normDesc)) byKey.set(cr.normDesc, cr);
+                        if (cr.material && !byKey.has(cr.material)) byKey.set(cr.material, cr);
+                    });
+
+                    let matchedCount = 0;
+                    let upCount = 0;
+                    let downCount = 0;
+
+                    const updatedItems: AgreementItem[] = agreementItems.map(item => {
+                        const normItemName = normalizeSearchStr(item.raw_name);
+                        const candidates = [
+                            normItemName,
+                            ...(COLSUBSIDIO_ALIAS_MAP[normItemName] || []),
+                            ...(item.material_code ? [String(item.material_code)] : []),
+                            ...(item.client_code ? [String(item.client_code)] : [])
+                        ];
+
+                        let matchedRow: ColsubsidioParsedRow | undefined;
+                        for (const cand of candidates) {
+                            if (byKey.has(cand)) {
+                                matchedRow = byKey.get(cand);
+                                break;
+                            }
+                        }
+
+                        if (!matchedRow) {
+                            return {
+                                ...item,
+                                matched_in_excel: false
+                            };
+                        }
+
+                        matchedCount++;
+                        // Conservar el Acuerdo Anterior consagrado en BD (ej. Septiembre); si no había acuerdo previo, usar ANT PRE del Excel
+                        const preservedPrevious = item.previous_price && item.previous_price > 0
+                            ? item.previous_price
+                            : (matchedRow.antPre > 0 ? matchedRow.antPre : item.client_proposed_price);
+
+                        const newProposed = matchedRow.finalProposed > 0
+                            ? matchedRow.finalProposed
+                            : item.client_proposed_price;
+
+                        const newCounter = item.is_frozen_override
+                            ? item.our_counterproposal
+                            : (matchedRow.counterExplicit > 0 ? matchedRow.counterExplicit : newProposed);
+
+                        const computedStatus: 'SUBIÓ' | 'BAJÓ' | 'IGUAL' = newProposed > preservedPrevious
+                            ? 'SUBIÓ'
+                            : (newProposed < preservedPrevious ? 'BAJÓ' : matchedRow.estado);
+
+                        if (computedStatus === 'SUBIÓ') upCount++;
+                        else if (computedStatus === 'BAJÓ') downCount++;
+
+                        return {
+                            ...item,
+                            material_code: matchedRow.material || item.material_code,
+                            unified_name: matchedRow.descripcion || item.unified_name,
+                            previous_price: preservedPrevious,
+                            excel_ant_price: matchedRow.antPre > 0 ? matchedRow.antPre : undefined,
+                            matched_in_excel: true,
+                            client_proposed_price: newProposed,
+                            our_counterproposal: newCounter,
+                            status_change: computedStatus
+                        };
+                    });
+
+                    setAgreementItems(updatedItems);
+                    await saveColsubsidioDraftToDb(updatedItems);
+                    setSuccessMsg(
+                        `Pliego Colsubsidio cargado (${wsname}): ${matchedCount} SKUs actualizados (${upCount} SUBIERON, ${downCount} BAJARON vs Acuerdo Anterior). Lista guardada en borrador persistente.`
+                    );
+                    setTimeout(() => setSuccessMsg(null), 7000);
+                    return;
+                }
+
                 const jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
                 if (!jsonRows || jsonRows.length === 0) {
@@ -1257,6 +1551,61 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, activePeriod || 'Acuerdo');
             XLSX.writeFile(wb, `ACUERDO_NUTRESA_${activePeriod}.xlsx`);
+        } else if (selectedClient === 'colsubsidio') {
+            const aoa: Array<Array<string | number>> = [
+                ['NIT: 901393217 INVESTMENTS CORTES SAS', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+                [
+                    'Material',
+                    'Descripcion',
+                    'U.M',
+                    'NUE PRE',
+                    'ANT PRE',
+                    'DIFERENC',
+                    'PORC',
+                    'VARIACION',
+                    'CONTRAPROPUESTA FRUFRESCO',
+                    'DIF VS PROPUESTA',
+                    'OBSERVACIÓN COMERCIAL',
+                    'Producto FruFresco',
+                    'Accounting ID',
+                    'Consumo Periodo',
+                    'COSTO CORABASTOS'
+                ]
+            ];
+
+            agreementItems.forEach(item => {
+                const prev = item.previous_price && item.previous_price > 0 ? item.previous_price : item.client_proposed_price;
+                const diffPliego = item.client_proposed_price - prev;
+                const pctPliego = prev > 0 ? Number((((item.client_proposed_price - prev) / prev) * 100).toFixed(1)) : 0;
+                const estadoPliego = diffPliego > 0 ? 'SUBIÓ' : (diffPliego < 0 ? 'BAJÓ' : 'IGUAL');
+                const diffCounter = item.our_counterproposal - item.client_proposed_price;
+                const obsComercial = diffCounter === 0
+                    ? 'SE ACEPTA PROPUESTA COLSUBSIDIO'
+                    : `SOLICITUD AJUSTE CONTRAPROPUESTA (${diffCounter > 0 ? '+' : ''}${diffCounter} COP)`;
+
+                aoa.push([
+                    item.material_code || item.client_code || '',
+                    item.unified_name || item.raw_name,
+                    item.unit,
+                    item.client_proposed_price,
+                    prev,
+                    diffPliego,
+                    `${pctPliego}%`,
+                    estadoPliego,
+                    item.our_counterproposal,
+                    diffCounter,
+                    obsComercial,
+                    item.raw_name,
+                    item.accounting_id ?? item.client_code ?? '',
+                    item.demand_volume !== undefined ? item.demand_volume : item.monthly_consumption_kg,
+                    item.corabastos_cost
+                ]);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(aoa);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'LIST PRE INVESMTES');
+            XLSX.writeFile(wb, `ACUERDO_COLSUBSIDIO_${activePeriod}.xlsx`);
         } else {
             const exportData = agreementItems.map(item => ({
                 'Material': item.client_code,
@@ -1273,7 +1622,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
             const ws = XLSX.utils.json_to_sheet(exportData);
             const wb = XLSX.utils.book_new();
-            const sheetName = selectedClient === 'colsubsidio' ? 'LIST PRE INVESMTES' : modelsMeta[selectedClient].name.slice(0, 30);
+            const sheetName = modelsMeta[selectedClient].name.slice(0, 30);
             XLSX.utils.book_append_sheet(wb, ws, sheetName);
             XLSX.writeFile(wb, `LISTA_${selectedClient.toUpperCase()}_${activePeriod}.xlsx`);
         }
@@ -1291,25 +1640,30 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
         setTimeout(() => setSuccessMsg(null), 3000);
     };
 
-    // Mantener / Restaurar precios del ciclo anterior
+    // Mantener / Restaurar precios del ciclo anterior (respetando SKUs Congelados)
     const handleKeepPreviousPrices = () => {
         setEditingPriceDrafts({});
         setEditingMarkupDrafts({});
-        setAgreementItems(prev => prev.map(item => ({
+        const updated = agreementItems.map(item => item.is_frozen_override ? item : ({
             ...item,
             our_counterproposal: item.client_proposed_price
-        })));
-        setSuccessMsg('Precios restaurados a los valores vigentes de la lista anterior.');
+        }));
+        setAgreementItems(updated);
+        if (selectedClient === 'general_quincenal' || selectedClient === 'general_mensual') {
+            saveGeneralListDraftToDb(selectedClient, updated);
+        }
+        setSuccessMsg('Precios no congelados restaurados a los valores vigentes de la lista anterior.');
         setTimeout(() => setSuccessMsg(null), 3000);
     };
 
     // Abrir Modal de Consagración y Vigencia pre-cargando los clientes suscritos al modelo
     const handleOpenConsagrateModal = (mode: 'compact_approve' | 'full_roster' = 'compact_approve') => {
         const currentMeta = modelsMeta[selectedClient];
+        const isIsolatedClient = selectedClient === 'nutresa' || selectedClient === 'colsubsidio';
         const todayStr = getBogotaDateStr();
-        const start = selectedClient === 'nutresa' ? todayStr : (currentMeta.start_date || todayStr);
+        const start = isIsolatedClient ? todayStr : (currentMeta.start_date || todayStr);
         let end = currentMeta.valid_until;
-        if (selectedClient === 'nutresa' || !end || end < todayStr) {
+        if (isIsolatedClient || !end || end < todayStr) {
             const d = new Date(start + 'T12:00:00');
             const defaultDays = selectedClient === 'nutresa' ? 30 : (currentMeta.default_duration_days || 15);
             d.setDate(d.getDate() + defaultDays);
@@ -1318,7 +1672,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
         }
         setModalStartDate(start);
         setModalEndDate(end);
-        setConsagrateModalMode(selectedClient === 'nutresa' ? mode : 'full_roster');
+        setConsagrateModalMode(isIsolatedClient ? mode : 'full_roster');
 
         // Pre-cargar automáticamente todos los clientes que pertenecen al padrón de este modelo
         const rosterIds = modelClientsMap[selectedClient] || [];
@@ -1426,33 +1780,56 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 }
             }
 
-            // 1.1 Si es Grupo Nutresa, persistir los metadatos consagrados de SIPSA + Prima y limpiar el borrador temporal
-            if (selectedClient === 'nutresa') {
+            // 1.1 Si es Grupo Nutresa o Colsubsidio, persistir los metadatos consagrados y limpiar el borrador temporal
+            if (selectedClient === 'nutresa' || selectedClient === 'colsubsidio') {
                 const consecratedMeta: Record<string, NutresaDraftEntry> = {};
                 agreementItems.forEach(it => {
                     const key = it.quote_item_id || it.product_id || it.id;
                     consecratedMeta[key] = {
                         sipsa_price: it.sipsa_price || 0,
                         prima_cop: it.prima_cop || 0,
+                        material_code: it.material_code || '',
                         unified_name: it.unified_name || '',
                         previous_price: it.previous_price || it.client_proposed_price || 0,
                         client_proposed_price: it.our_counterproposal || 0,
                         our_counterproposal: it.our_counterproposal || 0,
-                        is_frozen_override: false
+                        is_frozen_override: false,
+                        status_change: 'IGUAL'
                     };
                 });
+                const metaKey = selectedClient === 'nutresa' ? 'nutresa_sipsa_prima_meta' : 'colsubsidio_agreement_meta';
+                const draftKey = selectedClient === 'nutresa' ? 'nutresa_negotiation_draft' : 'colsubsidio_negotiation_draft';
                 await supabase.from('app_settings').upsert({
-                    key: 'nutresa_sipsa_prima_meta',
+                    key: metaKey,
                     value: JSON.stringify(consecratedMeta),
-                    description: 'Metadatos consagrados de SIPSA + Prima del último acuerdo oficial de Grupo Nutresa'
+                    description: selectedClient === 'nutresa'
+                        ? 'Metadatos consagrados de SIPSA + Prima del último acuerdo oficial de Grupo Nutresa'
+                        : 'Metadatos consagrados de Material SAP y descripción del último acuerdo oficial de Colsubsidio'
                 });
-                await supabase.from('app_settings').delete().eq('key', 'nutresa_negotiation_draft');
-                setHasNutresaDraft(false);
+                await supabase.from('app_settings').delete().eq('key', draftKey);
+                if (selectedClient === 'nutresa') {
+                    setHasNutresaDraft(false);
+                } else {
+                    setHasColsubsidioDraft(false);
+                    setColsubsidioStatusFilter('all');
+                }
                 setAgreementItems(prev => prev.map(it => ({
                     ...it,
                     previous_price: it.our_counterproposal,
                     client_proposed_price: it.our_counterproposal,
-                    is_frozen_override: false
+                    is_frozen_override: false,
+                    status_change: 'IGUAL'
+                })));
+            } else {
+                await supabase.from('app_settings').delete().eq('key', `${selectedClient}_negotiation_draft`);
+                setHasGeneralListDraft(false);
+                setGeneralListQuickFilter('all');
+                setAgreementItems(prev => prev.map(it => ({
+                    ...it,
+                    previous_price: it.our_counterproposal,
+                    client_proposed_price: it.our_counterproposal,
+                    is_frozen_override: false,
+                    status_change: 'IGUAL'
                 })));
             }
 
@@ -1576,6 +1953,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     normalizeSearchStr(item.raw_name).includes(q) ||
                     normalizeSearchStr(item.unified_name).includes(q) ||
                     normalizeSearchStr(item.mapped_sku || '').includes(q) ||
+                    String(item.material_code || '').toLowerCase().includes(q) ||
                     String(item.client_code || '').toLowerCase().includes(q);
                 const itemChains = item.chain_name ? item.chain_name.split(' • ').map(s => s.trim()) : [];
                 const matchesChain = selectedClient !== 'nutresa' || selectedChainFilter === 'all' || itemChains.includes(selectedChainFilter);
@@ -1590,6 +1968,34 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         matchesQuickFilter = Boolean(item.is_frozen_override);
                     } else if (nutresaQuickFilter === 'unmatched_excel') {
                         matchesQuickFilter = Boolean(item.unmatched_in_excel);
+                    }
+                } else if (selectedClient === 'colsubsidio' && colsubsidioStatusFilter !== 'all') {
+                    const prev = item.previous_price && item.previous_price > 0 ? item.previous_price : item.client_proposed_price;
+                    const prop = item.client_proposed_price;
+                    if (colsubsidioStatusFilter === 'in_excel') {
+                        matchesQuickFilter = Boolean(item.matched_in_excel);
+                    } else if (colsubsidioStatusFilter === 'up') {
+                        matchesQuickFilter = prop > prev;
+                    } else if (colsubsidioStatusFilter === 'down') {
+                        matchesQuickFilter = prop < prev;
+                    } else if (colsubsidioStatusFilter === 'same') {
+                        matchesQuickFilter = prop === prev;
+                    } else if (colsubsidioStatusFilter === 'low_margin') {
+                        const cost = Number(item.corabastos_cost) || 0;
+                        const markupPct = cost > 0 ? ((item.our_counterproposal - cost) / cost) * 100 : 100;
+                        matchesQuickFilter = cost > 0 && markupPct < 15;
+                    } else if (colsubsidioStatusFilter === 'frozen') {
+                        matchesQuickFilter = Boolean(item.is_frozen_override);
+                    }
+                } else if ((selectedClient === 'general_quincenal' || selectedClient === 'general_mensual') && generalListQuickFilter !== 'all') {
+                    if (generalListQuickFilter === 'with_demand') {
+                        matchesQuickFilter = (item.demand_volume || 0) > 0;
+                    } else if (generalListQuickFilter === 'low_margin') {
+                        const cost = Number(item.corabastos_cost) || 0;
+                        const markupPct = cost > 0 ? ((item.our_counterproposal - cost) / cost) * 100 : 100;
+                        matchesQuickFilter = cost > 0 && markupPct < 15;
+                    } else if (generalListQuickFilter === 'frozen') {
+                        matchesQuickFilter = Boolean(item.is_frozen_override);
                     }
                 }
                 return matchesSearch && matchesChain && matchesQuickFilter;
@@ -1616,6 +2022,10 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     res = (a.prima_cop || 0) - (b.prima_cop || 0);
                 } else if (sortField === 'proposed') {
                     res = a.client_proposed_price - b.client_proposed_price;
+                } else if (sortField === 'pliego_diff') {
+                    const prevA = a.previous_price && a.previous_price > 0 ? a.previous_price : a.client_proposed_price;
+                    const prevB = b.previous_price && b.previous_price > 0 ? b.previous_price : b.client_proposed_price;
+                    res = (a.client_proposed_price - prevA) - (b.client_proposed_price - prevB);
                 } else if (sortField === 'suggested') {
                     res = a.suggested_price - b.suggested_price;
                 } else if (sortField === 'margin') {
@@ -1631,7 +2041,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 }
                 return sortDir === 'asc' ? res : -res;
             });
-    }, [agreementItems, searchTerm, selectedClient, selectedChainFilter, nutresaQuickFilter, sortField, sortDir]);
+    }, [agreementItems, searchTerm, selectedClient, selectedChainFilter, nutresaQuickFilter, colsubsidioStatusFilter, generalListQuickFilter, sortField, sortDir]);
 
     // Métricas reales de portafolio y rentabilidad unitaria (100% datos reales de Supabase, 0% volumen mockeado)
     const validCostItems = filteredItems.filter(i => Number(i.corabastos_cost) > 0);
@@ -1647,9 +2057,24 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const avgNewGrossMarginPct = validCostItems.length > 0
         ? validCostItems.reduce((acc, i) => acc + (i.our_counterproposal > 0 ? ((i.our_counterproposal - i.corabastos_cost) / i.our_counterproposal) * 100 : 0), 0) / validCostItems.length
         : 0;
-    const skusUpCount = filteredItems.filter(i => i.our_counterproposal > i.client_proposed_price).length;
-    const skusDownCount = filteredItems.filter(i => i.our_counterproposal < i.client_proposed_price).length;
-    const skusSameCount = filteredItems.filter(i => i.our_counterproposal === i.client_proposed_price).length;
+    const skusUpCount = filteredItems.filter(i => {
+        const refPrice = selectedClient === 'colsubsidio'
+            ? (i.previous_price && i.previous_price > 0 ? i.previous_price : i.client_proposed_price)
+            : i.client_proposed_price;
+        return i.our_counterproposal > refPrice;
+    }).length;
+    const skusDownCount = filteredItems.filter(i => {
+        const refPrice = selectedClient === 'colsubsidio'
+            ? (i.previous_price && i.previous_price > 0 ? i.previous_price : i.client_proposed_price)
+            : i.client_proposed_price;
+        return i.our_counterproposal < refPrice;
+    }).length;
+    const skusSameCount = filteredItems.filter(i => {
+        const refPrice = selectedClient === 'colsubsidio'
+            ? (i.previous_price && i.previous_price > 0 ? i.previous_price : i.client_proposed_price)
+            : i.client_proposed_price;
+        return i.our_counterproposal === refPrice;
+    }).length;
 
     const totalMatricesCount = useMemo(() => allB2BClients.filter(c => c.isMatriz).length, [allB2BClients]);
     const totalBranchesCount = useMemo(() => allB2BClients.filter(c => c.isSucursal).length, [allB2BClients]);
@@ -2226,6 +2651,335 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 </div>
             )}
 
+            {/* INSTRUCTIVO OPERATIVO EXCLUSIVO PARA EL MODO DE TRABAJO DE COLSUBSIDIO (VARIACIÓN QUINCENAL 1Q/2Q) */}
+            {selectedClient === 'colsubsidio' && (
+                <div style={{
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: '12px',
+                    border: '1px solid #CBD5E1',
+                    padding: '0.85rem 1.1rem',
+                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '8px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                backgroundColor: '#E0F2FE',
+                                color: '#0369A1',
+                                border: '1px solid #BAE6FD',
+                                padding: '3px 9px',
+                                borderRadius: '6px',
+                                fontSize: '0.72rem',
+                                fontWeight: 800
+                            }}>
+                                <BookOpen size={13} />
+                                MODO COLSUBSIDIO (VARIACIÓN QUINCENAL 1Q/2Q)
+                            </span>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F172A' }}>
+                                Instructivo del Ciclo de Negociación Quincenal (3 Pasos)
+                            </span>
+                            {(() => {
+                                const frozenCount = agreementItems.filter(i => i.is_frozen_override).length;
+                                const upCount = agreementItems.filter(i => {
+                                    const prev = i.previous_price && i.previous_price > 0 ? i.previous_price : i.client_proposed_price;
+                                    return i.client_proposed_price > prev;
+                                }).length;
+                                const downCount = agreementItems.filter(i => {
+                                    const prev = i.previous_price && i.previous_price > 0 ? i.previous_price : i.client_proposed_price;
+                                    return i.client_proposed_price < prev;
+                                }).length;
+                                if (!hasColsubsidioDraft && frozenCount === 0 && upCount === 0 && downCount === 0) return null;
+                                return (
+                                    <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        backgroundColor: '#ECFDF5',
+                                        color: '#065F46',
+                                        border: '1px solid #A7F3D0',
+                                        padding: '2px 8px',
+                                        borderRadius: '999px',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 800
+                                    }}>
+                                        <Lock size={11} />
+                                        Negociación en borrador ({upCount} subieron • {downCount} bajaron • {frozenCount} {frozenCount === 1 ? 'congelado' : 'congelados'})
+                                    </span>
+                                );
+                            })()}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {hasColsubsidioDraft && (
+                                <button
+                                    type="button"
+                                    onClick={handleDiscardColsubsidioDraft}
+                                    style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #FCA5A5',
+                                        backgroundColor: '#FEF2F2',
+                                        color: '#B91C1C',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Descartar la planilla en borrador y restaurar los valores del último acuerdo consagrado"
+                                >
+                                    <RotateCcw size={12} />
+                                    Restablecer Borrador
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setShowColsubsidioGuide(prev => !prev)}
+                                style={{
+                                    padding: '4px 9px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#475569',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                {showColsubsidioGuide ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                {showColsubsidioGuide ? 'Ocultar guía' : 'Ver instructivo'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {showColsubsidioGuide && (
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                            gap: '0.75rem',
+                            marginTop: '0.75rem'
+                        }}>
+                            <div style={{
+                                backgroundColor: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '8px',
+                                padding: '0.65rem 0.8rem'
+                            }}>
+                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD', borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem', fontWeight: 900 }}>Paso 1</span>
+                                    <span>Cargar Planilla Quincenal de Colsubsidio</span>
+                                </div>
+                                <div style={{ fontSize: '0.71rem', color: '#475569', lineHeight: 1.45 }}>
+                                    Oprime <b>Importar Excel</b> y selecciona el archivo enviado por Colsubsidio (ej. <i>2Q OCTUBRE-COLSUBSIDIO.xlsx</i>). El sistema cruza los ítems, conserva el <b>Acuerdo Anterior</b> (ej. Septiembre) y calcula automáticamente cuáles <b>▲ SUBIERON</b> o <b>▼ BAJARON</b>.
+                                </div>
+                            </div>
+
+                            <div style={{
+                                backgroundColor: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '8px',
+                                padding: '0.65rem 0.8rem'
+                            }}>
+                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem', fontWeight: 900 }}>Paso 2</span>
+                                    <span>Filtrar Variaciones y Congelar Ajustes</span>
+                                </div>
+                                <div style={{ fontSize: '0.71rem', color: '#475569', lineHeight: 1.45 }}>
+                                    Usa los filtros rápidos <b>▲ Subieron</b> o <b>▼ Bajaron</b> para auditar la propuesta contra tu <b>Costo / Lista Inst.</b> Si negocias un ajuste con Colsubsidio, digítalo en <b>Contrapropuesta</b>: quedará persistente como <b>Congelado</b> en borrador.
+                                </div>
+                            </div>
+
+                            <div style={{
+                                backgroundColor: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '8px',
+                                padding: '0.65rem 0.8rem'
+                            }}>
+                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem', fontWeight: 900 }}>Paso 3</span>
+                                    <span>Consagrar y Congelar Vigencia</span>
+                                </div>
+                                <div style={{ fontSize: '0.71rem', color: '#475569', lineHeight: 1.45 }}>
+                                    Al finalizar la revisión, oprime <b>Consagrar Acuerdo</b>. Se abrirá el modal de aprobación para definir la vigencia quincenal (<b>00:00 h</b> a <b>23:59 h</b>) y activar la nueva lista en las <b>{modelClientsMap.colsubsidio?.length || 32} sedes</b> de Colsubsidio.
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* INSTRUCTIVO OPERATIVO INCORPORADO PARA LISTAS GENERALES 15 Y 30 DÍAS (SDD v1.9.333) */}
+            {isGeneralList && (
+                <div style={{
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '10px',
+                    padding: '0.7rem 1rem',
+                    marginBottom: '0.65rem',
+                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.75rem',
+                        flexWrap: 'wrap'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                backgroundColor: '#ECFDF5',
+                                color: '#065F46',
+                                border: '1px solid #A7F3D0',
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                fontSize: '0.72rem',
+                                fontWeight: 800
+                            }}>
+                                <BookOpen size={13} />
+                                {selectedClient === 'general_quincenal'
+                                    ? 'GUÍA OPERATIVA: LISTA GENERAL QUINCENAL (15 DÍAS)'
+                                    : 'GUÍA OPERATIVA: LISTA GENERAL MENSUAL (30 DÍAS)'}
+                            </span>
+                            <span style={{ fontSize: '0.76rem', color: '#475569', fontWeight: 600 }}>
+                                Flujo directo de 3 pasos con entrada libre bidireccional de <b>% Utilidad</b> o <b>Nuevo Precio</b> ({agreementItems.length} SKUs • {modelClientsMap[selectedClient]?.length || 0} clientes en padrón)
+                            </span>
+                            {hasGeneralListDraft && (
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    backgroundColor: '#FEF3C7',
+                                    color: '#92400E',
+                                    border: '1px solid #FDE68A',
+                                    borderRadius: '6px',
+                                    padding: '2px 8px',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 800
+                                }}>
+                                    <Lock size={11} />
+                                    Borrador en curso guardado ({agreementItems.filter(i => i.is_frozen_override).length} SKUs congelados)
+                                </span>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {hasGeneralListDraft && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleDiscardGeneralListDraft(selectedClient)}
+                                    style={{
+                                        padding: '4px 9px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #FCA5A5',
+                                        backgroundColor: '#FEF2F2',
+                                        color: '#B91C1C',
+                                        fontSize: '0.71rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Descartar el borrador en curso y restaurar los precios vigentes del ciclo anterior"
+                                >
+                                    <RotateCcw size={12} />
+                                    Restablecer Borrador
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setShowGeneralListGuide(prev => !prev)}
+                                style={{
+                                    padding: '4px 9px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#475569',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                {showGeneralListGuide ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                {showGeneralListGuide ? 'Ocultar guía' : 'Ver instructivo'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {showGeneralListGuide && (
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                            gap: '0.75rem',
+                            marginTop: '0.75rem'
+                        }}>
+                            <div style={{
+                                backgroundColor: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '8px',
+                                padding: '0.65rem 0.8rem'
+                            }}>
+                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD', borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem', fontWeight: 900 }}>Paso 1</span>
+                                    <span>Aislar SKUs de Rotación o Alerta de Margen</span>
+                                </div>
+                                <div style={{ fontSize: '0.71rem', color: '#475569', lineHeight: 1.45 }}>
+                                    Usa los filtros rápidos <b>Con Consumo</b> o <b>Alerta Margen</b> para enfocarte en los productos que realmente rotan en este padrón o cuyo <b>Precio Anterior</b> quedó rezagado frente al <b>Costo / Lista Inst.</b>
+                                </div>
+                            </div>
+
+                            <div style={{
+                                backgroundColor: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '8px',
+                                padding: '0.65rem 0.8rem'
+                            }}>
+                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem', fontWeight: 900 }}>Paso 2</span>
+                                    <span>Ajustar % Utilidad o Nuevo Precio (Congelado)</span>
+                                </div>
+                                <div style={{ fontSize: '0.71rem', color: '#475569', lineHeight: 1.45 }}>
+                                    Digita libremente el <b>% Utilidad</b> deseado (recalcula el precio redondeado a $50 COP) o el <b>Nuevo Precio</b> directo. Cada ajuste queda marcado como <b>Congelado</b> y guardado en borrador.
+                                </div>
+                            </div>
+
+                            <div style={{
+                                backgroundColor: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '8px',
+                                padding: '0.65rem 0.8rem'
+                            }}>
+                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F172A', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem', fontWeight: 900 }}>Paso 3</span>
+                                    <span>Consagrar Vigencia y Cascada al Padrón</span>
+                                </div>
+                                <div style={{ fontSize: '0.71rem', color: '#475569', lineHeight: 1.45 }}>
+                                    Oprime <b>Consagrar Acuerdo</b>, confirma el rango de vigencia (<b>00:00 h</b> a <b>23:59 h</b>) y aplica la nueva lista en cascada a los <b>{modelClientsMap[selectedClient]?.length || 0} clientes y sucursales</b> inscritos.
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* BARRA DE ACCIONES Y SINCRONIZACIÓN SODA/DANE (LÍNEA 1 STICKY MAGNÉTICA) */}
             <div style={{
                 backgroundColor: '#FFFFFF',
@@ -2384,6 +3138,278 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         );
                     })()}
 
+                    {/* PÍLDORAS DE FILTRO RÁPIDO PARA VARIACIÓN DE PLIEGO DE COLSUBSIDIO */}
+                    {selectedClient === 'colsubsidio' && (() => {
+                        const inExcelCount = agreementItems.filter(i => i.matched_in_excel).length;
+                        const upCount = agreementItems.filter(i => {
+                            const prev = i.previous_price && i.previous_price > 0 ? i.previous_price : i.client_proposed_price;
+                            return i.client_proposed_price > prev;
+                        }).length;
+                        const downCount = agreementItems.filter(i => {
+                            const prev = i.previous_price && i.previous_price > 0 ? i.previous_price : i.client_proposed_price;
+                            return i.client_proposed_price < prev;
+                        }).length;
+                        const sameCount = agreementItems.filter(i => {
+                            const prev = i.previous_price && i.previous_price > 0 ? i.previous_price : i.client_proposed_price;
+                            return i.client_proposed_price === prev;
+                        }).length;
+                        const lowMarginCount = agreementItems.filter(i => {
+                            const c = Number(i.corabastos_cost) || 0;
+                            return c > 0 && (((i.our_counterproposal - c) / c) * 100) < 15;
+                        }).length;
+                        const frozenCount = agreementItems.filter(i => i.is_frozen_override).length;
+
+                        return (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setColsubsidioStatusFilter('all')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: colsubsidioStatusFilter === 'all' ? '1.5px solid #0369A1' : '1px solid #CBD5E1',
+                                        backgroundColor: colsubsidioStatusFilter === 'all' ? '#E0F2FE' : '#FFFFFF',
+                                        color: colsubsidioStatusFilter === 'all' ? '#0C4A6E' : '#475569',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Todos ({agreementItems.length})
+                                </button>
+                                {inExcelCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setColsubsidioStatusFilter('in_excel')}
+                                        style={{
+                                            height: '30px',
+                                            padding: '0 9px',
+                                            borderRadius: '6px',
+                                            border: colsubsidioStatusFilter === 'in_excel' ? '1.5px solid #2563EB' : '1px solid #BFDBFE',
+                                            backgroundColor: colsubsidioStatusFilter === 'in_excel' ? '#DBEAFE' : '#EFF6FF',
+                                            color: '#1E40AF',
+                                            fontSize: '0.72rem',
+                                            fontWeight: 800,
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                        title="Aislar únicamente los SKUs que vinieron en la planilla Excel cargada de esta quincena"
+                                    >
+                                        <FileSpreadsheet size={12} />
+                                        En Planilla Excel ({inExcelCount})
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setColsubsidioStatusFilter('up')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: colsubsidioStatusFilter === 'up' ? '1.5px solid #059669' : '1px solid #A7F3D0',
+                                        backgroundColor: colsubsidioStatusFilter === 'up' ? '#DCFCE7' : '#F0FDF4',
+                                        color: '#166534',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Aislar productos donde la Propuesta de Colsubsidio subió frente al Acuerdo Anterior"
+                                >
+                                    <TrendingUp size={12} />
+                                    ▲ Subieron ({upCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setColsubsidioStatusFilter('down')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: colsubsidioStatusFilter === 'down' ? '1.5px solid #DC2626' : '1px solid #FECACA',
+                                        backgroundColor: colsubsidioStatusFilter === 'down' ? '#FEE2E2' : '#FEF2F2',
+                                        color: '#991B1B',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Aislar productos donde la Propuesta de Colsubsidio bajó frente al Acuerdo Anterior"
+                                >
+                                    <TrendingDown size={12} />
+                                    ▼ Bajaron ({downCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setColsubsidioStatusFilter('same')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: colsubsidioStatusFilter === 'same' ? '1.5px solid #64748B' : '1px solid #CBD5E1',
+                                        backgroundColor: colsubsidioStatusFilter === 'same' ? '#F1F5F9' : '#FFFFFF',
+                                        color: '#334155',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer'
+                                    }}
+                                    title="Ver productos que mantuvieron la misma tarifa del acuerdo anterior"
+                                >
+                                    • Igual ({sameCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setColsubsidioStatusFilter('low_margin')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: colsubsidioStatusFilter === 'low_margin' ? '1.5px solid #D97706' : '1px solid #FDE68A',
+                                        backgroundColor: colsubsidioStatusFilter === 'low_margin' ? '#FEF3C7' : '#FFFBEB',
+                                        color: '#92400E',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Aislar SKUs con utilidad sobre costo menor al 15% para priorizar contrapropuesta"
+                                >
+                                    <AlertTriangle size={12} />
+                                    Alerta Margen ({lowMarginCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setColsubsidioStatusFilter('frozen')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: colsubsidioStatusFilter === 'frozen' ? '1.5px solid #0D7A57' : '1px solid #A7F3D0',
+                                        backgroundColor: colsubsidioStatusFilter === 'frozen' ? '#DCFCE7' : '#ECFDF5',
+                                        color: '#065F46',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Ver únicamente los SKUs con contrapropuesta ajustada y congelada manualmente"
+                                >
+                                    <Lock size={11} />
+                                    Congelados ({frozenCount})
+                                </button>
+                            </div>
+                        );
+                    })()}
+
+                    {/* PÍLDORAS DE FILTRO RÁPIDO PARA LISTAS GENERALES 15 Y 30 DÍAS (SDD v1.9.333) */}
+                    {isGeneralList && (() => {
+                        const withDemandCount = agreementItems.filter(i => (i.demand_volume || 0) > 0).length;
+                        const lowMarginCount = agreementItems.filter(i => {
+                            const c = Number(i.corabastos_cost) || 0;
+                            return c > 0 && (((i.our_counterproposal - c) / c) * 100) < 15;
+                        }).length;
+                        const frozenCount = agreementItems.filter(i => i.is_frozen_override).length;
+
+                        return (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setGeneralListQuickFilter('all')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: generalListQuickFilter === 'all' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                        backgroundColor: generalListQuickFilter === 'all' ? '#ECFDF5' : '#FFFFFF',
+                                        color: generalListQuickFilter === 'all' ? '#065F46' : '#475569',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Todos ({agreementItems.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setGeneralListQuickFilter('with_demand')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: generalListQuickFilter === 'with_demand' ? '1.5px solid #0284C7' : '1px solid #BAE6FD',
+                                        backgroundColor: generalListQuickFilter === 'with_demand' ? '#E0F2FE' : '#F0F9FF',
+                                        color: '#0369A1',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Aislar únicamente los SKUs con demanda real facturada en los clientes de este padrón"
+                                >
+                                    <TrendingUp size={12} />
+                                    Con Consumo ({withDemandCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setGeneralListQuickFilter('low_margin')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: generalListQuickFilter === 'low_margin' ? '1.5px solid #DC2626' : '1px solid #FECACA',
+                                        backgroundColor: generalListQuickFilter === 'low_margin' ? '#FEF2F2' : '#FFF5F5',
+                                        color: '#B91C1C',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Aislar SKUs con utilidad sobre costo menor al 15% para actualizar su tarifa"
+                                >
+                                    <AlertTriangle size={12} />
+                                    Alerta Margen ({lowMarginCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setGeneralListQuickFilter('frozen')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: generalListQuickFilter === 'frozen' ? '1.5px solid #059669' : '1px solid #A7F3D0',
+                                        backgroundColor: generalListQuickFilter === 'frozen' ? '#DCFCE7' : '#F0FDF4',
+                                        color: '#065F46',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Ver únicamente los SKUs cuyo % Utilidad o Nuevo Precio fue ajustado y congelado manualmente"
+                                >
+                                    <Lock size={11} />
+                                    Congelados ({frozenCount})
+                                </button>
+                            </div>
+                        );
+                    })()}
+
                     {/* SELECTOR MULTI-HOJA DEL LIBRO EXCEL DE NUTRESA */}
                     {selectedClient === 'nutresa' && Object.keys(nutresaExcelSheets).length > 0 && (
                         <div style={{
@@ -2430,8 +3456,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
                 {/* BOTONES OPERATIVOS COMPACTOS */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                    {/* BOTÓN COPIAR EXCEPCIONES PARA WHATSAPP / CORREO A NUTRESA */}
-                    {selectedClient === 'nutresa' && (() => {
+                    {/* BOTÓN COPIAR EXCEPCIONES PARA WHATSAPP / CORREO A NUTRESA O COLSUBSIDIO */}
+                    {(selectedClient === 'nutresa' || selectedClient === 'colsubsidio') && (() => {
                         const exceptionsCount = agreementItems.filter(
                             i => i.is_frozen_override || i.our_counterproposal !== i.client_proposed_price
                         ).length;
@@ -2454,39 +3480,15 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                     alignItems: 'center',
                                     gap: '5px'
                                 }}
-                                title="Copiar resumen de SKUs negociados/congelados para enviar por WhatsApp o correo a Grupo Nutresa"
+                                title={`Copiar resumen de SKUs negociados/congelados para enviar por WhatsApp o correo a ${selectedClient === 'colsubsidio' ? 'Colsubsidio' : 'Grupo Nutresa'}`}
                             >
                                 {copiedExceptionsSuccess ? <Check size={13} /> : <Copy size={13} />}
                                 {copiedExceptionsSuccess ? 'Copiado' : `Copiar Excepciones (${exceptionsCount})`}
                             </button>
                         );
                     })()}
-                    {/* BOTÓN APLICAR SUGERIDOS INTELIGENTES (OCULTO EN NUTRESA PORQUE SE RIGE POR SIPSA + PRIMA) */}
-                    {selectedClient !== 'nutresa' && (
-                        <button
-                            onClick={handleApplyAllSuggested}
-                            style={{
-                                height: '32px',
-                                padding: '0 0.65rem',
-                                borderRadius: '6px',
-                                border: '1px solid #F59E0B',
-                                backgroundColor: '#FEF3C7',
-                                color: '#B45309',
-                                fontSize: '0.76rem',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                            }}
-                            title="Transferir todos los precios sugeridos por Lista Institucional + Colchón de Ciclo a la columna de fijación"
-                        >
-                            <Zap size={13} />
-                            Aplicar Sugeridos
-                        </button>
-                    )}
 
-                    {/* BOTÓN RESTAURAR PRECIOS ANTERIORES */}
+                    {/* BOTÓN RESTAURAR PRECIOS ANTERIORES (RESPETA CONGELADOS) */}
                     {isGeneralList && (
                         <button
                             onClick={handleKeepPreviousPrices}
@@ -2504,7 +3506,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 alignItems: 'center',
                                 gap: '5px'
                             }}
-                            title="Restaurar todos los precios a la tarifa del ciclo anterior"
+                            title="Restaurar los precios no congelados a la tarifa del ciclo anterior"
                         >
                             <span>Restaurar Anterior</span>
                         </button>
@@ -2821,63 +3823,65 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                     )}
                                 </th>
 
-                                {/* COLUMNAS EXCLUSIVAS DEL MODO NUTRESA: ACUERDO ANTERIOR, $ SIPSA Y + PRIMA */}
+                                {/* COLUMNA ACUERDO ANTERIOR (COMPARTIDA POR NUTRESA Y COLSUBSIDIO) */}
+                                {(selectedClient === 'nutresa' || selectedClient === 'colsubsidio') && (
+                                    <th
+                                        onClick={() => handleSort('previous')}
+                                        onMouseEnter={() => setActiveHeaderTooltip('previous')}
+                                        onMouseLeave={() => setActiveHeaderTooltip(null)}
+                                        style={{
+                                            padding: '0.55rem 0.5rem',
+                                            fontWeight: 800,
+                                            color: sortField === 'previous' ? THEME.colors.primary : '#475569',
+                                            textAlign: 'right',
+                                            cursor: 'pointer',
+                                            position: 'sticky',
+                                            top: embedded ? '190px' : '133px',
+                                            zIndex: activeHeaderTooltip === 'previous' ? 140 : 65,
+                                            backgroundColor: activeHeaderTooltip === 'previous' ? '#F1F5F9' : '#F8FAFC',
+                                            borderBottom: `2px solid ${THEME.colors.border}`,
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                            <span>ACUERDO ANTERIOR</span>
+                                            <HelpCircle size={12} color="#64748B" />
+                                            {sortField === 'previous' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
+                                        </div>
+                                        {activeHeaderTooltip === 'previous' && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: 'calc(100% + 6px)',
+                                                right: 0,
+                                                width: '300px',
+                                                backgroundColor: '#0F172A',
+                                                color: '#F8FAFC',
+                                                padding: '0.7rem 0.85rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid #334155',
+                                                boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
+                                                whiteSpace: 'normal',
+                                                textAlign: 'left',
+                                                fontWeight: 500,
+                                                lineHeight: 1.45,
+                                                pointerEvents: 'none',
+                                                zIndex: 9999
+                                            }}>
+                                                <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                    ACUERDO ANTERIOR (Ciclo Previo)
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                    Precio unitario que estuvo vigente en el último acuerdo consagrado (quincena o mes anterior) para comparar la evolución real del SKU.
+                                                </div>
+                                            </div>
+                                        )}
+                                    </th>
+                                )}
+
+                                {/* COLUMNAS EXCLUSIVAS DEL MODO NUTRESA: $ SIPSA Y + PRIMA */}
                                 {selectedClient === 'nutresa' && (
                                     <>
-                                        {/* 5A. ACUERDO ANTERIOR (MES PASADO) */}
-                                        <th
-                                            onClick={() => handleSort('previous')}
-                                            onMouseEnter={() => setActiveHeaderTooltip('previous')}
-                                            onMouseLeave={() => setActiveHeaderTooltip(null)}
-                                            style={{
-                                                padding: '0.55rem 0.5rem',
-                                                fontWeight: 800,
-                                                color: sortField === 'previous' ? THEME.colors.primary : '#475569',
-                                                textAlign: 'right',
-                                                cursor: 'pointer',
-                                                position: 'sticky',
-                                                top: embedded ? '190px' : '133px',
-                                                zIndex: activeHeaderTooltip === 'previous' ? 140 : 65,
-                                                backgroundColor: activeHeaderTooltip === 'previous' ? '#F1F5F9' : '#F8FAFC',
-                                                borderBottom: `2px solid ${THEME.colors.border}`,
-                                                boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
-                                                whiteSpace: 'nowrap'
-                                            }}
-                                        >
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
-                                                <span>ACUERDO ANTERIOR</span>
-                                                <HelpCircle size={12} color="#64748B" />
-                                                {sortField === 'previous' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
-                                            </div>
-                                            {activeHeaderTooltip === 'previous' && (
-                                                <div style={{
-                                                    position: 'absolute',
-                                                    top: 'calc(100% + 6px)',
-                                                    right: 0,
-                                                    width: '300px',
-                                                    backgroundColor: '#0F172A',
-                                                    color: '#F8FAFC',
-                                                    padding: '0.7rem 0.85rem',
-                                                    borderRadius: '10px',
-                                                    border: '1px solid #334155',
-                                                    boxShadow: '0 12px 28px rgba(15, 23, 42, 0.35)',
-                                                    whiteSpace: 'normal',
-                                                    textAlign: 'left',
-                                                    fontWeight: 500,
-                                                    lineHeight: 1.45,
-                                                    pointerEvents: 'none',
-                                                    zIndex: 9999
-                                                }}>
-                                                    <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
-                                                        ACUERDO ANTERIOR (Mes Pasado)
-                                                    </div>
-                                                    <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
-                                                        Precio unitario que estuvo vigente en el último acuerdo consagrado con Grupo Nutresa (mes anterior) para comparar la evolución real del SKU.
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </th>
-
                                         {/* 5B. $ SIPSA (REFERENCIA EXCEL NUTRESA) */}
                                         <th
                                             onClick={() => handleSort('sipsa')}
@@ -2996,21 +4000,27 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                     style={{ 
                                         padding: '0.55rem 0.55rem', 
                                         fontWeight: 800, 
-                                        color: '#DC2626', 
+                                        color: selectedClient === 'colsubsidio' ? '#0369A1' : '#DC2626', 
                                         textAlign: 'right', 
                                         cursor: 'pointer',
                                         position: 'sticky',
                                         top: embedded ? '190px' : '133px',
                                         zIndex: activeHeaderTooltip === 'proposed' ? 140 : 65,
-                                        backgroundColor: activeHeaderTooltip === 'proposed' ? '#FEF2F2' : '#F8FAFC',
+                                        backgroundColor: activeHeaderTooltip === 'proposed' ? (selectedClient === 'colsubsidio' ? '#E0F2FE' : '#FEF2F2') : '#F8FAFC',
                                         borderBottom: `2px solid ${THEME.colors.border}`,
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                         whiteSpace: 'nowrap'
                                     }}
                                 >
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
-                                        <span>{selectedClient === 'nutresa' ? 'PROPUESTA NUTRESA' : (isGeneralList ? 'PRECIO ANTERIOR' : 'PROPUESTA CLIENTE')}</span>
-                                        <HelpCircle size={12} color="#DC2626" />
+                                        <span>
+                                            {selectedClient === 'nutresa'
+                                                ? 'PROPUESTA NUTRESA'
+                                                : selectedClient === 'colsubsidio'
+                                                ? 'PROPUESTA COLSUBSIDIO'
+                                                : (isGeneralList ? 'PRECIO ANTERIOR' : 'PROPUESTA CLIENTE')}
+                                        </span>
+                                        <HelpCircle size={12} color={selectedClient === 'colsubsidio' ? '#0369A1' : '#DC2626'} />
                                         {sortField === 'proposed' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                     </div>
                                     {activeHeaderTooltip === 'proposed' && (
@@ -3033,11 +4043,17 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             zIndex: 9999
                                         }}>
                                             <div style={{ color: '#F87171', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
-                                                {selectedClient === 'nutresa' ? 'PROPUESTA NUTRESA ($ SIPSA + Prima)' : (isGeneralList ? 'PRECIO ANTERIOR (Ciclo Previo)' : 'PROPUESTA CLIENTE (Pliego)')}
+                                                {selectedClient === 'nutresa'
+                                                    ? 'PROPUESTA NUTRESA ($ SIPSA + Prima)'
+                                                    : selectedClient === 'colsubsidio'
+                                                    ? 'PROPUESTA COLSUBSIDIO (Planilla Quincenal 1Q/2Q)'
+                                                    : (isGeneralList ? 'PRECIO ANTERIOR (Ciclo Previo)' : 'PROPUESTA CLIENTE (Pliego)')}
                                             </div>
                                             <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
                                                 {selectedClient === 'nutresa'
                                                     ? 'Precio resultante del archivo enviado por Grupo Nutresa ($ SIPSA + Prima) y qué % de utilidad deja frente a nuestro costo actual.'
+                                                    : selectedClient === 'colsubsidio'
+                                                    ? 'Tarifa propuesta por Colsubsidio en el archivo Excel de esta quincena (columna NUE PRE) y qué % de utilidad deja frente a nuestro costo actual.'
                                                     : (isGeneralList
                                                         ? 'Tarifa congelada que estuvo vigente en el ciclo anterior (quincena o mes pasado) y qué % de utilidad deja frente al costo actual.'
                                                         : 'Tarifa unitaria vigente o solicitada por el cliente en su pliego de negociación y qué % de utilidad representa hoy.')}
@@ -3046,39 +4062,38 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                     )}
                                 </th>
 
-                                {/* 6. SUGERIDO IA (OCULTO EN NUTRESA) */}
-                                {selectedClient !== 'nutresa' && (
-                                    <th 
-                                        onClick={() => handleSort('suggested')}
-                                        onMouseEnter={() => setActiveHeaderTooltip('suggested')}
+                                {/* COLUMNA EXCLUSIVA DE COLSUBSIDIO: VARIACIÓN PLIEGO (SUBIÓ / BAJÓ / IGUAL) */}
+                                {selectedClient === 'colsubsidio' && (
+                                    <th
+                                        onClick={() => handleSort('pliego_diff')}
+                                        onMouseEnter={() => setActiveHeaderTooltip('pliego_diff')}
                                         onMouseLeave={() => setActiveHeaderTooltip(null)}
-                                        style={{ 
-                                            padding: '0.55rem 0.55rem', 
-                                            fontWeight: 800, 
-                                            color: '#B45309', 
-                                            textAlign: 'right', 
+                                        style={{
+                                            padding: '0.55rem 0.5rem',
+                                            fontWeight: 800,
+                                            color: sortField === 'pliego_diff' ? THEME.colors.primary : '#0F172A',
+                                            textAlign: 'right',
                                             cursor: 'pointer',
                                             position: 'sticky',
                                             top: embedded ? '190px' : '133px',
-                                            zIndex: activeHeaderTooltip === 'suggested' ? 140 : 65,
-                                            backgroundColor: activeHeaderTooltip === 'suggested' ? '#FFFBEB' : '#F8FAFC',
+                                            zIndex: activeHeaderTooltip === 'pliego_diff' ? 140 : 65,
+                                            backgroundColor: activeHeaderTooltip === 'pliego_diff' ? '#F1F5F9' : '#F8FAFC',
                                             borderBottom: `2px solid ${THEME.colors.border}`,
                                             boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                             whiteSpace: 'nowrap'
                                         }}
                                     >
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
-                                            <Zap size={12} color="#B45309" />
-                                            <span>SUGERIDO IA</span>
-                                            <HelpCircle size={12} color="#B45309" />
-                                            {sortField === 'suggested' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
+                                            <span>VARIACIÓN PLIEGO</span>
+                                            <HelpCircle size={12} color="#64748B" />
+                                            {sortField === 'pliego_diff' ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} color="#94A3B8" />}
                                         </div>
-                                        {activeHeaderTooltip === 'suggested' && (
+                                        {activeHeaderTooltip === 'pliego_diff' && (
                                             <div style={{
                                                 position: 'absolute',
                                                 top: 'calc(100% + 6px)',
                                                 right: 0,
-                                                width: '350px',
+                                                width: '320px',
                                                 backgroundColor: '#0F172A',
                                                 color: '#F8FAFC',
                                                 padding: '0.75rem 0.9rem',
@@ -3092,14 +4107,11 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                 pointerEvents: 'none',
                                                 zIndex: 9999
                                             }}>
-                                                <div style={{ color: '#FBBF24', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
-                                                    SUGERIDO IA (Fórmula Simplificada sin SIPSA)
+                                                <div style={{ color: '#38BDF8', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
+                                                    VARIACIÓN DEL PLIEGO (Propuesta vs Acuerdo Anterior)
                                                 </div>
-                                                <div style={{ fontSize: '0.71rem', color: '#FEF3C7', backgroundColor: 'rgba(245, 158, 11, 0.16)', padding: '5px 7px', borderRadius: '6px', marginBottom: '5px', fontWeight: 700 }}>
-                                                    Redondear50( Costo × (1 + % Lista Inst. + % Colchón Ciclo) )
-                                                </div>
-                                                <div style={{ fontSize: '0.71rem', color: '#E2E8F0' }}>
-                                                    Toma tu % de Lista Institucional (que ya incluye utilidad + merma + selección) y suma solo el colchón por congelar precios (+2%/+3% en 15 días o +4%/+6% en 30 días).
+                                                <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                                    Muestra en pesos ($) y porcentaje (%) cuánto <b>▲ SUBIÓ</b> o <b>▼ BAJÓ</b> la tarifa propuesta por Colsubsidio este mes frente al Acuerdo Anterior (ej. Septiembre).
                                                 </div>
                                             </div>
                                         )}
@@ -3207,10 +4219,10 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             zIndex: 9999
                                         }}>
                                             <div style={{ color: '#34D399', fontWeight: 800, fontSize: '0.74rem', marginBottom: '4px' }}>
-                                                {isGeneralList ? 'NUEVO PRECIO A CONSAGRAR' : 'CONTRAPROPUESTA OFICIAL (CONGELABLE)'}
+                                                {isGeneralList ? 'NUEVO PRECIO A CONSAGRAR (CONGELABLE)' : 'CONTRAPROPUESTA OFICIAL (CONGELABLE)'}
                                             </div>
                                             <div style={{ fontSize: '0.72rem', color: '#E2E8F0' }}>
-                                                Tarifa final en pesos COP que se fijará para todos los clientes suscritos a este acuerdo. En Nutresa, cualquier ajuste manual queda <b>Congelado</b> en borrador hasta consagrar el acuerdo.
+                                                Tarifa final en pesos COP que se fijará para todos los clientes suscritos a este acuerdo. Cualquier ajuste manual queda <b>Congelado</b> en borrador hasta consagrar el acuerdo.
                                             </div>
                                         </div>
                                     )}
@@ -3275,13 +4287,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={selectedClient === 'nutresa' ? 11 : 9} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 600 }}>
+                                    <td colSpan={selectedClient === 'nutresa' ? 11 : (selectedClient === 'colsubsidio' ? 10 : 8)} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 600 }}>
                                         Sincronizando catálogo y precios reales con Supabase...
                                     </td>
                                 </tr>
                             ) : filteredItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={selectedClient === 'nutresa' ? 11 : 9} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                    <td colSpan={selectedClient === 'nutresa' ? 11 : (selectedClient === 'colsubsidio' ? 10 : 8)} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
                                         No se encontraron productos con el criterio de búsqueda actual.
                                     </td>
                                 </tr>
@@ -3301,7 +4313,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 const prevMarkupPct = cost > 0 ? ((item.client_proposed_price - cost) / cost) * 100 : 0;
                                 const lastMonthPrice = item.previous_price && item.previous_price > 0 ? item.previous_price : item.client_proposed_price;
                                 const lastMonthMarkupPct = cost > 0 ? ((lastMonthPrice - cost) / cost) * 100 : 0;
-                                const suggestedMarkupPct = cost > 0 ? ((item.suggested_price - cost) / cost) * 100 : 0;
+                                const pliegoDiffCop = item.client_proposed_price - lastMonthPrice;
+                                const pliegoDiffPct = lastMonthPrice > 0 ? ((item.client_proposed_price - lastMonthPrice) / lastMonthPrice) * 100 : 0;
 
                                 const isHealthyMargin = currentMarkupPct >= Math.min(ruleTargetPct, 15);
                                 const isPositiveMargin = unitProfitCop > 0;
@@ -3315,7 +4328,22 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         }}
                                     >
                                         <td style={{ padding: '0.5rem 0.5rem', fontFamily: 'monospace', fontWeight: 700, color: THEME.colors.textSecondary, whiteSpace: 'nowrap' }}>
-                                            {item.client_code}
+                                            <div>{item.client_code}</div>
+                                            {selectedClient === 'colsubsidio' && item.material_code && (
+                                                <div style={{
+                                                    fontSize: '0.6rem',
+                                                    color: '#0369A1',
+                                                    backgroundColor: '#E0F2FE',
+                                                    border: '1px solid #BAE6FD',
+                                                    borderRadius: '4px',
+                                                    padding: '0 4px',
+                                                    display: 'inline-block',
+                                                    marginTop: '2px',
+                                                    fontWeight: 800
+                                                }}>
+                                                    SAP: {item.material_code}
+                                                </div>
+                                            )}
                                         </td>
                                         <td style={{ padding: '0.5rem 0.55rem' }}>
                                             <div style={{ fontWeight: 800, color: THEME.colors.textMain, fontSize: '0.82rem', lineHeight: 1.25 }}>
@@ -3326,6 +4354,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                     {item.unit}
                                                     {selectedClient === 'nutresa' && item.unified_name && item.unified_name !== item.raw_name
                                                         ? ` • SIPSA: ${item.unified_name}`
+                                                        : selectedClient === 'colsubsidio' && item.unified_name && item.unified_name !== item.raw_name
+                                                        ? ` • Colsubsidio: ${item.unified_name}`
                                                         : ''}
                                                 </span>
                                             </div>
@@ -3372,19 +4402,39 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             )}
                                         </td>
 
-                                        {/* COLUMNAS EXCLUSIVAS DE NUTRESA: ACUERDO ANTERIOR, $ SIPSA Y + PRIMA */}
+                                        {/* COLUMNA ACUERDO ANTERIOR (COMPARTIDA POR NUTRESA Y COLSUBSIDIO) */}
+                                        {(selectedClient === 'nutresa' || selectedClient === 'colsubsidio') && (
+                                            <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                <div style={{ fontWeight: 800, color: '#334155', fontSize: '0.8rem' }}>
+                                                    {formatMoney(lastMonthPrice)}
+                                                </div>
+                                                <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 700, marginTop: '2px' }}>
+                                                    {lastMonthMarkupPct >= 0 ? `+${lastMonthMarkupPct.toFixed(0)}%` : `${lastMonthMarkupPct.toFixed(0)}%`} s/costo
+                                                </div>
+                                                {selectedClient === 'colsubsidio' && item.excel_ant_price && item.excel_ant_price > 0 && item.excel_ant_price !== lastMonthPrice && (
+                                                    <div
+                                                        style={{
+                                                            marginTop: '2px',
+                                                            display: 'inline-block',
+                                                            fontSize: '0.58rem',
+                                                            fontWeight: 800,
+                                                            color: '#92400E',
+                                                            backgroundColor: '#FEF3C7',
+                                                            border: '1px solid #FDE68A',
+                                                            borderRadius: '4px',
+                                                            padding: '1px 4px'
+                                                        }}
+                                                        title={`El archivo de Colsubsidio declara ANT PRE = ${formatMoney(item.excel_ant_price)}, distinto al acuerdo anterior en BD (${formatMoney(lastMonthPrice)})`}
+                                                    >
+                                                        Dif. Excel: {formatMoney(item.excel_ant_price)}
+                                                    </div>
+                                                )}
+                                            </td>
+                                        )}
+
+                                        {/* COLUMNAS EXCLUSIVAS DE NUTRESA: $ SIPSA Y + PRIMA */}
                                         {selectedClient === 'nutresa' && (
                                             <>
-                                                {/* ACUERDO ANTERIOR (MES PASADO) */}
-                                                <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ fontWeight: 800, color: '#334155', fontSize: '0.8rem' }}>
-                                                        {formatMoney(lastMonthPrice)}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 700, marginTop: '2px' }}>
-                                                        {lastMonthMarkupPct >= 0 ? `+${lastMonthMarkupPct.toFixed(0)}%` : `${lastMonthMarkupPct.toFixed(0)}%`} s/costo
-                                                    </div>
-                                                </td>
-
                                                 {/* $ SIPSA */}
                                                 <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                     {(item.sipsa_price || 0) > 0 ? (
@@ -3478,11 +4528,11 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         )}
 
                                         {/* PRECIO ANTERIOR / PROPUESTA CLIENTE + % UTILIDAD */}
-                                        <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', fontWeight: 800, color: '#DC2626', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', fontWeight: 800, color: selectedClient === 'colsubsidio' ? '#0369A1' : '#DC2626', whiteSpace: 'nowrap' }}>
                                             <div>{formatMoney(item.client_proposed_price)}</div>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', marginTop: '2px' }}>
                                                 <span style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: 700 }}>
-                                                    {prevMarkupPct >= 0 ? `+${prevMarkupPct.toFixed(0)}%` : `${prevMarkupPct.toFixed(0)}%`}
+                                                    {prevMarkupPct >= 0 ? `+${prevMarkupPct.toFixed(0)}%` : `${prevMarkupPct.toFixed(0)}%`} s/costo
                                                 </span>
                                                 {selectedClient === 'nutresa' && item.client_proposed_price !== lastMonthPrice && (
                                                     <span style={{
@@ -3496,7 +4546,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                         {item.client_proposed_price > lastMonthPrice ? '+' : ''}{formatMoney(item.client_proposed_price - lastMonthPrice)} vs ant.
                                                     </span>
                                                 )}
-                                                {selectedClient !== 'nutresa' && item.status_change && (
+                                                {selectedClient !== 'nutresa' && selectedClient !== 'colsubsidio' && item.status_change && (
                                                     <span style={{
                                                         fontSize: '0.58rem',
                                                         padding: '1px 4px',
@@ -3511,44 +4561,53 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             </div>
                                         </td>
 
-                                        {/* PRECIO SUGERIDO IA + % UTILIDAD SUGERIDA (OCULTO EN NUTRESA) */}
-                                        {selectedClient !== 'nutresa' && (
-                                            <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                <button
-                                                    onClick={() => {
-                                                        setEditingPriceDrafts(prev => {
-                                                            const next = { ...prev };
-                                                            delete next[item.id];
-                                                            return next;
-                                                        });
-                                                        setEditingMarkupDrafts(prev => {
-                                                            const next = { ...prev };
-                                                            delete next[item.id];
-                                                            return next;
-                                                        });
-                                                        setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: item.suggested_price } : p));
-                                                    }}
-                                                    style={{
-                                                        background: '#FEF3C7',
-                                                        border: '1px solid #FCD34D',
-                                                        color: '#B45309',
-                                                        fontWeight: 800,
-                                                        fontSize: '0.76rem',
-                                                        padding: '2px 7px',
-                                                        borderRadius: '4px',
-                                                        cursor: 'pointer',
+                                        {/* COLUMNA EXCLUSIVA DE COLSUBSIDIO: VARIACIÓN PLIEGO (SUBIÓ / BAJÓ / IGUAL) */}
+                                        {selectedClient === 'colsubsidio' && (
+                                            <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                <div>
+                                                    <span style={{
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
-                                                        gap: '3px'
-                                                    }}
-                                                    title="Clic para fijar este precio sugerido técnico"
-                                                >
-                                                    <Zap size={11} color="#B45309" />
-                                                    {formatMoney(item.suggested_price)}
-                                                </button>
-                                                <div style={{ fontSize: '0.64rem', color: '#B45309', fontWeight: 700, marginTop: '2px' }}>
-                                                    +{suggestedMarkupPct.toFixed(1)}% s/costo
+                                                        gap: '3px',
+                                                        fontSize: '0.66rem',
+                                                        padding: '2px 7px',
+                                                        borderRadius: '6px',
+                                                        fontWeight: 800,
+                                                        backgroundColor: pliegoDiffCop > 0 ? '#DCFCE7' : (pliegoDiffCop < 0 ? '#FEE2E2' : '#F1F5F9'),
+                                                        color: pliegoDiffCop > 0 ? '#166534' : (pliegoDiffCop < 0 ? '#991B1B' : '#475569'),
+                                                        border: `1px solid ${pliegoDiffCop > 0 ? '#86EFAC' : (pliegoDiffCop < 0 ? '#FECACA' : '#E2E8F0')}`
+                                                    }}>
+                                                        {pliegoDiffCop > 0 ? '▲ SUBIÓ' : (pliegoDiffCop < 0 ? '▼ BAJÓ' : '• IGUAL')}
+                                                    </span>
                                                 </div>
+                                                <div style={{
+                                                    fontSize: '0.68rem',
+                                                    fontWeight: 800,
+                                                    color: pliegoDiffCop > 0 ? '#059669' : (pliegoDiffCop < 0 ? '#DC2626' : '#64748B'),
+                                                    marginTop: '3px'
+                                                }}>
+                                                    {pliegoDiffCop === 0
+                                                        ? '$0 (0%)'
+                                                        : `${pliegoDiffCop > 0 ? '+' : ''}${formatMoney(pliegoDiffCop)} (${pliegoDiffPct > 0 ? '+' : ''}${pliegoDiffPct.toFixed(1)}%)`}
+                                                </div>
+                                                {(item.demand_volume || 0) > 0 && pliegoDiffCop !== 0 && (
+                                                    <div
+                                                        style={{
+                                                            marginTop: '2px',
+                                                            display: 'inline-block',
+                                                            fontSize: '0.6rem',
+                                                            fontWeight: 800,
+                                                            color: pliegoDiffCop > 0 ? '#065F46' : '#991B1B',
+                                                            backgroundColor: pliegoDiffCop > 0 ? '#ECFDF5' : '#FEF2F2',
+                                                            border: `1px solid ${pliegoDiffCop > 0 ? '#A7F3D0' : '#FECACA'}`,
+                                                            borderRadius: '4px',
+                                                            padding: '1px 5px'
+                                                        }}
+                                                        title="Impacto en facturación del ciclo según los Kg reales demandados por las 32 sedes de Colsubsidio"
+                                                    >
+                                                        Impacto: {pliegoDiffCop > 0 ? '+' : '-'}${formatCompactMoney(Math.abs(pliegoDiffCop * (item.demand_volume || 0)))}
+                                                    </div>
+                                                )}
                                             </td>
                                         )}
 
@@ -3579,7 +4638,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                         setEditingMarkupDrafts(prev => ({ ...prev, [item.id]: raw }));
                                                         if (raw === '' || raw === '-' || raw === '.') {
                                                             if (raw === '') {
-                                                                setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: 0, is_frozen_override: selectedClient === 'nutresa' ? true : p.is_frozen_override } : p));
+                                                                setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: 0, is_frozen_override: true } : p));
                                                             }
                                                             return;
                                                         }
@@ -3588,7 +4647,12 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                             const newPrice = cost > 0
                                                                 ? Math.ceil((cost * (1 + newMarkup / 100)) / 50) * 50
                                                                 : item.our_counterproposal;
-                                                            setAgreementItems(prev => prev.map(p => p.id === item.id ? { ...p, our_counterproposal: newPrice, is_frozen_override: selectedClient === 'nutresa' ? true : p.is_frozen_override } : p));
+                                                            setAgreementItems(prev => prev.map(p => p.id === item.id ? {
+                                                                ...p,
+                                                                our_counterproposal: newPrice,
+                                                                is_frozen_override: true,
+                                                                status_change: newPrice > p.client_proposed_price ? 'SUBIÓ' : (newPrice < p.client_proposed_price ? 'BAJÓ' : 'IGUAL')
+                                                            } : p));
                                                         }
                                                     }}
                                                     onBlur={() => {
@@ -3599,6 +4663,10 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                         });
                                                         if (selectedClient === 'nutresa') {
                                                             saveNutresaDraftToDb(agreementItems);
+                                                        } else if (selectedClient === 'colsubsidio') {
+                                                            saveColsubsidioDraftToDb(agreementItems);
+                                                        } else {
+                                                            saveGeneralListDraftToDb(selectedClient, agreementItems);
                                                         }
                                                     }}
                                                     style={{
@@ -3622,7 +4690,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             </div>
                                         </td>
 
-                                        {/* NUEVO PRECIO A FIJAR / CONTRAPROPUESTA (CON BADGE CONGELADO EN NUTRESA) */}
+                                        {/* NUEVO PRECIO A FIJAR / CONTRAPROPUESTA (CON BADGE CONGELADO EN LOS 4 MODELOS) */}
                                         <td style={{ padding: '0.5rem 0.55rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
                                                 <input 
@@ -3650,7 +4718,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                         setAgreementItems(prev => prev.map(p => p.id === item.id ? {
                                                             ...p,
                                                             our_counterproposal: val,
-                                                            is_frozen_override: selectedClient === 'nutresa' ? (val !== p.client_proposed_price) : p.is_frozen_override
+                                                            is_frozen_override: val !== p.client_proposed_price,
+                                                            status_change: val > p.client_proposed_price ? 'SUBIÓ' : (val < p.client_proposed_price ? 'BAJÓ' : 'IGUAL')
                                                         } : p));
                                                     }}
                                                     onBlur={() => {
@@ -3661,6 +4730,10 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                         });
                                                         if (selectedClient === 'nutresa') {
                                                             saveNutresaDraftToDb(agreementItems);
+                                                        } else if (selectedClient === 'colsubsidio') {
+                                                            saveColsubsidioDraftToDb(agreementItems);
+                                                        } else {
+                                                            saveGeneralListDraftToDb(selectedClient, agreementItems);
                                                         }
                                                     }}
                                                     style={{
@@ -3680,7 +4753,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                         outline: 'none'
                                                     }}
                                                 />
-                                                {selectedClient === 'nutresa' && item.is_frozen_override && (
+                                                {item.is_frozen_override && (
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                         <span style={{
                                                             display: 'inline-flex',
@@ -3703,10 +4776,17 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                                 const updated = agreementItems.map(p => p.id === item.id ? {
                                                                     ...p,
                                                                     our_counterproposal: p.client_proposed_price,
-                                                                    is_frozen_override: false
+                                                                    is_frozen_override: false,
+                                                                    status_change: 'IGUAL' as const
                                                                 } : p);
                                                                 setAgreementItems(updated);
-                                                                saveNutresaDraftToDb(updated);
+                                                                if (selectedClient === 'nutresa') {
+                                                                    saveNutresaDraftToDb(updated);
+                                                                } else if (selectedClient === 'colsubsidio') {
+                                                                    saveColsubsidioDraftToDb(updated);
+                                                                } else {
+                                                                    saveGeneralListDraftToDb(selectedClient, updated);
+                                                                }
                                                             }}
                                                             style={{
                                                                 background: 'none',
@@ -3716,7 +4796,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                                 padding: 0,
                                                                 display: 'inline-flex'
                                                             }}
-                                                            title="Descongelar y volver a la propuesta original de Nutresa"
+                                                            title="Descongelar y volver a la tarifa anterior"
                                                         >
                                                             <RotateCcw size={10} />
                                                         </button>
@@ -3789,7 +4869,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     justifyContent: 'center',
                     padding: '1.25rem'
                 }}>
-                    {selectedClient === 'nutresa' && consagrateModalMode === 'compact_approve' ? (
+                    {(selectedClient === 'nutresa' || selectedClient === 'colsubsidio') && consagrateModalMode === 'compact_approve' ? (
                         <div style={{
                             backgroundColor: '#FFFFFF',
                             borderRadius: '20px',
@@ -3823,7 +4903,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                             Aprobar y Congelar Acuerdo de Precios
                                         </h3>
                                         <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
-                                            Modelo Especial SIPSA + Prima • {agreementItems.length} SKUs en lista
+                                            {selectedClient === 'nutresa' ? 'Modelo Especial SIPSA + Prima' : 'Modelo Especial Quincenal (1Q/2Q)'} • {agreementItems.length} SKUs en lista
                                         </p>
                                     </div>
                                 </div>
@@ -3858,7 +4938,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         <Building2 size={22} color="#16A34A" />
                                         <div>
                                             <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#14532D' }}>
-                                                GRUPO NUTRESA (IRCC)
+                                                {selectedClient === 'nutresa' ? 'GRUPO NUTRESA (IRCC)' : 'COLSUBSIDIO'}
                                             </div>
                                             <div style={{ fontSize: '0.76rem', color: '#15803D', fontWeight: 600 }}>
                                                 Cliente institucional formalizado ({selectedClientIdsForRun.length} sedes vinculadas). Se congelarán las tarifas vigentes.
@@ -3900,7 +4980,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                     }}>
                                         <Lock size={14} color="#0D7A57" />
                                         <span>
-                                            Incluye <strong>{agreementItems.filter(i => i.is_frozen_override).length} SKU(s)</strong> con precio negociado y congelado manualmente sobre la propuesta inicial de Nutresa.
+                                            Incluye <strong>{agreementItems.filter(i => i.is_frozen_override).length} SKU(s)</strong> con precio negociado y congelado manualmente sobre la propuesta inicial de {selectedClient === 'nutresa' ? 'Nutresa' : 'Colsubsidio'}.
                                         </span>
                                     </div>
                                 )}
@@ -4207,6 +5287,41 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                         />
                                     </div>
                                 </div>
+
+                                {/* AYUDA VISUAL DE VIGENCIA: HORARIO EXACTO DE COBERTURA DEL ACUERDO */}
+                                {(() => {
+                                    const todayBogota = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+                                    const isImmediateToday = modalStartDate === todayBogota;
+                                    const isFutureDate = modalStartDate > todayBogota;
+                                    return (
+                                        <div style={{
+                                            padding: '9px 12px',
+                                            borderRadius: '10px',
+                                            backgroundColor: isImmediateToday ? '#ECFDF5' : isFutureDate ? '#EFF6FF' : '#FFFBEB',
+                                            border: `1px solid ${isImmediateToday ? '#A7F3D0' : isFutureDate ? '#BFDBFE' : '#FDE68A'}`,
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                            gap: '10px'
+                                        }}>
+                                            <Clock size={16} color={isImmediateToday ? '#059669' : isFutureDate ? '#2563EB' : '#D97706'} style={{ marginTop: '2px', flexShrink: 0 }} />
+                                            <div style={{ fontSize: '0.74rem', lineHeight: 1.45, color: '#1E293B' }}>
+                                                <div style={{ fontWeight: 800, color: isImmediateToday ? '#065F46' : isFutureDate ? '#1E40AF' : '#92400E', marginBottom: '2px' }}>
+                                                    {isImmediateToday
+                                                        ? 'Activación inmediata hoy mismo'
+                                                        : isFutureDate
+                                                        ? `Activación programada (${modalStartDate} a las 00:00 h)`
+                                                        : `Vigencia retroactiva desde ${modalStartDate} (00:00 h)`}
+                                                </div>
+                                                <div style={{ color: '#475569' }}>
+                                                    {isImmediateToday
+                                                        ? 'Al confirmar, las tarifas entran en vigor de inmediato para todos los pedidos de hoy y rigen hasta las '
+                                                        : `Las tarifas se activarán automáticamente a las 00:00 h (medianoche Bogotá) del ${modalStartDate} y regirán hasta las `}
+                                                    <strong>23:59 h del {modalEndDate || 'día de vencimiento'}</strong>.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             {/* PASO 2: PADRÓN DE CLIENTES APLICABLES AL MODELO + BUSCADOR COMBINADO INTELIGENTE */}

@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.331 (Capítulo 44: Optimización Táctica de Grupo Nutresa SIPSA + Prima y Aislamiento Quincenal de Colsubsidio — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.333 (Capítulo 44: Simplificación y Blindaje de Listas Generales de 15 y 30 Días: Erradicación de Sugerido IA, Edición Directa % Utilidad / Nuevo Precio con Borrador Congelado, Filtros Rápidos y Guía de Vigencia 00:00 h a 23:59 h — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 348 Escenarios BDD Ininterrumpidos (1..348)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 350 Escenarios BDD Ininterrumpidos (1..350)
 
 ---
 
@@ -13123,4 +13123,49 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
        10. `VARIACIÓN / GANANCIA` (diferencial de la contrapropuesta frente a la propuesta del cliente, ganancia unitaria en `$/Kg` e impacto total según volumen)
   4. **Persistencia de Metadatos y Consagración Oficial (`colsubsidio_agreement_meta`):**
      - Al confirmar en el modal **`Aprobar y Congelar Acuerdo de Precios`**, el sistema actualiza `quotes`, `quote_items` y el padrón de las 32 sedes de Colsubsidio (`special_agreement_model_clients`, `app_settings`, `profiles.logistics_data`), guarda los metadatos consagrados en `app_settings.key = 'colsubsidio_agreement_meta'` (código `Material` SAP, descripción Colsubsidio y nuevo precio base) y limpia el borrador temporal `colsubsidio_negotiation_draft`.
+
+
+---
+
+### Escenario 349: Enriquecimiento de Inteligencia Comercial en el Modelo Colsubsidio (1Q/2Q): Filtros `En Planilla Excel` y `Alerta Margen (<15%)`, Auditoría Anti-Fuga de `ANT PRE`, Impacto Económico por Volumen de Sedes, Copiado de Excepciones con Código SAP y Exportación `.xlsx` Homologada (`NIT: 901393217 INVESTMENTS CORTES SAS`) (SDD v1.9.332)
+- **Given** el flujo aislado de negociación quincenal (`1Q/2Q`) de **Colsubsidio** en `/admin/commercial?tab=operations&subtab=agreements` (`src/components/SpecialAgreementsModule.tsx`), donde el acuerdo maestro consta de **252 SKUs** pero la planilla quincenal remitida por Colsubsidio contiene alrededor de **101 SKUs** de fruver activo junto con una columna histórica `ANT PRE` declarada por el cliente,
+- **When** el operador comercial importa la planilla de Colsubsidio, audita las variaciones y prepara su respuesta comercial:
+- **Then** el sistema provee las siguientes 5 capacidades enriquecidas exclusivas para **Colsubsidio**:
+  1. **Píldoras de Filtro `En Planilla Excel (N)` y `Alerta Margen (<15%)` (`ColsubsidioVariationFilter`):**
+     - Adicionalmente a `Todos`, `▲ Subieron`, `▼ Bajaron`, `• Igual` y `Congelados`, la barra de herramientas de Colsubsidio incorpora:
+       - **`En Planilla Excel (N)`** (`in_excel`, visible cuando existen SKUs cruzados con el archivo Excel cargado): Aísla únicamente los SKUs que vinieron en el pliego quincenal de Colsubsidio (`matched_in_excel === true`), separándolos de los SKUs de tarifa fija que no rotaron en esa planilla.
+       - **`Alerta Margen (N)`** (`low_margin`): Aísla los SKUs de Colsubsidio con `corabastos_cost > 0` cuya utilidad sobre costo (`(our_counterproposal - corabastos_cost) / corabastos_cost * 100`) es inferior al `15%`, priorizando aquellos productos que bajaron en el pliego y comprometen la rentabilidad mínima.
+  2. **Auditoría Anti-Fuga del Precio Anterior Declarado por el Cliente (`excel_ant_price` vs `previous_price`):**
+     - Al importar el Excel de Colsubsidio, el sistema captura el valor de la columna `ANT PRE` (`excel_ant_price`) y lo compara contra el `ACUERDO ANTERIOR` real consagrado en Supabase (`previous_price`).
+     - Si existe discrepancia (`excel_ant_price > 0 && excel_ant_price !== previous_price`), la celda de `ACUERDO ANTERIOR` muestra una alerta visual **`Dif. Excel: $...`** advirtiendo que el precio anterior reportado en la hoja de Colsubsidio difiere de la tarifa consagrada en sistema.
+  3. **Impacto Financiero Real del Pliego Ponderado por Demanda de las 32 Sedes (`Impacto ciclo`):**
+     - En la columna **`VARIACIÓN PLIEGO`**, cuando el SKU registra demanda real en el ciclo (`demand_volume > 0`) y su precio varió (`pliegoDiffCop !== 0`), se despliega una tercera línea con el impacto económico proyectado sobre el volumen real de las 32 sedes (`Impacto: +$... / -$...`, calculado como `(client_proposed_price - previous_price) * demand_volume`).
+  4. **Botón `Copiar Excepciones (N)` con Código SAP (`Material`) y Descripción Oficial de Colsubsidio:**
+     - En la barra de acciones de Colsubsidio, cuando existe al menos un SKU con precio congelado o contrapropuesta distinta a la propuesta del cliente, se habilita el botón **`Copiar Excepciones (N)`** que copia al portapapeles el guion comercial estructurado con el código SAP (`Material`), la descripción de Colsubsidio, el acuerdo anterior, la propuesta del cliente y la contrapropuesta de FruFresco.
+  5. **Exportación `.xlsx` Homologada al Formato Oficial de Colsubsidio (`NIT: 901393217 INVESTMENTS CORTES SAS`):**
+     - Al pulsar **`Descargar .xlsx`** en Colsubsidio, el archivo `ACUERDO_COLSUBSIDIO_{periodo}.xlsx` (hoja `LIST PRE INVESMTES`) incluye la fila superior institucional `NIT: 901393217 INVESTMENTS CORTES SAS` y las columnas oficiales de devolución (`Material`, `Descripcion`, `U.M`, `NUE PRE`, `ANT PRE`, `DIFERENC`, `PORC`, `VARIACION`, `CONTRAPROPUESTA FRUFRESCO`, `DIF VS PROPUESTA`, `OBSERVACIÓN COMERCIAL`, `Producto FruFresco`, `Accounting ID`, `Consumo Periodo`, `COSTO CORABASTOS`).
+
+
+---
+
+### Escenario 350: Simplificación y Blindaje de las Listas Generales de 15 Días (`general_quincenal`) y 30 Días (`general_mensual`): Erradicación de `SUGERIDO IA`, Edición Directa Bidireccional (`% Utilidad` ↔ `Nuevo Precio`), Borrador Persistente con Pin `Congelado`, Filtros Rápidos, Instructivo de 3 Pasos y Guía Visual de Vigencia (`00:00 h` a `23:59 h`) (SDD v1.9.333)
+- **Given** las tarjetas **Lista General Quincenal (15 Días)** (`general_quincenal`, 388 SKUs, 30 clientes/sedes) y **Lista General Mensual (30 Días)** (`general_mensual`, 388 SKUs, 10 clientes/sedes) en `/admin/commercial?tab=operations&subtab=agreements` (`src/components/SpecialAgreementsModule.tsx`),
+- **When** el operador comercial selecciona cualquiera de las dos Listas Generales (`general_quincenal` o `general_mensual`):
+- **Then** el sistema aplica el principio de simplicidad operativa ("La mejor pieza es la que no existe") cumpliendo las siguientes reglas contractuales:
+  1. **Erradicación Total de la Columna `SUGERIDO IA` y del Botón `Aplicar Sugeridos`:**
+     - Se suprimen por completo la columna `SUGERIDO IA` y el botón `Aplicar Sugeridos` en los 4 modelos de `SpecialAgreementsModule.tsx`.
+     - La fijación de precios en las Listas Generales de 15 y 30 días opera directamente mediante la entrada libre bidireccional en **`% UTILIDAD`** o **`NUEVO PRECIO`**, tomando como referencia real en pantalla el **`COSTO / LISTA INST.`** y el **`PRECIO ANTERIOR`** (más el botón opcional `Igualar a Lista Inst.` / `Restaurar Anterior` que respeta los SKUs congelados).
+  2. **Persistencia en Borrador (`general_quincenal_negotiation_draft` / `general_mensual_negotiation_draft`) y Estado `Congelado`:**
+     - Cuando el operador edita manualmente el `% Utilidad` o el `Nuevo Precio` de cualquier SKU en `general_quincenal` o `general_mensual`, el ítem queda marcado con `is_frozen_override = true` (mostrando el badge **`Congelado`** y su botón individual de desbloqueo `RotateCcw`) y se persiste automáticamente en `app_settings` (`key = 'general_quincenal_negotiation_draft'` o `'general_mensual_negotiation_draft'`).
+     - Al pulsar `Restaurar Anterior` o `Igualar a Lista Inst.`, el sistema respeta intactos todos los SKUs marcados como **`Congelado`** (`!item.is_frozen_override`).
+  3. **Píldoras de Filtro Rápido para Listas Generales (`generalListQuickFilter`):**
+     - En la barra de herramientas de `general_quincenal` y `general_mensual` se despliegan 4 píldoras interactivas con conteo en vivo:
+       - **`Todos (N)`** (`all`)
+       - **`Con Consumo (N)`** (`with_demand`: SKUs con `demand_volume > 0` en el ciclo)
+       - **`Alerta Margen (N)`** (`low_margin`: SKUs con `corabastos_cost > 0` y utilidad sobre costo `< 15%`)
+       - **`Congelados (N)`** (`frozen`: SKUs con `is_frozen_override === true`)
+  4. **Instructivo Operativo de 3 Pasos y Guía Visual de Vigencia (`00:00 h` a `23:59 h`) en el Modal de Consagración:**
+     - Despliega en cabecera un instructivo colapsable de 3 pasos para el modo de Lista General (15 o 30 días) con indicador de borrador activo y botón `Restablecer Borrador`.
+     - En el modal de consagración (`full_roster`), dentro de la sección `1. Vigencia y Duración del Ciclo de Precios`, incorpora el bloque de **Ayuda Visual Reactiva de Horario de Vigencia** (`Activación inmediata hoy mismo` vs `Activación programada a las 00:00 h`, rigiendo hasta las **`23:59 h`** del día de vencimiento).
+
 
