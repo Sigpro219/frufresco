@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
         const { data: clientProfile } = await supabaseAdmin
             .from('profiles')
-            .select('id, parent_id, is_corporate_parent, company_name, razon_social, nit')
+            .select('id, parent_id, is_corporate_parent, company_name, razon_social, nit, logistics_data')
             .eq('id', clientId)
             .single();
 
@@ -67,6 +67,43 @@ export async function GET(request: Request) {
                     }
                 });
             });
+        }
+
+        if (Object.keys(agreementMap).length === 0) {
+            let masterQuoteId = (clientProfile as any)?.logistics_data?.active_master_agreement_id;
+            if (!masterQuoteId) {
+                const { data: modelRow } = await supabaseAdmin
+                    .from('special_agreement_model_clients')
+                    .select('model_id')
+                    .in('client_id', clientIds)
+                    .limit(1)
+                    .maybeSingle();
+                if (modelRow?.model_id) {
+                    const { data: sam } = await supabaseAdmin
+                        .from('special_agreement_models')
+                        .select('master_quote_id')
+                        .eq('id', modelRow.model_id)
+                        .maybeSingle();
+                    masterQuoteId = sam?.master_quote_id;
+                }
+            }
+
+            if (masterQuoteId) {
+                const { data: masterQuote } = await supabaseAdmin
+                    .from('quotes')
+                    .select('id, quote_items(product_id, unit_price)')
+                    .eq('id', masterQuoteId)
+                    .eq('status', 'agreement')
+                    .maybeSingle();
+
+                if (masterQuote?.quote_items) {
+                    masterQuote.quote_items.forEach((qi: any) => {
+                        if (qi.product_id && qi.unit_price) {
+                            agreementMap[qi.product_id] = Number(qi.unit_price);
+                        }
+                    });
+                }
+            }
         }
 
         // Fetch standard catalog prices from General Institucional model for comparison

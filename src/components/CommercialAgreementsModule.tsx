@@ -695,6 +695,7 @@ export default function CommercialAgreementsModule() {
             // 1.1 Synchronize special_agreement_model_clients using canonical columns (model_id, client_id, is_default_selected)
             const STRUCTURAL_QUOTE_TO_MODEL: Record<string, string> = {
                 'ab9c0c14-a27e-4317-9995-dfb4ba9bcb80': 'nutresa',
+                '445c8f85-f693-4e05-a1fd-7c3a74c47162': 'colsubsidio',
                 '5afc3173-4ced-4635-a71f-56ef57e144f8': 'colsubsidio',
                 'b5a2abae-68f1-44fe-87a3-84b1817026db': 'general_quincenal',
                 '6572e7d6-4925-4576-8960-caca64a3c47f': 'general_mensual'

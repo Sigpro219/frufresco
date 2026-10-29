@@ -1362,7 +1362,8 @@ useEffect(() => {
             if (effectiveClientId) {
                 try {
                     const checkDate = selectedOrder.delivery_date ? String(selectedOrder.delivery_date).split('T')[0] : '';
-                    const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${effectiveClientId}&delivery_date=${checkDate}&client_type=B2B`);
+                    const orderDateParam = selectedOrder.created_at ? String(selectedOrder.created_at).split('T')[0] : '';
+                    const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${effectiveClientId}&order_date=${orderDateParam}&delivery_date=${checkDate}&client_type=B2B`);
                     if (res.ok) {
                         const json = await res.json();
                         if (json.contractPrices) {
@@ -3659,40 +3660,6 @@ useEffect(() => {
                                     <X size={11} strokeWidth={2.5} />
                                 </button>
                             )}
-                        </div>
-
-                        {/* Dropdown Filter by Channel */}
-                        <div style={{ position: 'relative', height: '38px', flexShrink: 0 }}>
-                            <select
-                                value={selectedChannel}
-                                onChange={(e) => setSelectedChannel(e.target.value)}
-                                style={{
-                                    height: '100%',
-                                    padding: '0 2rem 0 0.8rem',
-                                    borderRadius: '8px',
-                                    border: '1px solid #E2E8F0',
-                                    fontSize: '0.78rem',
-                                    fontWeight: '800',
-                                    color: '#334155',
-                                    outline: 'none',
-                                    backgroundColor: '#F8FAFC',
-                                    cursor: 'pointer',
-                                    appearance: 'none',
-                                    backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
-                                    backgroundPosition: 'right 0.5rem center',
-                                    backgroundSize: '1.1rem',
-                                    backgroundRepeat: 'no-repeat',
-                                    width: '150px'
-                                }}
-                            >
-                                <option value="">Todos los canales</option>
-                                <option value="whatsapp">WhatsApp</option>
-                                <option value="phone">Teléfono</option>
-                                <option value="web_b2c">Web Hogar</option>
-                                <option value="web_b2b">Web Horeca</option>
-                                <option value="email">Correo</option>
-                                <option value="file_upload">Carga Masiva</option>
-                            </select>
                         </div>
 
                         {/* Info Button for Commands */}

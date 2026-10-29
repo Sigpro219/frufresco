@@ -942,9 +942,79 @@ export default function B2BDashboard() {
                         .eq('status', 'agreement')
                         .order('created_at', { ascending: false });
 
-                    if (isMounted.current) setAgreements(fallback || []);
+                    let resolvedAgreements = fallback || [];
+                    if (resolvedAgreements.length === 0) {
+                        let masterQuoteId = activeProfile?.logistics_data?.active_master_agreement_id;
+                        if (!masterQuoteId) {
+                            const { data: modelRow } = await supabase
+                                .from('special_agreement_model_clients')
+                                .select('model_id')
+                                .in('client_id', clientIds)
+                                .limit(1)
+                                .maybeSingle();
+                            if (modelRow?.model_id) {
+                                const { data: sam } = await supabase
+                                    .from('special_agreement_models')
+                                    .select('master_quote_id')
+                                    .eq('id', modelRow.model_id)
+                                    .maybeSingle();
+                                masterQuoteId = sam?.master_quote_id;
+                            }
+                        }
+                        if (masterQuoteId) {
+                            const { data: mq } = await supabase
+                                .from('quotes')
+                                .select(`
+                                    *,
+                                    quote_items(
+                                        *,
+                                        products(id, name, name_en, unit_of_measure, image_url, sku, category)
+                                    )
+                                `)
+                                .eq('id', masterQuoteId)
+                                .eq('status', 'agreement')
+                                .maybeSingle();
+                            if (mq) resolvedAgreements = [mq];
+                        }
+                    }
+                    if (isMounted.current) setAgreements(resolvedAgreements);
                 } else {
-                    if (isMounted.current) setAgreements(data || []);
+                    let resolvedAgreements = data || [];
+                    if (resolvedAgreements.length === 0) {
+                        let masterQuoteId = activeProfile?.logistics_data?.active_master_agreement_id;
+                        if (!masterQuoteId) {
+                            const { data: modelRow } = await supabase
+                                .from('special_agreement_model_clients')
+                                .select('model_id')
+                                .in('client_id', clientIds)
+                                .limit(1)
+                                .maybeSingle();
+                            if (modelRow?.model_id) {
+                                const { data: sam } = await supabase
+                                    .from('special_agreement_models')
+                                    .select('master_quote_id')
+                                    .eq('id', modelRow.model_id)
+                                    .maybeSingle();
+                                masterQuoteId = sam?.master_quote_id;
+                            }
+                        }
+                        if (masterQuoteId) {
+                            const { data: mq } = await supabase
+                                .from('quotes')
+                                .select(`
+                                    *,
+                                    quote_items(
+                                        *,
+                                        products(id, name, name_en, unit_of_measure, image_url, sku, category)
+                                    )
+                                `)
+                                .eq('id', masterQuoteId)
+                                .eq('status', 'agreement')
+                                .maybeSingle();
+                            if (mq) resolvedAgreements = [mq];
+                        }
+                    }
+                    if (isMounted.current) setAgreements(resolvedAgreements);
                 }
             } catch (err) {
                 console.warn('[agreements] unexpected error, showing empty state');

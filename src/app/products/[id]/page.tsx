@@ -33,6 +33,7 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
 
         // Check if this client (or their matrix parent) has an active agreement quote
         const effectiveClientId = profile?.parent_id || userId;
+        let targetAgreementId: string | null = null;
         const { data: activeAgreement } = await serverSupabase
             .from('quotes')
             .select('id')
@@ -41,11 +42,36 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
             .maybeSingle();
 
         if (activeAgreement) {
+            targetAgreementId = activeAgreement.id;
+        } else {
+            let masterQuoteId = profile?.logistics_data?.active_master_agreement_id;
+            if (!masterQuoteId) {
+                const { data: modelRow } = await serverSupabase
+                    .from('special_agreement_model_clients')
+                    .select('model_id')
+                    .in('client_id', [userId, profile?.parent_id].filter(Boolean))
+                    .limit(1)
+                    .maybeSingle();
+                if (modelRow?.model_id) {
+                    const { data: sam } = await serverSupabase
+                        .from('special_agreement_models')
+                        .select('master_quote_id')
+                        .eq('id', modelRow.model_id)
+                        .maybeSingle();
+                    masterQuoteId = sam?.master_quote_id;
+                }
+            }
+            if (masterQuoteId) {
+                targetAgreementId = masterQuoteId;
+            }
+        }
+
+        if (targetAgreementId) {
             hasActiveAgreement = true;
             const { data: qItems } = await serverSupabase
                 .from('quote_items')
                 .select('product_id, unit_price')
-                .eq('quote_id', activeAgreement.id);
+                .eq('quote_id', targetAgreementId);
             if (qItems) {
                 agreementItems = qItems;
             }

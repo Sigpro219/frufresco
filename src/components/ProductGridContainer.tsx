@@ -41,6 +41,10 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
 
         // Check if this client (or their matrix parent) has an active agreement quote
         const effectiveClientId = profile?.parent_id || userId;
+        let targetAgreementId: string | null = null;
+        let agreementStartDate: string | null = null;
+        let agreementValidUntil: string | null = null;
+
         const { data: activeAgreement } = await serverSupabase
             .from('quotes')
             .select('id, start_date, valid_until')
@@ -49,9 +53,50 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             .maybeSingle();
 
         if (activeAgreement) {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const start = activeAgreement.start_date?.split('T')[0];
-            const end = activeAgreement.valid_until?.split('T')[0];
+            targetAgreementId = activeAgreement.id;
+            agreementStartDate = activeAgreement.start_date;
+            agreementValidUntil = activeAgreement.valid_until;
+        } else {
+            let masterQuoteId = profile?.logistics_data?.active_master_agreement_id;
+            if (!masterQuoteId) {
+                const { data: modelRow } = await serverSupabase
+                    .from('special_agreement_model_clients')
+                    .select('model_id')
+                    .in('client_id', [userId, profile?.parent_id].filter(Boolean))
+                    .limit(1)
+                    .maybeSingle();
+                if (modelRow?.model_id) {
+                    const { data: sam } = await serverSupabase
+                        .from('special_agreement_models')
+                        .select('master_quote_id, start_date, valid_until')
+                        .eq('id', modelRow.model_id)
+                        .maybeSingle();
+                    if (sam?.master_quote_id) {
+                        masterQuoteId = sam.master_quote_id;
+                        agreementStartDate = sam.start_date;
+                        agreementValidUntil = sam.valid_until;
+                    }
+                }
+            }
+            if (masterQuoteId) {
+                const { data: masterQuote } = await serverSupabase
+                    .from('quotes')
+                    .select('id, start_date, valid_until')
+                    .eq('id', masterQuoteId)
+                    .eq('status', 'agreement')
+                    .maybeSingle();
+                if (masterQuote) {
+                    targetAgreementId = masterQuote.id;
+                    agreementStartDate = agreementStartDate || masterQuote.start_date;
+                    agreementValidUntil = agreementValidUntil || masterQuote.valid_until;
+                }
+            }
+        }
+
+        if (targetAgreementId) {
+            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+            const start = agreementStartDate?.split('T')[0];
+            const end = agreementValidUntil?.split('T')[0];
             let isVigente = true;
             if (start && start > todayStr) isVigente = false;
             if (end && end < todayStr) isVigente = false;
@@ -61,7 +106,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
                 const { data: qItems } = await serverSupabase
                     .from('quote_items')
                     .select('product_id, unit_price')
-                    .eq('quote_id', activeAgreement.id);
+                    .eq('quote_id', targetAgreementId);
                 if (qItems) {
                     agreementItems = qItems;
                 }

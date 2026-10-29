@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.335 (Capítulo 44: Trazabilidad Histórica de Matriz Comercial, Herencia Padre→Hijo en Importación Masiva, KPI de SKUs Activos en Maestro y Badge `Obsequio` con Ícono Lucide `Gift` en Gestión de Pedidos — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.336 (Capítulo 44: Blindaje Arquitectural E2E de Acuerdos Comerciales, Resolución Canónica en Pedidos B2B, Evaluación Horaria Bogotá y Padrón Limpio sin Re-expansión Forzada — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 352 Escenarios BDD Ininterrumpidos (1..352)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 353 Escenarios BDD Ininterrumpidos (1..353)
 
 ---
 
@@ -13190,6 +13190,27 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 - **Given** la tabla principal de **Gestión y Cargue de Pedidos** (`/admin/orders/loading`, `src/app/admin/orders/loading/page.tsx`), donde la columna `VALOR` presenta el monto total del pedido acompañado de una etiqueta de clasificación comercial (`Acuerdo Institucional`, `B2C Estándar` o `Garantía / Sin Cobro`),
 - **When** un pedido contiene **exactamente 1 SKU** (`order.order_items.length === 1`) y dicho único SKU corresponde a un **Obsequio** (`products.accounting_id === 1062` o nombre/alias que contenga la palabra `"Obsequio"`):
 - **Then** el sistema reemplaza la etiqueta `Acuerdo Institucional` / `B2C Estándar` en la columna `VALOR` por el badge dedicado **`Obsequio`** acompañado exclusivamente del ícono vectorial `<Gift size={10} strokeWidth={2.5} />` de `lucide-react` (cumpliendo la prohibición estricta de emojis no-Lucide en UI industrial), estilizado en paleta violeta (`color: '#6D28D9'`, `backgroundColor: '#F3E8FF'`, `border: '1px solid #DDD6FE'`) bajo el total formateado (`$0`), permitiendo al operador distinguir a simple vista las remisiones de obsequio corporativo frente a los pedidos comerciales y a las reposiciones de garantía.
+
+---
+
+### Escenario 353: Blindaje Arquitectural E2E de Acuerdos Comerciales, Resolución Canónica en Pedidos B2B, Evaluación Horaria Bogotá y Padrón Limpio sin Re-expansión Forzada (SDD v1.9.336)
+- **Given** la mesa de negociación de Acuerdos Especiales (`/admin/commercial?tab=operations&subtab=agreements`, `src/components/SpecialAgreementsModule.tsx`), el resolvedor de precios de pedidos (`/api/orders/resolve-agreement-pricing`), el portal de autogestión B2B (`/b2b/dashboard`, `/api/b2b/agreements`, `/api/b2b/consumption`), las pantallas de pedidos (`/admin/orders/create`, `/admin/orders/loading`), el módulo de Acuerdos Comerciales (`CommercialAgreementsModule.tsx`) y el catálogo SSR (`ProductGridContainer.tsx`, `src/app/products/[id]/page.tsx`),
+- **When** se consagran acuerdos masivos, se gestionan sedes vinculadas o se consultan y facturan pedidos institucionales:
+- **Then** el sistema garantiza la coherencia arquitectónica y la sincronización de datos de extremo a extremo:
+  1. **Resolución Unificada de Acuerdos Maestros en Portal B2B y Catálogo SSR (Nivel 3):**
+     - En `/api/b2b/agreements`, `/b2b/dashboard`, `/api/b2b/consumption`, `ProductGridContainer.tsx` y `products/[id]/page.tsx`, si un cliente no posee una cotización de acuerdo individual directa (`quotes.client_id = :id`), el sistema consulta su puntero de Acuerdo Maestro en `profiles.logistics_data.active_master_agreement_id` (o el de su Casa Matriz `parent_id`), y en `special_agreement_model_clients` (vinculando a `special_agreement_models.master_quote_id`), resolviendo la lista de precios oficial pactada e impidiendo que los productos se presenten en `$0 COP` o "Sin acuerdos activos".
+  2. **Evaluación de Vigencia en Zona Horaria Canónica Bogotá (`America/Bogota`):**
+     - Tanto en `/api/orders/resolve-agreement-pricing` como en el portal B2B y catálogo SSR, la fecha de comparación se calcula estrictamente mediante `new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date())` en lugar de `new Date().toISOString()` (UTC), garantizando que las tarifas acordadas rijan de forma ininterrumpida hasta las **`23:59:59 h` hora de Colombia** del día de vencimiento pactado, sin expirar prematuramente a las 7:00 PM (19:00 h).
+     - En la creación y edición de pedidos admin (`/admin/orders/create` y `/admin/orders/loading`), el resolvedor recibe explícitamente el parámetro `order_date`, evaluando la vigencia contra la fecha en que el cliente coloca el pedido y no contra la fecha de entrega futura (`delivery_date`).
+  3. **Respeto a Exclusiones de Sucursales y "Solo Matriz" en Consagración:**
+     - En `SpecialAgreementsModule.tsx:handleConfirmConsagration`, el guardado utiliza la lista explícita de clientes elegida por el operador (`finalClientIds = Array.from(new Set(selectedClientIdsForRun))`) sin re-expandir incondicionalmente las sucursales hijas que el usuario haya decidido excluir o al emplear la opción `"Solo Matriz"`.
+     - Se elimina la sentencia `DELETE FROM special_agreement_model_clients` previa a la invocación de `apply_special_agreement_to_clients`, permitiendo a la función RPC en PostgreSQL limpiar de forma atómica y transaccional los clientes desmarcados y sus punteros en `profiles.logistics_data`.
+     - En la actualización de `quote_items`, la columna `margin_percent` almacena el porcentaje de Utilidad sobre Costo (Markup %: `((unitPrice - costBasis) / costBasis) * 100`).
+  4. **Mapeo Canónico de Colsubsidio `#189` en `CommercialAgreementsModule`:**
+     - En `CommercialAgreementsModule.tsx`, el mapa `STRUCTURAL_QUOTE_TO_MODEL` reconoce el UUID oficial del Acuerdo Maestro de Colsubsidio (`'445c8f85-f693-4e05-a1fd-7c3a74c47162'`: Cotización `#189`), asegurando que la gestión de sedes vinculadas sincronice `special_agreement_model_clients` sin generar referencias huérfanas.
+  5. **Desacople de Cotizaciones Históricas No Vigentes:**
+     - En `/api/orders/resolve-agreement-pricing`, la búsqueda de acuerdos individuales (Niveles 1 y 2) filtra estrictamente por `status = 'agreement'`, impidiendo que cotizaciones históricas en estado `'approved'` o `'expired'` secuestren la resolución y bloqueen el acceso del cliente a su Acuerdo Maestro vigente.
+
 
 
 

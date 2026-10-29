@@ -1325,7 +1325,8 @@ function CreateOrderContent() {
         async function resolveContract() {
             const isB2B = clientType === 'B2B' || Boolean(selectedClient);
             const activeId = isB2B ? selectedClient : selectedClientB2C;
-            const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
+            const todayBogota = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+            const checkDate = deliveryDate ? deliveryDate.split('T')[0] : todayBogota;
 
             if (!activeId) {
                 setActivePricingModel(null);
@@ -1340,20 +1341,31 @@ function CreateOrderContent() {
             }
 
             try {
-                const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${activeId}&delivery_date=${checkDate}&client_type=${clientType}`);
+                const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${activeId}&order_date=${todayBogota}&delivery_date=${checkDate}&client_type=${clientType}`);
                 if (!res.ok) throw new Error('Error en resolución de precios');
                 const data = await res.json();
                 if (isCancelled) return;
 
                 if (data.success) {
+                    const resolvedAllowOff = Boolean(data.allowOffAgreementPurchases);
+                    const resolvedAgrSet = new Set<string>(data.agreementProductIds || []);
                     setActivePricingModel(data.resolvedModel);
                     setIsB2CDefault(Boolean(data.isB2CDefault));
                     setIsContractExpired(Boolean(data.isExpired));
-                    setAllowOffAgreementPurchases(Boolean(data.allowOffAgreementPurchases));
+                    setAllowOffAgreementPurchases(resolvedAllowOff);
                     setContractPrices(data.contractPrices || {});
-                    setAgreementProductIds(new Set(data.agreementProductIds || []));
+                    setAgreementProductIds(resolvedAgrSet);
                     setCustomPriceIds(new Set(data.customPriceIds || []));
                     setCampaignPrices(data.campaignPrices || {});
+
+                    if (isB2B && !resolvedAllowOff && !isGiftRemissionClient && resolvedAgrSet.size > 0) {
+                        setStagedItems(prev => prev.map(st => {
+                            if (st?.suggestedProduct && !resolvedAgrSet.has(st.suggestedProduct.id)) {
+                                return { ...st, suggestedProduct: null, status: 'PENDING' };
+                            }
+                            return st;
+                        }));
+                    }
                 }
             } catch (err) {
                 console.error("Error al resolver acuerdo comercial:", err);
@@ -3365,8 +3377,10 @@ function CreateOrderContent() {
                 }
             }
 
-            // 1. Cargar Memoria Histórica de Aprendizaje del cliente
+            // 1. Cargar Memoria Histórica de Aprendizaje del cliente + Resolver Acuerdo Inmediato
             let learnedMemory: any[] = [];
+            let effectiveAllowOff = allowOffAgreementPurchases;
+            let effectiveAgrIds = agreementProductIds;
             const targetClientId = autoMatchedProfile?.id || selectedClient;
             if (targetClientId) {
                 try {
@@ -3378,6 +3392,23 @@ function CreateOrderContent() {
                 } catch (e) {
                     console.log('document_learning_memory not ready yet');
                 }
+                try {
+                    const checkDate = (deliveryDate || minDeliveryDate || new Date().toISOString().split('T')[0]).split('T')[0];
+                    const todayBogota = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+                    const agrRes = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${encodeURIComponent(targetClientId)}&order_date=${encodeURIComponent(todayBogota)}&delivery_date=${encodeURIComponent(checkDate)}&client_type=B2B`);
+                    if (agrRes.ok) {
+                        const agrJson = await agrRes.json();
+                        effectiveAllowOff = agrJson.allowOffAgreementPurchases !== undefined ? Boolean(agrJson.allowOffAgreementPurchases) : true;
+                        effectiveAgrIds = new Set<string>(Array.isArray(agrJson.agreementProductIds) ? agrJson.agreementProductIds : []);
+                        setAllowOffAgreementPurchases(effectiveAllowOff);
+                        setAgreementProductIds(effectiveAgrIds);
+                        if (agrJson.contractPrices && typeof agrJson.contractPrices === 'object') {
+                            setContractPrices(agrJson.contractPrices);
+                        }
+                    }
+                } catch (agrErr) {
+                    console.warn('[AI Extract] No se pudo pre-resolver acuerdo en tiempo real:', agrErr);
+                }
             }
 
             // Ensure data is structured correctly
@@ -3387,9 +3418,9 @@ function CreateOrderContent() {
             const rawItems = Array.isArray(data.items) ? data.items : [];
 
             // Intentamos encontrar el mejor SKU sugerido usando el Motor Unificado (Memoria + Catalog + Tokens)
-            const isStrictAgreement = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
+            const isStrictAgreement = !effectiveAllowOff && !isGiftRemissionClient && effectiveAgrIds.size > 0;
             const candidateProductPool = isStrictAgreement
-                ? products.filter(p => agreementProductIds.has(p.id))
+                ? products.filter(p => effectiveAgrIds.has(p.id))
                 : products;
 
             const suggested = rawItems.map((item: any) => {
@@ -3729,6 +3760,15 @@ function CreateOrderContent() {
         if (unassigned.length > 0) {
             showToast(`Hay ${unassigned.length} producto(s) sin homologar en el catálogo. Asígnalos o elimínalos antes de crear el pedido directamente.`, 'error');
             return;
+        }
+
+        if (clientType === 'B2B' && !allowOffAgreementPurchases && !isGiftRemissionClient && orderNature !== 'replacement' && agreementProductIds.size > 0) {
+            const offAgreementItems = stagedItems.filter(i => i.suggestedProduct && !agreementProductIds.has(i.suggestedProduct.id));
+            if (offAgreementItems.length > 0) {
+                const offNames = offAgreementItems.map(i => i.suggestedProduct?.name || i.originalName).join(', ');
+                showToast(`Acuerdo Cerrado (Solo Convenio): No se permite despachar productos fuera del acuerdo comercial (${offNames}).`, 'error');
+                return;
+            }
         }
 
         const targetDeliveryDate = deliveryDate || minDeliveryDate;
@@ -4103,6 +4143,14 @@ function CreateOrderContent() {
             if (!selectedClient) {
                 showToast('Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar la importación.', 'error');
                 return;
+            }
+            if (!allowOffAgreementPurchases && !isGiftRemissionClient && orderNature !== 'replacement' && agreementProductIds.size > 0) {
+                const offAgreementItems = stagedItems.filter(i => i.suggestedProduct && !agreementProductIds.has(i.suggestedProduct.id));
+                if (offAgreementItems.length > 0) {
+                    const offNames = offAgreementItems.map(i => i.suggestedProduct?.name || i.originalName).join(', ');
+                    showToast(`Acuerdo Cerrado (Solo Convenio): No se permite importar productos fuera del acuerdo comercial (${offNames}).`, 'error');
+                    return;
+                }
             }
         } else {
             // Canal Hogar (B2C)
@@ -4634,6 +4682,15 @@ function CreateOrderContent() {
         // Manual Delivery Validation
         if (isManualDelivery && !manualDeliveryTime) {
             return showToast('Si activas entrega manual, debes especificar la Hora.');
+        }
+
+        // Validación Estricta de Acuerdo Cerrado (Solo Convenio)
+        if (clientType === 'B2B' && !allowOffAgreementPurchases && !isGiftRemissionClient && orderNature !== 'replacement' && agreementProductIds.size > 0) {
+            const offAgreementCartItems = cart.filter(item => item.product && !agreementProductIds.has(item.product.id));
+            if (offAgreementCartItems.length > 0) {
+                const offNames = offAgreementCartItems.map(i => i.product.name).join(', ');
+                return showToast(`Acuerdo Cerrado (Solo Convenio): Elimina los productos fuera del acuerdo comercial antes de confirmar (${offNames}).`, 'error');
+            }
         }
 
         // Validación Poka-Yoke de Días Permitidos de Entrega

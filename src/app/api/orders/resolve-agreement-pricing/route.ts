@@ -70,7 +70,7 @@ async function getGeneralInstitutionalPrices(supabase: any): Promise<Record<stri
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('client_id');
-    const deliveryDate = searchParams.get('delivery_date') || new Date().toISOString().split('T')[0];
+    const deliveryDate = searchParams.get('delivery_date') || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
     const orderDate = searchParams.get('order_date') || searchParams.get('orderDate') || null;
     const clientType = searchParams.get('client_type') || (clientId ? 'B2B' : 'B2C');
 
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
         const clientId = body.client_id;
-        const deliveryDate = body.delivery_date || new Date().toISOString().split('T')[0];
+        const deliveryDate = body.delivery_date || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
         const orderDate = body.order_date || body.orderDate || null;
         const clientType = body.client_type || (clientId ? 'B2B' : 'B2C');
 
@@ -94,7 +94,8 @@ export async function POST(request: Request) {
 async function handleResolve(clientId: string | null, deliveryDate: string, clientType: string, orderDate?: string | null) {
     const supabase = getSupabase();
     // Brecha A5: El descuento y la vigencia aplican prioritariamente a la FECHA DEL PEDIDO
-    const checkDate = orderDate ? orderDate.split('T')[0] : (deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0]);
+    const defaultBogotaDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+    const checkDate = orderDate ? orderDate.split('T')[0] : (deliveryDate ? deliveryDate.split('T')[0] : defaultBogotaDate);
     const isB2B = clientType === 'B2B' || Boolean(clientId);
 
     if (!clientId) {
@@ -191,7 +192,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 .from('quotes')
                 .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
                 .eq('client_id', branchId)
-                .in('status', ['agreement', 'expired', 'approved', 'active'])
+                .eq('status', 'agreement')
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -210,7 +211,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 .from('quotes')
                 .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
                 .eq('client_id', parentId)
-                .in('status', ['agreement', 'expired', 'approved', 'active'])
+                .eq('status', 'agreement')
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -225,8 +226,28 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
 
         // Level 3: Master shared agreement (Solo si Nivel 1 y 2 no existen)
         if (!candidateAgreement) {
-            const masterId = currentProfile?.logistics_data?.active_master_agreement_id 
+            let masterId = currentProfile?.logistics_data?.active_master_agreement_id 
                           || parentProfile?.logistics_data?.active_master_agreement_id;
+            if (!masterId && (branchId || parentId)) {
+                const targetIds = [branchId, parentId].filter(Boolean);
+                const { data: modelRow } = await supabase
+                    .from('special_agreement_model_clients')
+                    .select('model_id')
+                    .in('client_id', targetIds)
+                    .limit(1)
+                    .maybeSingle();
+                if (modelRow?.model_id) {
+                    const { data: sam } = await supabase
+                        .from('special_agreement_models')
+                        .select('master_quote_id')
+                        .eq('id', modelRow.model_id)
+                        .maybeSingle();
+                    if (sam?.master_quote_id) {
+                        masterId = sam.master_quote_id;
+                    }
+                }
+            }
+
             if (masterId) {
                 const { data: sm } = await supabase
                     .from('quotes')

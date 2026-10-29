@@ -1744,15 +1744,9 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
             const masterQuoteId = currentMeta.master_quote_id;
             const previousRosterIds = modelClientsMap[selectedClient] || [];
 
-            // Expandir automáticamente las sucursales de cualquier Casa Matriz marcada para garantizar herencia 1 a N
-            const expandedSet = new Set<string>(selectedClientIdsForRun);
-            allB2BClients.forEach(c => {
-                if (c.parent_id && expandedSet.has(c.parent_id)) {
-                    expandedSet.add(c.id);
-                }
-            });
-            const finalClientIds = Array.from(expandedSet);
-            const removedClientIds = previousRosterIds.filter(cid => !expandedSet.has(cid));
+            // Respetar la selección explícita de clientes y sucursales enviada desde el modal
+            const finalClientIds = Array.from(new Set(selectedClientIdsForRun));
+            const removedClientIds = previousRosterIds.filter(cid => !finalClientIds.includes(cid));
 
             // 1. Actualizar los precios (unit_price y cost_basis) en quote_items del Acuerdo Maestro
             if (masterQuoteId) {
@@ -1763,7 +1757,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     await Promise.all(chunk.map(item => {
                         const unitPrice = Number(item.our_counterproposal) || 0;
                         const costBasis = Number(item.corabastos_cost) || 0;
-                        const marginPct = unitPrice > 0 ? Number((((unitPrice - costBasis) / unitPrice) * 100).toFixed(2)) : 0;
+                        const marginPct = costBasis > 0 ? Number((((unitPrice - costBasis) / costBasis) * 100).toFixed(2)) : 0;
                         const rate = Number(item.iva_rate) || 0;
                         const ivaAmount = rate > 0 ? Number((unitPrice * (rate / (100 + rate))).toFixed(2)) : 0;
                         return supabase
@@ -1833,14 +1827,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 })));
             }
 
-            // 2. Depurar clientes desmarcados del padrón del modelo para mantener paridad exacta
-            const { error: delErr } = await supabase
-                .from('special_agreement_model_clients')
-                .delete()
-                .eq('model_id', selectedClient);
-            if (delErr) throw delErr;
-
-            // 3. Ejecutar función RPC atómica `apply_special_agreement_to_clients` en PostgreSQL
+            // 2. Ejecutar función RPC atómica `apply_special_agreement_to_clients` en PostgreSQL (depura desmarcados y limpia active_master_agreement_id)
             const { error: rpcErr } = await supabase.rpc('apply_special_agreement_to_clients', {
                 p_model_id: selectedClient,
                 p_start_date: modalStartDate,
