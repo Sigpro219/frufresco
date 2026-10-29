@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.329 (Capítulo 44: Aislamiento del Ciclo de Negociación Mensual de Grupo Nutresa SIPSA + Prima, Congelamiento de Precios en Borrador, Instructivo Operativo de 3 Pasos y Guía Visual de Vigencia 00:00 h a 23:59 h — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.330 (Capítulo 44: Optimización Táctica del Modelo Grupo Nutresa SIPSA + Prima: Filtros de Excepción, Copiado de Guion de Negociación, Selector Multi-Hoja Excel y Edición Reactiva de Prima — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 346 Escenarios BDD Ininterrumpidos (1..346)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 347 Escenarios BDD Ininterrumpidos (1..347)
 
 ---
 
@@ -13066,3 +13066,61 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - Al confirmar (`Confirmar y Congelar Acuerdo`), el sistema actualiza `quotes`, `quote_items` y `client_agreements` para las 44 sedes de Nutresa, persiste la metadata `nutresa_sipsa_prima_meta` y limpia el borrador `nutresa_negotiation_draft`.
   4. **Estructura del Documento Excel Exportado (`Descargar .xlsx`):**
      - En la exportación de Excel (`handleExportCounterproposal`), el documento incluye la columna **`Consumo Periodo`** (`demand_volume` / `monthly_consumption_kg`) y reemplaza la columna `SKU FruFresco` por **`Accounting ID`** (`accounting_id` numérico del producto en World Office / ERP), manteniendo compatibilidad bidireccional en la importación.
+
+
+---
+
+### Escenario 347: Optimización Táctica del Modelo Grupo Nutresa (IRCC): Píldoras de Filtro de Excepciones, Copiado de Guion de Negociación, Selector Multi-Hoja Excel y Edición Reactiva de Prima (`+ PRIMA`) (SDD v1.9.330)
+- **Given** el flujo aislado de negociación mensual de **Grupo Nutresa (IRCC)** en `/admin/commercial?tab=operations&subtab=agreements` (`src/components/SpecialAgreementsModule.tsx`), donde el operador comercial requiere identificar en segundos qué SKUs del archivo Excel (`Zona 3 - Investments Cortes.xlsx`) presentan margen crítico, alternar entre las hojas mensuales del libro, ajustar directamente la prima pactada si se acuerda en llamada y enviar por escrito las excepciones al comprador de Nutresa,
+- **When** el operador trabaja sobre la tarjeta **Grupo Nutresa (IRCC)**:
+- **Then** el sistema provee las siguientes 4 capacidades operativas:
+  1. **Píldoras de Filtro Rápido para Negociación (`nutresaQuickFilter`):**
+     - En la barra de herramientas de Grupo Nutresa se despliegan 4 píldoras interactivas con conteo en vivo:
+       - **`Todos (N)`** (`all`): Muestra la totalidad del padrón de SKUs de Nutresa.
+       - **`Alerta Margen (N)`** (`low_margin`): Aísla los SKUs con `corabastos_cost > 0` cuya utilidad sobre costo (`(our_counterproposal - corabastos_cost) / corabastos_cost * 100`) es inferior al `15%`, identificando de inmediato los productos por los cuales se debe llamar a negociar.
+       - **`Congelados (N)`** (`frozen`): Aísla únicamente los SKUs con `is_frozen_override === true` ajustados manualmente durante la negociación.
+       - **`Sin Cruce Excel (N)`** (`unmatched_excel`, visible tras cargar un archivo Excel si existen ítems no cruzados): Aísla los SKUs del acuerdo de FruFresco que no vinieron en la pestaña cargada del Excel (`unmatched_in_excel === true`).
+  2. **Botón "Copiar Excepciones (N)" para WhatsApp / Correo a Nutresa (`handleCopyNutresaExceptions`):**
+     - En la barra de acciones de Grupo Nutresa, el botón **`Copiar Excepciones (N)`** genera y copia al portapapeles un resumen ejecutivo de todos los SKUs congelados o modificados frente a la propuesta inicial (`• {raw_name} (Cód {client_code}): Propuesta {formatMoney(client_proposed_price)} → Contrapropuesta {formatMoney(our_counterproposal)}`), mostrando confirmación visual inmediata (`Copiado`).
+  3. **Selector e Indicador Multi-Hoja del Libro Excel (`nutresaExcelSheets`, `nutresaActiveSheet`):**
+     - Al importar un libro `.xlsx` en Grupo Nutresa, el sistema almacena en memoria las hojas disponibles del archivo (`wb.SheetNames`, ej. `Oct_26`, `Sept_26`, `Agos_26`) y renderiza en la barra de herramientas el selector **`Hoja Excel: [ {nutresaActiveSheet} ]`**, permitiendo verificar qué pestaña se está leyendo o cambiar de pestaña en caliente (`applyNutresaSheetRows`) sin volver a subir el archivo.
+  4. **Edición Directa y Reactiva de `+ PRIMA` en Pantalla (`editingPrimaDrafts`):**
+     - En la columna `+ PRIMA` de la tabla de Grupo Nutresa, el valor en `$ COP` se presenta en un input numérico editable. Al modificar la prima de un SKU, el sistema recalcula en tiempo real `our_counterproposal = (sipsa_price || 0) + nuevaPrima`, marca el SKU con `is_frozen_override = true` (`Congelado`) y persiste el cambio en `app_settings` (`nutresa_negotiation_draft`) al desenfocar (`onBlur`).
+
+
+---
+
+### Escenario 347: Aislamiento del Ciclo de Negociación Quincenal (1Q/2Q) de Colsubsidio Basado en Propuesta del Cliente, Variación de Pliego (`SUBIÓ` / `BAJÓ` / `IGUAL`), Filtros Rápidos, Congelamiento en Borrador y Homologación del Modal de Consagración (SDD v1.9.330)
+- **Given** el módulo de **Acuerdos Especiales** (`/admin/commercial?tab=operations&subtab=agreements`, `src/components/SpecialAgreementsModule.tsx`), donde **Colsubsidio** (32 sedes vinculadas: *Restaurantes, Hoteles Piscilago, Clubes y Sedes Recreativas*) opera bajo un ciclo quincenal (`1Q / 2Q`) en el cual **es el cliente Colsubsidio quien envía el pliego Excel con su propuesta de precios** (ej. `2Q SEPTIEMBRE-COLSUBSIDIO.xlsx`, `2Q OCTUBRE-COLSUBSIDIO.xlsx` con fila 1 de título `NIT: 901393217 INVESTMENTS CORTES SAS` y fila 2 de encabezados `Material`, `Descripcion`, `U.M`/`U.EM`, `NUE PRE`/`NUE PREC`, `ANT PRE`/`PRE ANT`, `DIFERE`/`DIFERENC`, `PORC`, `ESTADO`/`VARIACION`, `NUE PRE`, `PRECIO`/`NUEVO PRE`) sobre un portafolio oficial de **252 SKUs** consagrado en el Acuerdo Maestro `#189` (`445c8f85-f693-4e05-a1fd-7c3a74c47162`),
+- **When** el operador comercial selecciona la tarjeta **Colsubsidio** en `Acuerdos Especiales`:
+- **Then** el sistema aísla la vista y el flujo operativo de Colsubsidio cumpliendo las siguientes reglas contractuales e invariantes de negocio:
+  1. **Vinculación Canónica al Acuerdo Maestro `#189` y Resolución del "ÚLTIMO" Costo Base Vigente:**
+     - El modelo `colsubsidio` en `special_agreement_models` apunta a `master_quote_id = '445c8f85-f693-4e05-a1fd-7c3a74c47162'` (Cotización `#189`, 252 SKUs reales de Colsubsidio, 32 sedes vinculadas).
+     - En `loadDataForModel`, el costo base (`corabastos_cost`) y la Lista Institucional Dinámica (`baseline_price`) de cada SKU se resuelven aplicando la cascada canónica de Escenario 343 (`resolveLatestProductCost` + `applyProductUnitConversion` + herencia `parent_id` sobre `commercial_cost_matrix`, `commercial_overrides`, `purchase_history_normalized` y `purchases`), erradicando costos `$0` en presentaciones institucionales derivadas (ej. *Cebolla larga institucional*, *Acelga institucional*, *Papaya institucional*, *Tomate chonto institucional*).
+  2. **Instructivo Operativo Incorporado (3 Pasos del Ciclo Quincenal `1Q/2Q`):**
+     - Despliega en la cabecera de Colsubsidio un bloque colapsable con los 3 pasos del modo de trabajo:
+       - **Paso 1 — Cargar Pliego Quincenal de Colsubsidio (`Importar Excel`):** El lector matricial (`XLSX.utils.sheet_to_json(ws, { header: 1 })`) detecta automáticamente la fila real de encabezados (`Material` + `Descripcion`), ignora banners de título superior (`NIT: 901393217...`) y cruza el código `Material` SAP y la descripción de Colsubsidio contra los 252 SKUs del acuerdo mediante `COLSUBSIDIO_ALIAS_MAP`, conservando intacto el **`Acuerdo Anterior`** (ej. Septiembre) y poblando la **`Propuesta Colsubsidio`** (ej. Octubre) junto con el estado de variación (`▲ SUBIÓ`, `▼ BAJÓ`, `• IGUAL`).
+       - **Paso 2 — Filtrar Variaciones (`Subieron` / `Bajaron`) y Congelar Ajustes en Borrador:** El usuario filtra con un clic cuáles productos subieron o bajaron en el pliego de Colsubsidio y ajusta la `Contrapropuesta` o `% Utilidad` en los ítems a negociar. Todo ajuste o carga queda **persistente automáticamente en base de datos** (`app_settings.key = 'colsubsidio_negotiation_draft'`) con distintivo visual **`Congelado`** hasta que se consagre el acuerdo o se oprima `Restablecer Borrador`.
+       - **Paso 3 — Consagrar y Congelar Vigencia Quincenal:** Al oprimir `Consagrar Acuerdo`, se abre el modal compacto `Aprobar y Congelar Acuerdo de Precios` (con preset predeterminado de `15 días`, guía horaria `00:00 h` a `23:59 h` y propagación atómica a las 32 sedes de Colsubsidio).
+  3. **Estructura Tabular Exclusiva de 10 Columnas y Píldoras de Filtro Rápido para Colsubsidio:**
+     - **Columnas suprimidas en Colsubsidio:** Se suprime la columna `SUGERIDO IA` (y su botón `Aplicar Sugeridos`), dado que la negociación parte de la propuesta enviada por el cliente Colsubsidio frente al acuerdo anterior y a la Lista Institucional.
+     - **Píldoras de Filtro Rápido en Barra de Herramientas (`colsubsidioStatusFilter`):**
+       - `Todos (N)`
+       - `▲ Subieron (N)` (`client_proposed_price > previous_price`)
+       - `▼ Bajaron (N)` (`client_proposed_price < previous_price`)
+       - `• Igual (N)` (`client_proposed_price === previous_price`)
+       - `Congelados (N)` (`is_frozen_override === true`)
+     - **Columnas activas en Colsubsidio (10 Columnas):**
+       1. `CÓD` (ID contable ERP y código SAP `Material` de Colsubsidio cuando exista)
+       2. `PRODUCTO EN LISTA` (Nombre del SKU en FruFresco y descripción homologada de Colsubsidio debajo)
+       3. `VOLUMEN CICLO` (Kg despachados e ingreso en el ciclo)
+       4. `COSTO / LISTA INST.` (Costo base "ÚLTIMO" vigente y píldora verde con precio y `%` de Lista Institucional Dinámica)
+       5. `ACUERDO ANTERIOR` (`previous_price`: tarifa consagrada en el periodo anterior —ej. Septiembre— y su `% s/costo`)
+       6. `PROPUESTA COLSUBSIDIO` (`client_proposed_price`: nuevo precio propuesto por Colsubsidio en el Excel cargado y su `% s/costo`)
+       7. `VARIACIÓN PLIEGO` (diferencia en `$ COP` y `%` entre `Propuesta Colsubsidio` y `Acuerdo Anterior`, con badge semántico de alto contraste `▲ SUBIÓ`, `▼ BAJÓ` o `• IGUAL`)
+       8. `% UTILIDAD` (calculadora bidireccional editable de utilidad sobre costo)
+       9. `CONTRAPROPUESTA` (input editable del precio final a fijar, con badge `Congelado`, botón de desbloqueo individual y persistencia en `colsubsidio_negotiation_draft`)
+       10. `VARIACIÓN / GANANCIA` (diferencial de la contrapropuesta frente a la propuesta del cliente, ganancia unitaria en `$/Kg` e impacto total según volumen)
+  4. **Persistencia de Metadatos y Consagración Oficial (`colsubsidio_agreement_meta`):**
+     - Al confirmar en el modal **`Aprobar y Congelar Acuerdo de Precios`**, el sistema actualiza `quotes`, `quote_items` y el padrón de las 32 sedes de Colsubsidio (`special_agreement_model_clients`, `app_settings`, `profiles.logistics_data`), guarda los metadatos consagrados en `app_settings.key = 'colsubsidio_agreement_meta'` (código `Material` SAP, descripción Colsubsidio y nuevo precio base) y limpia el borrador temporal `colsubsidio_negotiation_draft`.
+

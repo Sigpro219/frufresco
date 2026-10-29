@@ -66,7 +66,8 @@ import {
     RotateCcw,
     BookOpen,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    Copy
 } from 'lucide-react';
 
 export type SpecialModelId = 'nutresa' | 'colsubsidio' | 'general_quincenal' | 'general_mensual';
@@ -77,6 +78,7 @@ export interface AgreementItem {
     product_id?: string;
     client_code?: string | number;
     accounting_id?: string | number;
+    material_code?: string;
     raw_name: string;
     unified_name: string;
     mapped_sku?: string; // Catálogo FruFresco SKU real
@@ -97,6 +99,7 @@ export interface AgreementItem {
     our_counterproposal: number; // Nuestra contrapropuesta / Nuevo Precio a Fijar
     suggested_price: number; // Sugerido inteligente IA
     is_frozen_override?: boolean; // Para Nutresa: Precio ajustado y congelado manualmente durante negociación
+    unmatched_in_excel?: boolean; // Para Nutresa: SKU del padrón que no vino en la hoja cargada del Excel
     status_change?: 'SUBIÓ' | 'BAJÓ' | 'IGUAL';
     iva_rate?: number;
     notes?: string;
@@ -127,9 +130,23 @@ export interface EnrichedB2BClient {
     lastAppliedAt?: string | null;
 }
 
-export type SortField = 'code' | 'name' | 'sku' | 'chain' | 'consumption' | 'cost' | 'previous' | 'sipsa' | 'prima' | 'proposed' | 'suggested' | 'margin' | 'counter' | 'impact';
+export type SortField = 'code' | 'name' | 'sku' | 'chain' | 'consumption' | 'cost' | 'previous' | 'sipsa' | 'prima' | 'proposed' | 'pliego_diff' | 'suggested' | 'margin' | 'counter' | 'impact';
 export type SortDirection = 'asc' | 'desc';
 export type ClientModalFilterTab = 'roster' | 'selected' | 'matrices' | 'branches' | 'all';
+export type ColsubsidioVariationFilter = 'all' | 'up' | 'down' | 'same' | 'frozen';
+
+interface DbProductRow {
+    id: string;
+    name: string;
+    sku?: string | null;
+    accounting_id?: string | number | null;
+    category?: string | null;
+    unit_of_measure?: string | null;
+    parent_id?: string | null;
+    base_price?: number | string | null;
+    iva_rate?: number | string | null;
+    theoretical_shrinkage_pct?: number | string | null;
+}
 
 interface DbModelRow {
     id: string;
@@ -162,18 +179,6 @@ interface DbProfileRow {
 interface DbAppSettingRow {
     key: string;
     value?: string | null;
-}
-
-interface DbProductRow {
-    id: string;
-    name: string;
-    sku?: string | null;
-    accounting_id?: string | number | null;
-    category?: string | null;
-    unit_of_measure?: string | null;
-    base_price?: number | string | null;
-    iva_rate?: number | string | null;
-    theoretical_shrinkage_pct?: number | string | null;
 }
 
 interface DbCostMatrixRow {
@@ -293,14 +298,121 @@ const NUTRESA_ALIAS_MAP: Record<string, string[]> = {
     'zukini verde': ['zukini verdura', 'zukini']
 };
 
+// Diccionario canónico de equivalencias entre catálogo FruFresco (normalizado) y pliegos quincenales de Colsubsidio (Material SAP / Descripcion)
+const COLSUBSIDIO_ALIAS_MAP: Record<string, string[]> = {
+    'acelga institucional': ['acelga 1000 gr', '194599'],
+    'aguacate': ['aguacate papelillo 1000 gr', 'aguacate primera 1000 gr', '33', '62'],
+    'aguacate institucional': ['aguacate papelillo 1000 gr', 'aguacate primera 1000 gr', '33', '62'],
+    'aguacate hass': ['aguacate hass 1000 gr', '1450283'],
+    'ahuyama': ['ahuyama 1000 gr', '646563'],
+    'ahuyama zacata': ['zapayo 1000 gr', '205320', '1222020'],
+    'aji chile ancho deshidratado': ['aji chile ancho 1000 gr', '1420198'],
+    'aji jalapeno': ['aji jalapeno rojo 1000 gr', 'aji jalapeno verde 1000 gr', '1399459', '1399458'],
+    'ajonjoli tostado': ['ajonjoli 1000 gr', '1207665'],
+    'albahaca': ['albahaca 1000 gr', 'albahaca 500 gr', '1399462', '135299'],
+    'arracacha': ['arracacha 1000 gr', '646566'],
+    'arveja verde desgranada': ['arveja desgranada 1000 gr', '646569'],
+    'banano bocadillo': ['banano bocadillo 1000 gr', '84'],
+    'calabaza': ['calabaza kg', '647060'],
+    'cebolla cabezona blanca': ['cebolla bca 1000 gr', '646575'],
+    'cebolla cabezona roja': ['cebolla roja 1000 gr', 'cebolla cabezona roja x kg', '647061'],
+    'cebolla larga institucional': ['cebolla junca 1000 gr', '646761'],
+    'chuguas': ['chuguas 1000 gr', '647073'],
+    'cilantro': ['cilantro 1000 gr', '646594'],
+    'cilantro cimarron': ['cilantro cimarron 1000 gr', '1419282'],
+    'cogollos morados y verdes premium': ['cogollos morados y verdes premium kg', '1462583'],
+    'col crespa kale': ['kale rizada organi 1000 gr', '1413738'],
+    'coliflor': ['coliflor 1000 gr', '646597'],
+    'curuba': ['curuba 1000 gr', '735'],
+    'durazno importado': ['durazno importado 1000 gr', '763'],
+    'espinaca': ['espinaca 1000 gr', '646599'],
+    'espinaca baby': ['espinaca baby 1000 gr', '1402444'],
+    'eucalipto': ['eucalipto 1000 gr', '733020'],
+    'feijoa': ['feijoa 1000 gr', '874'],
+    'frijol verde desgranado': ['frijol desgranado 1000 gr', '217071'],
+    'granada': ['granada 1000 gr', '1413198'],
+    'granadilla': ['granadilla 1000 gr', '939'],
+    'guanabana': ['guanabana 1000 gr', '944'],
+    'guascas': ['guascas 1000 gr', '1399464'],
+    'guatila': ['guatila 1000 gr', '647075'],
+    'guayaba pera': ['guayaba 1000 gr', '647207'],
+    'habichuela': ['habichuela 1000 gr', '646600'],
+    'habichuelin': ['habichuelina 1000 gr', '647168'],
+    'kiwi importado': ['kiwi 1000 gr', '1026'],
+    'laurel': ['laurel 1000 gr', '1399465'],
+    'lechuga colchina': ['colchina 1000 gr', '647072', '1253721'],
+    'lechuga crespa verde': ['lechuga crespa verde 1000 gr', '647078'],
+    'lechuga lisa': ['lechuga lisa 1000 gr', '646622'],
+    'lechuga romana': ['lechuga romana 1000 gr', '263940'],
+    'lechuga rugula': ['rugula 1000 gr', 'lechuga rugula org 1000 gr', '1399470', '1413741'],
+    'limon mandarino': ['limon mandarino kg', '1472716'],
+    'limon tahiti': ['limon tahity 1000 gr', 'limon comun 1000 gr', '1272', '1080'],
+    'limonaria': ['limonaria por 500 gr', '892222'],
+    'lulo': ['lulo 1000 gr', '732998'],
+    'mandarina importada': ['mandarina importada kg', '1475342'],
+    'mango tommy': ['mango tommy 1000 gr', 'mango azucar 1000 gr', '1402301', '648155'],
+    'manzana nacional': ['manzana nacional 1000 gr', '648158'],
+    'manzana roja importada': ['manzana imp roja 1000 gr', '646756'],
+    'manzana verde importada': ['manzana imp verde 1000 gr', '646757'],
+    'maracuya': ['maracuya 1000 gr', '733000'],
+    'mazorca desgranada': ['mazorca desgranada 1000 gr', '647079'],
+    'mazorca en tuza institucional': ['mazorca 1000 gr', '646624'],
+    'melon': ['melon 1000 gr', '646760'],
+    'menta': ['menta kg', '1442413'],
+    'mix lechuga asiatico': ['mix asiatico org 1000 gr', '1413742'],
+    'mute de maiz': ['mute bolsa 500 gr', '650601'],
+    'name': ['name 1000 gr', '647080'],
+    'naranja tangelo': ['naranja tangelo 1000 gr', '648160'],
+    'naranja valencia': ['naranja valencia 1000 gr', '648161'],
+    'papa criolla cero': ['papa criolla 1000 gr', '646625'],
+    'papa criolla mediana': ['papa criolla 1000 gr', '646625'],
+    'papa criolla mini': ['papa criolla mini kg', '1465877'],
+    'papa pastusa cero lvda': ['papa pastusa 1000 gr', '648164'],
+    'papa pastusa lavada': ['papa pastusa 1000 gr', '648164'],
+    'papa sabanera cero': ['papa sabanera 1000 gr', '648165'],
+    'papa sabanera lavada': ['papa sabanera 1000 gr', '648165'],
+    'papaya institucional': ['papaya 1000 gr', '2368'],
+    'papayuela': ['papayuela 1000 gr', '647208'],
+    'patilla': ['patilla 1000 gr', '120330'],
+    'pepino cohombro': ['pepino cohombro 1000 gr', '646626'],
+    'pepino comun': ['pepino rellenar 1000 gr', '647081'],
+    'pepino europeo': ['pepino europeo 1000 gr', '773400'],
+    'pera nacional': ['pera nacional kg', '733006'],
+    'perejil crespo': ['perejil crespo 1000 gr', 'perejil 1000 gr', '1455131', '1399468'],
+    'perejil liso': ['perejil liso 1000 gr', 'perejil 1000 gr', '1455130', '1399468'],
+    'pimenton rojo institucional': ['pimenton rojo 1000 gr', '646627'],
+    'pitahaya': ['pitahaya 1000 gr', '120343'],
+    'platano colisero': ['platano guineo coleciero 1000 gr', '650247'],
+    'platano maduro': ['platano maduro 1000 gr', '646628'],
+    'platano verde': ['platano verde 1000 gr', '646629'],
+    'quinoa en pepa': ['quinua 1000 gr', '1402451'],
+    'remolacha mediana': ['remolacha 1000 gr', '646631'],
+    'romero': ['romero 1000 gr', '1399469'],
+    'tomate cherry': ['tomate cherry canasta ints 500 gr', '647198'],
+    'tomate chonto': ['tomate chonto 1000 gr', '647094'],
+    'tomate chonto institucional': ['tomate chonto 1000 gr', '647094'],
+    'tomillo': ['tomillo 1000 gr', '1399472'],
+    'toronja': ['toronja 1000 gr', '1343164'],
+    'uchuva en cascara': ['uchuva 1000 gr', '647054'],
+    'uchuvas desgranadas': ['uchuva 1000 gr', '647054'],
+    'uva chilena roja importada': ['uva importada 1000 gr', '892223', '184401'],
+    'uva roja': ['uva rojala 1000 gr', 'uva negra kg', '179777', '179810'],
+    'uva verde': ['uva verde 1000 gr', '172449'],
+    'zanahoria baby': ['zanahoria baby 1000 gr', '647204'],
+    'zukini amarillo': ['zuchini amarillo 1000 gr', '649013'],
+    'zukini verde': ['zuchini verde 1000 gr', '649006']
+};
+
 export interface NutresaDraftEntry {
     sipsa_price?: number;
     prima_cop?: number;
     unified_name?: string;
+    material_code?: string;
     client_proposed_price?: number;
     our_counterproposal?: number;
     is_frozen_override?: boolean;
     previous_price?: number;
+    status_change?: 'SUBIÓ' | 'BAJÓ' | 'IGUAL';
 }
 
 export default function SpecialAgreementsModule({ embedded = false }: { embedded?: boolean } = {}) {
@@ -311,6 +423,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const [syncingSipsa, setSyncingSipsa] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedChainFilter, setSelectedChainFilter] = useState<string>('all');
+    const [colsubsidioStatusFilter, setColsubsidioStatusFilter] = useState<ColsubsidioVariationFilter>('all');
     const [isSaving, setIsSaving] = useState(false);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [sortField, setSortField] = useState<SortField>('name');
@@ -318,8 +431,15 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     const [activeHeaderTooltip, setActiveHeaderTooltip] = useState<string | null>(null);
     const [editingPriceDrafts, setEditingPriceDrafts] = useState<Record<string, string>>({});
     const [editingMarkupDrafts, setEditingMarkupDrafts] = useState<Record<string, string>>({});
+    const [editingPrimaDrafts, setEditingPrimaDrafts] = useState<Record<string, string>>({});
     const [showNutresaGuide, setShowNutresaGuide] = useState<boolean>(true);
     const [hasNutresaDraft, setHasNutresaDraft] = useState<boolean>(false);
+    const [showColsubsidioGuide, setShowColsubsidioGuide] = useState<boolean>(true);
+    const [hasColsubsidioDraft, setHasColsubsidioDraft] = useState<boolean>(false);
+    const [nutresaQuickFilter, setNutresaQuickFilter] = useState<'all' | 'low_margin' | 'frozen' | 'unmatched_excel'>('all');
+    const [nutresaExcelSheets, setNutresaExcelSheets] = useState<Record<string, Record<string, unknown>[]>>({});
+    const [nutresaActiveSheet, setNutresaActiveSheet] = useState<string>('');
+    const [copiedExceptionsSuccess, setCopiedExceptionsSuccess] = useState<boolean>(false);
     const [consagrateModalMode, setConsagrateModalMode] = useState<'compact_approve' | 'full_roster'>('compact_approve');
     const [nutresaPresetDays, setNutresaPresetDays] = useState<number>(30);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -342,9 +462,9 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
             subtitle: 'Restaurantes • Hoteles (Piscilago) • Sedes Recreativas',
             cycle_type: 'quincenal_corporativo',
             default_duration_days: 15,
-            master_quote_id: '5afc3173-4ced-4635-a71f-56ef57e144f8',
-            start_date: '2026-10-16',
-            valid_until: '2026-10-31'
+            master_quote_id: '445c8f85-f693-4e05-a1fd-7c3a74c47162',
+            start_date: '2026-09-16',
+            valid_until: '2026-09-30'
         },
         general_quincenal: {
             id: 'general_quincenal',
@@ -862,6 +982,146 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
         }
     };
 
+    // Aplicar los renglones de una pestaña específica del libro Excel de Grupo Nutresa (IRCC)
+    const applyNutresaSheetRows = async (sheetName: string, sheetRows: Record<string, unknown>[]) => {
+        const extractNutresaRowValues = (row: Record<string, unknown>) => {
+            let rawName = '';
+            let unifiedName = '';
+            let codItem = '';
+            let primaVal = 0;
+            let sipsaVal = 0;
+            let precioVal = 0;
+            let counterVal = 0;
+
+            for (const [k, v] of Object.entries(row)) {
+                const kt = k.trim();
+                if (/^(nombre\s*item|producto|descripcion)$/i.test(kt)) {
+                    rawName = String(v ?? '').trim();
+                } else if (/^descripci[oó]n\s*unificada$/i.test(kt)) {
+                    unifiedName = String(v ?? '').trim();
+                } else if (/^(c[oó]d\s*item|c[oó]digo|material|sku\s*frufresco|accounting\s*id|id\s*contable)$/i.test(kt)) {
+                    codItem = String(v ?? '').trim();
+                } else if (/^prima\b/i.test(kt)) {
+                    primaVal = Number(v) || 0;
+                } else if (/^\$?\s*sipsa\b/i.test(kt)) {
+                    sipsaVal = Number(v) || 0;
+                } else if (/^(contrapropuesta|nuevo\s*precio)/i.test(kt)) {
+                    counterVal = Number(v) || 0;
+                } else if (/^(precio\b|propuesta\b|nue\s*pre)/i.test(kt)) {
+                    precioVal = Number(v) || 0;
+                }
+            }
+
+            const computedProposed = precioVal > 0 ? precioVal : (sipsaVal + primaVal);
+            return {
+                rawName,
+                unifiedName,
+                codItem,
+                prima: Math.round(primaVal),
+                sipsa: Math.round(sipsaVal),
+                proposed: Math.round(computedProposed),
+                counter: counterVal > 0 ? Math.round(counterVal) : 0
+            };
+        };
+
+        const excelByNorm = new Map<string, ReturnType<typeof extractNutresaRowValues>>();
+        const excelByCode = new Map<string, ReturnType<typeof extractNutresaRowValues>>();
+
+        sheetRows.forEach(r => {
+            const info = extractNutresaRowValues(r);
+            const n1 = normalizeSearchStr(info.rawName);
+            const n2 = normalizeSearchStr(info.unifiedName);
+            if (n1 && !excelByNorm.has(n1)) excelByNorm.set(n1, info);
+            if (n2 && n2 !== 'no se mide' && !excelByNorm.has(n2)) excelByNorm.set(n2, info);
+            if (info.codItem && !excelByCode.has(info.codItem.toUpperCase())) {
+                excelByCode.set(info.codItem.toUpperCase(), info);
+            }
+        });
+
+        let matchedCount = 0;
+        const updatedItems: AgreementItem[] = agreementItems.map(item => {
+            const normItemName = normalizeSearchStr(item.raw_name);
+            const candidates = [normItemName, ...(NUTRESA_ALIAS_MAP[normItemName] || [])];
+            let matchedExcel: ReturnType<typeof extractNutresaRowValues> | undefined;
+
+            for (const cand of candidates) {
+                if (excelByNorm.has(cand)) {
+                    matchedExcel = excelByNorm.get(cand);
+                    break;
+                }
+            }
+            if (!matchedExcel && item.client_code) {
+                matchedExcel = excelByCode.get(String(item.client_code).toUpperCase());
+            }
+
+            if (!matchedExcel) {
+                return {
+                    ...item,
+                    unmatched_in_excel: true
+                };
+            }
+
+            matchedCount++;
+            const newProposed = matchedExcel.proposed > 0 ? matchedExcel.proposed : item.client_proposed_price;
+            const preservedPrevious = item.previous_price && item.previous_price > 0
+                ? item.previous_price
+                : item.client_proposed_price;
+            // Si el usuario ya había congelado manualmente un precio en esta sesión, lo respetamos; si viene contrapropuesta explícita o es planilla fresca, se alinea a la propuesta de Nutresa
+            const newCounter = item.is_frozen_override
+                ? item.our_counterproposal
+                : (matchedExcel.counter > 0 ? matchedExcel.counter : newProposed);
+
+            return {
+                ...item,
+                unified_name: matchedExcel.unifiedName || item.unified_name,
+                sipsa_price: matchedExcel.sipsa,
+                prima_cop: matchedExcel.prima,
+                previous_price: preservedPrevious,
+                client_proposed_price: newProposed,
+                our_counterproposal: newCounter,
+                unmatched_in_excel: false,
+                status_change: newCounter > preservedPrevious ? 'SUBIÓ' : (newCounter < preservedPrevious ? 'BAJÓ' : 'IGUAL')
+            };
+        });
+
+        setNutresaActiveSheet(sheetName);
+        setAgreementItems(updatedItems);
+        await saveNutresaDraftToDb(updatedItems);
+        const unmatchedCount = updatedItems.length - matchedCount;
+        setSuccessMsg(
+            `Planilla Nutresa (${sheetName}): ${matchedCount} de ${updatedItems.length} SKUs cruzados con $ SIPSA + Prima${unmatchedCount > 0 ? ` (${unmatchedCount} sin cruce en esta hoja)` : ''}.`
+        );
+        setTimeout(() => setSuccessMsg(null), 6500);
+    };
+
+    // Copiar resumen ejecutivo de SKUs con excepción negociada (para WhatsApp / Correo a Nutresa)
+    const handleCopyNutresaExceptions = async () => {
+        const exceptionItems = agreementItems.filter(
+            i => i.is_frozen_override || i.our_counterproposal !== i.client_proposed_price
+        );
+        if (exceptionItems.length === 0) return;
+
+        const header = `Buen día equipo Grupo Nutresa (${nutresaActiveSheet || activePeriod}).\nRevisada la planilla del periodo, estamos de acuerdo con los precios de referencia excepto en las siguientes ${exceptionItems.length} referencia(s) ajustada(s):`;
+        const lines = exceptionItems.map(item => {
+            const diff = item.our_counterproposal - item.client_proposed_price;
+            const sign = diff >= 0 ? '+' : '';
+            return `• ${item.raw_name} (Cód ${item.client_code}): Propuesta ${formatMoney(item.client_proposed_price)} → Contrapropuesta ${formatMoney(item.our_counterproposal)} (${sign}${formatMoney(diff)})`;
+        });
+        const fullText = `${header}\n${lines.join('\n')}`;
+
+        try {
+            await navigator.clipboard.writeText(fullText);
+            setCopiedExceptionsSuccess(true);
+            setSuccessMsg(`Resumen de ${exceptionItems.length} excepción(es) copiado al portapapeles para enviar a Nutresa.`);
+            setTimeout(() => {
+                setCopiedExceptionsSuccess(false);
+                setSuccessMsg(null);
+            }, 3500);
+        } catch (err) {
+            console.error('Error copiando al portapapeles:', err);
+        }
+    };
+
     // Procesar carga de Excel cruzando contra los ítems reales de Supabase en memoria (Cero Mocks)
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -884,106 +1144,16 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
                 // MODO ESPECIAL GRUPO NUTRESA (IRCC): Cruza el Excel mensual ("Zona 3 - Investments Cortes") contra los 66 SKUs de Nutresa
                 if (selectedClient === 'nutresa') {
-                    const extractNutresaRowValues = (row: Record<string, unknown>) => {
-                        let rawName = '';
-                        let unifiedName = '';
-                        let codItem = '';
-                        let primaVal = 0;
-                        let sipsaVal = 0;
-                        let precioVal = 0;
-                        let counterVal = 0;
-
-                        for (const [k, v] of Object.entries(row)) {
-                            const kt = k.trim();
-                            if (/^(nombre\s*item|producto|descripcion)$/i.test(kt)) {
-                                rawName = String(v ?? '').trim();
-                            } else if (/^descripci[oó]n\s*unificada$/i.test(kt)) {
-                                unifiedName = String(v ?? '').trim();
-                            } else if (/^(c[oó]d\s*item|c[oó]digo|material|sku\s*frufresco|accounting\s*id|id\s*contable)$/i.test(kt)) {
-                                codItem = String(v ?? '').trim();
-                            } else if (/^prima\b/i.test(kt)) {
-                                primaVal = Number(v) || 0;
-                            } else if (/^\$?\s*sipsa\b/i.test(kt)) {
-                                sipsaVal = Number(v) || 0;
-                            } else if (/^(contrapropuesta|nuevo\s*precio)/i.test(kt)) {
-                                counterVal = Number(v) || 0;
-                            } else if (/^(precio\b|propuesta\b|nue\s*pre)/i.test(kt)) {
-                                precioVal = Number(v) || 0;
-                            }
-                        }
-
-                        const computedProposed = precioVal > 0 ? precioVal : (sipsaVal + primaVal);
-                        return {
-                            rawName,
-                            unifiedName,
-                            codItem,
-                            prima: Math.round(primaVal),
-                            sipsa: Math.round(sipsaVal),
-                            proposed: Math.round(computedProposed),
-                            counter: counterVal > 0 ? Math.round(counterVal) : 0
-                        };
-                    };
-
-                    const excelByNorm = new Map<string, ReturnType<typeof extractNutresaRowValues>>();
-                    const excelByCode = new Map<string, ReturnType<typeof extractNutresaRowValues>>();
-
-                    jsonRows.forEach(r => {
-                        const info = extractNutresaRowValues(r);
-                        const n1 = normalizeSearchStr(info.rawName);
-                        const n2 = normalizeSearchStr(info.unifiedName);
-                        if (n1 && !excelByNorm.has(n1)) excelByNorm.set(n1, info);
-                        if (n2 && n2 !== 'no se mide' && !excelByNorm.has(n2)) excelByNorm.set(n2, info);
-                        if (info.codItem && !excelByCode.has(info.codItem.toUpperCase())) {
-                            excelByCode.set(info.codItem.toUpperCase(), info);
+                    const sheetsMap: Record<string, Record<string, unknown>[]> = {};
+                    wb.SheetNames.forEach(sName => {
+                        const sheetObj = wb.Sheets[sName];
+                        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheetObj);
+                        if (rows && rows.length > 0) {
+                            sheetsMap[sName] = rows;
                         }
                     });
-
-                    let matchedCount = 0;
-                    const updatedItems: AgreementItem[] = agreementItems.map(item => {
-                        const normItemName = normalizeSearchStr(item.raw_name);
-                        const candidates = [normItemName, ...(NUTRESA_ALIAS_MAP[normItemName] || [])];
-                        let matchedExcel: ReturnType<typeof extractNutresaRowValues> | undefined;
-
-                        for (const cand of candidates) {
-                            if (excelByNorm.has(cand)) {
-                                matchedExcel = excelByNorm.get(cand);
-                                break;
-                            }
-                        }
-                        if (!matchedExcel && item.client_code) {
-                            matchedExcel = excelByCode.get(String(item.client_code).toUpperCase());
-                        }
-
-                        if (!matchedExcel) return item;
-
-                        matchedCount++;
-                        const newProposed = matchedExcel.proposed > 0 ? matchedExcel.proposed : item.client_proposed_price;
-                        const preservedPrevious = item.previous_price && item.previous_price > 0
-                            ? item.previous_price
-                            : item.client_proposed_price;
-                        // Si el usuario ya había congelado manualmente un precio en esta sesión, lo respetamos; si viene contrapropuesta explícita o es planilla fresca, se alinea a la propuesta de Nutresa
-                        const newCounter = item.is_frozen_override
-                            ? item.our_counterproposal
-                            : (matchedExcel.counter > 0 ? matchedExcel.counter : newProposed);
-
-                        return {
-                            ...item,
-                            unified_name: matchedExcel.unifiedName || item.unified_name,
-                            sipsa_price: matchedExcel.sipsa,
-                            prima_cop: matchedExcel.prima,
-                            previous_price: preservedPrevious,
-                            client_proposed_price: newProposed,
-                            our_counterproposal: newCounter,
-                            status_change: newCounter > preservedPrevious ? 'SUBIÓ' : (newCounter < preservedPrevious ? 'BAJÓ' : 'IGUAL')
-                        };
-                    });
-
-                    setAgreementItems(updatedItems);
-                    await saveNutresaDraftToDb(updatedItems);
-                    setSuccessMsg(
-                        `Planilla Nutresa cargada (${wsname}): ${matchedCount} de ${updatedItems.length} SKUs cruzados con $ SIPSA + Prima y Acuerdo Anterior conservado. Ajusta cualquier precio para congelarlo antes de consagrar.`
-                    );
-                    setTimeout(() => setSuccessMsg(null), 6500);
+                    setNutresaExcelSheets(sheetsMap);
+                    await applyNutresaSheetRows(wsname, jsonRows);
                     return;
                 }
 
@@ -1409,7 +1579,20 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     String(item.client_code || '').toLowerCase().includes(q);
                 const itemChains = item.chain_name ? item.chain_name.split(' • ').map(s => s.trim()) : [];
                 const matchesChain = selectedClient !== 'nutresa' || selectedChainFilter === 'all' || itemChains.includes(selectedChainFilter);
-                return matchesSearch && matchesChain;
+
+                let matchesQuickFilter = true;
+                if (selectedClient === 'nutresa' && nutresaQuickFilter !== 'all') {
+                    if (nutresaQuickFilter === 'low_margin') {
+                        const cost = Number(item.corabastos_cost) || 0;
+                        const markupPct = cost > 0 ? ((item.our_counterproposal - cost) / cost) * 100 : 100;
+                        matchesQuickFilter = cost > 0 && markupPct < 15;
+                    } else if (nutresaQuickFilter === 'frozen') {
+                        matchesQuickFilter = Boolean(item.is_frozen_override);
+                    } else if (nutresaQuickFilter === 'unmatched_excel') {
+                        matchesQuickFilter = Boolean(item.unmatched_in_excel);
+                    }
+                }
+                return matchesSearch && matchesChain && matchesQuickFilter;
             })
             .sort((a, b) => {
                 let res = 0;
@@ -1448,7 +1631,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 }
                 return sortDir === 'asc' ? res : -res;
             });
-    }, [agreementItems, searchTerm, selectedClient, selectedChainFilter, sortField, sortDir]);
+    }, [agreementItems, searchTerm, selectedClient, selectedChainFilter, nutresaQuickFilter, sortField, sortDir]);
 
     // Métricas reales de portafolio y rentabilidad unitaria (100% datos reales de Supabase, 0% volumen mockeado)
     const validCostItems = filteredItems.filter(i => Number(i.corabastos_cost) > 0);
@@ -2104,10 +2287,180 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         <Users size={13} color={THEME.colors.primary} />
                         <span>Padrón: {modelClientsMap[selectedClient]?.length || 0} clientes</span>
                     </button>
+
+                    {/* PÍLDORAS DE FILTRO RÁPIDO PARA NEGOCIACIÓN DE GRUPO NUTRESA */}
+                    {selectedClient === 'nutresa' && (() => {
+                        const lowMarginCount = agreementItems.filter(i => {
+                            const c = Number(i.corabastos_cost) || 0;
+                            return c > 0 && (((i.our_counterproposal - c) / c) * 100) < 15;
+                        }).length;
+                        const frozenCount = agreementItems.filter(i => i.is_frozen_override).length;
+                        const unmatchedCount = agreementItems.filter(i => i.unmatched_in_excel).length;
+
+                        return (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setNutresaQuickFilter('all')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: nutresaQuickFilter === 'all' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                        backgroundColor: nutresaQuickFilter === 'all' ? '#ECFDF5' : '#FFFFFF',
+                                        color: nutresaQuickFilter === 'all' ? '#065F46' : '#475569',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Todos ({agreementItems.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNutresaQuickFilter('low_margin')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: nutresaQuickFilter === 'low_margin' ? '1.5px solid #DC2626' : '1px solid #FECACA',
+                                        backgroundColor: nutresaQuickFilter === 'low_margin' ? '#FEF2F2' : '#FFF5F5',
+                                        color: '#B91C1C',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Aislar SKUs con utilidad sobre costo menor al 15% para llamar a negociar"
+                                >
+                                    <AlertTriangle size={12} />
+                                    Alerta Margen ({lowMarginCount})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNutresaQuickFilter('frozen')}
+                                    style={{
+                                        height: '30px',
+                                        padding: '0 9px',
+                                        borderRadius: '6px',
+                                        border: nutresaQuickFilter === 'frozen' ? '1.5px solid #059669' : '1px solid #A7F3D0',
+                                        backgroundColor: nutresaQuickFilter === 'frozen' ? '#DCFCE7' : '#F0FDF4',
+                                        color: '#065F46',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title="Ver únicamente los SKUs con precio negociado y congelado manualmente"
+                                >
+                                    <Lock size={11} />
+                                    Congelados ({frozenCount})
+                                </button>
+                                {unmatchedCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setNutresaQuickFilter('unmatched_excel')}
+                                        style={{
+                                            height: '30px',
+                                            padding: '0 9px',
+                                            borderRadius: '6px',
+                                            border: nutresaQuickFilter === 'unmatched_excel' ? '1.5px solid #D97706' : '1px solid #FDE68A',
+                                            backgroundColor: nutresaQuickFilter === 'unmatched_excel' ? '#FEF3C7' : '#FFFBEB',
+                                            color: '#92400E',
+                                            fontSize: '0.72rem',
+                                            fontWeight: 800,
+                                            cursor: 'pointer'
+                                        }}
+                                        title="SKUs en padrón que no vinieron en la hoja cargada del Excel"
+                                    >
+                                        Sin Cruce Excel ({unmatchedCount})
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })()}
+
+                    {/* SELECTOR MULTI-HOJA DEL LIBRO EXCEL DE NUTRESA */}
+                    {selectedClient === 'nutresa' && Object.keys(nutresaExcelSheets).length > 0 && (
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            backgroundColor: '#EFF6FF',
+                            border: '1px solid #BFDBFE',
+                            borderRadius: '6px',
+                            padding: '0 8px',
+                            height: '30px'
+                        }}>
+                            <FileSpreadsheet size={13} color="#1D4ED8" />
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1E40AF' }}>Hoja Excel:</span>
+                            <select
+                                value={nutresaActiveSheet}
+                                onChange={(e) => {
+                                    const nextSheet = e.target.value;
+                                    const rows = nutresaExcelSheets[nextSheet];
+                                    if (rows) {
+                                        applyNutresaSheetRows(nextSheet, rows);
+                                    }
+                                }}
+                                style={{
+                                    border: 'none',
+                                    backgroundColor: 'transparent',
+                                    color: '#1E3A8A',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    outline: 'none'
+                                }}
+                                title="Cambiar la pestaña del archivo Excel de Nutresa"
+                            >
+                                {Object.keys(nutresaExcelSheets).map(sName => (
+                                    <option key={sName} value={sName}>
+                                        {sName} ({nutresaExcelSheets[sName]?.length || 0} filas)
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
 
                 {/* BOTONES OPERATIVOS COMPACTOS */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* BOTÓN COPIAR EXCEPCIONES PARA WHATSAPP / CORREO A NUTRESA */}
+                    {selectedClient === 'nutresa' && (() => {
+                        const exceptionsCount = agreementItems.filter(
+                            i => i.is_frozen_override || i.our_counterproposal !== i.client_proposed_price
+                        ).length;
+                        if (exceptionsCount === 0) return null;
+                        return (
+                            <button
+                                type="button"
+                                onClick={handleCopyNutresaExceptions}
+                                style={{
+                                    height: '32px',
+                                    padding: '0 0.65rem',
+                                    borderRadius: '6px',
+                                    border: '1px solid #8B5CF6',
+                                    backgroundColor: copiedExceptionsSuccess ? '#EDE9FE' : '#F5F3FF',
+                                    color: '#5B21B6',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                }}
+                                title="Copiar resumen de SKUs negociados/congelados para enviar por WhatsApp o correo a Grupo Nutresa"
+                            >
+                                {copiedExceptionsSuccess ? <Check size={13} /> : <Copy size={13} />}
+                                {copiedExceptionsSuccess ? 'Copiado' : `Copiar Excepciones (${exceptionsCount})`}
+                            </button>
+                        );
+                    })()}
                     {/* BOTÓN APLICAR SUGERIDOS INTELIGENTES (OCULTO EN NUTRESA PORQUE SE RIGE POR SIPSA + PRIMA) */}
                     {selectedClient !== 'nutresa' && (
                         <button
@@ -3055,20 +3408,71 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                     )}
                                                 </td>
 
-                                                {/* + PRIMA ($ COP) */}
+                                                {/* + PRIMA ($ COP) EDITABLE CON RECÁLCULO AUTOMÁTICO DE CONTRAPROPUESTA */}
                                                 <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                    {(item.prima_cop || 0) > 0 ? (
-                                                        <>
-                                                            <div style={{ fontWeight: 800, color: '#6D28D9', fontSize: '0.8rem' }}>
-                                                                +{formatMoney(item.prima_cop || 0)}
-                                                            </div>
-                                                            <div style={{ fontSize: '0.62rem', color: '#7C3AED', fontWeight: 700, marginTop: '2px' }}>
-                                                                {(item.sipsa_price || 0) > 0 ? 'Prima s/SIPSA' : 'Valor Base'}
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <span style={{ color: '#94A3B8', fontSize: '0.74rem', fontWeight: 600 }}>—</span>
-                                                    )}
+                                                    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#6D28D9' }}>+$</span>
+                                                            <input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                placeholder="0"
+                                                                value={
+                                                                    editingPrimaDrafts[item.id] !== undefined
+                                                                        ? editingPrimaDrafts[item.id]
+                                                                        : ((item.prima_cop || 0) === 0 ? '' : String(item.prima_cop))
+                                                                }
+                                                                onFocus={(e) => {
+                                                                    setEditingPrimaDrafts(prev => ({
+                                                                        ...prev,
+                                                                        [item.id]: (item.prima_cop || 0) === 0 ? '' : String(item.prima_cop)
+                                                                    }));
+                                                                    e.currentTarget.select();
+                                                                }}
+                                                                onChange={(e) => {
+                                                                    const raw = e.target.value
+                                                                        .replace(/[^0-9]/g, '')
+                                                                        .replace(/^0+(?=\d)/, '');
+                                                                    setEditingPrimaDrafts(prev => ({ ...prev, [item.id]: raw }));
+                                                                    const newPrima = raw === '' ? 0 : Number(raw);
+                                                                    setAgreementItems(prev => prev.map(p => {
+                                                                        if (p.id !== item.id) return p;
+                                                                        const recalculatedCounter = (p.sipsa_price || 0) + newPrima;
+                                                                        return {
+                                                                            ...p,
+                                                                            prima_cop: newPrima,
+                                                                            our_counterproposal: recalculatedCounter,
+                                                                            is_frozen_override: recalculatedCounter !== p.client_proposed_price
+                                                                        };
+                                                                    }));
+                                                                }}
+                                                                onBlur={() => {
+                                                                    setEditingPrimaDrafts(prev => {
+                                                                        const next = { ...prev };
+                                                                        delete next[item.id];
+                                                                        return next;
+                                                                    });
+                                                                    saveNutresaDraftToDb(agreementItems);
+                                                                }}
+                                                                style={{
+                                                                    width: '68px',
+                                                                    padding: '0.22rem 0.35rem',
+                                                                    border: '1.5px solid #DDD6FE',
+                                                                    borderRadius: '6px',
+                                                                    backgroundColor: '#F5F3FF',
+                                                                    color: '#5B21B6',
+                                                                    fontWeight: 800,
+                                                                    fontSize: '0.75rem',
+                                                                    textAlign: 'right',
+                                                                    outline: 'none'
+                                                                }}
+                                                                title="Edita la Prima ($ COP) para recalcular automáticamente la Contrapropuesta ($ SIPSA + Prima) y congelar este SKU"
+                                                            />
+                                                        </div>
+                                                        <div style={{ fontSize: '0.6rem', color: '#7C3AED', fontWeight: 700 }}>
+                                                            {(item.sipsa_price || 0) > 0 ? 'Prima s/SIPSA' : 'Valor Base'}
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             </>
                                         )}
