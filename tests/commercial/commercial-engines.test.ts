@@ -15,6 +15,7 @@ import {
     evaluateCostFreshness
 } from '../../src/lib/commercial/costFreshnessPolicy';
 
+import { fetchAllRows } from '../../src/lib/supabase';
 import {
     parseBlindCountQuantity,
     DEFAULT_INSTITUTIONAL_MARGIN_PCT,
@@ -295,5 +296,43 @@ describe('TDD: Escenario 338 — DT-01 (Piso 25% & Blindaje 0% Corporativo) y DT
         assert.equal(DEFAULT_INSTITUTIONAL_MARGIN_PCT, 25);
         assert.equal(GENERAL_INSTITUCIONAL_ID, 'd90a91e5-827c-473d-9d4f-3e28c7c91e15');
         assert.equal(FAMILIA_CORTES_CORPORATIVO_ID, '31c6d356-2d52-488f-81d6-abffaed295cf');
+    });
+});
+
+// ============================================================================
+// SUITE 5: ESCENARIO 339 (SDD v1.9.322) — DT-02 (fetchAllRows Paginación Transparente)
+// ============================================================================
+describe('TDD: Escenario 339 — DT-02 (Paginación Transparente fetchAllRows)', () => {
+    it('debe ejecutar una sola consulta cuando el dataset tiene menos de 1000 filas', async () => {
+        let calls = 0;
+        const mockRows = Array.from({ length: 42 }, (_, i) => ({ id: `row-${i}` }));
+        const { data, error } = await fetchAllRows(
+            async (from, to) => {
+                calls++;
+                return { data: mockRows.slice(from, to + 1), error: null };
+            },
+            1000,
+            10000
+        );
+        assert.equal(error, null);
+        assert.equal(data.length, 42);
+        assert.equal(calls, 1, 'Dataset pequeño debe resolverse en una sola llamada');
+    });
+
+    it('debe iterar sobre múltiples rangos cuando el dataset supera 1000 filas sin truncar', async () => {
+        let calls = 0;
+        const totalSimulated = 2500;
+        const mockRows = Array.from({ length: totalSimulated }, (_, i) => ({ id: `row-${i}` }));
+        const { data, error } = await fetchAllRows(
+            async (from, to) => {
+                calls++;
+                return { data: mockRows.slice(from, to + 1), error: null };
+            },
+            1000,
+            10000
+        );
+        assert.equal(error, null);
+        assert.equal(data.length, totalSimulated);
+        assert.equal(calls, 3, '2500 filas con pageSize 1000 requiere 3 llamadas (0-999, 1000-1999, 2000-2999)');
     });
 });

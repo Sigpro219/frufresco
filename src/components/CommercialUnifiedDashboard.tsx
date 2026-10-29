@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import {
     DollarSign,
@@ -618,10 +618,9 @@ export default function CommercialUnifiedDashboard({
                     .select('key, value')
                     .eq('key', 'scarcity_locked_skus')
                     .maybeSingle(),
-                supabase
-                    .from('purchases')
-                    .select('product_id, unit_price, created_at, payment_method, raw_data_source')
-                    .order('created_at', { ascending: false }),
+                fetchAllRows<{ product_id: string; unit_price: number; created_at: string; payment_method: string; raw_data_source: string }>(
+                    (from, to) => supabase.from('purchases').select('product_id, unit_price, created_at, payment_method, raw_data_source').order('created_at', { ascending: false }).range(from, to)
+                ),
                 supabase
                     .from('leads')
                     .select('id, company_name, contact_name, phone, email, business_type, business_size, status, created_at, next_contact_date, last_contact_date, municipality, address'),

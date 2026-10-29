@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
 import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import Link from 'next/link';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
@@ -153,9 +153,9 @@ export default function PricingSettingsPage({
 
         if (data) {
             // Calcular utilidad promedio para cada modelo desde pricing_rules
-            const { data: allRules } = await supabase
-                .from('pricing_rules')
-                .select('model_id, margin_adjustment');
+            const { data: allRules } = await fetchAllRows<{ model_id: string; margin_adjustment: number | null }>(
+                (from, to) => supabase.from('pricing_rules').select('model_id, margin_adjustment').range(from, to)
+            );
 
             const avgMap: Record<string, number> = {};
             if (allRules && allRules.length > 0) {
@@ -264,10 +264,9 @@ export default function PricingSettingsPage({
 
             // 2. Fetch exception rules for this model and General Institucional baseline
             const modelIdsToFetch = modelId === GENERAL_INSTITUCIONAL_ID ? [modelId] : [modelId, GENERAL_INSTITUCIONAL_ID];
-            const { data: rulesData, error: rulesErr } = await supabase
-                .from('pricing_rules')
-                .select('*')
-                .in('model_id', modelIdsToFetch);
+            const { data: rulesData, error: rulesErr } = await fetchAllRows<any>(
+                (from, to) => supabase.from('pricing_rules').select('*').in('model_id', modelIdsToFetch).range(from, to)
+            );
             if (rulesErr) throw rulesErr;
             
             const rulesMap = new Map();
@@ -294,10 +293,9 @@ export default function PricingSettingsPage({
             });
 
             // 4. Fetch latest purchases
-            const { data: purchasesData } = await supabase
-                .from('purchases')
-                .select('product_id, unit_price, purchase_unit, created_at')
-                .order('created_at', { ascending: false });
+            const { data: purchasesData } = await fetchAllRows<{ product_id: string; unit_price: number; purchase_unit: string; created_at: string }>(
+                (from, to) => supabase.from('purchases').select('product_id, unit_price, purchase_unit, created_at').order('created_at', { ascending: false }).range(from, to)
+            );
             
             const purchasesMap = new Map();
             purchasesData?.forEach(p => {

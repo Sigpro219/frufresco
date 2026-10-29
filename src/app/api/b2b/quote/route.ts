@@ -72,6 +72,20 @@ const ANCHOR_PRIORITY: Record<string, string[]> = {
   ]
 };
 
+async function fetchAllQueryRows<T>(buildRange: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+  const pageSize = 1000;
+  while (from < 25000) {
+    const { data, error } = await buildRange(from, from + pageSize - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 export async function POST(request: Request) {
     try {
         const supabase = getSupabase();
@@ -272,10 +286,9 @@ export async function POST(request: Request) {
             });
 
             // Fetch latest purchases cost
-            const { data: purchases } = await supabase
-                .from('purchases')
-                .select('product_id, unit_price, created_at')
-                .order('created_at', { ascending: false });
+            const purchases = await fetchAllQueryRows<{ product_id: string; unit_price: number; created_at: string }>(
+                (from, to) => supabase.from('purchases').select('product_id, unit_price, created_at').order('created_at', { ascending: false }).range(from, to)
+            );
             const purchasesMap = new Map<string, number>();
             purchases?.forEach(p => {
                 if (!purchasesMap.has(p.product_id)) purchasesMap.set(p.product_id, Number(p.unit_price));

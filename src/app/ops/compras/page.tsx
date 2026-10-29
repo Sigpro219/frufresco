@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
 import { useAuth } from "../../../lib/authContext";
 import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
@@ -685,23 +685,26 @@ export default function ProcurementPage() {
     if (!targetDate) return;
 
     // 1. Obtener items de pedidos ACTIVOS (SIN RESTRICCIÓN DE FECHA - DESACTIVADO TEMPORALMENTE)
-    const { data: items, error: fetchErr } = await supabase
-      .from("order_items")
-      .select(
-        `
-                  id, 
-                  quantity, 
-                  unit,
-                  product_id, 
-                  variant_label,
-                  nickname,
-                  selected_options,
-                  products(id, name, unit_of_measure, weight_kg, parent_id, min_inventory_level),
-                  orders!inner(delivery_date, status)
-              `,
-      )
-      .in("orders.status", ["para_compra", "approved", "picking"])
-      .abortSignal(signal as any);
+    const { data: items, error: fetchErr } = await fetchAllRows<any>(
+      (from, to) => supabase
+        .from("order_items")
+        .select(
+          `
+                    id, 
+                    quantity, 
+                    unit,
+                    product_id, 
+                    variant_label,
+                    nickname,
+                    selected_options,
+                    products(id, name, unit_of_measure, weight_kg, parent_id, min_inventory_level),
+                    orders!inner(delivery_date, status)
+                `,
+        )
+        .in("orders.status", ["para_compra", "approved", "picking"])
+        .range(from, to)
+        .abortSignal(signal as any)
+    );
 
     if (fetchErr) {
       if (isAbortError(fetchErr)) return;

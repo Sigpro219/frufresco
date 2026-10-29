@@ -86,11 +86,11 @@ export const supabase = createSafeClient();
  * DEBT-002: Paginated query helper that transparently overcomes the 1,000-row PostgREST limit.
  * If the dataset has < 1,000 rows, it executes only 1 HTTP request (zero extra overhead).
  */
-export async function fetchAllRows<T = any>(
-    buildRangeQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+export async function fetchAllRows<T = Record<string, unknown>>(
+    buildRangeQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
     pageSize = 1000,
-    maxRows = 10000
-): Promise<{ data: T[]; error: any }> {
+    maxRows = 25000
+): Promise<{ data: T[]; error: unknown }> {
     const allRows: T[] = [];
     let from = 0;
 

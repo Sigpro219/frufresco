@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import {
@@ -168,7 +168,9 @@ export default function CommercialReportsPage() {
                 supabase.from('profiles').select('id, role, company_name, contact_name, nit, is_corporate_parent, parent_id'),
                 supabase.from('products').select('id, name, sku, accounting_id, category, unit_of_measure, is_active').eq('is_active', true),
                 supabase.from('commercial_cost_matrix').select('product_id, manual_cost, updated_at, is_active').eq('is_active', true),
-                supabase.from('purchases').select('product_id, unit_price, created_at').order('created_at', { ascending: false }),
+                fetchAllRows<{ product_id: string; unit_price: number; created_at: string }>(
+                    (from, to) => supabase.from('purchases').select('product_id, unit_price, created_at').order('created_at', { ascending: false }).range(from, to)
+                ),
                 supabase.from('pricing_model_prices').select('product_id, price').eq('model_id', 'd90a91e5-827c-473d-9d4f-3e28c7c91e15')
             ]);
 
