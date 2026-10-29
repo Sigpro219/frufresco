@@ -843,11 +843,12 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             .filter(r => {
                 if (onlyWithShrinkageOrFlow && !r.hasAnyActivity) return false;
                 if (qSearch) {
-                    const matchName = r.name.toLowerCase().includes(qSearch);
-                    const matchCode = String(r.code).toLowerCase().includes(qSearch);
-                    const matchSku = r.sku.toLowerCase().includes(qSearch);
-                    const matchCell = r.cellGroup.toLowerCase().includes(qSearch);
-                    if (!matchName && !matchCode && !matchSku && !matchCell) return false;
+                    const norm = (v: string | number | null | undefined) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const qNorm = norm(qSearch);
+                    const matchName = norm(r.name).includes(qNorm);
+                    const matchCode = norm(r.code).includes(qNorm);
+                    const matchSku = norm(r.sku).includes(qNorm);
+                    if (!matchName && !matchCode && !matchSku) return false;
                 }
                 return true;
             })

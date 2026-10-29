@@ -1030,7 +1030,7 @@ export default function InventoryAdminPage() {
             const accountingIdStr = p.accounting_id !== null && p.accounting_id !== undefined ? String(p.accounting_id) : '';
             const accountingIdHash = accountingIdStr ? `#${accountingIdStr}` : '';
 
-            // Blob unificado con todos los atributos relevantes del producto
+            // Blob unificado con todos los atributos propios del producto
             const productSearchBlob = normalizeText([
                 accountingIdStr,
                 accountingIdHash,
@@ -1038,11 +1038,6 @@ export default function InventoryAdminPage() {
                 p.sku,
                 p.category,
                 categoryLabel,
-                p.inventory_group,
-                cell?.name,
-                cell?.short_name,
-                cell?.description,
-                cell?.leader_name,
                 p.unit_of_measure,
                 !p.inventory_group ? 'sin celula sin asignar huerfano' : ''
             ].filter(Boolean).join(' '));
@@ -1414,14 +1409,11 @@ export default function InventoryAdminPage() {
         const tags = parts.filter(pt => pt.startsWith('@')).map(t => t.slice(1).toLowerCase());
         const searchTerms = parts.filter(pt => !pt.startsWith('@')).map(t => t.toLowerCase());
 
-        const matchesText = searchTerms.every(term => 
-            p.name?.toLowerCase().includes(term) ||
-            p.sku?.toLowerCase().includes(term) ||
-            p.accounting_id?.toString()?.includes(term) ||
-            p.inventory_group?.toLowerCase().includes(term) ||
-            p.buying_team?.toLowerCase().includes(term) ||
-            (p as any).purchase_sublist?.toLowerCase().includes(term)
-        );
+        const matchesText = searchTerms.every(term => {
+            const norm = (v: string | number | null | undefined) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const t = norm(term);
+            return norm(p.name).includes(t) || norm(p.sku).includes(t) || norm(p.accounting_id).includes(t);
+        });
 
         if (!matchesText && searchTerms.length > 0) return false;
 

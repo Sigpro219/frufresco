@@ -1151,6 +1151,13 @@ export default function InventoryDailyBalanceTab({
     }, [dailyRows]);
 
     // Lógica de búsqueda inteligente y etiquetas (#ID, @tags, multi-búsqueda por comas)
+    const normalizeSearchText = (val: string | number | null | undefined): string =>
+        String(val || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+
     const matchSearchSegment = (row: InventoryDailyRow, segment: string): boolean => {
         const trimmed = segment.trim();
         if (!trimmed) return true;
@@ -1162,14 +1169,17 @@ export default function InventoryDailyBalanceTab({
         }
 
         const parts = trimmed.split(/\s+/);
-        const tags = parts.filter(pt => pt.startsWith('@')).map(t => t.slice(1).toLowerCase());
-        const searchTerms = parts.filter(pt => !pt.startsWith('@')).map(t => t.toLowerCase());
+        const tags = parts.filter(pt => pt.startsWith('@')).map(t => normalizeSearchText(t.slice(1)));
+        const searchTerms = parts.filter(pt => !pt.startsWith('@')).map(t => normalizeSearchText(t)).filter(Boolean);
+
+        const normName = normalizeSearchText(row.colD_productName);
+        const normSku = normalizeSearchText(row.sku);
+        const normId = normalizeSearchText(row.colB_idProducto);
 
         const matchesText = searchTerms.every(term => 
-            row.colD_productName?.toLowerCase().includes(term) ||
-            (row.sku || '')?.toLowerCase().includes(term) ||
-            row.colB_idProducto?.toString()?.toLowerCase().includes(term) ||
-            row.colC_inventoryGroup?.toLowerCase().includes(term)
+            normName.includes(term) ||
+            normSku.includes(term) ||
+            normId.includes(term)
         );
 
         if (!matchesText && searchTerms.length > 0) return false;
@@ -1248,38 +1258,52 @@ export default function InventoryDailyBalanceTab({
     const filteredFamilies = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
         const segments = query ? query.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const result: DailyFamily[] = [];
 
-        return dailyFamilies.filter(family => {
+        for (const family of dailyFamilies) {
             // Filtro exclusivo: Solo familias/SKUs con movimiento en el turno
             if (onlyWithMovement && !hasFamilyMovement(family)) {
-                return false;
+                continue;
             }
 
             // Filtro por Célula / Grupo
             if (selectedCell !== 'ALL') {
                 const groupUpper = (family.parent.colC_inventoryGroup || '').toUpperCase();
                 const cellUpper = selectedCell.toUpperCase();
-                const parentMatches = groupUpper.includes(cellUpper) || cellUpper.includes(groupUpper);
-                const childMatches = family.children.some(c => {
+                const parentMatchesCell = groupUpper.includes(cellUpper) || cellUpper.includes(groupUpper);
+                const childMatchesCell = family.children.some(c => {
                     const g = (c.colC_inventoryGroup || '').toUpperCase();
                     return g.includes(cellUpper) || cellUpper.includes(g);
                 });
-                if (!parentMatches && !childMatches) return false;
+                if (!parentMatchesCell && !childMatchesCell) continue;
             }
 
-            // Filtro por búsqueda inteligente avanzada
+            // Filtro por búsqueda inteligente avanzada (exclusivo sobre nombre de producto, SKU e ID)
             if (segments.length > 0) {
-                const matchFamily = segments.every(seg => {
-                    if (matchSearchSegment(family.parent, seg)) return true;
-                    if (matchSearchSegment(family.consolidated, seg)) return true;
-                    if (family.children.some(child => matchSearchSegment(child, seg))) return true;
-                    return false;
-                });
-                if (!matchFamily) return false;
+                const parentMatches = segments.some(seg =>
+                    matchSearchSegment(family.parent, seg) || matchSearchSegment(family.consolidated, seg)
+                );
+                const matchingChildren = family.children.filter(child =>
+                    segments.some(seg => matchSearchSegment(child, seg))
+                );
+
+                if (!parentMatches && matchingChildren.length === 0) {
+                    continue;
+                }
+
+                if (family.isParent && !parentMatches && matchingChildren.length > 0) {
+                    result.push({
+                        ...family,
+                        children: matchingChildren
+                    });
+                    continue;
+                }
             }
 
-            return true;
-        });
+            result.push(family);
+        }
+
+        return result;
     }, [dailyFamilies, selectedCell, searchQuery, onlyWithMovement, hasFamilyMovement]);
 
     // Total de SKUs activos representados (padres + hijos)
@@ -1336,25 +1360,28 @@ export default function InventoryDailyBalanceTab({
         });
     }, [filteredFamilies, columnFilters]);
 
-    // Estado colapsado de familias (por defecto colapsadas para vista ejecutiva compacta)
+    // Estado colapsado de familias (por defecto colapsadas para vista ejecutiva compacta, auto-expandidas al buscar)
     const [collapsedFamilies, setCollapsedFamilies] = useState<Record<string, boolean>>({});
+    const isSearchActive = searchQuery.trim().length > 0;
 
     const toggleFamily = useCallback((familyId: string) => {
         setCollapsedFamilies(prev => {
-            const isCurrentlyCollapsed = prev[familyId] !== false; // default true
+            const isCurrentlyCollapsed = isSearchActive
+                ? (prev[familyId] === true)
+                : (prev[familyId] !== false);
             return {
                 ...prev,
                 [familyId]: !isCurrentlyCollapsed
             };
         });
-    }, []);
+    }, [isSearchActive]);
 
     // Determinar si todas las familias con hijos en el filtro están colapsadas
     const allCollapsed = useMemo(() => {
         const parents = filteredFamilies.filter(f => f.isParent);
         if (parents.length === 0) return true;
-        return parents.every(f => collapsedFamilies[f.id] !== false);
-    }, [filteredFamilies, collapsedFamilies]);
+        return parents.every(f => isSearchActive ? (collapsedFamilies[f.id] === true) : (collapsedFamilies[f.id] !== false));
+    }, [filteredFamilies, collapsedFamilies, isSearchActive]);
 
     const toggleAllFamilies = useCallback(() => {
         setCollapsedFamilies(prev => {
@@ -1410,7 +1437,9 @@ export default function InventoryDailyBalanceTab({
     const flatVisibleRows = useMemo<FlatRowItem[]>(() => {
         const list: FlatRowItem[] = [];
         for (const family of displayedFamilies) {
-            const isCollapsed = collapsedFamilies[family.id] !== false; // default true
+            const isCollapsed = isSearchActive
+                ? (collapsedFamilies[family.id] === true)
+                : (collapsedFamilies[family.id] !== false);
             if (family.isParent) {
                 list.push({
                     rowKey: `parent-${family.id}`,
@@ -4311,7 +4340,9 @@ export default function InventoryDailyBalanceTab({
                             ) : (
                                 displayedFamilies.map((family, idx) => {
                                     const isAlternate = idx % 2 === 1;
-                                    const isCollapsed = collapsedFamilies[family.id] !== false; // default true
+                                    const isCollapsed = isSearchActive
+                                        ? (collapsedFamilies[family.id] === true)
+                                        : (collapsedFamilies[family.id] !== false);
 
                                     if (family.isParent) {
                                         return (
