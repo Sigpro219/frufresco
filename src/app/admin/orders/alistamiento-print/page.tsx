@@ -1124,7 +1124,7 @@ export default function AlistamientoSabanaPrintPage() {
                                             <th style={{ width: '44px', padding: '5px 2px', textAlign: 'center', fontWeight: 900, border: '1px solid #475569', color: '#000000', fontSize: '8pt' }}>
                                                 LUGAR
                                             </th>
-                                            <th style={{ width: '190px', padding: '5px 6px', textAlign: 'left', fontWeight: 900, border: '1px solid #475569', color: '#000000', fontSize: '8pt' }}>
+                                            <th style={{ width: '215px', padding: '5px 6px', textAlign: 'left', fontWeight: 900, border: '1px solid #475569', color: '#000000', fontSize: '8pt' }}>
                                                 SUCURSAL / CLIENTE ({activeOrdersInCell.length})
                                             </th>
                                             <th style={{ width: '26px', padding: '5px 1px', textAlign: 'center', fontWeight: 900, border: '1px solid #475569', color: '#000000', fontSize: '8pt' }}>
@@ -1168,11 +1168,13 @@ export default function AlistamientoSabanaPrintPage() {
                                                         {ord.space_label}
                                                     </td>
 
-                                                    {/* Sucursal del Cliente (Estricto: solo nombre de sucursal + Sello Cuidado Especial) */}
-                                                    <td style={{ textAlign: 'left', padding: '4px 6px', border: '1px solid #64748B', color: '#000000', maxWidth: '190px' }} title={ord.branch_name}>
-                                                        <div style={{ fontWeight: 800, fontSize: '8.5pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3px' }}>
-                                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ord.branch_name}</span>
-                                                            <SpecialClientBadge state={ord.special_attention} variant="print-stamp" />
+                                                    {/* Sucursal del Cliente (Estricto: nombre completo sin truncar + Sello Cuidado Especial) */}
+                                                    <td style={{ textAlign: 'left', padding: '4px 6px', border: '1px solid #64748B', color: '#000000', width: '215px', minWidth: '190px', maxWidth: '230px' }} title={ord.branch_name}>
+                                                        <div style={{ fontWeight: 800, fontSize: '8.3pt', lineHeight: '1.15', whiteSpace: 'normal', wordBreak: 'break-word', color: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                                            <span style={{ flex: 1, minWidth: 0 }}>{ord.branch_name}</span>
+                                                            <span style={{ flexShrink: 0, display: 'inline-flex' }}>
+                                                                <SpecialClientBadge state={ord.special_attention} variant="print-stamp" />
+                                                            </span>
                                                         </div>
                                                     </td>
 

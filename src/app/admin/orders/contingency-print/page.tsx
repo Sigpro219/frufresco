@@ -503,9 +503,9 @@ function resolveDeliverySlotInfo(order: OrderData): DeliverySlotResult {
  *   con su propio encabezado oficial, Pág X de Y, totales, firmas y pie de página legal.
  */
 function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
-    const SINGLE_PAGE_MAX = 36;
-    const INTERMEDIATE_PAGE_MAX = 38;
-    const LAST_PAGE_MAX = 32;
+    const SINGLE_PAGE_MAX = 46;       // Hasta 46 ítems caben en 1 sola hoja Carta con modo isUltraDense (4 niveles)
+    const INTERMEDIATE_PAGE_MAX = 48; // Página 1 sin bloque de firmas/totales aloja hasta 48 ítems sin dejar hueco blanco
+    const LAST_PAGE_MAX = 40;         // Última página con firmas y totales aloja hasta 40 ítems
 
     if (!items || items.length === 0) return [[]];
     if (items.length <= SINGLE_PAGE_MAX) return [items];
@@ -520,7 +520,7 @@ function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
         }
 
         if (remaining.length <= INTERMEDIATE_PAGE_MAX + LAST_PAGE_MAX) {
-            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.max(24, remaining.length - 6));
+            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.max(36, remaining.length - 8));
             pages.push(remaining.slice(0, firstPageCount));
             pages.push(remaining.slice(firstPageCount));
             break;
@@ -776,13 +776,13 @@ function ContingencyPrintContent() {
             const addressClean = cleanAddress(order.shipping_address || order.profiles?.address);
             const phone = cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone);
             const bay = order.warehouse_spaces && order.warehouse_spaces.length > 0 
-                ? `Bahía ${formatSpaceLabel(order.warehouse_spaces)}` 
+                ? `Espacio ${formatSpaceLabel(order.warehouse_spaces)}` 
                 : '';
 
             return {
                 '#': idx + 1,
                 'Pedido': `#${orderNum}`,
-                'Bahía': bay,
+                'Espacio': bay,
                 'Razón Social Matriz': parentName,
                 'Sucursal / Punto de Entrega': branchName,
                 'Dirección': addressClean,
@@ -840,14 +840,16 @@ function ContingencyPrintContent() {
     const showPurchases = showAll || mode === 'purchases';
     const showRemissions = showAll || mode === 'remissions';
     const showDispatch = showAll || mode === 'dispatch';
+    const totalRemissionSheets = orders.reduce((acc, o) => acc + paginateRemissionItems(o.order_items || []).length * 2, 0);
 
     return (
-        <div style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', padding: '20px 0', color: '#000', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+        <div className="print-root-wrapper" style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', padding: '20px 0', color: '#000', fontFamily: 'Arial, Helvetica, sans-serif' }}>
             {/* CSS Print Rules */}
             <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
                     .no-print { display: none !important; }
-                    body { background: white !important; padding: 0 !important; margin: 0 !important; color: black !important; }
+                    html, body, .print-root-wrapper { background: white !important; padding: 0 !important; margin: 0 !important; min-height: 0 !important; height: auto !important; color: black !important; }
+                    .print-doc-wrapper { max-width: 100% !important; margin: 0 !important; padding: 0 !important; gap: 0 !important; display: block !important; }
                     .page-break { page-break-after: always; break-after: page; }
                     .avoid-break { page-break-inside: avoid; break-inside: avoid; }
                     .print-sheet {
@@ -924,7 +926,7 @@ function ContingencyPrintContent() {
                             )}
                         </h1>
                         <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
-                            {orders.length} {mode === 'dispatch' ? 'paradas' : 'ped.'} {mode === 'remissions' ? `(${orders.length * 2} hojas)` : ''}
+                            {orders.length} {mode === 'dispatch' ? 'paradas' : 'ped.'} {mode === 'remissions' ? `(${totalRemissionSheets} hojas)` : ''}
                         </span>
                         <span style={{ fontSize: '0.68rem', fontWeight: '700', color: mode === 'dispatch' ? '#065F46' : mode === 'remissions' ? '#0D7A57' : '#92400E', backgroundColor: mode === 'dispatch' || mode === 'remissions' ? '#ECFDF5' : '#FEF3C7', padding: '1px 6px', borderRadius: '12px', border: mode === 'dispatch' || mode === 'remissions' ? '1px solid #A7F3D0' : '1px solid #FCD34D', whiteSpace: 'nowrap' }}>
                             {mode === 'dispatch' ? 'Despacho y Ruta' : mode === 'remissions' ? 'Original + Copia' : mode === 'purchases' ? 'Corabastos' : 'Kit Completo'}
@@ -1059,7 +1061,7 @@ function ContingencyPrintContent() {
                                 title: mode === 'dispatch' 
                                     ? `Manifiesto de Ruta - ${orders.length} Paradas`
                                     : mode === 'remissions'
-                                    ? `Remisiones de Entrega - ${orders.length} Pedidos (${orders.length * 2} Hojas)`
+                                    ? `Remisiones de Entrega - ${orders.length} Pedidos (${totalRemissionSheets} Hojas)`
                                     : `Kit de Contingencia - ${orders.length} Pedidos (${mode.toUpperCase()})`,
                                 paperSize: mode === 'dispatch' ? 'oficio' : 'letter',
                                 orientation: 'portrait',
@@ -1088,7 +1090,7 @@ function ContingencyPrintContent() {
             </div>
 
             {/* Printable Container (Attached ref for clean new-window printing) */}
-            <div ref={printDocRef} style={{ maxWidth: '850px', margin: '0.75rem auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div ref={printDocRef} className="print-doc-wrapper" style={{ maxWidth: '850px', margin: '0.75rem auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
                 {orders.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '3.5rem 2rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #CBD5E1', maxWidth: '650px', margin: '2rem auto', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
@@ -1415,17 +1417,17 @@ function ContingencyPrintContent() {
                                         </div>
                                     )}
 
-                                    {/* Client & Route Micro-Grid */}
+                                    {/* Client & Route Micro-Grid (Adaptativo según densidad de página) */}
                                     <div style={{
                                         display: 'grid',
                                         gridTemplateColumns: '1.3fr 1fr',
-                                        gap: '8px',
+                                        gap: pageItems.length >= 38 ? '6px' : '8px',
                                         backgroundColor: '#F8FAFC',
-                                        padding: '4px 8px',
+                                        padding: pageItems.length >= 38 ? '2.5px 6px' : '4px 8px',
                                         border: '1px solid #CBD5E1',
                                         borderRadius: '4px',
-                                        fontSize: '7pt',
-                                        marginBottom: '5px'
+                                        fontSize: pageItems.length >= 38 ? '6.5pt' : '7pt',
+                                        marginBottom: pageItems.length >= 38 ? '3px' : '5px'
                                     }}>
                                         <div>
                                             {b2cGift.isB2CGift ? (
@@ -1471,29 +1473,37 @@ function ContingencyPrintContent() {
                                         </div>
                                     </div>
 
-                                    {/* Products Table con todas las columnas (IVA, KG-UN Recibe) y cuadro de check al final */}
+                                    {/* Products Table con Escala Adaptativa en 4 Niveles (Spacious, Standard, Dense, UltraDense) */}
                                     {(() => {
-                                        const isUltraDense = pageItems.length > 25;
-                                        const isDense = pageItems.length > 16;
-                                        const rowPad = isUltraDense ? '0.6px 3px' : isDense ? '1px 3px' : '1.8px 3px';
-                                        const prodPad = isUltraDense ? '0.6px 4px' : isDense ? '1px 4px' : '1.8px 5px';
-                                        const prodFontSize = isUltraDense ? '7pt' : isDense ? '7.4pt' : '8pt';
-                                        const bodyFontSize = isUltraDense ? '6.9pt' : isDense ? '7.2pt' : '7.8pt';
-                                        const smallFontSize = isUltraDense ? '6.4pt' : isDense ? '6.8pt' : '7.2pt';
+                                        const count = pageItems.length;
+                                        const isUltraDense = count >= 38;
+                                        const isDense = count >= 27 && count < 38;
+                                        const isStandard = count >= 16 && count < 27;
+                                        // Nivel 1: Spacious (1-15), Nivel 2: Standard (16-26), Nivel 3: Dense (27-37), Nivel 4: UltraDense (38-48)
+                                        const rowPad = isUltraDense ? '0.4px 3px' : isDense ? '1px 3px' : isStandard ? '2px 3.5px' : '3px 4px';
+                                        const prodPad = isUltraDense ? '0.4px 4px' : isDense ? '1px 4px' : isStandard ? '2px 4.5px' : '3px 5px';
+                                        const thPad = isUltraDense ? '1px 2px' : isDense ? '1.5px 2px' : '2.5px 3px';
+                                        const thFontSize = isUltraDense ? '6.8pt' : isDense ? '7.2pt' : '7.8pt';
+                                        const prodFontSize = isUltraDense ? '6.8pt' : isDense ? '7.3pt' : isStandard ? '7.8pt' : '8.3pt';
+                                        const bodyFontSize = isUltraDense ? '6.7pt' : isDense ? '7.1pt' : isStandard ? '7.6pt' : '8.1pt';
+                                        const smallFontSize = isUltraDense ? '6.2pt' : isDense ? '6.7pt' : isStandard ? '7.1pt' : '7.5pt';
+                                        const lineH = isUltraDense ? 1.05 : isDense ? 1.12 : isStandard ? 1.18 : 1.24;
+                                        const receiveBoxH = isUltraDense ? '8.5px' : isDense ? '11px' : isStandard ? '13px' : '15px';
+                                        const checkBoxSize = isUltraDense ? '8.5px' : isDense ? '10px' : isStandard ? '11px' : '12px';
 
                                         return (
-                                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: isUltraDense ? '1px' : '3px', marginBottom: isUltraDense ? '2px' : '4px' }}>
                                                 <thead>
                                                     <tr>
-                                                        <th style={{ width: '3.5%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>#</th>
-                                                        <th style={{ width: '31%', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 4px' : '2px 5px' }}>DESCRIPCIÓN DEL PRODUCTO</th>
-                                                        <th style={{ width: '7.5%', textAlign: 'right', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>CANT.</th>
-                                                        <th style={{ width: '6%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>UM</th>
-                                                        <th style={{ width: '10%', textAlign: 'right', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>VALOR/UM</th>
-                                                        <th style={{ width: '10%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>IVA</th>
-                                                        <th style={{ width: '11%', textAlign: 'right', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>TOTAL</th>
-                                                        <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>KG-UN RECIBE</th>
-                                                        <th style={{ width: '7%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>[]</th>
+                                                        <th style={{ width: '3.5%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>#</th>
+                                                        <th style={{ width: '31%', fontSize: thFontSize, padding: thPad }}>DESCRIPCIÓN DEL PRODUCTO</th>
+                                                        <th style={{ width: '7.5%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>CANT.</th>
+                                                        <th style={{ width: '6%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>UM</th>
+                                                        <th style={{ width: '10%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>VALOR/UM</th>
+                                                        <th style={{ width: '10%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>IVA</th>
+                                                        <th style={{ width: '11%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>TOTAL</th>
+                                                        <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: thFontSize, padding: thPad }}>KG-UN RECIBE</th>
+                                                        <th style={{ width: '7%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>[]</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -1532,35 +1542,35 @@ function ContingencyPrintContent() {
 
                                                         return (
                                                             <tr key={globalIdx} style={{ backgroundColor: bg }}>
-                                                                <td style={{ textAlign: 'center', fontSize: isDense ? '7pt' : '7.5pt', color: '#64748B', fontWeight: 'bold', padding: rowPad }}>{globalIdx}</td>
-                                                                <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: prodPad }}>
-                                                                    <strong style={{ fontSize: prodFontSize, color: '#0F172A', lineHeight: 1.15 }}>
+                                                                <td style={{ textAlign: 'center', fontSize: smallFontSize, color: '#64748B', fontWeight: 'bold', padding: rowPad, lineHeight: lineH }}>{globalIdx}</td>
+                                                                <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: prodPad, lineHeight: lineH }}>
+                                                                    <strong style={{ fontSize: prodFontSize, color: '#0F172A', lineHeight: lineH }}>
                                                                         {pName}
                                                                     </strong>
                                                                 </td>
-                                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, color: '#0F172A', fontVariantNumeric: 'tabular-nums', padding: rowPad }}>
+                                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, color: '#0F172A', fontVariantNumeric: 'tabular-nums', padding: rowPad, lineHeight: lineH }}>
                                                                     {displayQty.toLocaleString('es-CO')}
                                                                 </td>
-                                                                <td style={{ textAlign: 'center', fontSize: isDense ? '7pt' : '7.5pt', fontWeight: '600', color: '#334155', padding: rowPad }}>
+                                                                <td style={{ textAlign: 'center', fontSize: smallFontSize, fontWeight: '600', color: '#334155', padding: rowPad, lineHeight: lineH }}>
                                                                     {displayUnit}
                                                                 </td>
-                                                                <td style={{ textAlign: 'right', fontSize: isDense ? '7.1pt' : '7.6pt', fontVariantNumeric: 'tabular-nums', color: '#334155', padding: rowPad }}>
+                                                                <td style={{ textAlign: 'right', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#334155', padding: rowPad, lineHeight: lineH }}>
                                                                     {displayPrice > 0 ? formatMoney(displayPrice) : formatMoney(0)}
                                                                 </td>
-                                                                <td style={{ textAlign: 'center', fontSize: smallFontSize, fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: rowPad }}>
+                                                                <td style={{ textAlign: 'center', fontSize: smallFontSize, fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: rowPad, lineHeight: lineH }}>
                                                                     {ivaPct > 0 ? `${ivaPct}%` : '0%'}
                                                                 </td>
-                                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: rowPad }}>
+                                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: rowPad, lineHeight: lineH }}>
                                                                     {lineTotal > 0 ? formatMoney(lineTotal) : formatMoney(0)}
                                                                 </td>
-                                                                <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: '1px 3px' }}>
-                                                                    <div style={{ borderBottom: '1px dashed #94A3B8', height: isDense ? '12px' : '14px' }}></div>
+                                                                <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: isUltraDense ? '0.4px 3px' : '1px 3px', lineHeight: lineH }}>
+                                                                    <div style={{ borderBottom: '1px dashed #94A3B8', height: receiveBoxH }}></div>
                                                                 </td>
-                                                                <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '1px 2px' }}>
+                                                                <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: isUltraDense ? '0.4px 2px' : '1px 2px', lineHeight: lineH }}>
                                                                     <div style={{
-                                                                        width: isDense ? '10px' : '12px',
-                                                                        height: isDense ? '10px' : '12px',
-                                                                        border: '1.2px solid #64748B',
+                                                                        width: checkBoxSize,
+                                                                        height: checkBoxSize,
+                                                                        border: '1.1px solid #64748B',
                                                                         borderRadius: '2px',
                                                                         margin: '0 auto',
                                                                         backgroundColor: '#FFFFFF'
@@ -1580,18 +1590,19 @@ function ContingencyPrintContent() {
                                             Continúa en la siguiente página... (Pág. {pageIdx + 1} de {remissionPages.length})
                                         </div>
                                     ) : (() => {
-                                        const isDense = pageItems.length > 16;
+                                        const isUltraDense = pageItems.length >= 38;
+                                        const isDense = pageItems.length >= 25;
                                         return (
-                                            <div style={{ marginTop: 'auto', paddingTop: isDense ? '3px' : '6px' }}>
+                                            <div style={{ marginTop: 'auto', paddingTop: isUltraDense ? '1.5px' : isDense ? '3px' : '6px' }}>
                                                 {/* Summary & Canastillas Control Compact */}
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: isDense ? '3px' : '5px', gap: '8px' }}>
-                                                    <div style={{ flex: 1, fontSize: isDense ? '6.4pt' : '6.8pt', color: '#334155', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: isUltraDense ? '2px' : isDense ? '3px' : '5px', gap: isUltraDense ? '6px' : '8px' }}>
+                                                    <div style={{ flex: 1, fontSize: isUltraDense ? '6pt' : isDense ? '6.4pt' : '6.8pt', color: '#334155', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                                         <div>
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1px', gap: '6px', flexWrap: 'wrap' }}>
-                                                                <div style={{ fontWeight: 'bold', color: '#0F172A', fontSize: isDense ? '6.6pt' : '7pt' }}>Control de Canastillas Plásticas:</div>
+                                                                <div style={{ fontWeight: 'bold', color: '#0F172A', fontSize: isUltraDense ? '6.2pt' : isDense ? '6.6pt' : '7pt' }}>Control de Canastillas Plásticas:</div>
                                                                 {crateBalance > 0 && (
                                                                     <div style={{
-                                                                        fontSize: isDense ? '6.2pt' : '6.5pt',
+                                                                        fontSize: isUltraDense ? '5.8pt' : isDense ? '6.2pt' : '6.5pt',
                                                                         color: '#0369A1',
                                                                         fontWeight: '700',
                                                                         backgroundColor: '#F0F9FF',
@@ -1600,16 +1611,16 @@ function ContingencyPrintContent() {
                                                                         padding: '1px 5px',
                                                                         whiteSpace: 'nowrap'
                                                                     }}>
-                                                                        Tienes en este momento <strong style={{ color: '#0284C7', fontSize: isDense ? '6.8pt' : '7.2pt' }}>{crateBalance}</strong> canastillas de FruFresco
+                                                                        Tienes en este momento <strong style={{ color: '#0284C7', fontSize: isUltraDense ? '6.4pt' : isDense ? '6.8pt' : '7.2pt' }}>{crateBalance}</strong> canastillas de FruFresco
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            <div style={{ display: 'flex', gap: '10px', border: '1px dashed #94A3B8', padding: isDense ? '2px 6px' : '3px 8px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
-                                                                <div>Entregadas: <strong style={{ fontSize: isDense ? '7.2pt' : '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
-                                                                <div>Recogidas / Devueltas: <strong style={{ fontSize: isDense ? '7.2pt' : '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
+                                                            <div style={{ display: 'flex', gap: '10px', border: '1px dashed #94A3B8', padding: isUltraDense ? '1.5px 5px' : isDense ? '2px 6px' : '3px 8px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
+                                                                <div>Entregadas: <strong style={{ fontSize: isUltraDense ? '6.8pt' : isDense ? '7.2pt' : '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
+                                                                <div>Recogidas / Devueltas: <strong style={{ fontSize: isUltraDense ? '6.8pt' : isDense ? '7.2pt' : '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
                                                             </div>
                                                         </div>
-                                                        <div style={{ marginTop: '1px', fontSize: isDense ? '5.4pt' : '5.8pt', color: '#64748B', lineHeight: 1.1 }}>
+                                                        <div style={{ marginTop: '1px', fontSize: isUltraDense ? '5.1pt' : isDense ? '5.4pt' : '5.8pt', color: '#64748B', lineHeight: 1.05 }}>
                                                             * Activos en comodato propiedad exclusiva de FruFresco. Retorne al conductor igual cantidad recibida.
                                                         </div>
                                                     </div>
@@ -1620,7 +1631,7 @@ function ContingencyPrintContent() {
                                                         const finalPrintTotal = isZeroCostDoc ? 0 : Math.max(0, subtotal - discountAmount + Number(order.tax || 0));
 
                                                         return (
-                                                            <div style={{ width: isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isDense ? '3px 6px' : '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isDense ? '6.6pt' : '7pt' }}>
+                                                            <div style={{ width: isUltraDense ? '195px' : isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isUltraDense ? '2px 5px' : isDense ? '3px 6px' : '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isUltraDense ? '6.2pt' : isDense ? '6.6pt' : '7pt' }}>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                                                                     <span style={{ color: '#475569' }}>{discountPct > 0 ? 'Subtotal Bruto:' : 'Subtotal:'}</span>
                                                                     <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(subtotal)}</span>
@@ -1635,7 +1646,7 @@ function ContingencyPrintContent() {
                                                                     <span style={{ color: '#475569' }}>IVA (0% / Excluido):</span>
                                                                     <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isZeroCostDoc ? formatMoney(0) : formatMoney(order.tax || 0)}</span>
                                                                 </div>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '1px', fontSize: isDense ? '7.8pt' : '8.4pt', fontWeight: '900' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '1px', fontSize: isUltraDense ? '7.3pt' : isDense ? '7.8pt' : '8.4pt', fontWeight: '900' }}>
                                                                     <span style={{ color: '#0F172A' }}>TOTAL:</span>
                                                                     <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(finalPrintTotal)}</span>
                                                                 </div>
@@ -1645,31 +1656,31 @@ function ContingencyPrintContent() {
                                                 </div>
 
                                                 {/* Signatures Block Compact at Bottom con QR Vectorial de Radicación */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.95fr auto', gap: '8px', border: '1px solid #CBD5E1', padding: isDense ? '3px 6px' : '4px 8px', borderRadius: '4px', fontSize: isDense ? '6.2pt' : '6.6pt', alignItems: 'center' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.95fr auto', gap: isUltraDense ? '6px' : '8px', border: '1px solid #CBD5E1', padding: isUltraDense ? '2px 5px' : isDense ? '3px 6px' : '4px 8px', borderRadius: '4px', fontSize: isUltraDense ? '5.8pt' : isDense ? '6.2pt' : '6.6pt', alignItems: 'center' }}>
                                                     <div>
-                                                        <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isDense ? '6.4pt' : '6.8pt' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
-                                                        <div style={{ marginTop: isDense ? '8px' : '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
-                                                        <div style={{ marginTop: '2px', color: '#334155' }}>Nombre Legible: ____________________________________</div>
+                                                        <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isUltraDense ? '6pt' : isDense ? '6.4pt' : '6.8pt' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
+                                                        <div style={{ marginTop: isUltraDense ? '5px' : isDense ? '8px' : '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
+                                                        <div style={{ marginTop: '1.5px', color: '#334155' }}>Nombre Legible: ____________________________________</div>
                                                         <div style={{ marginTop: '1px', color: '#334155' }}>C.C. / Cargo: _______________________________________</div>
                                                     </div>
                                                     <div>
-                                                        <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isDense ? '6.4pt' : '6.8pt' }}>SELLO / NOVEDADES EN SITIO:</div>
-                                                        <div style={{ height: isDense ? '26px' : '32px', border: '1px dashed #CBD5E1', borderRadius: '3px', padding: '2px', color: '#94A3B8', fontSize: isDense ? '5.4pt' : '5.8pt', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isUltraDense ? '6pt' : isDense ? '6.4pt' : '6.8pt' }}>SELLO / NOVEDADES EN SITIO:</div>
+                                                        <div style={{ height: isUltraDense ? '20px' : isDense ? '26px' : '32px', border: '1px dashed #CBD5E1', borderRadius: '3px', padding: '2px', color: '#94A3B8', fontSize: isUltraDense ? '5pt' : isDense ? '5.4pt' : '5.8pt', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                                                             Sello húmedo del establecimiento o relación de devoluciones/faltantes firmados.
                                                         </div>
                                                     </div>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderLeft: '1px dashed #CBD5E1', paddingLeft: '8px', textAlign: 'center' }}>
-                                                        <div style={{ fontWeight: '800', color: '#0D7A57', fontSize: isDense ? '5.6pt' : '6pt', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderLeft: '1px dashed #CBD5E1', paddingLeft: isUltraDense ? '6px' : '8px', textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: '800', color: '#0D7A57', fontSize: isUltraDense ? '5.2pt' : isDense ? '5.6pt' : '6pt', marginBottom: '1.5px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
                                                             Garantía & PQRS
                                                         </div>
-                                                        <div style={{ backgroundColor: '#FFFFFF', padding: '2px', borderRadius: '3px', border: '1px solid #E2E8F0', display: 'inline-flex' }}>
+                                                        <div style={{ backgroundColor: '#FFFFFF', padding: '1.5px', borderRadius: '3px', border: '1px solid #E2E8F0', display: 'inline-flex' }}>
                                                             <QRCodeSVG 
                                                                 value={typeof window !== 'undefined' ? `${window.location.origin}/pqrs?order_id=${order.id}` : `https://frufresco.com/pqrs?order_id=${order.id}`} 
-                                                                size={isDense ? 48 : 54} 
+                                                                size={isUltraDense ? 40 : isDense ? 48 : 54} 
                                                                 level="M" 
                                                             />
                                                         </div>
-                                                        <div style={{ fontSize: '4.6pt', color: '#64748B', marginTop: '2px', maxWidth: '64px', lineHeight: 1.1, fontWeight: '500' }}>
+                                                        <div style={{ fontSize: '4.4pt', color: '#64748B', marginTop: '1px', maxWidth: '64px', lineHeight: 1.05, fontWeight: '500' }}>
                                                             Escanea para radicar novedades
                                                         </div>
                                                     </div>
@@ -1746,7 +1757,7 @@ function ContingencyPrintContent() {
                                                         #{orderNum}
                                                         {order.warehouse_spaces && order.warehouse_spaces.length > 0 && (
                                                             <div style={{ fontSize: '6.8pt', color: '#0369A1', fontWeight: '700' }}>
-                                                                Bahía {formatSpaceLabel(order.warehouse_spaces)}
+                                                                Espacio {formatSpaceLabel(order.warehouse_spaces)}
                                                             </div>
                                                         )}
                                                     </td>

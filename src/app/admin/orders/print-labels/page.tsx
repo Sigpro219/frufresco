@@ -624,7 +624,7 @@ export default function BulkOrderPrintLabelsPage() {
                                         paddingTop: '1mm',
                                         marginTop: '1mm'
                                     }}>
-                                        {/* Espacio / Bahia */}
+                                        {/* Espacio */}
                                         <div style={{ 
                                             border: '1.5px solid #000000', 
                                             padding: '1px 5px', 
@@ -632,7 +632,7 @@ export default function BulkOrderPrintLabelsPage() {
                                             fontSize: '8.5pt',
                                             fontWeight: '900'
                                         }}>
-                                            BAHÍA: #{lbl.bahiaLabel}
+                                            ESPACIO: #{lbl.bahiaLabel}
                                         </div>
 
                                         {/* Total Weight */}

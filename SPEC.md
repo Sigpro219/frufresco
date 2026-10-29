@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.317 (Capítulo 44: Blindaje Poka-Yoke Anti-Colisión de Regex en Códigos PLU y Palabras con Prefijo "gr" — 76/76 Pantallas Certificadas)
-> **Fecha:** 27 de Octubre, 2026  
+> **Versión:** 1.9.323 (Capítulo 44: Cascada Dinámica Canónica de Margen en Modelos Derivados Clientes Hogar = GI + 10% — 76/76 Pantallas Certificadas)
+> **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 335 Escenarios BDD Ininterrumpidos (1..335)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 340 Escenarios BDD Ininterrumpidos (1..340)
 
 ---
 
@@ -12896,3 +12896,57 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
   1. **Transparencia y Cero Overhead para Datasets Pequeños:** Si el resultado posee menos de 1.000 filas, se ejecuta en una única petición HTTP (1 round-trip) sin penalización de latencia.
   2. **Resolución Exhaustiva sin Pérdida:** Datasets que superen 1.000 filas se iteran automáticamente en bloques continuos (`from = 0, 1000, 2000...`) hasta el tope de seguridad (25.000 filas), garantizando integridad referencial del 100% de los datos.
   3. **Tipado Estricto Zero-Trust:** Cero uso de `any` o directivas de evasión `eslint-disable`, garantizando firmas limpias `fetchAllRows<T = Record<string, unknown>>`.
+---
+
+### Escenario 340: Cascada Dinámica Canónica de Margen en Modelos Derivados (Clientes Hogar = GI + 10%) y Erradicación de Reglas Estáticas Quemadas (SDD v1.9.323)
+- **Given** la configuración de Modelos de Precios (`/admin/commercial/settings`), donde la línea base comercial maestra es **`General institucional dinámico`** (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`, `base_margin_percent = 0%`) y **`Clientes Hogar`** (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`, `base_margin_percent = 10%`) está definido ontológicamente como un modelo derivado en cascada que debe aplicar exactamente el **10% adicional de utilidad sobre el margen de cada producto** de General Institucional, pero donde existía una violación de la Single Source of Truth (§7.5.6):
+  1. En la base de datos `pricing_rules`, existían **1.036 filas estáticas y quemadas** registradas directamente bajo `Clientes Hogar` (la gran mayoría remanentes del prototipo del 11 de junio de 2026), provocando que productos como el **`Aceite de girasol x 1000 ml`** (ID ERP 1281) mantuvieran un margen congelado de **`30%`** en Hogar mientras en General Institucional se ajustó a **`10%`** el 19 de octubre de 2026 (generando un desfase arbitrario de +20% en vez del +10% contractual).
+  2. En el código de `src/app/admin/commercial/settings/page.tsx` y `src/lib/pricingUtils.ts`, el cortocircuito `if (rule) { absoluteMargin = Number(rule.margin_adjustment) }` leía a ciegas la regla fija histórica de Hogar e impedía que se evaluara la rama de cascada dinámica `else if (giRule) { margin = giRule.margin + 10 }`.
+  3. En `saveMarginEdit`, al intentar editar un margen para un modelo derivado, la resta `parsedVal - selectedModel.base_margin_percent` insertaba deltas relativos en `pricing_rules`, colisionando con el diseño de `pricing_rules.margin_adjustment` que almacena márgenes absolutos.
+- **When** se ejecuta la intervención integral de depuración de datos y blindaje de arquitectura:
+- **Then** el sistema garantiza el cumplimiento estricto de las siguientes invariantes:
+  1. **Erradicación de Datos Quemados y Resguardo Cero-Pérdida:**
+     - Se extrajo un respaldo íntegro en JSON de las 1.036 reglas fijas de `Clientes Hogar` en el repositorio forense.
+     - Se eliminaron las 1.036 filas redundantes de `pricing_rules` para `model_id = f7043ca1-94d5-4d25-bd10-fbf30ce120ee`, restituyendo la pureza relacional de la base de datos.
+  2. **Cascada Dinámica Pura en Tiempo Real:**
+     - En `src/app/admin/commercial/settings/page.tsx` y `src/lib/pricingUtils.ts`, los modelos derivados (`Clientes Hogar`, `Pequeño`, `Mediano`, `Grande`) resuelven su margen directamente desde la línea base:
+       $$\text{Margen Derivado} = \text{Margen General Institucional} + \text{base\_margin\_percent}$$
+       - `Aceite de girasol x 1000 ml` (ID ERP 1281): General Institucional = `10%` $\to$ Clientes Hogar Dinámico = **`20%`** ($10\% + 10\%$).
+       - `Aceite rio oro x litro` (ID ERP 863): General Institucional = `40%` $\to$ Clientes Hogar Dinámico = **`50%`** ($40\% + 10\%$).
+       - `Acelga` (ID ERP 1): General Institucional = `110%` $\to$ Clientes Hogar Dinámico = **`120%`** ($110\% + 10\%$).
+       - `Achote en pasta` (ID ERP 614): General Institucional = `10%` $\to$ Clientes Hogar Dinámico = **`20%`** ($10\% + 10\%$).
+  3. **Gobernanza de Edición Inteligente (`saveMarginEdit`):**
+     - Si el usuario edita un margen en un modelo derivado y el valor coincide con el margen heredado dinámico (`parsedVal === giMargin + base_margin`), el sistema elimina la regla explícita de `pricing_rules` para preservar la herencia viva en cascada.
+     - Solo se crea una regla explícita en `pricing_rules` si el usuario fija deliberadamente una excepción comercial que difiere de la herencia general.
+  4. **Materialización Sincronizada en `pricing_model_prices`:**
+     - Se ejecutó la sincronización masiva para los 633 productos activos a través de `batchRecalculateAndSyncPrices`, materializando los precios con la fórmula canónica de markup, IVA y redondeo a $50 COP (ej. Aceite de girasol: costo base $11.000 + 20% utilidad = $13.200 + 19% IVA = $15.708 $\to$ **$15.750 COP** en tienda Hogar).
+  5. **Telemetría de Margen Promedio Real:**
+     - La tarjeta de telemetría de modelos calcula el `PROMEDIO REAL` para modelos derivados en cascada sumando su delta porcentual sobre el promedio de la línea base general.
+
+---
+
+### Escenario 341: Estandarización de Ordenadores de Columna Tri-Estado en Matriz de Precios y Galerías Operativas (SDD v1.9.324)
+- **Given** la necesidad operativa de ordenar de forma rápida y confiable los productos y registros en las tablas maestras de FruFresco, específicamente en la **Matriz de Precios y Utilidades** (`/admin/commercial/settings`), donde el listado de 633 productos activos requería inspección analítica por ERP ID, Nombre, Categoría, Costo Base, IVA, Margen de Utilidad, Precio Sugerido sin IVA y Precio Final:
+- **When** el usuario u operador comercial interactúa con cualquiera de los encabezados de columna (`<th>`) de la tabla:
+- **Then** el sistema aplica las siguientes reglas contractualmente inviolables:
+  1. **Ciclo Tri-Estado Inviolable:**
+     - 1er Clic: Orden ascendente (`asc`).
+     - 2do Clic: Orden descendente (`desc`).
+     - 3er Clic: Retorno al orden neutral natural (`null`), eliminando el bloqueo que impedía restaurar la disposición predeterminada.
+  2. **Anatomía Visual de Alta Precisión e Íconos Canónicos Lucide:**
+     - Encabezados interactivos con `cursor: pointer` y `user-select: none`.
+     - Íconos institucionales: `ArrowUp` (ascendente), `ArrowDown` (descendente) y `ArrowUpDown` (inactivo con opacidad reducida `opacity: 0.35`).
+     - Colores reactivos: Al activarse una columna, tanto el texto como el ícono adquieren el color de acento primario (`THEME.colors.primary`).
+     - Alineación estricta: Columnas de texto alineadas a la izquierda; columnas numéricas, de moneda y porcentajes agrupadas y alineadas a la derecha (`justify-end`).
+  3. **Ordenamiento Multi-Tipo Resiliente:**
+     - **Textos y Categorías en Español:** Implementación de `localeCompare(b, 'es', { sensitivity: 'base', numeric: true })` para ordenar respetando tildes, mayúsculas y secuencias naturales ("Producto 2" antes de "Producto 10").
+     - **Identificadores Híbridos (ID ERP / SKU):** Conversión numérica `numA - numB` cuando son numéricos puros, con fallback a comparación alfanumérica natural.
+     - **Numéricos y Moneda:** Resta aritmética `valA - valB` con fallback `0` ante nulos o `NaN`.
+  4. **Invariante y Ergonomía de Paginación:**
+     - El ordenamiento se ejecuta sobre el universo total filtrado (`filteredProducts`) antes de paginar (`paginatedProducts`), garantizando que la página 1 exhiba los verdaderos extremos del conjunto.
+     - Al alternar o seleccionar un nuevo campo de ordenamiento, la paginación se reinicia automáticamente a la página 1 (`setMatrixPage(1)`).
+  5. **Integración con la Skill Global:**
+     - Se incorporó la Sección 10 a la Skill `estandar-galerias-frufresco` en el Arsenal Global (`~/.gemini/config/skills/estandar-galerias-frufresco/SKILL.md`), formalizando este estándar para todas las galerías del ecosistema.
+  6. **Inmutabilidad y Protección de Modelos Estándar:**
+     - Se erradicó el botón 'Eliminar' en la barra de herramientas de Modelos Estándar (`/admin/commercial/settings`) para impedir mutilaciones accidentales en la jerarquía comercial.
+     - Se introdujo un guardrail en `deleteModel` que veta terminantemente la eliminación de modelos columna vertebral (`General institucional dinámico`, `Clientes Hogar`, `Grande`, `Mediano`, `Pequeño`, `Modelo Corporativo`), preservando la integridad referencial de precios y cascadas.

@@ -285,7 +285,7 @@ export default function GoldenPrintStyles({
                 }
                 .letterhead-container {
                     width: 100% !important;
-                    min-height: ${pageSize.includes('legal') ? '335mm' : '262mm'} !important;
+                    min-height: ${pageSize.includes('legal') ? '335mm' : '260mm'} !important;
                     height: auto !important;
                     overflow: visible !important;
                     display: flex !important;
@@ -350,8 +350,8 @@ export default function GoldenPrintStyles({
                     padding: 2px 4px;
                 }
                 .letterhead-container td {
-                    font-size: 7.4pt;
-                    padding: 1.5px 4px;
+                    font-size: 7.2pt;
+                    padding: 1px 4px;
                 }
                 .page-break {
                     page-break-after: always !important;

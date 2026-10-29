@@ -297,8 +297,8 @@ input:-webkit-autofill:active {
 
 /* Global Print Mode Hardening */
 @media print {
-  header,
-  footer,
+  header:not(.letterhead-header),
+  footer:not(.letterhead-footer),
   nav,
   .no-print,
   #header,

@@ -100,7 +100,7 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            min-height: ${paperSize === 'oficio' || paperSize === 'legal' ? '335mm' : '262mm'} !important;
+            min-height: ${paperSize === 'oficio' || paperSize === 'legal' ? '335mm' : '260mm'} !important;
             height: auto !important;
             overflow: visible !important;
             position: relative !important;
@@ -199,10 +199,10 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             text-transform: uppercase !important;
         }
         td {
-            font-size: 7.4pt;
-            padding: 1.5px 4px;
+            font-size: 7.2pt;
+            padding: 1px 4px;
             vertical-align: middle !important;
-            line-height: 1.15;
+            line-height: 1.12;
         }
         td.num-cell, td.text-right, .tabular-nums {
             font-variant-numeric: tabular-nums !important;

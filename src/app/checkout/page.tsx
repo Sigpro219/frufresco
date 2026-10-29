@@ -142,6 +142,12 @@ export default function CheckoutPage() {
     const [companyNit, setCompanyNit] = useState('');
     const [companyBusinessName, setCompanyBusinessName] = useState('');
     const [showCartItemsList, setShowCartItemsList] = useState(false);
+    const [showClearCartModal, setShowClearCartModal] = useState(false);
+
+    const handleConfirmClearCart = () => {
+        clearCart();
+        setShowClearCartModal(false);
+    };
     const [isEditingBuyerInfo, setIsEditingBuyerInfo] = useState(false);
 
     const notify = (message: string, type: 'error' | 'success' | 'warning' | 'info' = 'info') => {
@@ -1702,6 +1708,31 @@ export default function CheckoutPage() {
                                 <Plus size={13} color="var(--primary)" />
                                 {locale === 'es' ? 'Seguir comprando' : 'Add items'}
                             </Link>
+                            {items.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowClearCartModal(true)}
+                                    style={{
+                                        padding: '0.4rem 0.75rem',
+                                        borderRadius: '10px',
+                                        fontSize: '0.74rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        color: '#DC2626',
+                                        backgroundColor: '#FEF2F2',
+                                        border: '1px solid #FECACA',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    title={locale === 'es' ? 'Vaciar todos los productos del carrito' : 'Clear all items from cart'}
+                                >
+                                    <Trash2 size={12} strokeWidth={2.2} />
+                                    {locale === 'es' ? 'Vaciar carrito' : 'Clear cart'}
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -2937,17 +2968,43 @@ export default function CheckoutPage() {
                                 <Receipt size={17} color="var(--primary)" />
                                 {locale === 'es' ? 'Resumen de Compra' : 'Order Summary'}
                             </h3>
-                            <span style={{
-                                fontSize: '0.7rem',
-                                fontWeight: '800',
-                                backgroundColor: '#ECFDF5',
-                                color: '#047857',
-                                padding: '2px 7px',
-                                borderRadius: '6px',
-                                border: '1px solid #A7F3D0'
-                            }}>
-                                {items.length} {items.length === 1 ? 'producto' : 'productos'}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: '800',
+                                    backgroundColor: '#ECFDF5',
+                                    color: '#047857',
+                                    padding: '2px 7px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #A7F3D0'
+                                }}>
+                                    {items.length} {items.length === 1 ? 'producto' : 'productos'}
+                                </span>
+                                {items.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowClearCartModal(true)}
+                                        style={{
+                                            background: '#FEF2F2',
+                                            border: '1px solid #FECACA',
+                                            color: '#DC2626',
+                                            cursor: 'pointer',
+                                            padding: '2px 7px',
+                                            borderRadius: '6px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '3px',
+                                            fontSize: '0.68rem',
+                                            fontWeight: '700',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title={locale === 'es' ? 'Vaciar canasta' : 'Empty cart'}
+                                    >
+                                        <Trash2 size={11} strokeWidth={2.2} />
+                                        <span>{locale === 'es' ? 'Vaciar' : 'Clear'}</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Desplegable / Accordion de Canasta */}
@@ -3038,6 +3095,29 @@ export default function CheckoutPage() {
                                             </div>
                                         </div>
                                     ))}
+                                    {items.length > 0 && (
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowClearCartModal(true)}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#DC2626',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.68rem',
+                                                    fontWeight: '700',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    padding: '3px 0'
+                                                }}
+                                            >
+                                                <Trash2 size={11} />
+                                                {locale === 'es' ? 'Vaciar toda la canasta' : 'Empty whole cart'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -3951,6 +4031,114 @@ export default function CheckoutPage() {
                                             ? (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')
                                             : (locale === 'es' ? 'Ir a Pagar Seguro (Wompi)' : 'Proceed to Secure Payment')
                                 }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Confirmación para Vaciar Carrito */}
+            {showClearCartModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(6px)',
+                    WebkitBackdropFilter: 'blur(6px)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1.25rem'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '20px',
+                        width: '100%',
+                        maxWidth: '420px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #E2E8F0',
+                        padding: '1.75rem',
+                        position: 'relative',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '50px',
+                            height: '50px',
+                            borderRadius: '50%',
+                            backgroundColor: '#FEF2F2',
+                            color: '#DC2626',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1rem auto',
+                            border: '1px solid #FECACA'
+                        }}>
+                            <Trash2 size={24} strokeWidth={2.2} />
+                        </div>
+
+                        <h3 style={{
+                            fontSize: '1.2rem',
+                            fontWeight: '800',
+                            color: '#0F172A',
+                            margin: '0 0 0.5rem 0',
+                            fontFamily: 'var(--font-outfit), sans-serif',
+                            letterSpacing: '-0.02em'
+                        }}>
+                            {locale === 'es' ? '¿Vaciar tu canasta de compras?' : 'Clear your shopping cart?'}
+                        </h3>
+
+                        <p style={{
+                            fontSize: '0.84rem',
+                            color: '#64748B',
+                            margin: '0 0 1.5rem 0',
+                            lineHeight: '1.45'
+                        }}>
+                            {locale === 'es'
+                                ? `Se eliminarán los ${items.length} ${items.length === 1 ? 'producto' : 'productos'} de tu canasta actual. ¿Deseas continuar?`
+                                : `This will remove all ${items.length} ${items.length === 1 ? 'item' : 'items'} from your cart. Do you want to proceed?`}
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowClearCartModal(false)}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.7rem 1rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid #E2E8F0',
+                                    backgroundColor: '#F8FAFC',
+                                    color: '#475569',
+                                    fontWeight: '700',
+                                    fontSize: '0.84rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                {locale === 'es' ? 'No, conservar' : 'Cancel'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmClearCart}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.7rem 1rem',
+                                    borderRadius: '12px',
+                                    border: 'none',
+                                    backgroundColor: '#DC2626',
+                                    color: '#FFFFFF',
+                                    fontWeight: '800',
+                                    fontSize: '0.84rem',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                {locale === 'es' ? 'Sí, vaciar canasta' : 'Yes, clear cart'}
                             </button>
                         </div>
                     </div>

@@ -35,7 +35,10 @@ import {
     ArrowLeftCircle,
     Clock,
     Crown,
-    Loader2
+    Loader2,
+    ArrowUp,
+    ArrowDown,
+    ArrowUpDown
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 
@@ -148,6 +151,26 @@ export default function PricingSettingsPage({
     const [savingMargins, setSavingMargins] = useState<Record<string, 'saving' | 'success' | 'error'>>({});
     const [editingMargins, setEditingMargins] = useState<Record<string, string>>({});
     const [showExcelModal, setShowExcelModal] = useState(false);
+
+    // Matrix Sorting states
+    type MatrixSortField = 'id' | 'name' | 'category' | 'base_cost' | 'iva_rate' | 'margin' | 'suggested_price' | 'final_price';
+    const [matrixSortField, setMatrixSortField] = useState<MatrixSortField | null>(null);
+    const [matrixSortOrder, setMatrixSortOrder] = useState<'asc' | 'desc'>('asc');
+
+    const handleMatrixSort = (field: MatrixSortField) => {
+        if (matrixSortField === field) {
+            if (matrixSortOrder === 'asc') {
+                setMatrixSortOrder('desc');
+            } else {
+                setMatrixSortField(null);
+                setMatrixSortOrder('asc');
+            }
+        } else {
+            setMatrixSortField(field);
+            setMatrixSortOrder('asc');
+        }
+        setMatrixPage(1);
+    };
     const [uploadingExcel, setUploadingExcel] = useState(false);
     const [excelError, setExcelError] = useState<string | null>(null);
     const [excelSuccess, setExcelSuccess] = useState<string | null>(null);
@@ -176,6 +199,17 @@ export default function PricingSettingsPage({
                 data.forEach(m => {
                     const stats = sumMap[m.id];
                     avgMap[m.id] = stats && stats.count > 0 ? (stats.sum / stats.count) : (m.base_margin_percent || 0);
+                });
+                // Cascada dinámica para modelos derivados sin reglas fijas (ej. Clientes Hogar = GI + 10%)
+                const giAvg = avgMap[GENERAL_INSTITUCIONAL_ID] || 25;
+                data.forEach(m => {
+                    if (m.id !== GENERAL_INSTITUCIONAL_ID && (!sumMap[m.id] || sumMap[m.id].count === 0)) {
+                        avgMap[m.id] = giAvg + (Number(m.base_margin_percent) || 0);
+                    }
+                });
+            } else {
+                data.forEach(m => {
+                    avgMap[m.id] = Number(m.base_margin_percent) || 0;
                 });
             }
             setModelAverages(avgMap);
@@ -362,13 +396,15 @@ export default function PricingSettingsPage({
                 if (rule) {
                     absoluteMargin = Number(rule.margin_adjustment);
                     adjustment = absoluteMargin;
+                    isInherited = false;
                 } else if (giRule && modelId !== GENERAL_INSTITUCIONAL_ID) {
                     absoluteMargin = Number(giRule.margin_adjustment) + (Number(modelData.base_margin_percent) || 0);
-                    adjustment = absoluteMargin;
+                    adjustment = Number(modelData.base_margin_percent) || 0;
                     isInherited = true;
                 } else {
                     absoluteMargin = Number(modelData.base_margin_percent) || 0;
                     adjustment = 0;
+                    isInherited = false;
                 }
 
                 return {
@@ -914,6 +950,16 @@ export default function PricingSettingsPage({
     };
 
     const deleteModel = async (id: string, name: string) => {
+        // Proteccion inmutable: Los modelos estandar jamas deben poder eliminarse
+        const isStandardModel = id === GENERAL_INSTITUCIONAL_ID || 
+            id === CLIENTES_HOGAR_ID || 
+            ['general institucional dinámico', 'general institucional', 'clientes hogar', 'grande', 'mediano', 'pequeño', 'modelo corporativo'].includes(name.toLowerCase().trim());
+
+        if (isStandardModel) {
+            alert(`El modelo estándar "${name}" es una columna vertebral del sistema de precios y está protegido contra eliminación.`);
+            return;
+        }
+
         // First confirmation
         const firstConfirm = confirm(`¿Estás seguro de que deseas eliminar el modelo de precios "${name}"?`);
         if (!firstConfirm) return;
@@ -1002,11 +1048,37 @@ export default function PricingSettingsPage({
         }
 
         setSavingMargins(prev => ({ ...prev, [productId]: 'saving' }));
-        const targetAdjustment = parsedVal - selectedModel.base_margin_percent;
 
         try {
-            if (Math.abs(targetAdjustment) < 0.001) {
-                // Delete pricing rule if it matches base margin
+            const isBaseModel = selectedModel.id === GENERAL_INSTITUCIONAL_ID;
+            let shouldDeleteRule = false;
+
+            if (isBaseModel) {
+                if (Math.abs(parsedVal - (Number(selectedModel.base_margin_percent) || 0)) < 0.001) {
+                    shouldDeleteRule = true;
+                }
+            } else {
+                // Consultar regla de General Institucional para este producto
+                const { data: giRule } = await supabase
+                    .from('pricing_rules')
+                    .select('margin_adjustment')
+                    .eq('model_id', GENERAL_INSTITUCIONAL_ID)
+                    .eq('product_id', productId)
+                    .maybeSingle();
+
+                const giMargin = giRule?.margin_adjustment !== undefined && giRule?.margin_adjustment !== null
+                    ? Number(giRule.margin_adjustment)
+                    : 25;
+
+                const expectedInheritedMargin = giMargin + (Number(selectedModel.base_margin_percent) || 0);
+
+                if (Math.abs(parsedVal - expectedInheritedMargin) < 0.001) {
+                    shouldDeleteRule = true;
+                }
+            }
+
+            if (shouldDeleteRule) {
+                // Delete pricing rule if it matches inherited/base margin
                 const { error } = await supabase
                     .from('pricing_rules')
                     .delete()
@@ -1017,18 +1089,24 @@ export default function PricingSettingsPage({
                 
                 setMatrixData(prev => prev.map(item => {
                     if (item.product_id === productId) {
-                        return { ...item, margin: parsedVal, margin_adjustment: 0, rule_id: null };
+                        return { 
+                            ...item, 
+                            margin: parsedVal, 
+                            margin_adjustment: isBaseModel ? 0 : (Number(selectedModel.base_margin_percent) || 0), 
+                            rule_id: null,
+                            is_inherited: !isBaseModel
+                        };
                     }
                     return item;
                 }));
             } else {
-                // Upsert pricing rule
+                // Upsert pricing rule con margen absoluto
                 const { data, error } = await supabase
                     .from('pricing_rules')
                     .upsert({
                         model_id: selectedModel.id,
                         product_id: productId,
-                        margin_adjustment: targetAdjustment
+                        margin_adjustment: parsedVal
                     }, { onConflict: 'model_id,product_id' })
                     .select()
                     .single();
@@ -1037,7 +1115,13 @@ export default function PricingSettingsPage({
 
                 setMatrixData(prev => prev.map(item => {
                     if (item.product_id === productId) {
-                        return { ...item, margin: parsedVal, margin_adjustment: targetAdjustment, rule_id: data.id };
+                        return { 
+                            ...item, 
+                            margin: parsedVal, 
+                            margin_adjustment: parsedVal, 
+                            rule_id: data.id,
+                            is_inherited: false
+                        };
                     }
                     return item;
                 }));
@@ -1329,7 +1413,7 @@ export default function PricingSettingsPage({
         } finally {
             setIsSyncing(false);
         }
-    };    // Filter and paginate the matrix data locally
+    };    // Filter the matrix data locally
     const filteredProducts = matrixData.filter(prod => {
         const term = matrixSearch.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (!term) return true;
@@ -1340,15 +1424,78 @@ export default function PricingSettingsPage({
         return prodName.includes(term) || prodSku.includes(term) || prodId.includes(term) || categoryName.includes(term);
     });
 
+    // Sort the filtered products tri-state
+    const sortedProducts = [...filteredProducts].sort((a, b) => {
+        if (!matrixSortField) return 0;
+
+        switch (matrixSortField) {
+            case 'id': {
+                const idA = a.accounting_id || a.sku || '';
+                const idB = b.accounting_id || b.sku || '';
+                const numA = Number(idA);
+                const numB = Number(idB);
+                if (!isNaN(numA) && !isNaN(numB) && idA !== '' && idB !== '') {
+                    return matrixSortOrder === 'asc' ? numA - numB : numB - numA;
+                }
+                return matrixSortOrder === 'asc' 
+                    ? String(idA).localeCompare(String(idB), 'es', { numeric: true }) 
+                    : String(idB).localeCompare(String(idA), 'es', { numeric: true });
+            }
+            case 'name': {
+                const valA = a.name || '';
+                const valB = b.name || '';
+                return matrixSortOrder === 'asc'
+                    ? valA.localeCompare(valB, 'es', { sensitivity: 'base', numeric: true })
+                    : valB.localeCompare(valA, 'es', { sensitivity: 'base', numeric: true });
+            }
+            case 'category': {
+                const valA = CATEGORY_MAP[a.category] || a.category || '';
+                const valB = CATEGORY_MAP[b.category] || b.category || '';
+                return matrixSortOrder === 'asc'
+                    ? valA.localeCompare(valB, 'es', { sensitivity: 'base', numeric: true })
+                    : valB.localeCompare(valA, 'es', { sensitivity: 'base', numeric: true });
+            }
+            case 'base_cost': {
+                const valA = Number(a.base_cost) || 0;
+                const valB = Number(b.base_cost) || 0;
+                return matrixSortOrder === 'asc' ? valA - valB : valB - valA;
+            }
+            case 'iva_rate': {
+                const valA = Number(a.iva_rate) || 0;
+                const valB = Number(b.iva_rate) || 0;
+                return matrixSortOrder === 'asc' ? valA - valB : valB - valA;
+            }
+            case 'margin': {
+                const valA = Number(a.margin) || 0;
+                const valB = Number(b.margin) || 0;
+                return matrixSortOrder === 'asc' ? valA - valB : valB - valA;
+            }
+            case 'suggested_price': {
+                const valA = (Number(a.base_cost) || 0) * (1 + (Number(a.margin) || 0) / 100);
+                const valB = (Number(b.base_cost) || 0) * (1 + (Number(b.margin) || 0) / 100);
+                return matrixSortOrder === 'asc' ? valA - valB : valB - valA;
+            }
+            case 'final_price': {
+                const priceBeforeTaxA = (Number(a.base_cost) || 0) * (1 + (Number(a.margin) || 0) / 100);
+                const finalA = Math.ceil((priceBeforeTaxA * (1 + (Number(a.iva_rate) || 0) / 100)) / 50) * 50;
+                const priceBeforeTaxB = (Number(b.base_cost) || 0) * (1 + (Number(b.margin) || 0) / 100);
+                const finalB = Math.ceil((priceBeforeTaxB * (1 + (Number(b.iva_rate) || 0) / 100)) / 50) * 50;
+                return matrixSortOrder === 'asc' ? finalA - finalB : finalB - finalA;
+            }
+            default:
+                return 0;
+        }
+    });
+
     const avgMargin = matrixData.length > 0
         ? matrixData.reduce((acc, curr) => acc + curr.margin, 0) / matrixData.length
         : selectedModel?.base_margin_percent || 0;
 
-    const totalItems = filteredProducts.length;
+    const totalItems = sortedProducts.length;
     const totalPages = Math.ceil(totalItems / matrixPageSize);
     const startIndex = (matrixPage - 1) * matrixPageSize;
     const endIndex = startIndex + matrixPageSize;
-    const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+    const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
 
     const getAutosyncDaysSummary = (days: number[] | null) => {
         const dayList = days || [0, 1, 2, 3, 4, 5, 6];
@@ -1447,10 +1594,16 @@ export default function PricingSettingsPage({
                                         }}
                                         style={{
                                             width: '100%',
-                                            padding: '0.5rem 0.85rem',
+                                            padding: (selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional')) && !isModelPickerOpen 
+                                                ? '0.5rem 6.6rem 0.5rem 0.85rem' 
+                                                : '0.5rem 0.85rem',
                                             borderRadius: '8px',
-                                            border: isModelPickerOpen ? `1.5px solid ${THEME.colors.primary}` : `1.5px solid ${THEME.colors.border}`,
-                                            backgroundColor: isModelPickerOpen ? '#FFFFFF' : '#F8FAFC',
+                                            border: isModelPickerOpen 
+                                                ? `1.5px solid ${THEME.colors.primary}` 
+                                                : ((selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional')) ? '1.5px solid #059669' : `1.5px solid ${THEME.colors.border}`),
+                                            backgroundColor: isModelPickerOpen 
+                                                ? '#FFFFFF' 
+                                                : ((selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional')) ? '#F8FCFA' : '#F8FAFC'),
                                             fontWeight: '700',
                                             fontSize: '0.88rem',
                                             color: THEME.colors.textMain,
@@ -1460,6 +1613,26 @@ export default function PricingSettingsPage({
                                             transition: 'all 0.15s ease'
                                         }}
                                     />
+                                    {(selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional')) && !isModelPickerOpen && (
+                                        <span style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                            <span style={{
+                                                fontSize: '0.62rem',
+                                                fontWeight: '800',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.04em',
+                                                backgroundColor: '#DCFCE7',
+                                                color: '#15803D',
+                                                border: '1px solid #A7F3D0',
+                                                padding: '2px 7px',
+                                                borderRadius: '999px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}>
+                                                <Crown size={11} strokeWidth={2.4} /> Base Maestra
+                                            </span>
+                                        </span>
+                                    )}
                                     {isModelPickerOpen && (
                                         <div style={{
                                             position: 'absolute',
@@ -1483,6 +1656,7 @@ export default function PricingSettingsPage({
                                                 })
                                                 .map(m => {
                                                     const isSelected = selectedModel?.id === m.id;
+                                                    const isMaster = m.id === GENERAL_INSTITUCIONAL_ID || m.name?.toLowerCase().includes('general institucional');
                                                     const avg = modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0);
                                                     return (
                                                         <div
@@ -1494,37 +1668,70 @@ export default function PricingSettingsPage({
                                                                 setIsEditingModel(false);
                                                             }}
                                                             style={{
-                                                                padding: '0.65rem 0.9rem',
+                                                                padding: isMaster ? '0.75rem 0.95rem' : '0.65rem 0.9rem',
                                                                 cursor: 'pointer',
-                                                                borderBottom: '1px solid #F1F5F9',
-                                                                backgroundColor: isSelected ? '#F0FDF4' : 'white',
+                                                                borderBottom: isMaster ? '1.5px solid #E2E8F0' : '1px solid #F1F5F9',
+                                                                borderLeft: isMaster ? '4px solid #059669' : '4px solid transparent',
+                                                                backgroundColor: isSelected 
+                                                                    ? '#F0FDF4' 
+                                                                    : (isMaster ? '#F8FCFA' : 'white'),
                                                                 display: 'flex',
                                                                 justifyContent: 'space-between',
                                                                 alignItems: 'center',
-                                                                gap: '0.5rem',
-                                                                transition: 'background-color 0.1s'
+                                                                gap: '0.6rem',
+                                                                transition: 'all 0.15s ease'
                                                             }}
                                                             onMouseEnter={e => {
-                                                                if (!isSelected) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                                                if (!isSelected) {
+                                                                    e.currentTarget.style.backgroundColor = isMaster ? '#EBF8F2' : '#F8FAFC';
+                                                                }
                                                             }}
                                                             onMouseLeave={e => {
-                                                                if (!isSelected) e.currentTarget.style.backgroundColor = 'white';
+                                                                if (!isSelected) {
+                                                                    e.currentTarget.style.backgroundColor = isMaster ? '#F8FCFA' : 'white';
+                                                                }
                                                             }}
                                                         >
-                                                            <span style={{
-                                                                fontWeight: isSelected ? '800' : '600',
-                                                                color: isSelected ? THEME.colors.primary : THEME.colors.textMain,
-                                                                fontSize: '0.86rem'
-                                                            }}>
-                                                                {m.name}
-                                                            </span>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                                                                 {isMaster && (
+                                                                     <Crown size={14} color="#059669" strokeWidth={2.4} style={{ flexShrink: 0 }} />
+                                                                 )}
+                                                                 <span style={{
+                                                                     fontWeight: isMaster ? '800' : (isSelected ? '800' : '600'),
+                                                                     color: isMaster ? '#0F172A' : (isSelected ? THEME.colors.primary : THEME.colors.textMain),
+                                                                     fontSize: '0.86rem',
+                                                                     letterSpacing: isMaster ? '-0.01em' : 'normal'
+                                                                 }}>
+                                                                     {m.name}
+                                                                 </span>
+                                                                 {isMaster && (
+                                                                     <span style={{
+                                                                         fontSize: '0.62rem',
+                                                                         fontWeight: '800',
+                                                                         textTransform: 'uppercase',
+                                                                         letterSpacing: '0.04em',
+                                                                         backgroundColor: '#DCFCE7',
+                                                                         color: '#15803D',
+                                                                         border: '1px solid #A7F3D0',
+                                                                         padding: '1px 7px',
+                                                                         borderRadius: '999px',
+                                                                         whiteSpace: 'nowrap',
+                                                                         display: 'inline-flex',
+                                                                         alignItems: 'center',
+                                                                         boxShadow: '0 1px 2px rgba(5, 150, 105, 0.08)'
+                                                                     }}>
+                                                                         Base Maestra
+                                                                     </span>
+                                                                 )}
+                                                            </div>
                                                             <span style={{
                                                                 fontSize: '0.72rem',
                                                                 fontWeight: '700',
-                                                                color: isSelected ? '#065F46' : '#64748B',
-                                                                backgroundColor: isSelected ? '#DCFCE7' : '#F1F5F9',
-                                                                padding: '2px 6px',
-                                                                borderRadius: '4px',
+                                                                color: isMaster ? '#047857' : (isSelected ? '#065F46' : '#64748B'),
+                                                                backgroundColor: isMaster ? '#E6F7F0' : (isSelected ? '#DCFCE7' : '#F1F5F9'),
+                                                                border: isMaster ? '1px solid #A7F3D0' : 'none',
+                                                                padding: '2px 8px',
+                                                                borderRadius: '5px',
                                                                 whiteSpace: 'nowrap'
                                                             }}>
                                                                 Margen: {m.base_margin_percent}% (Prom: {formatNumber(avg, 1)}%)
@@ -1646,23 +1853,7 @@ export default function PricingSettingsPage({
                                         Editar
                                     </button>
 
-                                    <button
-                                        onClick={() => deleteModel(selectedModel.id, selectedModel.name)}
-                                        style={{
-                                            color: '#9CA3AF',
-                                            background: '#F8FAFC',
-                                            border: '1px solid #E2E8F0',
-                                            padding: '0.45rem',
-                                            borderRadius: '6px',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}
-                                        title="Eliminar Modelo"
-                                    >
-                                        Eliminar
-                                    </button>
+
                                 </div>
                             )}
                         </div>
@@ -1682,6 +1873,25 @@ export default function PricingSettingsPage({
                                     <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#EAFDF4', color: '#0D7A57', padding: '0.2rem 0.55rem', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                                         Margen Base: {selectedModel.base_margin_percent}%
                                     </span>
+
+                                    {(selectedModel.id === GENERAL_INSTITUCIONAL_ID || selectedModel.name?.toLowerCase().includes('general institucional')) && (
+                                        <span style={{
+                                            fontSize: '0.68rem',
+                                            fontWeight: '800',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.04em',
+                                            color: '#047857',
+                                            backgroundColor: '#ECFDF5',
+                                            border: '1px solid #A7F3D0',
+                                            padding: '2px 8px',
+                                            borderRadius: '999px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}>
+                                            <Crown size={11} strokeWidth={2.5} /> Modelo Base Maestro
+                                        </span>
+                                    )}
 
                                     {selectedModel.color_tag && (
                                         <span style={{
@@ -2096,14 +2306,211 @@ export default function PricingSettingsPage({
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                                             <thead style={{ position: 'sticky', top: embedded ? '208px' : '151px', zIndex: 30, backgroundColor: '#F8FAFC' }}>
                                                 <tr>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>ID ERP</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '35%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Producto</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '15%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Categoría</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Costo Base</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '8%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>IVA</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Utilidad</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Sug. sin IVA</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Precio Final</th>
+                                                    <th 
+                                                        onClick={() => handleMatrixSort('id')}
+                                                        style={{ 
+                                                            ...THEME.typography.tableHeader, 
+                                                            padding: '0.65rem 1.25rem', 
+                                                            width: '10%', 
+                                                            position: 'sticky', 
+                                                            top: embedded ? '208px' : '151px', 
+                                                            backgroundColor: '#F8FAFC', 
+                                                            zIndex: 30, 
+                                                            borderBottom: `1.5px solid ${THEME.colors.border}`, 
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                            cursor: 'pointer',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: matrixSortField === 'id' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                            <span>ID ERP</span>
+                                                            {matrixSortField === 'id' ? (
+                                                                matrixSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                            ) : (
+                                                                <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleMatrixSort('name')}
+                                                        style={{ 
+                                                            ...THEME.typography.tableHeader, 
+                                                            padding: '0.65rem 1.25rem', 
+                                                            width: '35%', 
+                                                            position: 'sticky', 
+                                                            top: embedded ? '208px' : '151px', 
+                                                            backgroundColor: '#F8FAFC', 
+                                                            zIndex: 30, 
+                                                            borderBottom: `1.5px solid ${THEME.colors.border}`, 
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                            cursor: 'pointer',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: matrixSortField === 'name' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                            <span>Producto</span>
+                                                            {matrixSortField === 'name' ? (
+                                                                matrixSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                            ) : (
+                                                                <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleMatrixSort('category')}
+                                                        style={{ 
+                                                            ...THEME.typography.tableHeader, 
+                                                            padding: '0.65rem 1.25rem', 
+                                                            width: '15%', 
+                                                            position: 'sticky', 
+                                                            top: embedded ? '208px' : '151px', 
+                                                            backgroundColor: '#F8FAFC', 
+                                                            zIndex: 30, 
+                                                            borderBottom: `1.5px solid ${THEME.colors.border}`, 
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                            cursor: 'pointer',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: matrixSortField === 'category' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                            <span>Categoría</span>
+                                                            {matrixSortField === 'category' ? (
+                                                                matrixSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                            ) : (
+                                                                <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleMatrixSort('base_cost')}
+                                                        style={{ 
+                                                            ...THEME.typography.tableHeader, 
+                                                            padding: '0.65rem 1.25rem', 
+                                                            width: '10%', 
+                                                            textAlign: 'right', 
+                                                            position: 'sticky', 
+                                                            top: embedded ? '208px' : '151px', 
+                                                            backgroundColor: '#F8FAFC', 
+                                                            zIndex: 30, 
+                                                            borderBottom: `1.5px solid ${THEME.colors.border}`, 
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                            cursor: 'pointer',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: matrixSortField === 'base_cost' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                            <span>Costo Base</span>
+                                                            {matrixSortField === 'base_cost' ? (
+                                                                matrixSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                            ) : (
+                                                                <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleMatrixSort('iva_rate')}
+                                                        style={{ 
+                                                            ...THEME.typography.tableHeader, 
+                                                            padding: '0.65rem 1.25rem', 
+                                                            width: '8%', 
+                                                            textAlign: 'right', 
+                                                            position: 'sticky', 
+                                                            top: embedded ? '208px' : '151px', 
+                                                            backgroundColor: '#F8FAFC', 
+                                                            zIndex: 30, 
+                                                            borderBottom: `1.5px solid ${THEME.colors.border}`, 
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                            cursor: 'pointer',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: matrixSortField === 'iva_rate' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                            <span>IVA</span>
+                                                            {matrixSortField === 'iva_rate' ? (
+                                                                matrixSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                            ) : (
+                                                                <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleMatrixSort('margin')}
+                                                        style={{ 
+                                                            ...THEME.typography.tableHeader, 
+                                                            padding: '0.65rem 1.25rem', 
+                                                            width: '12%', 
+                                                            textAlign: 'right', 
+                                                            position: 'sticky', 
+                                                            top: embedded ? '208px' : '151px', 
+                                                            backgroundColor: '#F8FAFC', 
+                                                            zIndex: 30, 
+                                                            borderBottom: `1.5px solid ${THEME.colors.border}`, 
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                            cursor: 'pointer',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: matrixSortField === 'margin' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                            <span>Utilidad</span>
+                                                            {matrixSortField === 'margin' ? (
+                                                                matrixSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                            ) : (
+                                                                <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleMatrixSort('suggested_price')}
+                                                        style={{ 
+                                                            ...THEME.typography.tableHeader, 
+                                                            padding: '0.65rem 1.25rem', 
+                                                            width: '10%', 
+                                                            textAlign: 'right', 
+                                                            position: 'sticky', 
+                                                            top: embedded ? '208px' : '151px', 
+                                                            backgroundColor: '#F8FAFC', 
+                                                            zIndex: 30, 
+                                                            borderBottom: `1.5px solid ${THEME.colors.border}`, 
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                            cursor: 'pointer',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: matrixSortField === 'suggested_price' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                            <span>Sug. sin IVA</span>
+                                                            {matrixSortField === 'suggested_price' ? (
+                                                                matrixSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                            ) : (
+                                                                <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => handleMatrixSort('final_price')}
+                                                        style={{ 
+                                                            ...THEME.typography.tableHeader, 
+                                                            padding: '0.65rem 1.25rem', 
+                                                            width: '10%', 
+                                                            textAlign: 'right', 
+                                                            position: 'sticky', 
+                                                            top: embedded ? '208px' : '151px', 
+                                                            backgroundColor: '#F8FAFC', 
+                                                            zIndex: 30, 
+                                                            borderBottom: `1.5px solid ${THEME.colors.border}`, 
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                            cursor: 'pointer',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: matrixSortField === 'final_price' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                            <span>Precio Final</span>
+                                                            {matrixSortField === 'final_price' ? (
+                                                                matrixSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                                                            ) : (
+                                                                <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+                                                            )}
+                                                        </div>
+                                                    </th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2119,7 +2526,8 @@ export default function PricingSettingsPage({
                                                         ? editingMargins[p.product_id] 
                                                         : formatNumber(p.margin, 1);
 
-                                                    const isModified = Math.abs(p.margin_adjustment) > 0.001;
+                                                    const isInherited = p.is_inherited;
+                                                    const isModified = p.rule_id !== null && !isInherited;
 
                                                     return (
                                                         <tr key={p.product_id} style={{ 
@@ -2191,7 +2599,7 @@ export default function PricingSettingsPage({
                                                                     )}
 
                                                                     <div 
-                                                                        title={isModified ? `Margen personalizado (ajuste: ${p.margin_adjustment > 0 ? `+${formatNumber(p.margin_adjustment, 1)}` : formatNumber(p.margin_adjustment, 1)}%)` : undefined}
+                                                                        title={isInherited ? `Margen dinámico heredado (+${formatNumber(p.margin_adjustment, 1)}% sobre base General Institucional)` : (isModified ? `Margen personalizado exclusivo para este modelo (${formatNumber(p.margin, 1)}%)` : undefined)}
                                                                         style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
                                                                     >
                                                                         <input 
