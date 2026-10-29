@@ -39,6 +39,14 @@ import {
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 
+interface PricingRuleItem {
+    id: string;
+    model_id: string;
+    product_id: string;
+    margin_adjustment: number;
+    created_at?: string;
+}
+
 export default function PricingSettingsPage({ 
     embedded = false,
     activeTab: externalActiveTab,
@@ -264,7 +272,7 @@ export default function PricingSettingsPage({
 
             // 2. Fetch exception rules for this model and General Institucional baseline
             const modelIdsToFetch = modelId === GENERAL_INSTITUCIONAL_ID ? [modelId] : [modelId, GENERAL_INSTITUCIONAL_ID];
-            const { data: rulesData, error: rulesErr } = await fetchAllRows<any>(
+            const { data: rulesData, error: rulesErr } = await fetchAllRows<PricingRuleItem>(
                 (from, to) => supabase.from('pricing_rules').select('*').in('model_id', modelIdsToFetch).range(from, to)
             );
             if (rulesErr) throw rulesErr;

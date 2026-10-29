@@ -111,6 +111,28 @@ function formatMoney(num: number | string | null | undefined): string {
   return `$${parts[0]}`;
 }
 
+interface ConsolidatedOrderItemRow {
+  id: string;
+  quantity: number;
+  unit?: string | null;
+  product_id: string;
+  variant_label?: string | null;
+  nickname?: string | null;
+  selected_options?: Record<string, unknown> | null;
+  products: {
+    id: string;
+    name: string;
+    unit_of_measure: string;
+    weight_kg?: number | null;
+    parent_id?: string | null;
+    min_inventory_level?: number | null;
+  } | null;
+  orders: {
+    delivery_date: string;
+    status: string;
+  } | null;
+}
+
 export default function ProcurementPage() {
   console.log("ProcurementPage rendering...");
   const { user, profile } = useAuth();
@@ -685,7 +707,7 @@ export default function ProcurementPage() {
     if (!targetDate) return;
 
     // 1. Obtener items de pedidos ACTIVOS (SIN RESTRICCIÓN DE FECHA - DESACTIVADO TEMPORALMENTE)
-    const { data: items, error: fetchErr } = await fetchAllRows<any>(
+    const { data: items, error: fetchErr } = await fetchAllRows<ConsolidatedOrderItemRow>(
       (from, to) => supabase
         .from("order_items")
         .select(
@@ -727,7 +749,7 @@ export default function ProcurementPage() {
         delivery_date: string;
       }
     > = {};
-    items.forEach((item: any) => {
+    items.forEach((item: ConsolidatedOrderItemRow) => {
       const pName = item.products?.name || item.nickname || '';
       const canonicalVariant = getCanonicalProcurementSpec({
         selected_options: item.selected_options,
