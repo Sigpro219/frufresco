@@ -76,6 +76,7 @@ export interface AgreementItem {
     quote_item_id?: string;
     product_id?: string;
     client_code?: string | number;
+    accounting_id?: string | number;
     raw_name: string;
     unified_name: string;
     mapped_sku?: string; // Catálogo FruFresco SKU real
@@ -775,6 +776,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     quote_item_id: qi.id,
                     product_id: resolvedProductId,
                     client_code: prod?.accounting_id || prod?.sku || (idx + 1),
+                    accounting_id: prod?.accounting_id ?? prod?.sku ?? (idx + 1),
                     raw_name: qi.product_name || prod?.name || 'Producto',
                     unified_name: unifiedVal,
                     mapped_sku: prod?.sku || (prod?.accounting_id ? String(prod.accounting_id) : ''),
@@ -897,7 +899,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                 rawName = String(v ?? '').trim();
                             } else if (/^descripci[oó]n\s*unificada$/i.test(kt)) {
                                 unifiedName = String(v ?? '').trim();
-                            } else if (/^(c[oó]d\s*item|c[oó]digo|material|sku\s*frufresco)$/i.test(kt)) {
+                            } else if (/^(c[oó]d\s*item|c[oó]digo|material|sku\s*frufresco|accounting\s*id|id\s*contable)$/i.test(kt)) {
                                 codItem = String(v ?? '').trim();
                             } else if (/^prima\b/i.test(kt)) {
                                 primaVal = Number(v) || 0;
@@ -996,7 +998,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
 
                 const parsed: AgreementItem[] = jsonRows.map((row, i): AgreementItem => {
                     const rawName = String(row['Nombre Item'] ?? row['Descripcion'] ?? row['Producto'] ?? row['PRODUCTO'] ?? '').trim();
-                    const skuRaw = String(row['SKU FruFresco'] ?? row['Material'] ?? row['Código'] ?? row['Cód Item'] ?? '').trim();
+                    const skuRaw = String(row['Accounting ID'] ?? row['ID Contable'] ?? row['SKU FruFresco'] ?? row['Material'] ?? row['Código'] ?? row['Cód Item'] ?? '').trim();
                     const existing = existingBySku.get(skuRaw.toUpperCase()) || existingByName.get(normalizeSearchStr(rawName));
 
                     const realCost = existing?.corabastos_cost ?? (Number(row['COSTO CORABASTOS'] ?? row['Costo'] ?? 0) || 0);
@@ -1072,12 +1074,13 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                 'Cód Item': item.client_code,
                 'Nombre Item': item.raw_name,
                 'DESCRIPCIÓN UNIFICADA': item.unified_name || 'No se mide',
-                ' Prima $  COP ': item.our_counterproposal - (item.sipsa_price || 0),
+                'Consumo Periodo': item.demand_volume !== undefined ? item.demand_volume : item.monthly_consumption_kg,
+                ' Prima $  COP ': item.prima_cop !== undefined && item.prima_cop > 0 ? item.prima_cop : (item.our_counterproposal - (item.sipsa_price || 0)),
                 ' $ SIPSA Anterior': item.sipsa_price || 0,
                 'Precio Propuesto Nutresa': item.client_proposed_price,
                 'Acuerdo Anterior': item.previous_price || 0,
                 'Contrapropuesta FruFresco': item.our_counterproposal,
-                'SKU FruFresco': item.mapped_sku || ''
+                'Accounting ID': item.accounting_id ?? item.client_code ?? ''
             }));
 
             const ws = XLSX.utils.json_to_sheet(exportData);
@@ -1088,8 +1091,9 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
             const exportData = agreementItems.map(item => ({
                 'Material': item.client_code,
                 'Descripcion': item.raw_name,
-                'SKU FruFresco': item.mapped_sku || '',
+                'Accounting ID': item.accounting_id ?? item.client_code ?? '',
                 'U.M': item.unit,
+                'Consumo Periodo': item.demand_volume !== undefined ? item.demand_volume : item.monthly_consumption_kg,
                 'COSTO CORABASTOS': item.corabastos_cost,
                 'PRECIO PROPUESTO CLIENTE': item.client_proposed_price,
                 'CONTRAPROPUESTA FRUFRESCO': item.our_counterproposal,
