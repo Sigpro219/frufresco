@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.337 (Capítulo 44: Blindaje Estricto de Acuerdo Cerrado (`Solo Convenio`) en Creación e Ingesta de Pedidos y Resguardo de Tarifas Fijas `"No se mide"` en SIPSA para Nutresa — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.338 (Capítulo 44: Reacomodación Contigua en Cascada de Bahías de Suelo y Erradicación de Agujeros Vacíos en Cross-Docking Nocturno — 76/76 Pantallas Certificadas) en Creación e Ingesta de Pedidos y Resguardo de Tarifas Fijas `"No se mide"` en SIPSA para Nutresa — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 354 Escenarios BDD Ininterrumpidos (1..354)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 355 Escenarios BDD Ininterrumpidos (1..355)
 
 ---
 
@@ -13233,7 +13233,18 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - De los 66 SKUs del acuerdo cerrado de Nutresa, los **21 SKUs no medidos por el boletín SIPSA** (`sipsa_price === 0`, `unified_name === 'No se mide'`) almacenan su **Tarifa Fija acordada** en `prima_cop` (`Valor Base`) y `unit_price` (`0 + Valor Base = Tarifa Fija`), manteniendo sincronizadas las llaves `nutresa_sipsa_prima_meta` y `nutresa_negotiation_draft` en `app_settings` junto con `quote_items` de `Quote #96`.
      - Las sedes de `L&C S A S - LEÑOS Y CARBÓN` operan bajo el mismo bloqueo estricto (`allow_off_agreement_purchases = false`) y puntero `active_master_agreement_id` del acuerdo maestro de Nutresa.
 
+---
 
-
-
-
+### Escenario 355: Reacomodación Contigua en Cascada de Bahías de Suelo (`adjustSpacesWithCascadingShift`) y Erradicación de Agujeros Vacíos en Cross-Docking Nocturno (`/admin/logistics/staging-spaces`) (SDD v1.9.338)
+- **Given** el **Centro de Mando de Espacios & Bahías en Suelo (1 a 150)** (`/admin/logistics/staging-spaces`, `src/components/StagingSpacesManagement.tsx`) y el motor de asignación (`src/lib/stagingSpaceAllocator.ts`),
+- **When** un operador ajusta individualmente el número de bahías requeridas para un pedido mediante la acción reactiva **`[Ajustar a N]`** tras una variación de cubicaje o corrección de parámetros:
+- **Then** el sistema erradica la fragmentación del suelo de bodega y garantiza la contigüidad física absoluta del cross-docking:
+  1. **Compactación en Cascada ante Reducción de Bahías (`diff < 0`, sobra espacio):**
+     - Al reducir bahías (ejemplo: de 2 a 1 en clientes como *Aldimark* o *Policía Nacional*, o de 3 a 2 en *Colsubsidio Catering*), el sistema conserva los primeros `targetSpaces` del pedido y libera los slots excedentes finales (`freed`).
+     - En lugar de dejar los slots liberados como espacios vacíos (`Libre`) en medio del clúster de cargue, la función canónica `adjustSpacesWithCascadingShift` toma automáticamente **todas las órdenes con bahías posteriores (`slots >= minFreed`) y las desplaza hacia abajo en `freedCount` posiciones (`slot - freedCount`)**, sellando de inmediato la brecha de forma compacta y continua.
+  2. **Apertura de Hueco Contiguo ante Expansión de Bahías (`diff > 0`, falta espacio):**
+     - Al ampliar bahías (ejemplo: cuando un cliente aumenta su volumen y pasa de 1 a 2 espacios), el sistema identifica el slot superior actual del pedido (`maxAssigned`) y **desplaza primero hacia arriba todas las órdenes posteriores (`slot + expandCount`)**, abriendo el espacio contiguo necesario sin generar colisiones ni sobreescrituras en la cuadrícula de 150 bahías.
+     - Acto seguido, el pedido incorpora sus nuevos slots contiguos (`maxAssigned + 1..N`).
+  3. **Preservación de Pedidos No Afectados y Asignación de Huérfanos:**
+     - Todas las órdenes ubicadas antes del punto de corte permanecen inmunes e inalteradas.
+     - Si un pedido no poseía bahías previas (`S/A`), se ubica automáticamente al final del último slot ocupado (`maxOccupied + 1..N`).

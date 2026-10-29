@@ -6,7 +6,8 @@ import {
     OrderStagingInput, 
     allocateStagingSpacesGeographically,
     calculateCratesAndSpaces,
-    formatSpaceLabel
+    formatSpaceLabel,
+    adjustSpacesWithCascadingShift
 } from '@/lib/stagingSpaceAllocator';
 import { 
     Grid, 
@@ -213,6 +214,13 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             newMap[a.order_id] = a.assigned_spaces;
         });
         setManualSpacesMap(newMap);
+        setSaveSuccess(false);
+    };
+
+    // Ajuste reactivo con reacomodación y compactación en cascada contigua del piso
+    const handleAdjustOrderSpaces = (orderId: string, targetSpacesCount: number) => {
+        if (readOnly) return;
+        setManualSpacesMap(prev => adjustSpacesWithCascadingShift(prev, orderId, targetSpacesCount));
         setSaveSuccess(false);
     };
 
@@ -1010,14 +1018,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                                         {!readOnly && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => {
-                                                                    const newSpaces = assigned.length > spaces ? assigned.slice(0, spaces) : assigned;
-                                                                    setManualSpacesMap(prev => ({
-                                                                        ...prev,
-                                                                        [order.id]: newSpaces
-                                                                    }));
-                                                                    setSaveSuccess(false);
-                                                                }}
+                                                                onClick={() => handleAdjustOrderSpaces(order.id, spaces)}
                                                                 style={{
                                                                     fontSize: '0.58rem',
                                                                     fontWeight: 800,
