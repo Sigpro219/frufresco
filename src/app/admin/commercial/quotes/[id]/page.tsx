@@ -1863,8 +1863,8 @@ export default function QuoteDetailPage() {
                                         Vigencia de Precios Congelados del Acuerdo
                                     </div>
                                 </div>
-                                <p style={{ fontSize: '0.76rem', color: '#B45309', margin: '0 0 10px 0', lineHeight: 1.35 }}>
-                                    Define el periodo pactado con el cliente (ej. 6 meses). Durante esta vigencia, todos sus pedidos aplicarán automáticamente estas tarifas congeladas.
+                                <p style={{ fontSize: '0.76rem', color: '#B45309', margin: '0 0 10px 0', lineHeight: 1.4 }}>
+                                    El acuerdo entra en vigencia <strong>de forma inmediata al confirmar</strong> (cubriendo todo el día de hoy desde las <strong>00:00 h</strong>) y regirá hasta la fecha límite seleccionada a las <strong>23:59 h</strong> (día incluido), aplicando automáticamente a los pedidos del cliente y reemplazando acuerdos previos.
                                 </p>
 
                                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>

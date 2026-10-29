@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase, fetchAllRows } from '@/lib/supabase';
-import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
+import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, resolveLatestProductCost, applyProductUnitConversion, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID, FAMILIA_CORTES_CORPORATIVO_ID, DEFAULT_INSTITUTIONAL_MARGIN_PCT } from '@/lib/pricingUtils';
 import Link from 'next/link';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { 
@@ -35,6 +35,7 @@ import {
     ArrowLeftCircle,
     Clock,
     Crown,
+    ShieldCheck,
     Loader2,
     ArrowUp,
     ArrowDown,
@@ -87,6 +88,7 @@ export default function PricingSettingsPage({
 
     // Telemetría On-Screen y márgenes personalizados por cliente (Escenario 275 SDD)
     const [templateCosts, setTemplateCosts] = useState<Record<string, number>>({});
+    const [templateBaseMargins, setTemplateBaseMargins] = useState<Record<string, number>>({});
     const [templateDemand, setTemplateDemand] = useState<Record<string, { volume: number; ordersCount: number }>>({});
     const [templateMargins, setTemplateMargins] = useState<Record<string, number>>({});
     const [savingTemplateMargins, setSavingTemplateMargins] = useState(false);
@@ -96,6 +98,7 @@ export default function PricingSettingsPage({
     const [templateSearchFilter, setTemplateSearchFilter] = useState('');
     const [uploadingTemplateExcel, setUploadingTemplateExcel] = useState(false);
     const [showTemplateExcelModal, setShowTemplateExcelModal] = useState(false);
+
 
     // Searchable Picker States (Buscadores de cabecera)
     const modelPickerRef = useRef<HTMLDivElement>(null);
@@ -171,6 +174,26 @@ export default function PricingSettingsPage({
         }
         setMatrixPage(1);
     };
+
+    // Template (Canastas) Tri-State Sorting states
+    type TemplateSortField = 'id' | 'name' | 'category' | 'cost' | 'iva_rate' | 'margin' | 'priceBeforeTax' | 'projectedPrice' | 'monthlyVolume' | 'projectedProfit';
+    const [templateSortField, setTemplateSortField] = useState<TemplateSortField | null>(null);
+    const [templateSortOrder, setTemplateSortOrder] = useState<'asc' | 'desc'>('asc');
+
+    const handleTemplateSort = (field: TemplateSortField) => {
+        if (templateSortField === field) {
+            if (templateSortOrder === 'asc') {
+                setTemplateSortOrder('desc');
+            } else {
+                setTemplateSortField(null);
+                setTemplateSortOrder('asc');
+            }
+        } else {
+            setTemplateSortField(field);
+            setTemplateSortOrder('asc');
+        }
+    };
+
     const [uploadingExcel, setUploadingExcel] = useState(false);
     const [excelError, setExcelError] = useState<string | null>(null);
     const [excelSuccess, setExcelSuccess] = useState<string | null>(null);
@@ -203,7 +226,10 @@ export default function PricingSettingsPage({
                 // Cascada dinámica para modelos derivados sin reglas fijas (ej. Clientes Hogar = GI + 10%)
                 const giAvg = avgMap[GENERAL_INSTITUCIONAL_ID] || 25;
                 data.forEach(m => {
-                    if (m.id !== GENERAL_INSTITUCIONAL_ID && (!sumMap[m.id] || sumMap[m.id].count === 0)) {
+                    const isCorp = m.id === FAMILIA_CORTES_CORPORATIVO_ID || m.name?.toLowerCase().includes('corporativo');
+                    if (isCorp) {
+                        avgMap[m.id] = 0; // Modelo Corporativo es Costo Puro (Utilidad 0%)
+                    } else if (m.id !== GENERAL_INSTITUCIONAL_ID && (!sumMap[m.id] || sumMap[m.id].count === 0)) {
                         avgMap[m.id] = giAvg + (Number(m.base_margin_percent) || 0);
                     }
                 });
@@ -321,28 +347,51 @@ export default function PricingSettingsPage({
                 }
             });
 
-            // 3. Fetch overrides
-            const { data: overridesData } = await supabase
-                .from('commercial_overrides')
-                .select('product_id, manual_cost, expires_at');
-            
-            const overridesMap = new Map();
-            const now = new Date();
-            overridesData?.forEach(o => {
-                if (!o.expires_at || new Date(o.expires_at) > now) {
-                    overridesMap.set(o.product_id, o.manual_cost);
+            // 3. Fetch canonical cost matrix (SDD Escenarios 337 & 343)
+            const { data: ccmData } = await fetchAllRows<{ product_id: string; manual_cost: number; updated_at: string; updated_by: string | null; is_active: boolean }>(
+                (from, to) => supabase.from('commercial_cost_matrix').select('product_id, manual_cost, updated_at, updated_by, is_active').eq('is_active', true).range(from, to)
+            );
+            const costMap = new Map<string, { cost: number; updatedAt: number; updatedBy?: string | null }>();
+            ccmData?.forEach(c => {
+                if (c.manual_cost && Number(c.manual_cost) > 0) {
+                    costMap.set(c.product_id, {
+                        cost: Number(c.manual_cost),
+                        updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : 0,
+                        updatedBy: c.updated_by || null
+                    });
                 }
             });
 
-            // 4. Fetch latest purchases
-            const { data: purchasesData } = await fetchAllRows<{ product_id: string; unit_price: number; purchase_unit: string; created_at: string }>(
-                (from, to) => supabase.from('purchases').select('product_id, unit_price, purchase_unit, created_at').order('created_at', { ascending: false }).range(from, to)
-            );
-            
-            const purchasesMap = new Map();
+            // 4. Fetch latest purchases (purchase_history_normalized + purchases fallback)
+            const [{ data: phnData }, { data: purchasesData }] = await Promise.all([
+                fetchAllRows<{ product_id: string; unit_price: number; normalized_price: number; purchase_unit: string; created_at: string }>(
+                    (from, to) => supabase.from('purchase_history_normalized').select('product_id, unit_price, normalized_price, purchase_unit, created_at').order('created_at', { ascending: false }).range(from, to)
+                ),
+                fetchAllRows<{ product_id: string; unit_price: number; purchase_unit: string; created_at: string }>(
+                    (from, to) => supabase.from('purchases').select('product_id, unit_price, purchase_unit, created_at').order('created_at', { ascending: false }).range(from, to)
+                )
+            ]);
+
+            const purchasesMap = new Map<string, { cost: number; createdAt: number; createdAtIso: string; unit?: string | null }>();
+            phnData?.forEach(p => {
+                const normCost = Number(p.normalized_price || p.unit_price || 0);
+                if (!purchasesMap.has(p.product_id) && normCost > 0) {
+                    purchasesMap.set(p.product_id, {
+                        cost: normCost,
+                        createdAt: p.created_at ? new Date(p.created_at).getTime() : 0,
+                        createdAtIso: p.created_at || new Date().toISOString(),
+                        unit: null
+                    });
+                }
+            });
             purchasesData?.forEach(p => {
-                if (!purchasesMap.has(p.product_id)) {
-                    purchasesMap.set(p.product_id, { price: p.unit_price, unit: p.purchase_unit });
+                if (!purchasesMap.has(p.product_id) && Number(p.unit_price) > 0) {
+                    purchasesMap.set(p.product_id, {
+                        cost: Number(p.unit_price),
+                        createdAt: p.created_at ? new Date(p.created_at).getTime() : 0,
+                        createdAtIso: p.created_at || new Date().toISOString(),
+                        unit: p.purchase_unit || null
+                    });
                 }
             });
 
@@ -352,59 +401,74 @@ export default function PricingSettingsPage({
                 .select('*');
             const conversions = convData || [];
 
-            // 6. Build the matrix data
+            // 6. Build the matrix data using canonical "ÚLTIMO" price precedence (SDD Escenarios 337 & 343)
             const matrix = allProds.map(prod => {
-                // Find cost
-                const overrideCost = overridesMap.get(prod.id);
-                const purchaseInfo = purchasesMap.get(prod.id) || (prod.parent_id ? purchasesMap.get(prod.parent_id) : null);
-                
-                let baseCost = 0;
-                if (overrideCost !== undefined) {
-                    baseCost = overrideCost;
-                } else if (purchaseInfo) {
-                    let realCost = purchaseInfo.price;
-                    if (purchaseInfo.unit && purchaseInfo.unit !== prod.unit_of_measure) {
-                        const convAB = conversions.find(c => 
-                            c.product_id === prod.id && 
-                            c.from_unit === purchaseInfo.unit && 
-                            c.to_unit === prod.unit_of_measure
+                const directResolved = resolveLatestProductCost(
+                    costMap.get(prod.id),
+                    purchasesMap.get(prod.id)
+                );
+
+                let baseCost = directResolved.cost;
+                if (baseCost > 0 && directResolved.unit) {
+                    baseCost = applyProductUnitConversion(
+                        baseCost,
+                        prod.id,
+                        directResolved.unit,
+                        prod.unit_of_measure,
+                        conversions
+                    );
+                } else if ((!baseCost || baseCost <= 0) && prod.parent_id) {
+                    const parentResolved = resolveLatestProductCost(
+                        costMap.get(prod.parent_id),
+                        purchasesMap.get(prod.parent_id)
+                    );
+                    if (parentResolved.cost > 0) {
+                        baseCost = applyProductUnitConversion(
+                            parentResolved.cost,
+                            prod.id,
+                            parentResolved.unit,
+                            prod.unit_of_measure,
+                            conversions
                         );
-                        if (convAB && convAB.conversion_factor) {
-                            realCost = purchaseInfo.price / convAB.conversion_factor;
-                        } else {
-                            const convBA = conversions.find(c => 
-                                c.product_id === prod.id && 
-                                c.from_unit === prod.unit_of_measure && 
-                                c.to_unit === purchaseInfo.unit
-                            );
-                            if (convBA && convBA.conversion_factor) {
-                                realCost = purchaseInfo.price * convBA.conversion_factor;
-                            }
-                        }
                     }
-                    baseCost = realCost;
                 }
 
                 // Margin adjustment rule if exists, or cascade from General Institucional baseline
                 const rule = rulesMap.get(prod.id);
                 const giRule = giRulesMap.get(prod.id);
+                const giBaseMargin = (giRule && Number(giRule.margin_adjustment) > 0)
+                    ? Number(giRule.margin_adjustment)
+                    : DEFAULT_INSTITUTIONAL_MARGIN_PCT;
+                const modelDelta = Number(modelData.base_margin_percent) || 0;
+                const expectedCascadeMargin = giBaseMargin + modelDelta;
                 
                 let absoluteMargin: number;
                 let adjustment: number = 0;
                 let isInherited = false;
 
-                if (rule) {
+                const isCorp = modelId === FAMILIA_CORTES_CORPORATIVO_ID || modelData.name?.toLowerCase().includes('corporativo');
+
+                if (isCorp) {
+                    // Modelo Corporativo: Costo Puro sin margen comercial (Utilidad 0%), salvo excepción explícita
+                    absoluteMargin = rule ? Number(rule.margin_adjustment) : 0;
+                    adjustment = absoluteMargin;
+                    isInherited = !rule;
+                } else if (modelId === GENERAL_INSTITUCIONAL_ID) {
+                    absoluteMargin = (rule && Number(rule.margin_adjustment) > 0)
+                        ? Number(rule.margin_adjustment)
+                        : DEFAULT_INSTITUTIONAL_MARGIN_PCT;
+                    adjustment = absoluteMargin;
+                    isInherited = false;
+                } else if (rule && Math.abs(Number(rule.margin_adjustment) - expectedCascadeMargin) >= 0.001) {
+                    // Excepción real manual distinta de la cascada del modelo derivado
                     absoluteMargin = Number(rule.margin_adjustment);
                     adjustment = absoluteMargin;
                     isInherited = false;
-                } else if (giRule && modelId !== GENERAL_INSTITUCIONAL_ID) {
-                    absoluteMargin = Number(giRule.margin_adjustment) + (Number(modelData.base_margin_percent) || 0);
-                    adjustment = Number(modelData.base_margin_percent) || 0;
-                    isInherited = true;
                 } else {
-                    absoluteMargin = Number(modelData.base_margin_percent) || 0;
-                    adjustment = 0;
-                    isInherited = false;
+                    // Cascada dinámica desde General Institucional (GI ± % del modelo)
+                    absoluteMargin = expectedCascadeMargin;
+                    adjustment = modelDelta;
+                    isInherited = true;
                 }
 
                 return {
@@ -500,27 +564,131 @@ export default function PricingSettingsPage({
         setLoadingTemplateItems(true);
         const tpl = currentTemplate || selectedTemplate;
         try {
-            // 1. Cargar productos de la canasta
+            // 1. Cargar productos de la canasta (incluyendo parent_id e iva_rate para herencia de costos y conversión de unidades)
             const { data, error } = await supabase
                 .from('quote_template_items')
-                .select('product_id, products(id, name, sku, accounting_id, category, unit_of_measure)')
+                .select('product_id, products(id, name, sku, accounting_id, category, unit_of_measure, parent_id, iva_rate)')
                 .eq('template_id', templateId);
-            
+
             const flattened = (data || []).map((item: any) => ({
                 product_id: item.product_id,
                 ...item.products
             })).filter((item: any) => item.id);
             setTemplateItems(flattened);
 
-            // 2. Cargar costos base vigentes de commercial_cost_matrix
-            const { data: matrixCosts } = await supabase
-                .from('commercial_cost_matrix')
-                .select('product_id, manual_cost');
-            const cMap: Record<string, number> = {};
-            (matrixCosts || []).forEach((c: any) => {
-                if (c.manual_cost) cMap[c.product_id] = Number(c.manual_cost);
-            });
-            setTemplateCosts(cMap);
+            // 2. Cargar costos base vigentes con cascada canónica (commercial_cost_matrix, commercial_overrides, purchase_history_normalized, purchases, product_conversions) + Reglas de General Institucional Dinámico
+            const targetProdIds = Array.from(new Set(
+                flattened.flatMap((p: any) => [p.id, p.parent_id].filter(Boolean))
+            ));
+
+            if (targetProdIds.length > 0) {
+                const [
+                    { data: matrixCosts },
+                    { data: overrideCosts },
+                    { data: phnData },
+                    { data: purchasesData },
+                    { data: convData },
+                    { data: giRulesData }
+                ] = await Promise.all([
+                    supabase.from('commercial_cost_matrix').select('product_id, manual_cost, updated_at, updated_by, is_active').eq('is_active', true).in('product_id', targetProdIds),
+                    supabase.from('commercial_overrides').select('product_id, manual_cost, updated_at').in('product_id', targetProdIds),
+                    supabase.from('purchase_history_normalized').select('product_id, unit_price, normalized_price, purchase_unit, created_at').in('product_id', targetProdIds).order('created_at', { ascending: false }),
+                    supabase.from('purchases').select('product_id, unit_price, purchase_unit, created_at').in('product_id', targetProdIds).order('created_at', { ascending: false }),
+                    supabase.from('product_conversions').select('*'),
+                    supabase.from('pricing_rules').select('product_id, margin_adjustment').eq('model_id', GENERAL_INSTITUCIONAL_ID).in('product_id', targetProdIds)
+                ]);
+
+                const costMap = new Map<string, { cost: number; updatedAt: number; updatedBy?: string | null }>();
+                (overrideCosts || []).forEach((c: any) => {
+                    if (c.manual_cost && Number(c.manual_cost) > 0) {
+                        costMap.set(c.product_id, {
+                            cost: Number(c.manual_cost),
+                            updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : 0,
+                            updatedBy: null
+                        });
+                    }
+                });
+                (matrixCosts || []).forEach((c: any) => {
+                    if (c.manual_cost && Number(c.manual_cost) > 0) {
+                        costMap.set(c.product_id, {
+                            cost: Number(c.manual_cost),
+                            updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : 0,
+                            updatedBy: c.updated_by || null
+                        });
+                    }
+                });
+
+                const purchasesMap = new Map<string, { cost: number; createdAt: number; createdAtIso: string; unit?: string | null }>();
+                (phnData || []).forEach((p: any) => {
+                    const normCost = Number(p.normalized_price || p.unit_price || 0);
+                    if (!purchasesMap.has(p.product_id) && normCost > 0) {
+                        purchasesMap.set(p.product_id, {
+                            cost: normCost,
+                            createdAt: p.created_at ? new Date(p.created_at).getTime() : 0,
+                            createdAtIso: p.created_at || new Date().toISOString(),
+                            unit: null
+                        });
+                    }
+                });
+                (purchasesData || []).forEach((p: any) => {
+                    if (!purchasesMap.has(p.product_id) && Number(p.unit_price) > 0) {
+                        purchasesMap.set(p.product_id, {
+                            cost: Number(p.unit_price),
+                            createdAt: p.created_at ? new Date(p.created_at).getTime() : 0,
+                            createdAtIso: p.created_at || new Date().toISOString(),
+                            unit: p.purchase_unit || null
+                        });
+                    }
+                });
+
+                const conversions = convData || [];
+                const cMap: Record<string, number> = {};
+                flattened.forEach((prod: any) => {
+                    const directResolved = resolveLatestProductCost(
+                        costMap.get(prod.id),
+                        purchasesMap.get(prod.id)
+                    );
+                    let baseCost = directResolved.cost;
+                    if (baseCost > 0 && directResolved.unit) {
+                        baseCost = applyProductUnitConversion(
+                            baseCost,
+                            prod.id,
+                            directResolved.unit,
+                            prod.unit_of_measure,
+                            conversions
+                        );
+                    } else if ((!baseCost || baseCost <= 0) && prod.parent_id) {
+                        const parentResolved = resolveLatestProductCost(
+                            costMap.get(prod.parent_id),
+                            purchasesMap.get(prod.parent_id)
+                        );
+                        if (parentResolved.cost > 0) {
+                            baseCost = applyProductUnitConversion(
+                                parentResolved.cost,
+                                prod.id,
+                                parentResolved.unit,
+                                prod.unit_of_measure,
+                                conversions
+                            );
+                        }
+                    }
+                    if (baseCost > 0) {
+                        cMap[prod.id] = Math.round(baseCost);
+                    }
+                });
+                setTemplateCosts(cMap);
+
+                const giMap: Record<string, number> = {};
+                (giRulesData || []).forEach((r: any) => {
+                    if (r.margin_adjustment !== null && r.margin_adjustment !== undefined) {
+                        giMap[r.product_id] = Number(r.margin_adjustment);
+                    }
+                });
+                setTemplateBaseMargins(giMap);
+            } else {
+                setTemplateCosts({});
+                setTemplateBaseMargins({});
+            }
 
             // 3. Cargar márgenes personalizados de la canasta desde app_settings
             const { data: sData } = await supabase
@@ -530,7 +698,11 @@ export default function PricingSettingsPage({
                 .maybeSingle();
             let mObj: Record<string, number> = {};
             if (sData?.value) {
-                try { mObj = JSON.parse(sData.value); } catch (e) {}
+                try {
+                    mObj = JSON.parse(sData.value);
+                } catch (parseErr) {
+                    console.warn('Error parseando márgenes personalizados de la canasta:', parseErr);
+                }
             }
             setTemplateMargins(mObj);
 
@@ -1580,59 +1752,93 @@ export default function PricingSettingsPage({
                                 </span>
 
                                 <div ref={modelPickerRef} style={{ position: 'relative', minWidth: '340px', maxWidth: '520px', flex: 1 }}>
-                                    <input
-                                        type="text"
-                                        value={isModelPickerOpen ? modelSearchQuery : (selectedModel ? `${selectedModel.name} — Margen Base: ${selectedModel.base_margin_percent}%` : '')}
-                                        placeholder="Buscar modelo de precios..."
-                                        onFocus={() => {
-                                            setIsModelPickerOpen(true);
-                                            setModelSearchQuery('');
-                                        }}
-                                        onChange={e => {
-                                            setModelSearchQuery(e.target.value);
-                                            if (!isModelPickerOpen) setIsModelPickerOpen(true);
-                                        }}
-                                        style={{
-                                            width: '100%',
-                                            padding: (selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional')) && !isModelPickerOpen 
-                                                ? '0.5rem 6.6rem 0.5rem 0.85rem' 
-                                                : '0.5rem 0.85rem',
-                                            borderRadius: '8px',
-                                            border: isModelPickerOpen 
-                                                ? `1.5px solid ${THEME.colors.primary}` 
-                                                : ((selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional')) ? '1.5px solid #059669' : `1.5px solid ${THEME.colors.border}`),
-                                            backgroundColor: isModelPickerOpen 
-                                                ? '#FFFFFF' 
-                                                : ((selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional')) ? '#F8FCFA' : '#F8FAFC'),
-                                            fontWeight: '700',
-                                            fontSize: '0.88rem',
-                                            color: THEME.colors.textMain,
-                                            cursor: 'text',
-                                            outline: 'none',
-                                            boxShadow: isModelPickerOpen ? '0 0 0 2px rgba(13, 122, 87, 0.15)' : 'none',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                    />
-                                    {(selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional')) && !isModelPickerOpen && (
-                                        <span style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
-                                            <span style={{
-                                                fontSize: '0.62rem',
-                                                fontWeight: '800',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.04em',
-                                                backgroundColor: '#DCFCE7',
-                                                color: '#15803D',
-                                                border: '1px solid #A7F3D0',
-                                                padding: '2px 7px',
-                                                borderRadius: '999px',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '3px'
-                                            }}>
-                                                <Crown size={11} strokeWidth={2.4} /> Base Maestra
-                                            </span>
-                                        </span>
-                                    )}
+                                    {(() => {
+                                        const isSelMaster = (selectedModel?.id === GENERAL_INSTITUCIONAL_ID || selectedModel?.name?.toLowerCase().includes('general institucional'));
+                                        const isSelCorp = (selectedModel?.id === FAMILIA_CORTES_CORPORATIVO_ID || selectedModel?.name?.toLowerCase().includes('corporativo'));
+                                        const displayVal = isModelPickerOpen 
+                                            ? modelSearchQuery 
+                                            : (selectedModel 
+                                                ? (isSelCorp ? `${selectedModel.name} — Utilidad: 0% (A Costo Base)` : `${selectedModel.name} — Margen Base: ${selectedModel.base_margin_percent}%`) 
+                                                : '');
+
+                                        return (
+                                            <>
+                                                <input
+                                                    type="text"
+                                                    value={displayVal}
+                                                    placeholder="Buscar modelo de precios..."
+                                                    onFocus={() => {
+                                                        setIsModelPickerOpen(true);
+                                                        setModelSearchQuery('');
+                                                    }}
+                                                    onChange={e => {
+                                                        setModelSearchQuery(e.target.value);
+                                                        if (!isModelPickerOpen) setIsModelPickerOpen(true);
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: (isSelMaster || isSelCorp) && !isModelPickerOpen 
+                                                            ? '0.5rem 6.6rem 0.5rem 0.85rem' 
+                                                            : '0.5rem 0.85rem',
+                                                        borderRadius: '8px',
+                                                        border: isModelPickerOpen 
+                                                            ? `1.5px solid ${THEME.colors.primary}` 
+                                                            : (isSelMaster ? '1.5px solid #059669' : (isSelCorp ? '1.5px solid #4F46E5' : `1.5px solid ${THEME.colors.border}`)),
+                                                        backgroundColor: isModelPickerOpen 
+                                                            ? '#FFFFFF' 
+                                                            : (isSelMaster ? '#F8FCFA' : (isSelCorp ? '#F8FAFF' : '#F8FAFC')),
+                                                        fontWeight: '700',
+                                                        fontSize: '0.88rem',
+                                                        color: THEME.colors.textMain,
+                                                        cursor: 'text',
+                                                        outline: 'none',
+                                                        boxShadow: isModelPickerOpen ? '0 0 0 2px rgba(13, 122, 87, 0.15)' : 'none',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                />
+                                                {isSelMaster && !isModelPickerOpen && (
+                                                    <span style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                        <span style={{
+                                                            fontSize: '0.62rem',
+                                                            fontWeight: '800',
+                                                            textTransform: 'uppercase',
+                                                            letterSpacing: '0.04em',
+                                                            backgroundColor: '#DCFCE7',
+                                                            color: '#15803D',
+                                                            border: '1px solid #A7F3D0',
+                                                            padding: '2px 7px',
+                                                            borderRadius: '999px',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
+                                                        }}>
+                                                            <Crown size={11} strokeWidth={2.4} /> Base Maestra
+                                                        </span>
+                                                    </span>
+                                                )}
+                                                {isSelCorp && !isModelPickerOpen && (
+                                                    <span style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                        <span style={{
+                                                            fontSize: '0.62rem',
+                                                            fontWeight: '800',
+                                                            textTransform: 'uppercase',
+                                                            letterSpacing: '0.04em',
+                                                            backgroundColor: '#EEF2FF',
+                                                            color: '#4338CA',
+                                                            border: '1px solid #C7D2FE',
+                                                            padding: '2px 7px',
+                                                            borderRadius: '999px',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
+                                                        }}>
+                                                            <ShieldCheck size={11} strokeWidth={2.4} /> Utilidad 0%
+                                                        </span>
+                                                    </span>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                     {isModelPickerOpen && (
                                         <div style={{
                                             position: 'absolute',
@@ -1657,7 +1863,8 @@ export default function PricingSettingsPage({
                                                 .map(m => {
                                                     const isSelected = selectedModel?.id === m.id;
                                                     const isMaster = m.id === GENERAL_INSTITUCIONAL_ID || m.name?.toLowerCase().includes('general institucional');
-                                                    const avg = modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0);
+                                                    const isCorp = m.id === FAMILIA_CORTES_CORPORATIVO_ID || m.name?.toLowerCase().includes('corporativo');
+                                                    const avg = isCorp ? 0 : (modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0));
                                                     return (
                                                         <div
                                                             key={m.id}
@@ -1668,13 +1875,13 @@ export default function PricingSettingsPage({
                                                                 setIsEditingModel(false);
                                                             }}
                                                             style={{
-                                                                padding: isMaster ? '0.75rem 0.95rem' : '0.65rem 0.9rem',
+                                                                padding: (isMaster || isCorp) ? '0.75rem 0.95rem' : '0.65rem 0.9rem',
                                                                 cursor: 'pointer',
-                                                                borderBottom: isMaster ? '1.5px solid #E2E8F0' : '1px solid #F1F5F9',
-                                                                borderLeft: isMaster ? '4px solid #059669' : '4px solid transparent',
+                                                                borderBottom: (isMaster || isCorp) ? '1.5px solid #E2E8F0' : '1px solid #F1F5F9',
+                                                                borderLeft: isMaster ? '4px solid #059669' : (isCorp ? '4px solid #4F46E5' : '4px solid transparent'),
                                                                 backgroundColor: isSelected 
-                                                                    ? '#F0FDF4' 
-                                                                    : (isMaster ? '#F8FCFA' : 'white'),
+                                                                    ? (isCorp ? '#EEF2FF' : '#F0FDF4') 
+                                                                    : (isMaster ? '#F8FCFA' : (isCorp ? '#F8FAFF' : 'white')),
                                                                 display: 'flex',
                                                                 justifyContent: 'space-between',
                                                                 alignItems: 'center',
@@ -1683,12 +1890,12 @@ export default function PricingSettingsPage({
                                                             }}
                                                             onMouseEnter={e => {
                                                                 if (!isSelected) {
-                                                                    e.currentTarget.style.backgroundColor = isMaster ? '#EBF8F2' : '#F8FAFC';
+                                                                    e.currentTarget.style.backgroundColor = isMaster ? '#EBF8F2' : (isCorp ? '#EEF2FF' : '#F8FAFC');
                                                                 }
                                                             }}
                                                             onMouseLeave={e => {
                                                                 if (!isSelected) {
-                                                                    e.currentTarget.style.backgroundColor = isMaster ? '#F8FCFA' : 'white';
+                                                                    e.currentTarget.style.backgroundColor = isMaster ? '#F8FCFA' : (isCorp ? '#F8FAFF' : 'white');
                                                                 }
                                                             }}
                                                         >
@@ -1696,11 +1903,14 @@ export default function PricingSettingsPage({
                                                                  {isMaster && (
                                                                      <Crown size={14} color="#059669" strokeWidth={2.4} style={{ flexShrink: 0 }} />
                                                                  )}
+                                                                 {isCorp && (
+                                                                     <ShieldCheck size={14} color="#4F46E5" strokeWidth={2.4} style={{ flexShrink: 0 }} />
+                                                                 )}
                                                                  <span style={{
-                                                                     fontWeight: isMaster ? '800' : (isSelected ? '800' : '600'),
-                                                                     color: isMaster ? '#0F172A' : (isSelected ? THEME.colors.primary : THEME.colors.textMain),
+                                                                     fontWeight: (isMaster || isCorp) ? '800' : (isSelected ? '800' : '600'),
+                                                                     color: isMaster ? '#0F172A' : (isCorp ? '#1E1B4B' : (isSelected ? THEME.colors.primary : THEME.colors.textMain)),
                                                                      fontSize: '0.86rem',
-                                                                     letterSpacing: isMaster ? '-0.01em' : 'normal'
+                                                                     letterSpacing: (isMaster || isCorp) ? '-0.01em' : 'normal'
                                                                  }}>
                                                                      {m.name}
                                                                  </span>
@@ -1723,18 +1933,37 @@ export default function PricingSettingsPage({
                                                                          Base Maestra
                                                                      </span>
                                                                  )}
+                                                                 {isCorp && (
+                                                                     <span style={{
+                                                                         fontSize: '0.62rem',
+                                                                         fontWeight: '800',
+                                                                         textTransform: 'uppercase',
+                                                                         letterSpacing: '0.04em',
+                                                                         backgroundColor: '#EEF2FF',
+                                                                         color: '#4338CA',
+                                                                         border: '1px solid #C7D2FE',
+                                                                         padding: '1px 7px',
+                                                                         borderRadius: '999px',
+                                                                         whiteSpace: 'nowrap',
+                                                                         display: 'inline-flex',
+                                                                         alignItems: 'center',
+                                                                         boxShadow: '0 1px 2px rgba(79, 70, 229, 0.08)'
+                                                                     }}>
+                                                                         Utilidad 0%
+                                                                     </span>
+                                                                 )}
                                                             </div>
                                                             <span style={{
                                                                 fontSize: '0.72rem',
                                                                 fontWeight: '700',
-                                                                color: isMaster ? '#047857' : (isSelected ? '#065F46' : '#64748B'),
-                                                                backgroundColor: isMaster ? '#E6F7F0' : (isSelected ? '#DCFCE7' : '#F1F5F9'),
-                                                                border: isMaster ? '1px solid #A7F3D0' : 'none',
+                                                                color: isCorp ? '#4338CA' : (isMaster ? '#047857' : (isSelected ? '#065F46' : '#64748B')),
+                                                                backgroundColor: isCorp ? '#EEF2FF' : (isMaster ? '#E6F7F0' : (isSelected ? '#DCFCE7' : '#F1F5F9')),
+                                                                border: isCorp ? '1px solid #C7D2FE' : (isMaster ? '1px solid #A7F3D0' : 'none'),
                                                                 padding: '2px 8px',
                                                                 borderRadius: '5px',
                                                                 whiteSpace: 'nowrap'
                                                             }}>
-                                                                Margen: {m.base_margin_percent}% (Prom: {formatNumber(avg, 1)}%)
+                                                                {isCorp ? 'A Costo Base' : `Margen: ${m.base_margin_percent}% (Prom: ${formatNumber(avg, 1)}%)`}
                                                             </span>
                                                         </div>
                                                     );
@@ -1870,28 +2099,66 @@ export default function PricingSettingsPage({
                                 borderTop: `1px solid ${THEME.colors.border || '#F1F5F9'}`
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#EAFDF4', color: '#0D7A57', padding: '0.2rem 0.55rem', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                                        Margen Base: {selectedModel.base_margin_percent}%
-                                    </span>
+                                    {(() => {
+                                        const isSelMaster = (selectedModel.id === GENERAL_INSTITUCIONAL_ID || selectedModel.name?.toLowerCase().includes('general institucional'));
+                                        const isSelCorp = (selectedModel.id === FAMILIA_CORTES_CORPORATIVO_ID || selectedModel.name?.toLowerCase().includes('corporativo'));
 
-                                    {(selectedModel.id === GENERAL_INSTITUCIONAL_ID || selectedModel.name?.toLowerCase().includes('general institucional')) && (
-                                        <span style={{
-                                            fontSize: '0.68rem',
-                                            fontWeight: '800',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.04em',
-                                            color: '#047857',
-                                            backgroundColor: '#ECFDF5',
-                                            border: '1px solid #A7F3D0',
-                                            padding: '2px 8px',
-                                            borderRadius: '999px',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px'
-                                        }}>
-                                            <Crown size={11} strokeWidth={2.5} /> Modelo Base Maestro
-                                        </span>
-                                    )}
+                                        return (
+                                            <>
+                                                <span style={{ 
+                                                    fontSize: '0.72rem', 
+                                                    fontWeight: '700', 
+                                                    backgroundColor: isSelCorp ? '#EEF2FF' : '#EAFDF4', 
+                                                    color: isSelCorp ? '#4338CA' : '#0D7A57', 
+                                                    padding: '0.2rem 0.55rem', 
+                                                    borderRadius: '10px', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '0.25rem' 
+                                                }}>
+                                                    {isSelCorp ? 'Utilidad: 0% (A Costo Base)' : `Margen Base: ${selectedModel.base_margin_percent}%`}
+                                                </span>
+
+                                                {isSelMaster && (
+                                                    <span style={{
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '0.04em',
+                                                        color: '#047857',
+                                                        backgroundColor: '#ECFDF5',
+                                                        border: '1px solid #A7F3D0',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '999px',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <Crown size={11} strokeWidth={2.5} /> Modelo Base Maestro
+                                                    </span>
+                                                )}
+
+                                                {isSelCorp && (
+                                                    <span style={{
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '0.04em',
+                                                        color: '#4338CA',
+                                                        backgroundColor: '#EEF2FF',
+                                                        border: '1px solid #C7D2FE',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '999px',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <ShieldCheck size={11} strokeWidth={2.5} /> Tarifa Presidencial & Corporativa
+                                                    </span>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
 
                                     {selectedModel.color_tag && (
                                         <span style={{
@@ -2223,22 +2490,23 @@ export default function PricingSettingsPage({
                                 borderRadius: THEME.radius.lg, 
                                 boxShadow: THEME.shadow.md, 
                                 border: `1px solid ${THEME.colors.border}`,
+                                overflow: 'visible',
                                 position: 'relative'
                             }}>
                                 
-                                {/* Search and count header (Sticky Frosted Toolbar) */}
+                                {/* Search and count header (Sticky Solid Toolbar - 0px Gap) */}
                                 <div style={{ 
-                                    padding: '0.85rem 1.5rem', 
+                                    padding: '0 1.5rem', 
                                     borderBottom: `1px solid ${THEME.colors.border}`,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                                    backdropFilter: 'blur(12px)',
+                                    backgroundColor: '#FFFFFF',
                                     position: 'sticky',
                                     top: embedded ? '142px' : '85px',
                                     zIndex: 40,
                                     borderTopLeftRadius: THEME.radius.lg,
                                     borderTopRightRadius: THEME.radius.lg,
                                     boxSizing: 'border-box',
-                                    minHeight: '66px',
+                                    height: '66px',
+                                    boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
                                     display: 'flex',
                                     alignItems: 'center'
                                 }}>
@@ -2526,8 +2794,9 @@ export default function PricingSettingsPage({
                                                         ? editingMargins[p.product_id] 
                                                         : formatNumber(p.margin, 1);
 
+                                                    const isBaseModel = selectedModel.id === GENERAL_INSTITUCIONAL_ID;
                                                     const isInherited = p.is_inherited;
-                                                    const isModified = p.rule_id !== null && !isInherited;
+                                                    const isModified = !isBaseModel && p.rule_id !== null && !isInherited;
 
                                                     return (
                                                         <tr key={p.product_id} style={{ 
@@ -3093,19 +3362,27 @@ export default function PricingSettingsPage({
 
                     {/* TEMPLATE ITEMS TABLE CARD */}
                     {selectedTemplate ? (() => {
-                        const defaultMargin = 34.2;
+                        const defaultMargin = DEFAULT_INSTITUTIONAL_MARGIN_PCT;
                         const computedRows = templateItems.map(item => {
                             const cost = templateCosts[item.product_id] || 0;
-                            const margin = templateMargins[item.product_id] !== undefined ? templateMargins[item.product_id] : defaultMargin;
-                            const projectedPrice = cost > 0 ? Math.ceil((cost * (1 + margin / 100)) / 50) * 50 : 0;
+                            const ivaRate = Number(item.iva_rate) || 0;
+                            const baseGiMargin = templateBaseMargins[item.product_id] !== undefined ? templateBaseMargins[item.product_id] : defaultMargin;
+                            const isCustomMargin = templateMargins[item.product_id] !== undefined && Math.abs(Number(templateMargins[item.product_id]) - baseGiMargin) >= 0.001;
+                            const margin = templateMargins[item.product_id] !== undefined ? templateMargins[item.product_id] : baseGiMargin;
+                            const priceBeforeTax = cost > 0 ? cost * (1 + margin / 100) : 0;
+                            const priceWithTax = priceBeforeTax * (1 + ivaRate / 100);
+                            const projectedPrice = cost > 0 ? Math.ceil(priceWithTax / 50) * 50 : 0;
                             const demandInfo = templateDemand[item.product_id] || { volume: 0, ordersCount: 0 };
                             const monthlyVolume = demandInfo.volume;
-                            const projectedProfit = monthlyVolume > 0 && cost > 0 ? monthlyVolume * (projectedPrice - cost) : 0;
+                            const projectedProfit = monthlyVolume > 0 && cost > 0 ? monthlyVolume * (priceBeforeTax - cost) : 0;
                             const projectedRevenue = monthlyVolume > 0 && projectedPrice > 0 ? monthlyVolume * projectedPrice : 0;
                             return {
                                 ...item,
                                 cost,
+                                iva_rate: ivaRate,
                                 margin,
+                                isCustomMargin,
+                                priceBeforeTax,
                                 projectedPrice,
                                 monthlyVolume,
                                 ordersCount: demandInfo.ordersCount,
@@ -3119,16 +3396,77 @@ export default function PricingSettingsPage({
                         const totalRevenueCOP = computedRows.reduce((acc, r) => acc + (r.projectedRevenue || 0), 0);
                         const weightedMargin = totalRevenueCOP > 0 ? (totalProfitCOP / totalRevenueCOP) * 100 : (computedRows.length > 0 ? computedRows.reduce((acc, r) => acc + r.margin, 0) / computedRows.length : defaultMargin);
 
+                        const normalizePhonetic = (str: string) =>
+                            (str || '')
+                                .toLowerCase()
+                                .normalize('NFD')
+                                .replace(/[\u0300-\u036f]/g, '')
+                                .replace(/z/g, 's')
+                                .replace(/ce/g, 'se')
+                                .replace(/ci/g, 'si')
+                                .trim();
+
                         const filteredRows = computedRows.filter(item => {
-                            const term = templateSearchFilter.toLowerCase().trim();
-                            if (!term) return true;
-                            return (item.name || '').toLowerCase().includes(term) || 
-                                   String(item.accounting_id || '').includes(term);
+                            const rawTerm = templateSearchFilter.trim();
+                            if (!rawTerm) return true;
+                            if (rawTerm.startsWith('#')) {
+                                const exactId = rawTerm.slice(1).trim();
+                                return String(item.accounting_id || '') === exactId || String(item.sku || '').toLowerCase() === exactId.toLowerCase();
+                            }
+                            const tokens = normalizePhonetic(rawTerm).split(/\s+/).filter(Boolean);
+                            const haystack = normalizePhonetic(
+                                `${item.name || ''} ${item.accounting_id || ''} ${item.sku || ''} ${CATEGORY_MAP[item.category] || item.category || ''} ${item.unit_of_measure || ''}`
+                            );
+                            return tokens.every(tok => haystack.includes(tok));
                         });
 
-                        const stickyBase = embedded ? 139 : 0;
+                        const sortedTemplateRows = [...filteredRows].sort((a, b) => {
+                            if (!templateSortField) return 0;
+                            switch (templateSortField) {
+                                case 'id': {
+                                    const idA = String(a.accounting_id || a.sku || '');
+                                    const idB = String(b.accounting_id || b.sku || '');
+                                    const numA = Number(idA);
+                                    const numB = Number(idB);
+                                    if (!isNaN(numA) && !isNaN(numB) && idA !== '' && idB !== '') {
+                                        return templateSortOrder === 'asc' ? numA - numB : numB - numA;
+                                    }
+                                    const comp = idA.localeCompare(idB, 'es', { sensitivity: 'base', numeric: true });
+                                    return templateSortOrder === 'asc' ? comp : -comp;
+                                }
+                                case 'name': {
+                                    const comp = (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base', numeric: true });
+                                    return templateSortOrder === 'asc' ? comp : -comp;
+                                }
+                                case 'category': {
+                                    const catA = CATEGORY_MAP[a.category] || a.category || '';
+                                    const catB = CATEGORY_MAP[b.category] || b.category || '';
+                                    const comp = catA.localeCompare(catB, 'es', { sensitivity: 'base', numeric: true });
+                                    return templateSortOrder === 'asc' ? comp : -comp;
+                                }
+                                case 'cost':
+                                    return templateSortOrder === 'asc' ? (a.cost || 0) - (b.cost || 0) : (b.cost || 0) - (a.cost || 0);
+                                case 'iva_rate':
+                                    return templateSortOrder === 'asc' ? (a.iva_rate || 0) - (b.iva_rate || 0) : (b.iva_rate || 0) - (a.iva_rate || 0);
+                                case 'margin':
+                                    return templateSortOrder === 'asc' ? (a.margin || 0) - (b.margin || 0) : (b.margin || 0) - (a.margin || 0);
+                                case 'priceBeforeTax':
+                                    return templateSortOrder === 'asc' ? (a.priceBeforeTax || 0) - (b.priceBeforeTax || 0) : (b.priceBeforeTax || 0) - (a.priceBeforeTax || 0);
+                                case 'projectedPrice':
+                                    return templateSortOrder === 'asc' ? (a.projectedPrice || 0) - (b.projectedPrice || 0) : (b.projectedPrice || 0) - (a.projectedPrice || 0);
+                                case 'monthlyVolume':
+                                    return templateSortOrder === 'asc' ? (a.monthlyVolume || 0) - (b.monthlyVolume || 0) : (b.monthlyVolume || 0) - (a.monthlyVolume || 0);
+                                case 'projectedProfit':
+                                    return templateSortOrder === 'asc' ? (a.projectedProfit || 0) - (b.projectedProfit || 0) : (b.projectedProfit || 0) - (a.projectedProfit || 0);
+                                default:
+                                    return 0;
+                            }
+                        });
+
+                        const stickyBase = embedded ? 142 : 85;
+                        const stickyToolbarHeight = 56;
                         const stickyToolbarTop = `${stickyBase}px`;
-                        const stickyTheadTop = `${stickyBase + 54}px`;
+                        const stickyTheadTop = `${stickyBase + stickyToolbarHeight}px`;
 
                         return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
@@ -3221,13 +3559,15 @@ export default function PricingSettingsPage({
                                     overflow: 'visible',
                                     position: 'relative'
                                 }}>
-                                    {/* FILA STICKY 1: TOOLBAR DE PRODUCTOS DE LA CANASTA */}
+                                    {/* FILA STICKY 1: TOOLBAR DE PRODUCTOS DE LA CANASTA (0px Gap) */}
                                     <div style={{
                                         position: 'sticky',
                                         top: stickyToolbarTop,
+                                        height: `${stickyToolbarHeight}px`,
+                                        boxSizing: 'border-box',
                                         zIndex: 40,
                                         backgroundColor: '#FFFFFF',
-                                        padding: '0.65rem 1.25rem',
+                                        padding: '0 1.25rem',
                                         borderBottom: `1px solid ${THEME.colors.border}`,
                                         display: 'flex',
                                         justifyContent: 'space-between',
@@ -3354,51 +3694,131 @@ export default function PricingSettingsPage({
                                     ) : (
                                         <div style={{ width: '100%', overflow: 'visible' }}>
                                             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
-                                                {/* FILA STICKY 2: THEAD CON REGLA CHROMIUM */}
-                                                <thead>
+                                                {/* FILA STICKY 2: THEAD ALINEADO CON MODELOS ESTÁNDAR + TRI-STATE SORT */}
+                                                <thead style={{ position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC' }}>
                                                     <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '8%', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>ID ERP</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '22%', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Producto</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Categoría</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '11%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Costo Base</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'center', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Utilidad %</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '11%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Precio Final</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Consumo 30d</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>Utilidad Total</th>
-                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '6%', textAlign: 'center', position: 'sticky', top: stickyTheadTop, zIndex: 35, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}></th>
+                                                        <th onClick={() => handleTemplateSort('id')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '7%', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: templateSortField === 'id' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>ID ERP</span>
+                                                                {templateSortField === 'id' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('name')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '23%', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: templateSortField === 'name' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>Producto</span>
+                                                                {templateSortField === 'name' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('category')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '13%', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: templateSortField === 'category' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>Categoría</span>
+                                                                {templateSortField === 'category' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('cost')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '9%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: templateSortField === 'cost' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>Costo Base</span>
+                                                                {templateSortField === 'cost' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('iva_rate')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '6%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: templateSortField === 'iva_rate' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>IVA</span>
+                                                                {templateSortField === 'iva_rate' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('margin')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: templateSortField === 'margin' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>Utilidad</span>
+                                                                {templateSortField === 'margin' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('priceBeforeTax')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '9%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: templateSortField === 'priceBeforeTax' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>Sug. sin IVA</span>
+                                                                {templateSortField === 'priceBeforeTax' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('projectedPrice')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '9%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: templateSortField === 'projectedPrice' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>Precio Final</span>
+                                                                {templateSortField === 'projectedPrice' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('monthlyVolume')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '9%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: templateSortField === 'monthlyVolume' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>Consumo 30d</span>
+                                                                {templateSortField === 'monthlyVolume' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th onClick={() => handleTemplateSort('projectedProfit')} style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '9%', textAlign: 'right', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)', cursor: 'pointer', userSelect: 'none' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: templateSortField === 'projectedProfit' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                                <span>Utilidad Total</span>
+                                                                {templateSortField === 'projectedProfit' ? (templateSortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.35 }} />}
+                                                            </div>
+                                                        </th>
+                                                        <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 0.75rem', width: '4%', textAlign: 'center', position: 'sticky', top: stickyTheadTop, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {filteredRows.map(item => {
+                                                    {sortedTemplateRows.map(item => {
                                                         const cleanUnit = item.unit_of_measure === 'Atado' ? 'Kg' : (item.unit_of_measure || 'Kg');
+                                                        const isModified = Boolean(item.isCustomMargin);
                                                         return (
-                                                            <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }}>
-                                                                <td style={{ padding: '0.65rem 1.25rem', fontWeight: '800', fontFamily: 'monospace', color: '#475569', fontSize: '0.85rem' }}>
-                                                                    {item.accounting_id || '—'}
+                                                            <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.2s' }}>
+                                                                {/* ID ERP */}
+                                                                <td style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem', fontFamily: 'monospace', color: '#475569', fontWeight: 'bold' }}>
+                                                                    {item.accounting_id || item.sku || '—'}
                                                                 </td>
-                                                                <td style={{ padding: '0.65rem 1.25rem', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
-                                                                    <div>{item.name}</div>
-                                                                    <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>
-                                                                        {cleanUnit}
+
+                                                                {/* Producto */}
+                                                                <td style={{ padding: '0.65rem 1.25rem' }}>
+                                                                    <div style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>
+                                                                        {item.name}
                                                                     </div>
                                                                 </td>
+
+                                                                {/* Categoría + Unidad */}
                                                                 <td style={{ padding: '0.65rem 1.25rem' }}>
-                                                                    <span style={{
-                                                                        backgroundColor: '#F1F5F9',
-                                                                        color: '#475569',
-                                                                        padding: '0.15rem 0.45rem',
-                                                                        borderRadius: '4px',
-                                                                        fontSize: '0.72rem',
-                                                                        fontWeight: '700'
-                                                                    }}>
-                                                                        {CATEGORY_MAP[item.category] || item.category || 'General'}
-                                                                    </span>
+                                                                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                                                        <span style={{
+                                                                            fontSize: '0.7rem',
+                                                                            fontWeight: '700',
+                                                                            backgroundColor: '#F1F5F9',
+                                                                            color: '#475569',
+                                                                            padding: '0.15rem 0.4rem',
+                                                                            borderRadius: '4px'
+                                                                        }}>
+                                                                            {CATEGORY_MAP[item.category] || item.category || 'General'}
+                                                                        </span>
+                                                                        {cleanUnit && (
+                                                                            <span style={{
+                                                                                fontSize: '0.7rem',
+                                                                                fontWeight: '700',
+                                                                                backgroundColor: '#E2E8F0',
+                                                                                color: '#64748B',
+                                                                                padding: '0.15rem 0.4rem',
+                                                                                borderRadius: '4px'
+                                                                            }}>
+                                                                                {cleanUnit}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </td>
-                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontWeight: '700', color: '#475569', fontSize: '0.85rem', fontFamily: 'monospace' }}>
-                                                                    {item.cost > 0 ? `${formatNumber(item.cost)}` : <span style={{ color: '#EF4444' }}>Sin Costo</span>}
+
+                                                                {/* Costo Base */}
+                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain }}>
+                                                                    {item.cost > 0 ? formatMoney(item.cost) : <span style={{ color: '#EF4444', fontWeight: '700' }}>Sin Costo</span>}
                                                                 </td>
-                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }}>
-                                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+
+                                                                {/* IVA */}
+                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                    {item.iva_rate || 0}%
+                                                                </td>
+
+                                                                {/* Utilidad */}
+                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }}>
+                                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                                                         <input
                                                                             type="number"
                                                                             step="0.5"
@@ -3406,22 +3826,32 @@ export default function PricingSettingsPage({
                                                                             onChange={(e) => handleUpdateItemMargin(item.product_id, parseFloat(e.target.value) || 0)}
                                                                             style={{
                                                                                 width: '65px',
-                                                                                padding: '4px 6px',
+                                                                                padding: '0.35rem 0.5rem',
                                                                                 borderRadius: '6px',
-                                                                                border: '1.5px solid #CBD5E1',
-                                                                                fontWeight: '800',
+                                                                                border: `1px solid ${isModified ? '#A7F3D0' : THEME.colors.border}`,
+                                                                                fontWeight: 'bold',
                                                                                 textAlign: 'right',
-                                                                                fontSize: '0.82rem',
-                                                                                color: '#0D7A57',
-                                                                                backgroundColor: '#F8FAFC'
+                                                                                fontSize: '0.85rem',
+                                                                                color: isModified ? '#065F46' : THEME.colors.textMain,
+                                                                                outline: 'none',
+                                                                                backgroundColor: isModified ? '#ECFDF5' : 'white'
                                                                             }}
                                                                         />
-                                                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B' }}>%</span>
+                                                                        <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: isModified ? '#065F46' : THEME.colors.textSecondary, marginLeft: '2px' }}>%</span>
                                                                     </div>
                                                                 </td>
-                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontWeight: '800', color: THEME.colors.primary, fontSize: '0.9rem', fontFamily: 'monospace' }}>
-                                                                    {item.projectedPrice > 0 ? `${formatNumber(item.projectedPrice)}` : '—'}
+
+                                                                {/* Sug. sin IVA */}
+                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                    {item.priceBeforeTax > 0 ? formatMoney(item.priceBeforeTax) : '—'}
                                                                 </td>
+
+                                                                {/* Precio Final */}
+                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.primary }}>
+                                                                    {item.projectedPrice > 0 ? formatMoney(item.projectedPrice) : '—'}
+                                                                </td>
+
+                                                                {/* Consumo 30d */}
                                                                 <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }}>
                                                                     <div>
                                                                         <span style={{ fontWeight: '800', fontSize: '0.85rem', color: item.monthlyVolume > 0 ? '#0284C7' : '#94A3B8' }}>
@@ -3434,10 +3864,14 @@ export default function PricingSettingsPage({
                                                                         )}
                                                                     </div>
                                                                 </td>
-                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontWeight: '800', color: item.projectedProfit > 0 ? '#0D7A57' : '#94A3B8', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+
+                                                                {/* Utilidad Total */}
+                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontWeight: '800', color: item.projectedProfit > 0 ? '#0D7A57' : '#94A3B8', fontSize: '0.85rem' }}>
                                                                     {item.projectedProfit > 0 ? formatMoney(item.projectedProfit) : '—'}
                                                                 </td>
-                                                                <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }}>
+
+                                                                {/* Eliminar */}
+                                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'center' }}>
                                                                     <button
                                                                         onClick={() => removeProductFromTemplate(item.product_id)}
                                                                         style={{

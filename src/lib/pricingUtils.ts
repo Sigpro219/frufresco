@@ -14,6 +14,8 @@ interface PricingProductRow {
     name?: string;
     iva_rate?: number | null;
     theoretical_shrinkage_pct?: number | null;
+    parent_id?: string | null;
+    unit_of_measure?: string | null;
 }
 
 interface PricingRuleRow {
@@ -26,12 +28,107 @@ interface CostMatrixRow {
     product_id: string;
     manual_cost: number | string | null;
     updated_at?: string | null;
+    updated_by?: string | null;
 }
 
 interface PurchaseHistoryRow {
     product_id: string;
     unit_price: number | string | null;
+    normalized_price?: number | string | null;
+    purchase_unit?: string | null;
     created_at?: string | null;
+}
+
+interface ProductConversionRow {
+    product_id: string;
+    from_unit: string;
+    to_unit: string;
+    conversion_factor: number | string | null;
+}
+
+export interface ResolvedLatestCost {
+    cost: number;
+    isPurchaseNewer: boolean;
+    purchaseCreatedAtIso?: string;
+    unit?: string | null;
+}
+
+/**
+ * Resuelve el costo base canónico bajo la Regla del "ÚLTIMO" Precio Vigente (SDD Escenarios 337 y 343):
+ * 1. Si commercial_cost_matrix posee un MANUAL_OVERRIDE positivo, gobierna directamente.
+ * 2. Si existen tanto commercial_cost_matrix como una última compra en purchase_history_normalized/purchases:
+ *    - Si commercial_cost_matrix.updated_at >= purchase.created_at, gobierna commercial_cost_matrix (ej. Carga Excel / Cotización).
+ *    - Si la compra es posterior, aplica el Circuit Breaker (±20%): si excede 20% sin aprobación, congela preventivamente commercial_cost_matrix.
+ * 3. Jamás lee compras históricas superadas (COMPRA -1 .. -7); evalúa únicamente el último registro vigente.
+ */
+export function resolveLatestProductCost(
+    ccmEntry?: { cost: number; updatedAt: number; updatedBy?: string | null } | null,
+    purEntry?: { cost: number; createdAt: number; createdAtIso?: string; unit?: string | null } | null
+): ResolvedLatestCost {
+    const ccmCost = ccmEntry && ccmEntry.cost > 0 ? Math.round(ccmEntry.cost) : 0;
+    const purCost = purEntry && purEntry.cost > 0 ? Math.round(purEntry.cost) : 0;
+
+    if (ccmCost > 0 && ccmEntry?.updatedBy === 'MANUAL_OVERRIDE') {
+        return { cost: ccmCost, isPurchaseNewer: false };
+    }
+
+    if (ccmCost > 0 && purCost > 0) {
+        const ccmTime = ccmEntry?.updatedAt || 0;
+        const purTime = purEntry?.createdAt || 0;
+        if (ccmTime >= purTime) {
+            return { cost: ccmCost, isPurchaseNewer: false };
+        }
+        const deltaPct = Math.abs(Math.round(((purCost - ccmCost) / ccmCost) * 100));
+        if (deltaPct > 20) {
+            return { cost: ccmCost, isPurchaseNewer: false };
+        }
+        return {
+            cost: purCost,
+            isPurchaseNewer: true,
+            purchaseCreatedAtIso: purEntry?.createdAtIso,
+            unit: purEntry?.unit
+        };
+    }
+
+    if (ccmCost > 0) {
+        return { cost: ccmCost, isPurchaseNewer: false };
+    }
+
+    if (purCost > 0) {
+        return {
+            cost: purCost,
+            isPurchaseNewer: true,
+            purchaseCreatedAtIso: purEntry?.createdAtIso,
+            unit: purEntry?.unit
+        };
+    }
+
+    return { cost: 0, isPurchaseNewer: false };
+}
+
+export function applyProductUnitConversion(
+    rawCost: number,
+    productId: string,
+    sourceUnit: string | null | undefined,
+    targetUnit: string | null | undefined,
+    conversions: ProductConversionRow[]
+): number {
+    if (!rawCost || rawCost <= 0 || !sourceUnit || !targetUnit || sourceUnit === targetUnit) {
+        return Math.round(rawCost);
+    }
+    const convAB = conversions.find(
+        c => c.product_id === productId && c.from_unit === sourceUnit && c.to_unit === targetUnit
+    );
+    if (convAB && Number(convAB.conversion_factor) > 0) {
+        return Math.round(rawCost / Number(convAB.conversion_factor));
+    }
+    const convBA = conversions.find(
+        c => c.product_id === productId && c.from_unit === targetUnit && c.to_unit === sourceUnit
+    );
+    if (convBA && Number(convBA.conversion_factor) > 0) {
+        return Math.round(rawCost * Number(convBA.conversion_factor));
+    }
+    return Math.round(rawCost);
 }
 
 export interface MinimalProfile {
@@ -110,7 +207,7 @@ export async function recalculateAndSyncProductPrices(
     try {
         const { data: prod, error: pErr } = await supabaseClient
             .from('products')
-            .select('id, name, iva_rate, theoretical_shrinkage_pct')
+            .select('id, name, iva_rate, theoretical_shrinkage_pct, parent_id, unit_of_measure')
             .eq('id', productId)
             .single();
 
@@ -120,43 +217,76 @@ export async function recalculateAndSyncProductPrices(
 
         let baseCost = explicitCost;
         if (baseCost === undefined || baseCost === null || baseCost <= 0) {
-            const [{ data: ccm }, { data: pur }] = await Promise.all([
-                supabaseClient
-                    .from('commercial_cost_matrix')
-                    .select('manual_cost, updated_at')
-                    .eq('product_id', productId)
-                    .eq('is_active', true)
-                    .maybeSingle(),
-                supabaseClient
-                    .from('purchase_history_normalized')
-                    .select('unit_price, created_at')
-                    .eq('product_id', productId)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle()
-            ]);
+            const resolveForTarget = async (targetId: string) => {
+                const [{ data: ccm }, { data: pur }, { data: rawPur }] = await Promise.all([
+                    supabaseClient
+                        .from('commercial_cost_matrix')
+                        .select('manual_cost, updated_at, updated_by')
+                        .eq('product_id', targetId)
+                        .eq('is_active', true)
+                        .maybeSingle(),
+                    supabaseClient
+                        .from('purchase_history_normalized')
+                        .select('unit_price, normalized_price, purchase_unit, created_at')
+                        .eq('product_id', targetId)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle(),
+                    supabaseClient
+                        .from('purchases')
+                        .select('unit_price, purchase_unit, created_at')
+                        .eq('product_id', targetId)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle()
+                ]);
 
-            const ccmCost = ccm?.manual_cost && Number(ccm.manual_cost) > 0 ? Number(ccm.manual_cost) : 0;
-            const purCost = pur?.unit_price && Number(pur.unit_price) > 0 ? Number(pur.unit_price) : 0;
+                const ccmEntry = ccm?.manual_cost && Number(ccm.manual_cost) > 0
+                    ? {
+                        cost: Number(ccm.manual_cost),
+                        updatedAt: ccm.updated_at ? new Date(ccm.updated_at).getTime() : 0,
+                        updatedBy: ccm.updated_by
+                    }
+                    : null;
 
-            if (ccmCost > 0 && purCost > 0) {
-                const ccmTime = ccm?.updated_at ? new Date(ccm.updated_at).getTime() : 0;
-                const purTime = pur?.created_at ? new Date(pur.created_at).getTime() : 0;
-                baseCost = purTime > ccmTime ? purCost : ccmCost;
-            } else if (ccmCost > 0) {
-                baseCost = ccmCost;
-            } else if (purCost > 0) {
-                baseCost = purCost;
-            } else {
-                const { data: rawPur } = await supabaseClient
-                    .from('purchases')
-                    .select('unit_price')
-                    .eq('product_id', productId)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                if (rawPur?.unit_price && rawPur.unit_price > 0) {
-                    baseCost = Number(rawPur.unit_price);
+                const phnPrice = Number(pur?.normalized_price || pur?.unit_price || 0);
+                const rawPrice = Number(rawPur?.unit_price || 0);
+                const purEntry = phnPrice > 0
+                    ? {
+                        cost: phnPrice,
+                        createdAt: pur?.created_at ? new Date(pur.created_at).getTime() : 0,
+                        createdAtIso: pur?.created_at || undefined,
+                        unit: null
+                    }
+                    : (rawPrice > 0
+                        ? {
+                            cost: rawPrice,
+                            createdAt: rawPur?.created_at ? new Date(rawPur.created_at).getTime() : 0,
+                            createdAtIso: rawPur?.created_at || undefined,
+                            unit: rawPur?.purchase_unit || null
+                        }
+                        : null);
+
+                return resolveLatestProductCost(ccmEntry, purEntry);
+            };
+
+            const directResolved = await resolveForTarget(productId);
+            if (directResolved.cost > 0) {
+                baseCost = directResolved.cost;
+            } else if (prod.parent_id) {
+                const parentResolved = await resolveForTarget(prod.parent_id);
+                if (parentResolved.cost > 0) {
+                    const { data: convData } = await supabaseClient
+                        .from('product_conversions')
+                        .select('product_id, from_unit, to_unit, conversion_factor')
+                        .eq('product_id', productId);
+                    baseCost = applyProductUnitConversion(
+                        parentResolved.cost,
+                        productId,
+                        parentResolved.unit,
+                        prod.unit_of_measure,
+                        (convData || []) as ProductConversionRow[]
+                    );
                 }
             }
         }
@@ -297,74 +427,109 @@ async function fetchAllRows<T = Record<string, unknown>>(
     return allData;
 }
 
+export interface BatchPricingSyncOptions {
+    isMidnightCron?: boolean;
+    freezeDailyCost?: boolean;
+}
+
+interface PricingModelRow {
+    id: string;
+    name: string;
+    base_margin_percent: number;
+    is_base_model?: boolean | null;
+    b2c_autosync_enabled?: boolean | null;
+    autosync_days?: number[] | null;
+}
+
 /**
  * Batch recalculate and sync prices for multiple products (or all active products).
  */
 export async function batchRecalculateAndSyncPrices(
     supabaseClient: SupabaseClient,
-    targetProductIds?: string[]
-): Promise<{ success: boolean; processed: number; error?: string }> {
+    targetProductIds?: string[],
+    options?: BatchPricingSyncOptions
+): Promise<{ success: boolean; processed: number; modelsUpdated?: number; frozenCostsCount?: number; error?: string }> {
     try {
         let prods: PricingProductRow[];
         if (targetProductIds && targetProductIds.length > 0) {
             const { data, error } = await supabaseClient
                 .from('products')
-                .select('id, name, iva_rate, theoretical_shrinkage_pct')
+                .select('id, name, iva_rate, theoretical_shrinkage_pct, parent_id, unit_of_measure')
                 .eq('is_active', true)
                 .in('id', targetProductIds);
             if (error) throw error;
             prods = (data || []) as PricingProductRow[];
         } else {
-            prods = await fetchAllRows<PricingProductRow>(supabaseClient, 'products', 'id, name, iva_rate, theoretical_shrinkage_pct', { eq: ['is_active', true] });
+            prods = await fetchAllRows<PricingProductRow>(supabaseClient, 'products', 'id, name, iva_rate, theoretical_shrinkage_pct, parent_id, unit_of_measure', { eq: ['is_active', true] });
         }
 
         if (!prods || prods.length === 0) {
             return { success: false, processed: 0, error: 'No products found' };
         }
 
-        const { data: models } = await supabaseClient
+        const { data: rawModels } = await supabaseClient
             .from('pricing_models')
-            .select('id, name, base_margin_percent, is_base_model');
+            .select('id, name, base_margin_percent, is_base_model, b2c_autosync_enabled, autosync_days');
 
-        if (!models || models.length === 0) {
+        if (!rawModels || rawModels.length === 0) {
             return { success: false, processed: 0, error: 'No pricing models found' };
         }
 
-        // Fetch cost matrix with pagination (including updated_at for chronological precedence)
-        const ccmList = await fetchAllRows<CostMatrixRow>(supabaseClient, 'commercial_cost_matrix', 'product_id, manual_cost, updated_at', { eq: ['is_active', true] });
+        // Si se ejecuta desde el Cron de Medianoche, respetar el switch Activo/Inactivo y el día actual en Bogotá (0=Dom ... 6=Sáb)
+        const bogotaNowStr = new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' });
+        const bogotaDayOfWeek = new Date(bogotaNowStr).getDay();
 
-        const costMap = new Map<string, { cost: number; updatedAt: number }>();
+        const models = (rawModels as PricingModelRow[]).filter((m) => {
+            if (!options?.isMidnightCron) return true;
+            if (m.b2c_autosync_enabled === false) return false;
+            const days = Array.isArray(m.autosync_days) ? m.autosync_days : [0, 1, 2, 3, 4, 5, 6];
+            return days.includes(bogotaDayOfWeek);
+        });
+
+        // Fetch cost matrix with pagination (including updated_at and updated_by for chronological precedence & MANUAL_OVERRIDE)
+        const ccmList = await fetchAllRows<CostMatrixRow>(supabaseClient, 'commercial_cost_matrix', 'product_id, manual_cost, updated_at, updated_by', { eq: ['is_active', true] });
+
+        const costMap = new Map<string, { cost: number; updatedAt: number; updatedBy?: string | null }>();
         (ccmList || []).forEach((c: CostMatrixRow) => {
             if (c.manual_cost && Number(c.manual_cost) > 0) {
                 costMap.set(c.product_id, {
                     cost: Number(c.manual_cost),
-                    updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : 0
+                    updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : 0,
+                    updatedBy: c.updated_by || null
                 });
             }
         });
 
         // Fetch latest purchases for chronological comparison / fallback across purchase_history_normalized and purchases
-        const [phnList, rawPurList] = await Promise.all([
+        const [phnList, rawPurList, conversionsList] = await Promise.all([
             fetchAllRows<PurchaseHistoryRow>(
                 supabaseClient,
                 'purchase_history_normalized',
-                'product_id, unit_price, created_at',
+                'product_id, unit_price, normalized_price, purchase_unit, created_at',
                 { orderBy: { column: 'created_at', ascending: false } }
             ),
             fetchAllRows<PurchaseHistoryRow>(
                 supabaseClient,
                 'purchases',
-                'product_id, unit_price, created_at',
+                'product_id, unit_price, purchase_unit, created_at',
                 { orderBy: { column: 'created_at', ascending: false } }
+            ),
+            fetchAllRows<ProductConversionRow>(
+                supabaseClient,
+                'product_conversions',
+                'product_id, from_unit, to_unit, conversion_factor'
             )
         ]);
 
-        const purchaseMap = new Map<string, { cost: number; createdAt: number }>();
+        const purchaseMap = new Map<string, { cost: number; createdAt: number; createdAtIso: string; unit?: string | null }>();
         (phnList || []).forEach((p: PurchaseHistoryRow) => {
-            if (!purchaseMap.has(p.product_id) && Number(p.unit_price) > 0) {
+            const normCost = Number(p.normalized_price || p.unit_price || 0);
+            if (!purchaseMap.has(p.product_id) && normCost > 0) {
                 purchaseMap.set(p.product_id, {
-                    cost: Number(p.unit_price),
-                    createdAt: p.created_at ? new Date(p.created_at).getTime() : 0
+                    cost: normCost,
+                    createdAt: p.created_at ? new Date(p.created_at).getTime() : 0,
+                    createdAtIso: p.created_at || new Date().toISOString(),
+                    unit: null
                 });
             }
         });
@@ -372,7 +537,9 @@ export async function batchRecalculateAndSyncPrices(
             if (!purchaseMap.has(p.product_id) && Number(p.unit_price) > 0) {
                 purchaseMap.set(p.product_id, {
                     cost: Number(p.unit_price),
-                    createdAt: p.created_at ? new Date(p.created_at).getTime() : 0
+                    createdAt: p.created_at ? new Date(p.created_at).getTime() : 0,
+                    createdAtIso: p.created_at || new Date().toISOString(),
+                    unit: p.purchase_unit || null
                 });
             }
         });
@@ -387,27 +554,61 @@ export async function batchRecalculateAndSyncPrices(
 
         const pmpBatch: Array<{ model_id: string; product_id: string; price: number; updated_at: string }> = [];
         const overridesBatch: Array<{ product_id: string; manual_cost: number; expires_at: null; updated_by: string }> = [];
+        const ccmFreezeBatch: Array<{ product_id: string; manual_cost: number; updated_at: string; updated_by: string; is_active: boolean }> = [];
 
         let processed = 0;
+        const shouldFreeze = Boolean(options?.isMidnightCron || options?.freezeDailyCost);
 
         for (const prod of prods) {
             const ccmEntry = costMap.get(prod.id);
             const purEntry = purchaseMap.get(prod.id);
-            let baseCost = 0;
-            if (ccmEntry && purEntry) {
-                baseCost = purEntry.createdAt > ccmEntry.updatedAt ? purEntry.cost : ccmEntry.cost;
-            } else if (ccmEntry) {
-                baseCost = ccmEntry.cost;
-            } else if (purEntry) {
-                baseCost = purEntry.cost;
+            const directResolved = resolveLatestProductCost(ccmEntry, purEntry);
+
+            let baseCost = directResolved.cost;
+            let isPurchaseNewer = directResolved.isPurchaseNewer;
+
+            if (baseCost > 0 && directResolved.unit) {
+                baseCost = applyProductUnitConversion(
+                    baseCost,
+                    prod.id,
+                    directResolved.unit,
+                    prod.unit_of_measure,
+                    conversionsList || []
+                );
+            } else if ((!baseCost || baseCost <= 0) && prod.parent_id) {
+                const parentResolved = resolveLatestProductCost(
+                    costMap.get(prod.parent_id),
+                    purchaseMap.get(prod.parent_id)
+                );
+                if (parentResolved.cost > 0) {
+                    baseCost = applyProductUnitConversion(
+                        parentResolved.cost,
+                        prod.id,
+                        parentResolved.unit,
+                        prod.unit_of_measure,
+                        conversionsList || []
+                    );
+                }
             }
             if (!baseCost || baseCost <= 0) continue;
+
+            // En el cierre de medianoche (o cuando se pide congelar), si la última compra del día es más reciente
+            // (o no existía fila en commercial_cost_matrix), congelamos ese último costo capturado en commercial_cost_matrix
+            if (shouldFreeze && (isPurchaseNewer || !ccmEntry)) {
+                ccmFreezeBatch.push({
+                    product_id: prod.id,
+                    manual_cost: baseCost,
+                    updated_at: purEntry?.createdAtIso || new Date().toISOString(),
+                    updated_by: 'MIDNIGHT-CRON-FREEZE',
+                    is_active: true
+                });
+            }
 
             overridesBatch.push({
                 product_id: prod.id,
                 manual_cost: baseCost,
                 expires_at: null,
-                updated_by: 'DELTA-BATCH-SYNC'
+                updated_by: shouldFreeze ? 'MIDNIGHT-CRON-FREEZE' : 'DELTA-BATCH-SYNC'
             });
 
             // Factor de Merma Teórica: Costo Neto = Costo Base / (1 - Merma%)
@@ -460,6 +661,16 @@ export async function batchRecalculateAndSyncPrices(
             processed++;
         }
 
+        // Upsert frozen daily costs into commercial_cost_matrix in chunks of 250
+        for (let i = 0; i < ccmFreezeBatch.length; i += 250) {
+            const chunk = ccmFreezeBatch.slice(i, i + 250);
+            try {
+                await supabaseClient.from('commercial_cost_matrix').upsert(chunk, { onConflict: 'product_id' });
+            } catch (ccmChunkErr) {
+                console.warn('commercial_cost_matrix freeze chunk notice:', ccmChunkErr);
+            }
+        }
+
         // Upsert overrides in chunks of 250
         for (let i = 0; i < overridesBatch.length; i += 250) {
             const chunk = overridesBatch.slice(i, i + 250);
@@ -478,7 +689,12 @@ export async function batchRecalculateAndSyncPrices(
 
         // SPEC.md §7.2: Supresión total de escritura a products.base_price en sincronización masiva.
 
-        return { success: true, processed };
+        return {
+            success: true,
+            processed,
+            modelsUpdated: models.length,
+            frozenCostsCount: ccmFreezeBatch.length
+        };
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown batch error';
         return { success: false, processed: 0, error: message };

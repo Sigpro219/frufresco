@@ -3,8 +3,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2, RefreshCw, Copy, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2, RefreshCw, Copy, ArrowUpDown, ArrowUp, ArrowDown, Clock } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
+
+const getBogotaDateStr = (d: Date = new Date()): string => {
+    try {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    } catch {
+        return d.toISOString().split('T')[0];
+    }
+};
 
 export default function QuotesListPage({ embedded = false }: { embedded?: boolean } = {}) {
     const [quotes, setQuotes] = useState<any[]>([]);
@@ -26,22 +34,22 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
     // Estado para aprobación ágil directa a Acuerdo Comercial (Escenario 269 SDD)
     const [quoteToApprove, setQuoteToApprove] = useState<any | null>(null);
     const [approving, setApproving] = useState(false);
-    const [approvalStartDate, setApprovalStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [approvalStartDate, setApprovalStartDate] = useState(() => getBogotaDateStr());
     const [approvalValidUntil, setApprovalValidUntil] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() + 30);
-        return d.toISOString().split('T')[0];
+        return getBogotaDateStr(d);
     });
     const [presetDays, setPresetDays] = useState<number>(30);
 
     const handleOpenApproveModal = (quote: any) => {
         setQuoteToApprove(quote);
         const today = new Date();
-        const start = today.toISOString().split('T')[0];
+        const start = getBogotaDateStr(today);
         setApprovalStartDate(start);
         const until = new Date(today);
         until.setDate(until.getDate() + 30);
-        setApprovalValidUntil(until.toISOString().split('T')[0]);
+        setApprovalValidUntil(getBogotaDateStr(until));
         setPresetDays(30);
     };
 
@@ -952,9 +960,13 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                                 border: '1px solid #CBD5E1',
                                                 fontSize: '0.8rem',
                                                 color: '#1E293B',
-                                                outline: 'none'
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
                                             }}
                                         />
+                                        <div style={{ fontSize: '0.67rem', color: '#64748B', marginTop: '4px', fontWeight: 600 }}>
+                                            Desde las 00:00 h (Inmediato si es hoy)
+                                        </div>
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px' }}>
@@ -974,11 +986,60 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                                 border: '1px solid #CBD5E1',
                                                 fontSize: '0.8rem',
                                                 color: '#1E293B',
-                                                outline: 'none'
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
                                             }}
                                         />
+                                        <div style={{ fontSize: '0.67rem', color: '#64748B', marginTop: '4px', fontWeight: 600 }}>
+                                            Hasta las 23:59 h (Día completo incluido)
+                                        </div>
                                     </div>
                                 </div>
+
+                                {/* Guía Visual de Entrada en Vigencia y Horario para el Operador */}
+                                {(() => {
+                                    const todayStr = getBogotaDateStr();
+                                    const isImmediate = !approvalStartDate || approvalStartDate <= todayStr;
+                                    const startFormatted = approvalStartDate
+                                        ? new Date(approvalStartDate + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        : 'Hoy';
+                                    const endFormatted = approvalValidUntil
+                                        ? new Date(approvalValidUntil + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        : '---';
+
+                                    return (
+                                        <div style={{
+                                            backgroundColor: isImmediate ? '#ECFDF5' : '#EFF6FF',
+                                            border: `1px solid ${isImmediate ? '#A7F3D0' : '#BFDBFE'}`,
+                                            borderRadius: '10px',
+                                            padding: '10px 12px',
+                                            marginTop: '2px',
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                            gap: '10px'
+                                        }}>
+                                            <Clock size={16} color={isImmediate ? '#0D7A57' : '#1D4ED8'} style={{ marginTop: '2px', flexShrink: 0 }} />
+                                            <div style={{ fontSize: '0.73rem', lineHeight: 1.45, color: isImmediate ? '#065F46' : '#1E3A8A' }}>
+                                                <div style={{ fontWeight: 800, marginBottom: '2px' }}>
+                                                    {isImmediate
+                                                        ? 'Activación inmediata en tiempo real'
+                                                        : `Activación programada para el ${startFormatted} a las 00:00 h`}
+                                                </div>
+                                                <div>
+                                                    {isImmediate ? (
+                                                        <>
+                                                            Al confirmar, las tarifas congeladas entran en vigencia <strong>en este mismo instante</strong> (cubriendo todo el día desde las <strong>00:00 h</strong>) y regirán hasta el <strong>{endFormatted} a las 23:59 h</strong>. Cualquier pedido montado a partir de ahora tomará estos precios y reemplazará el acuerdo anterior.
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            El acuerdo se activará automáticamente el <strong>{startFormatted} a las 00:00 h (medianoche)</strong> y regirá hasta el <strong>{endFormatted} a las 23:59 h</strong> para los pedidos dentro de ese rango de fechas.
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 

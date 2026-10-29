@@ -18,6 +18,8 @@ import {
 import { fetchAllRows } from '../../src/lib/supabase';
 import {
     parseBlindCountQuantity,
+    resolveLatestProductCost,
+    applyProductUnitConversion,
     DEFAULT_INSTITUTIONAL_MARGIN_PCT,
     GENERAL_INSTITUCIONAL_ID,
     FAMILIA_CORTES_CORPORATIVO_ID
@@ -334,5 +336,69 @@ describe('TDD: Escenario 339 — DT-02 (Paginación Transparente fetchAllRows)',
         assert.equal(error, null);
         assert.equal(data.length, totalSimulated);
         assert.equal(calls, 3, '2500 filas con pageSize 1000 requiere 3 llamadas (0-999, 1000-1999, 2000-2999)');
+    });
+});
+
+
+// ============================================================================
+// SUITE 6: ESCENARIO 343 (SDD v1.9.326) — Regla del "ÚLTIMO" Precio Vigente y Erradicación de Históricos
+// ============================================================================
+describe('TDD: Escenario 343 — Resolución Canónica del ÚLTIMO Precio Vigente (resolveLatestProductCost)', () => {
+    it('debe priorizar commercial_cost_matrix ($8.450 sep 17) sobre compras históricas superadas ($140.000 mar 12)', () => {
+        const ccmHabichuela = {
+            cost: 8450,
+            updatedAt: new Date('2026-09-17T16:06:27Z').getTime(),
+            updatedBy: 'EXCEL-IMPORT'
+        };
+        const purHabichuelaHistorica = {
+            cost: 140000,
+            createdAt: new Date('2026-03-12T00:00:00Z').getTime(),
+            createdAtIso: '2026-03-12T00:00:00Z'
+        };
+
+        const resolved = resolveLatestProductCost(ccmHabichuela, purHabichuelaHistorica);
+        assert.equal(resolved.cost, 8450, 'Debe tomar el ÚLTIMO precio ($8.450) e ignorar el histórico de prueba ($140.000)');
+        assert.equal(resolved.isPurchaseNewer, false);
+    });
+
+    it('debe congelar el costo de commercial_cost_matrix si una compra posterior salta > 20% (Circuit Breaker)', () => {
+        const ccm = {
+            cost: 10000,
+            updatedAt: new Date('2026-09-17T10:00:00Z').getTime(),
+            updatedBy: 'EXCEL-IMPORT'
+        };
+        const purSpike = {
+            cost: 50000, // +400%
+            createdAt: new Date('2026-09-20T10:00:00Z').getTime()
+        };
+
+        const resolved = resolveLatestProductCost(ccm, purSpike);
+        assert.equal(resolved.cost, 10000, 'Circuit Breaker debe congelar el costo vigente ante salto >20% no aprobado');
+        assert.equal(resolved.isPurchaseNewer, false);
+    });
+
+    it('debe adoptar una compra posterior cuando la variación es <= 20%', () => {
+        const ccm = {
+            cost: 10000,
+            updatedAt: new Date('2026-09-17T10:00:00Z').getTime(),
+            updatedBy: 'EXCEL-IMPORT'
+        };
+        const purValid = {
+            cost: 11500, // +15%
+            createdAt: new Date('2026-09-20T10:00:00Z').getTime(),
+            createdAtIso: '2026-09-20T10:00:00Z'
+        };
+
+        const resolved = resolveLatestProductCost(ccm, purValid);
+        assert.equal(resolved.cost, 11500);
+        assert.equal(resolved.isPurchaseNewer, true);
+    });
+
+    it('debe aplicar conversión de unidad correctamente cuando existe factor en product_conversions', () => {
+        const conversions = [
+            { product_id: 'prod-1', from_unit: 'Bulto', to_unit: 'Kg', conversion_factor: 50 }
+        ];
+        assert.equal(applyProductUnitConversion(150000, 'prod-1', 'Bulto', 'Kg', conversions), 3000);
+        assert.equal(applyProductUnitConversion(8450, 'prod-1', 'Kg', 'Kg', conversions), 8450);
     });
 });

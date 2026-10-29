@@ -1105,15 +1105,9 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             return refCost && refCost > 0 ? Math.round(refCost) : 0;
         }
 
-        const observations: PriceObservation[] = history.map(h => ({
-            price: h.normalized_price,
-            date: h.created_at,
-            purchaseUnit: h.purchase_unit,
-            quantity: h.quantity || null
-        }));
-
-        // Costo base bruto sin inflar por merma (la merma se aplica una única vez en pricingUtils al calcular los modelos)
-        return calculateAdaptiveCost(observations, refCost, { shrinkagePct: 0 });
+        // Regla del "ÚLTIMO" Precio Vigente (SDD Escenarios 337 y 343):
+        // Toma estrictamente el último precio registrado (history[0]), sin evaluar ni filtrar contra históricos pasados (COMPRA -1 .. -7)
+        return Math.round(history[0].normalized_price || history[0].unit_price || 0);
     };
 
     const getHarvestStatus = (productId: string) => {

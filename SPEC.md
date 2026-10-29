@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.323 (Capítulo 44: Cascada Dinámica Canónica de Margen en Modelos Derivados Clientes Hogar = GI + 10% — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.326 (Capítulo 44: Homologación Canónica del "ÚLTIMO" Precio Vigente en Modelos de Precios y Erradicación de Lectura de Compras Históricas Superadas — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 340 Escenarios BDD Ininterrumpidos (1..340)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 343 Escenarios BDD Ininterrumpidos (1..343)
 
 ---
 
@@ -12950,3 +12950,67 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
   6. **Inmutabilidad y Protección de Modelos Estándar:**
      - Se erradicó el botón 'Eliminar' en la barra de herramientas de Modelos Estándar (`/admin/commercial/settings`) para impedir mutilaciones accidentales en la jerarquía comercial.
      - Se introdujo un guardrail en `deleteModel` que veta terminantemente la eliminación de modelos columna vertebral (`General institucional dinámico`, `Clientes Hogar`, `Grande`, `Mediano`, `Pequeño`, `Modelo Corporativo`), preservando la integridad referencial de precios y cascadas.
+
+---
+
+### Escenario 342: Blindaje de Modelo Corporativo como Tarifa de Costo Puro (Utilidad 0%) con Sigilo Comercial (SDD v1.9.325)
+- **Given** la existencia del **`Modelo Corporativo`** (`31c6d356-2d52-488f-81d6-abffaed295cf`) en la Matriz de Precios (`/admin/commercial/settings`), el cual por diseño ontológico no es una tarifa con margen comercial sino una cuenta reservada de **Utilidad 0% (Facturación a Costo Base + IVA)**, pero donde el motor de cascada dinámica le imputaba erróneamente un promedio de 33,4% (heredando los márgenes de General Institucional):
+- **When** el operador o directivo consulta, selecciona o procesa precios bajo el `Modelo Corporativo`:
+- **Then** el sistema aplica las siguientes reglas contractualmente inviolables:
+  1. **Sigilo y Discreción Ejecutiva Absoluta:**
+     - Prohibición terminante de exhibir términos como "familia" en la interfaz de usuario, etiquetas, selectores o base de datos.
+     - Denominación canónica oficial: **`Modelo Corporativo`**.
+     - Insignia distintiva: **`UTILIDAD 0%`** en tipografía compacta (#4338CA sobre fondo zafiro #EEF2FF).
+     - Píldora de telemetría: **`A Costo Base`**.
+  2. **Corte de Cascada Comercial y Utilidad 0,0% Estricta:**
+     - El `Modelo Corporativo` no hereda los márgenes comerciales de General Institucional. En su lugar, todos los productos resuelven un margen de utilidad idéntico a **`0,0%`**.
+     - El precio sugerido sin IVA equivale exactamente al costo base (`base_cost`), y el precio final equivale a:
+       $$\text{Precio Final} = \lceil (\text{Costo Base} \times (1 + \text{IVA})) / 50 \rceil \times 50$$
+     - La tarjeta de telemetría de modelos calcula y exhibe su **`PROMEDIO REAL: 0,0%`**.
+  3. **Resaltado Visual Ejecutivo y Sutil:**
+     - Borde lateral vertical de acento índigo (`4px solid #4F46E5`).
+     - Ícono sobrio de protección (`ShieldCheck` en #4F46E5).
+     - Integración coherente en el selector cerrado con la pastilla `UTILIDAD 0%` y descripción oficial de facturación a costo estricto para cuentas corporativas directas y presidencia.
+
+
+---
+
+### Escenario 343: Homologación Canónica del Costo Base ("ÚLTIMO" Precio Vigente) en Modelos de Precios (`/admin/commercial/settings`) y Erradicación de Lectura de Compras Históricas Superadas (SDD v1.9.326)
+- **Given** el hallazgo operativo en la **Matriz de Precios y Utilidades** (`/admin/commercial/settings`), donde productos derivados como **`Habichuela en julianas`** (`ID ERP 1142`), **`Habichuela picada x 250grs`** (`ID ERP 958`) y **`Habichuela picada x libra`** (`ID ERP 966`) exhibían un **`COSTO BASE` de `$140.000`** (y otros 55 SKUs derivados exhibían costos históricos de pruebas como *Manzana royal gala x caja* `$145.000`, *Plátano verde pelado* `$80.000`, *Ajo importado para pelar* `$75.000`, *Cebolla cabezona blanca cero sin pelar* `$55.000`), a pesar de que en la **Matriz de Costos** (`/admin/commercial/cost-matrix`) el producto padre **`Habichuela`** (`ID ERP 119`) tenía como **"ÚLTIMO"** precio vigente **`$8.450`** (`Carga Excel 17 sep`), mientras los `$140.000` correspondían a registros históricos de prueba del 11–12 de marzo de 2026 (`Atípico` en columnas `COMPRA -1`..`-7`),
+- **When** se realiza la auditoría forense de extremo a extremo sobre `src/app/admin/commercial/settings/page.tsx`, `src/lib/pricingUtils.ts` y `src/app/admin/commercial/cost-matrix/page.tsx`:
+  1. `fetchMatrixData` en `/admin/commercial/settings/page.tsx` nunca consultaba la tabla canónica `commercial_cost_matrix` ni `purchase_history_normalized`. Consultaba únicamente `commercial_overrides` y la tabla cruda `purchases`.
+  2. Como `pricingUtils.ts` omitía la resolución de herencia por `parent_id`, los 65 productos hijos sin costo directo carecían de registro en `commercial_overrides` y `pricing_model_prices`.
+  3. Al no encontrar `overrideCost`, `settings/page.tsx` ejecutaba `purchasesMap.get(prod.parent_id)` sobre la tabla cruda `purchases`, leyendo el registro histórico de prueba del padre (`$140.000` de marzo de 2026) e ignorando por completo el **"ÚLTIMO"** precio vigente en `commercial_cost_matrix` (`$8.450` del 17 de septiembre de 2026).
+- **Then** el sistema aplica las siguientes reglas canónicas e innegociables de resolución de costo base:
+  1. **Función Canónica Unificada `resolveLatestProductCost` (`src/lib/pricingUtils.ts`):**
+     - Tanto el motor de sincronización (`recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices`) como la vista de Modelos de Precios (`/admin/commercial/settings`) y la Matriz de Costos (`/admin/commercial/cost-matrix`) resuelven el costo base estrictamente bajo la **Regla del "ÚLTIMO" Precio Vigente**:
+       - Si `commercial_cost_matrix` posee un `MANUAL_OVERRIDE` positivo, gobierna de forma directa.
+       - Si existen tanto `commercial_cost_matrix` como una última compra en `purchase_history_normalized` / `purchases`: cuando `commercial_cost_matrix.updated_at >= purchase.created_at`, gobierna `commercial_cost_matrix` (ej. Carga Excel o Cotización de Mercado).
+       - Si ingresa una compra física posterior (`purchase.created_at > commercial_cost_matrix.updated_at`), se evalúa el Circuit Breaker de volatilidad (`±20%`): si excede el `20%` sin aprobación explícita, se congela preventivamente el costo vigente de `commercial_cost_matrix`.
+       - Queda terminantemente prohibido leer, promediar o hacer fallback hacia compras históricas superadas (`COMPRA -1` .. `COMPRA -7`).
+  2. **Herencia Padre $\to$ Hijo (`parent_id`) sobre el "ÚLTIMO" Precio Vigente:**
+     - Cuando un SKU derivado carece de costo directo propio (`0`) y posee `parent_id`, hereda exclusivamente el **"ÚLTIMO" precio vigente** resuelto canónicamente para su padre (`resolveLatestProductCost(parent_id)`), aplicando `applyProductUnitConversion` si difiere la unidad de medida:
+       - `Habichuela en julianas` (`ID 1142`), `Habichuela picada x 250grs` (`ID 958`) y `Habichuela picada x libra` (`ID 966`) heredan de `Habichuela` (`ID 119`) su "ÚLTIMO" precio vigente: **`$8.450`** (erradicando los `$140.000` históricos).
+       - `Ajo importado para pelar` (`ID 1522`): pasa de `$75.000` histórico a **`$5.800`**.
+       - `Plátano verde pelado` (`ID 1304`): pasa de `$80.000` histórico a **`$2.500`**.
+       - `Cebolla cabezona blanca cero sin pelar` (`ID 1502`): pasa de `$55.000` histórico a **`$3.000`**.
+       - `Manzana royal gala x caja` (`ID 1445`): pasa de `$145.000` histórico a **`$7.500`**.
+  3. **Sincronización Integral en Base de Datos (`pricing_model_prices` y `commercial_overrides`):**
+     - Los **541 productos activos con costo resoluble** (475 directos + 66 por herencia canónica de padre) quedan materializados en `pricing_model_prices` (**3.246 filas** en los 6 modelos comerciales) y sincronizados en `commercial_overrides`.
+
+
+---
+
+### Escenario 344: Homologación de Costo Base y Herencia Real de Utilidad en Modelos por Cliente (Canastas) (SDD v1.9.327)
+- **Given** la pestaña **Modelos por Cliente (Canastas)** (`/admin/commercial?tab=operations&subtab=settings`, `activeTab === 'templates'`), regida por el Escenario 275 §2, donde se detectaron dos desviaciones respecto al contrato SDD:
+  1. `fetchTemplateItems` consultaba exclusivamente `commercial_cost_matrix.manual_cost` y `commercial_overrides.manual_cost`, ignorando `purchase_history_normalized`, `purchases`, `product_conversions` y la herencia `parent_id`, provocando que productos con compras válidas (como *Mazorca entera sin amero para asar* ID 1108 a \$3.500, *Lulo pelado* ID 1339 a \$5.400 y *Maracuyá cosecha* ID 723 a \$7.000 en la canasta `ADR WORK SAS`) mostraran falsamente **`Sin Costo`**.
+  2. `computedRows` contenía una constante quemada `const defaultMargin = 34.2;`, asignando un `34,2%` plano a todos los productos de la canasta en lugar de heredar la utilidad producto a producto desde **`General Institucional Dinámico`** (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`).
+- **When** el operador selecciona cualquier Lista de Cotización / Canasta de Cliente en `Modelos por Cliente (Canastas)`:
+- **Then** el sistema garantiza el cumplimiento estricto de las siguientes invariantes:
+  1. **Cascada Canónica de Costo Base (`resolveLatestProductCost` + `applyProductUnitConversion`):**
+     - `fetchTemplateItems` resuelve el costo base de cada SKU de la canasta integrando `commercial_cost_matrix`, `commercial_overrides`, `purchase_history_normalized`, `purchases`, `product_conversions` y el fallback jerárquico `parent_id`, eliminando los falsos `Sin Costo`.
+  2. **Herencia Producto a Producto desde `General Institucional Dinámico` (`templateBaseMargins`):**
+     - `fetchTemplateItems` consulta `pricing_rules` para `model_id = GENERAL_INSTITUCIONAL_ID` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) sobre los productos de la canasta y utiliza como fallback `DEFAULT_INSTITUTIONAL_MARGIN_PCT` (`25%`), erradicando el valor quemado `34.2`.
+     - Un margen se marca como personalizado (`isCustomMargin`) únicamente cuando existe un override explícito en `quote_template_margins:{templateId}` que difiere del margen base heredado de `General Institucional Dinámico`.
+  3. **Ordenadores Tri-Estado en Columnas de Canasta:**
+     - Las 10 columnas de datos de la tabla de Canastas (`ID ERP`, `Producto`, `Categoría`, `Costo Base`, `IVA`, `Utilidad`, `Sug. sin IVA`, `Precio Final`, `Consumo 30d`, `Utilidad Total`) implementan el protocolo Tri-Estado (`asc` $\to$ `desc` $\to$ `null`) de `estandar-galerias-frufresco`.

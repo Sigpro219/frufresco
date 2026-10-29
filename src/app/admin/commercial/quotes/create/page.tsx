@@ -128,6 +128,7 @@ function CreateQuotePageContent() {
     const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
     const [originalQuoteVersion, setOriginalQuoteVersion] = useState<number>(1);
     const [parentQuoteId, setParentQuoteId] = useState<string | null>(null);
+    const [inheritedSnapshotName, setInheritedSnapshotName] = useState<string | null>(null);
 
     // MODAL STATE FOR NEW CLIENT
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -227,6 +228,7 @@ function CreateQuotePageContent() {
             if (qData) {
                 setParentQuoteId(qData.id);
                 setOriginalQuoteVersion(qData.version || 1);
+                setInheritedSnapshotName(qData.model_snapshot_name || null);
                 if (qData.client_id) {
                     setSelectedClientId(qData.client_id);
                     fetchClientDemand(qData.client_id);
@@ -275,12 +277,13 @@ function CreateQuotePageContent() {
                         });
                     }
 
+                    const isExpiredRequote = qData.status === 'expired' || (qData.valid_until && new Date(qData.valid_until.split('T')[0] + 'T23:59:59') < new Date());
                     const loadedItems = iData.map((item: any) => {
-                        const liveCost = liveCostMap[item.product_id] || Number(item.cost_basis) || 0;
-                        const margin = Number(item.margin_percent) || 34.5;
-                        const recalculatedPrice = liveCost > 0
+                        const liveCost = isExpiredRequote ? (liveCostMap[item.product_id] || Number(item.cost_basis) || 0) : (Number(item.cost_basis) || liveCostMap[item.product_id] || 0);
+                        const margin = item.margin_percent !== null && item.margin_percent !== undefined ? Number(item.margin_percent) : 25;
+                        const recalculatedPrice = isExpiredRequote && liveCost > 0
                             ? Math.ceil((liveCost * (1 + margin / 100)) / 50) * 50
-                            : (Number(item.unit_price) || 0);
+                            : (Number(item.unit_price) || (liveCost > 0 ? Math.ceil((liveCost * (1 + margin / 100)) / 50) * 50 : 0));
                         return {
                             product_id: item.product_id,
                             variant_id: item.variant_id || null,
@@ -291,6 +294,7 @@ function CreateQuotePageContent() {
                             unit: normalizeUnit(item.unit_of_measure || item.products?.unit_of_measure || 'Kg'),
                             cost: liveCost,
                             margin: margin,
+                            has_custom_margin: true,
                             variant_adjustment: 0,
                             price: recalculatedPrice,
                             iva_rate: item.iva_rate ?? item.products?.iva_rate ?? 0,
@@ -850,7 +854,7 @@ function CreateQuotePageContent() {
             const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
             const snapshotLabel = selectedTemplate
                 ? `${selectedTemplate.name} (${selectedModel?.name || 'Institucional'})`
-                : (selectedModel?.name || 'General Institucional');
+                : (inheritedSnapshotName || selectedModel?.name || 'General Institucional');
 
             const { data: quote, error: qError } = await supabase
                 .from('quotes')
