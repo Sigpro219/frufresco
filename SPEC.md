@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.339 (Capítulo 44: Poda Canónica de Subtotales de ERP mediante Estilos de Celda (`cellStyles.fgColor !== \'FFFF00\'`) y Consolidación de Familias sin Doble Imputación en Carga de Inventario Diaria — 76/76 Pantallas Certificadas) en Creación e Ingesta de Pedidos y Resguardo de Tarifas Fijas `"No se mide"` en SIPSA para Nutresa — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.340 (Capítulo 44: Compuerta Poka-Yoke Estricta y Emergencia Condicional del Botón de Avance en Asistente de Despacho Manual — 76/76 Pantallas Certificadas) y Consolidación de Familias sin Doble Imputación en Carga de Inventario Diaria — 76/76 Pantallas Certificadas) en Creación e Ingesta de Pedidos y Resguardo de Tarifas Fijas `"No se mide"` en SIPSA para Nutresa — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 356 Escenarios BDD Ininterrumpidos (1..356)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 357 Escenarios BDD Ininterrumpidos (1..357)
 
 ---
 
@@ -13263,3 +13263,18 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - Al ignorar la fila amarilla `#107`, el sistema asigna 765 kg únicamente a `#1196` y 0 kg a `#107`, evitando que la familia consolide $765 + 765 = 1.530$ kg (eliminando los 765 kg duplicados).
   3. **Reseteo Atómico de Subtotales Fantasma en `inventory_stocks`:**
      - El pipeline actualiza en caliente los 119 productos contados en la *Bodega Principal FruFresco* y resetea a `quantity = 0` de forma atómica cualquier SKU padre que haya quedado inflado por cargas previas (`#107`, `#110`, `#154`, `#158`, `#191`, `#866`, `#844`, `#1202`), sincronizando la disponibilidad viva del WMS y TMS con la realidad física del Gemba.
+
+---
+
+### Escenario 357: Compuerta Poka-Yoke Estricta y Emergencia Condicional de Botones de Avance en el Asistente Guiado de Despacho Manual (`ManualDispatchWizardModal.tsx`) (SDD v1.9.340)
+- **Given** el flujo secuencial de 4 estaciones del **Asistente Guiado de Despacho Manual (BCP) [Flujo Poka-Yoke]** (`/admin/orders/loading`, `src/components/ManualDispatchWizardModal.tsx`),
+- **When** el operario se encuentra en cualquiera de los pasos operativos del asistente (Paso 1: *Espacios & Bahías*, Paso 2: *Compras & Recibo*, Paso 3: *Remisiones & Manifiesto*, Paso 4: *Rótulos Térmicos*):
+- **Then** el sistema impone la compuerta de verificación física innegociable antes de habilitar el avance de la tanda:
+  1. **Erradicación de Fugas Lógicas y Avances Prematuros:**
+     - Se elimina la condición permisiva del Paso 1 (`assignedCount === 0`) que permitía avanzar automáticamente sin marcar la casilla cuando los pedidos ya tenían bahías asignadas en base de datos.
+     - En los Pasos 2 y 3 se erradica el auto-marcado encubierto por clic simple en el botón de navegación.
+  2. **Emergencia Condicional Estricta del Botón de Avance:**
+     - En las cuatro estaciones del asistente, el botón de avance (`Continuar a...` o `FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO`) **permanece completamente oculto y no se renderiza** mientras la casilla de confirmación física obligatoria esté desmarcada (`!stepConfirmed`).
+     - En su lugar, el pie de página proyecta una píldora informativa de guía visual: `[ℹ️ Marca la casilla para habilitar el avance]`.
+  3. **Activación Reactiva Poka-Yoke:**
+     - Tan pronto el operario marca físicamente la casilla de verificación tras constatar la emisión de documentos de planta (Sábana de alistamiento en Paso 1, planillas de plaza en Paso 2, remisiones/manifiesto en Paso 3 o rótulos térmicos en Paso 4), el botón de avance emerge al instante con animación suave, permitiendo una transición consciente, deliberada y libre de errores operativos humanos en la nave de alistamiento.
