@@ -13210,6 +13210,9 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - En `CommercialAgreementsModule.tsx`, el mapa `STRUCTURAL_QUOTE_TO_MODEL` reconoce el UUID oficial del Acuerdo Maestro de Colsubsidio (`'445c8f85-f693-4e05-a1fd-7c3a74c47162'`: Cotización `#189`), asegurando que la gestión de sedes vinculadas sincronice `special_agreement_model_clients` sin generar referencias huérfanas.
   5. **Desacople de Cotizaciones Históricas No Vigentes:**
      - En `/api/orders/resolve-agreement-pricing`, la búsqueda de acuerdos individuales (Niveles 1 y 2) filtra estrictamente por `status = 'agreement'`, impidiendo que cotizaciones históricas en estado `'approved'` o `'expired'` secuestren la resolución y bloqueen el acceso del cliente a su Acuerdo Maestro vigente.
+  6. **Control de Acuerdos Cerrados y Herencia Matriz en Borradores de Correo (`EmailDraftsModule.tsx`):**
+     - En la resolución de acuerdos de `EmailDraftsModule`, se integra la herencia del puntero de Acuerdo Maestro desde la Casa Matriz (`parentObj?.logistics_data?.active_master_agreement_id`).
+     - Si el acuerdo del cliente está configurado como estricto/cerrado (`!allowOffAgreementPurchases`), la mesa de borradores bloquea automáticamente la confirmación y la selección por autocompletado de SKUs ajenos al convenio comercial, desplegando un banner de bloqueo en el modal de aprobación y limpiando coincidencias inválidas para blindar el cumplimiento contractual.
 
 
 

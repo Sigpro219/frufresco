@@ -3392,7 +3392,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const resolveActiveAgreementForClient = (
     branchId: string | null | undefined, 
     parentId: string | null | undefined,
-    profileObj?: any
+    profileObj?: any,
+    parentObj?: any
   ) => {
     // Nivel 1: Sucursal directa (Cortocircuito Estricto)
     if (branchId) {
@@ -3415,7 +3416,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     }
 
     // Nivel 3: Lista Maestra Compartida (Solo si Nivel 1 y 2 no poseen acuerdo)
-    const masterId = profileObj?.logistics_data?.active_master_agreement_id;
+    const masterId = profileObj?.logistics_data?.active_master_agreement_id || parentObj?.logistics_data?.active_master_agreement_id;
     if (masterId) {
       const sAgr = agreements.find(q => q.id === masterId);
       if (sAgr) return sAgr;
@@ -3474,7 +3475,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const agrProdIds = new Set<string>();
 
       // SPEC.md Secc. 7.5.6: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra Compartida)
-      const activeAgreement = resolveActiveAgreementForClient(branchId, parentId, currentProfileForContract);
+      const activeAgreement = resolveActiveAgreementForClient(branchId, parentId, currentProfileForContract, parentProfile);
 
       if (activeAgreement) {
         resolvedModel = {
@@ -3576,6 +3577,20 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       setIsB2CDefault(b2cFallback);
       setIsContractExpired(expired);
       setContractPrices(loadedPrices);
+
+      if (!allowOff && agrProdIds.size > 0) {
+        setEditableItems(prev => {
+          if (!prev || prev.length === 0) return prev;
+          const hasInvalid = prev.some(item => !item.isDeleted && item.matched_product_id && !agrProdIds.has(item.matched_product_id));
+          if (!hasInvalid) return prev;
+          return prev.map(item => {
+            if (!item.isDeleted && item.matched_product_id && !agrProdIds.has(item.matched_product_id)) {
+              return { ...item, matched_product_id: null, matched_product_name: null };
+            }
+            return item;
+          });
+        });
+      }
     }
 
     resolveContract();
@@ -3926,8 +3941,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       // Fetch all active agreement quotes
       const { data: quotesData } = await supabase
         .from('quotes')
-        .select('id, client_id, quote_number, start_date, valid_until, model_snapshot_name')
-        .eq('status', 'agreement');
+        .select('id, client_id, quote_number, start_date, valid_until, model_snapshot_name, created_at')
+        .in('status', ['agreement', 'expired', 'approved', 'active']);
 
       if (quotesData && quotesData.length > 0) {
         setAgreements(quotesData);
@@ -5973,6 +5988,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const itemsData: any[] = [];
       let hasZeroPriceItem = false;
       let zeroPriceItemName = '';
+      let hasForbiddenOffAgreementItem = false;
+      let forbiddenOffAgreementNames: string[] = [];
       let hasOpenConsumption = false;
       const unpricedItems: any[] = [];
       const resolvedDraftClientRole = currentMatchedProfile?.role || metadata?.clientType || 'b2b_client';
@@ -5983,6 +6000,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           const prod = products.find(p => p.id === item.matched_product_id);
           if (prod) {
             const isInAgreement = agreementProductIds.has(prod.id);
+            if (hasActiveAgreementSplit && !allowOffAgreementPurchases && !isInAgreement) {
+              hasForbiddenOffAgreementItem = true;
+              forbiddenOffAgreementNames.push(prod.name);
+              continue;
+            }
             const isContractPriceDefined = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null;
             const resolvedPrice = (hasActiveAgreementSplit && !isInAgreement)
               ? 0
@@ -6047,6 +6069,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             });
           }
         }
+      }
+
+      if (hasForbiddenOffAgreementItem) {
+        setConfirmingOrder(false);
+        showToast(`Acuerdo Cerrado (Solo Convenio): No se permite despachar productos fuera del acuerdo comercial (${forbiddenOffAgreementNames.join(', ')}). Elimínalos antes de aprobar.`, 'error');
+        return;
       }
 
       if (hasZeroPriceItem && !allowZeroPriceDispatch) {
@@ -9145,7 +9173,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                               }}
                               onBlur={(e) => {
                                 const val = e.target.value;
-                                const exactProduct = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
+                                const eligiblePool = (!allowOffAgreementPurchases && agreementProductIds.size > 0)
+                                  ? products.filter(p => agreementProductIds.has(p.id))
+                                  : products;
+                                const exactProduct = eligiblePool.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
                                 if (exactProduct) {
                                   selectProduct(exactProduct, i);
                                 }
@@ -9161,10 +9192,13 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                   ? activeRowSearchQuery 
                                   : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : ''));
                                 const scoredList = getScoredProductsForQuery(currentQuery);
+                                const eligiblePool = (!allowOffAgreementPurchases && agreementProductIds.size > 0)
+                                  ? products.filter(p => agreementProductIds.has(p.id))
+                                  : products;
 
                                 if (e.key === 'Tab') {
                                   const val = e.currentTarget.value;
-                                  const p = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || matchedProd;
+                                  const p = (scoredList && scoredList[focusedDropdownItemIndex]) || eligiblePool.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || matchedProd;
                                   if (p) {
                                     e.preventDefault(); 
                                     selectProduct(p, i);
@@ -9182,7 +9216,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                   }
                                 } else if (e.key === 'Enter') {
                                   e.preventDefault();
-                                  const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || matchedProd;
+                                  const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || eligiblePool.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || matchedProd;
                                   if (selectedProd) {
                                     selectProduct(selectedProd, i);
                                   }
@@ -11559,6 +11593,36 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               )}
 
               {(() => {
+                const isStrictClosedAgreement = !allowOffAgreementPurchases && agreementProductIds.size > 0;
+                const forbiddenOffAgreementModal = isStrictClosedAgreement
+                  ? editableItems.filter(itm => !itm.isDeleted && itm.matched_product_id && !agreementProductIds.has(itm.matched_product_id))
+                  : [];
+
+                if (forbiddenOffAgreementModal.length > 0) {
+                  const forbiddenNames = forbiddenOffAgreementModal.map(i => products.find(p => p.id === i.matched_product_id)?.name || i.originalName).join(', ');
+                  return (
+                    <div
+                      style={{
+                        backgroundColor: '#FEF2F2',
+                        border: '2px solid #DC2626',
+                        borderRadius: '12px',
+                        padding: '1rem 1.25rem',
+                        marginTop: '0.5rem'
+                      }}
+                    >
+                      <div style={{ fontSize: '0.86rem', fontWeight: '800', color: '#991B1B' }}>
+                        Acuerdo Cerrado (Solo Convenio) — Despacho Bloqueado ({forbiddenOffAgreementModal.length})
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#B91C1C', marginTop: '4px', lineHeight: '1.4' }}>
+                        <strong>Productos fuera de acuerdo:</strong> {forbiddenNames}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#7F1D1D', marginTop: '4px', lineHeight: '1.4', fontWeight: '600' }}>
+                        Este cliente tiene bloqueadas las compras fuera de convenio. Elimina o cambia estos productos por referencias del acuerdo comercial antes de aprobar.
+                      </div>
+                    </div>
+                  );
+                }
+
                 const unpricedItemsInModal = editableItems.filter(itm => !itm.isDeleted && itm.matched_product_id).filter(itm => {
                   const prod = products.find(p => p.id === itm.matched_product_id);
                   if (!prod) return false;
