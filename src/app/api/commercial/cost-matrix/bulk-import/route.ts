@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { batchRecalculateAndSyncPrices } from '@/lib/pricingUtils';
+import { batchRecalculateAndSyncPrices, applyProductUnitConversion } from '@/lib/pricingUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,11 +38,100 @@ export async function POST(req: NextRequest) {
         for (const item of rawUpdates) {
             dedupedMap.set(item.product_id, item);
         }
+
+        // Consultar catálogo activo, conversiones y matriz actual para:
+        // 1) Preservar el costo previo en el historial de matriz (`commercial_cost_matrix_history`) para COMPRA 2..8
+        // 2) Propagar automáticamente el nuevo costo de padres a sus hijos derivados (`parent_id`)
+        const [
+            { data: allProducts },
+            { data: conversions },
+            { data: currentMatrix },
+            { data: existingHistRow }
+        ] = await Promise.all([
+            supabaseAdmin.from('products').select('id, parent_id, unit_of_measure, is_active').eq('is_active', true),
+            supabaseAdmin.from('product_conversions').select('product_id, from_unit, to_unit, conversion_factor'),
+            supabaseAdmin.from('commercial_cost_matrix').select('product_id, manual_cost, updated_at, updated_by'),
+            supabaseAdmin.from('app_settings').select('value').eq('key', 'commercial_cost_matrix_history').maybeSingle()
+        ]);
+
+        const prodMap = new Map<string, any>((allProducts || []).map((p: any) => [p.id, p]));
+        const currentMatrixMap = new Map<string, any>((currentMatrix || []).map((m: any) => [m.product_id, m]));
+        let parsedExistingHist: Record<string, Array<{ price: number; date: string; source: string }>> = {};
+        if (existingHistRow?.value) {
+            try {
+                const rawVal = typeof existingHistRow.value === 'string' ? JSON.parse(existingHistRow.value) : existingHistRow.value;
+                if (rawVal && typeof rawVal === 'object') {
+                    parsedExistingHist = { ...rawVal };
+                }
+            } catch {
+                parsedExistingHist = {};
+            }
+        }
+        const historyMap: Record<string, Array<{ price: number; date: string; source: string }>> = parsedExistingHist;
+
+        // Propagar de Padre a Hijo (parent_id) para los hijos que no vinieron explícitamente en el Excel
+        for (const p of (allProducts || [])) {
+            if (!p.parent_id || dedupedMap.has(p.id)) continue;
+            const parentUpdate = dedupedMap.get(p.parent_id);
+            if (!parentUpdate) continue;
+            const parentProd = prodMap.get(p.parent_id);
+            const convertedCost = applyProductUnitConversion(
+                Number(parentUpdate.manual_cost),
+                p.id,
+                parentProd?.unit_of_measure,
+                p.unit_of_measure,
+                conversions || []
+            );
+            if (convertedCost > 0) {
+                dedupedMap.set(p.id, {
+                    product_id: p.id,
+                    manual_cost: convertedCost,
+                    updated_at: parentUpdate.updated_at || nowIso,
+                    updated_by: parentUpdate.updated_by || 'EXCEL-IMPORT',
+                    is_active: true
+                });
+            }
+        }
+
         const cleanUpdates = Array.from(dedupedMap.values());
 
         if (cleanUpdates.length === 0) {
             return NextResponse.json({ error: 'Ninguno de los registros contiene product_id y costo válidos.' }, { status: 400 });
         }
+
+        // Archivar el costo anterior vigente en `commercial_cost_matrix_history` antes de sobrescribir
+        for (const upd of cleanUpdates) {
+            const prev = currentMatrixMap.get(upd.product_id);
+            if (prev && Number(prev.manual_cost) > 0 && prev.updated_at) {
+                const prevPrice = Math.round(Number(prev.manual_cost));
+                const prevDate = String(prev.updated_at);
+                const newDateDay = String(upd.updated_at || nowIso).slice(0, 10);
+                const prevDateDay = prevDate.slice(0, 10);
+                if (prevDateDay !== newDateDay || Math.abs(prevPrice - Math.round(Number(upd.manual_cost))) >= 1) {
+                    if (!Array.isArray(historyMap[upd.product_id])) {
+                        historyMap[upd.product_id] = [];
+                    }
+                    const alreadyRecorded = historyMap[upd.product_id].some(
+                        h => Math.abs(h.price - prevPrice) < 1 && String(h.date).slice(0, 10) === prevDateDay
+                    );
+                    if (!alreadyRecorded) {
+                        historyMap[upd.product_id].unshift({
+                            price: prevPrice,
+                            date: prevDate,
+                            source: prev.updated_by || 'EXCEL-IMPORT'
+                        });
+                        historyMap[upd.product_id].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                        historyMap[upd.product_id] = historyMap[upd.product_id].slice(0, 7);
+                    }
+                }
+            }
+        }
+
+        await supabaseAdmin.from('app_settings').upsert({
+            key: 'commercial_cost_matrix_history',
+            value: historyMap,
+            description: 'Historial de cargas de Matriz Comercial para trazabilidad COMPRA 2..8 sin contaminar órdenes de compra'
+        }, { onConflict: 'key' });
 
         // Upsert in batches of 100 using supabaseAdmin (bypasses RLS limits)
         let updatedCount = 0;

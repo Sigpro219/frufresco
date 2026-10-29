@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Fragment, memo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices } from '@/lib/pricingUtils';
+import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, applyProductUnitConversion } from '@/lib/pricingUtils';
 import { 
     Search, 
     X, 
@@ -81,6 +81,7 @@ interface Product {
     name: string;
     category: string;
     unit_of_measure: string;
+    parent_id?: string | null;
     keywords?: string;
     tags?: string[];
     capabilities?: string[];
@@ -179,7 +180,7 @@ function StatCard({ label, value, subValue, trend, color, bg = THEME.colors.surf
     );
 }
 
-const Sparkline = memo(function Sparkline({ data, productId }: { data: Purchase[], productId?: string }) {
+const Sparkline = memo(function Sparkline({ data, productId, referencePrice }: { data: Purchase[], productId?: string, referencePrice?: number }) {
     if (!data || data.length === 0) {
         return (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -233,7 +234,7 @@ const Sparkline = memo(function Sparkline({ data, productId }: { data: Purchase[
         date: d.created_at,
         purchaseUnit: d.purchase_unit
     }));
-    const { validObservations, filteredCount } = filterPriceOutliers(obsList);
+    const { validObservations, filteredCount } = filterPriceOutliers(obsList, referencePrice);
     const validPurchases = chronologicalPurchases.filter(p => 
         validObservations.some(v => Math.abs(v.price - p.normalized_price) < 0.01 && v.date === p.created_at)
     );
@@ -299,8 +300,13 @@ const Sparkline = memo(function Sparkline({ data, productId }: { data: Purchase[
         return { x, y, price: p, date: validPurchases[i].created_at };
     });
 
-    const trend = (prices[prices.length - 1] - prices[0]) / (prices[0] || 1);
+    // Variación inmediata canónica (SDD §7.4.C): Última (prices[length - 1]) vs Compra 2 (prices[length - 2])
+    const latestPrice = prices[prices.length - 1];
+    const prevPrice = prices[prices.length - 2];
+    const trend = (latestPrice - prevPrice) / (prevPrice || 1);
     const trendPercent = Math.abs(trend * 100);
+    const histTrend = (latestPrice - prices[0]) / (prices[0] || 1);
+    const histTrendPercent = Math.abs(histTrend * 100);
     const isUp = trend > 0.005;
     const isDown = trend < -0.005;
     const isNeutral = !isUp && !isDown;
@@ -316,10 +322,11 @@ const Sparkline = memo(function Sparkline({ data, productId }: { data: Purchase[
     const firstPoint = points[0];
     const areaD = `${pathD} L ${lastPoint.x.toFixed(1)},${H} L ${firstPoint.x.toFixed(1)},${H} Z`;
 
-    const tooltipText = `Historial de compras normalizado (${prices.length} eventos):\n` +
+    const tooltipText = `Historial de compras y matriz (${prices.length} eventos):\n` +
         validPurchases.map(p => `• ${safeFormatDate(p.created_at, 'dd MMM yyyy')}: $${formatNumber(Math.round(p.normalized_price))}`).join('\n') +
         (filteredCount > 0 ? `\n(${filteredCount} compras atípicas de empaque excluidas)` : '') +
-        `\nTendencia: ${isUp ? '+' : isDown ? '-' : ''}${trendPercent.toFixed(1)}%`;
+        `\nVariación inmediata (Última vs Compra 2): ${isUp ? '+' : isDown ? '-' : ''}${trendPercent.toFixed(1)}%` +
+        (prices.length > 2 ? `\nVariación en ventana histórica: ${histTrend >= 0 ? '+' : '-'}${histTrendPercent.toFixed(1)}%` : '');
 
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center', padding: '0 0.1rem' }} title={tooltipText}>
@@ -593,6 +600,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
     const [products, setProducts] = useState<Product[]>([]);
     const [purchaseHistory, setPurchaseHistory] = useState<Record<string, Purchase[]>>({});
     const [manualOverrides, setManualOverrides] = useState<Record<string, any>>({});
+    const [matrixHistory, setMatrixHistory] = useState<Record<string, Array<{ price: number; date: string; source: string }>>>({});
+    const [productConversions, setProductConversions] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todas');
     const [savingId, setSavingId] = useState<string | null>(null);
@@ -722,10 +731,15 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             const computedTercils = computeProductTerciles(activeIds, purchaseCounts);
             setProductTerciles(computedTercils);
 
-            const { data: manual, error: manualErr } = await supabase
-                .from('commercial_cost_matrix')
-                .select('*')
-                .setHeader('Cache-Control', 'no-store');
+            const [
+                { data: manual, error: manualErr },
+                { data: histSetting },
+                { data: convData }
+            ] = await Promise.all([
+                supabase.from('commercial_cost_matrix').select('*').setHeader('Cache-Control', 'no-store'),
+                supabase.from('app_settings').select('value').eq('key', 'commercial_cost_matrix_history').maybeSingle(),
+                supabase.from('product_conversions').select('product_id, from_unit, to_unit, conversion_factor')
+            ]);
 
             if (manualErr) throw manualErr;
             
@@ -734,6 +748,18 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 manualMap[m.product_id] = m;
             });
             setManualOverrides(manualMap);
+
+            if (histSetting?.value) {
+                try {
+                    const parsed = typeof histSetting.value === 'string' ? JSON.parse(histSetting.value) : histSetting.value;
+                    if (parsed && typeof parsed === 'object') {
+                        setMatrixHistory(parsed);
+                    }
+                } catch {
+                    // ignore invalid JSON
+                }
+            }
+            setProductConversions(convData || []);
 
         } catch (err) {
             logError('fetchData-CostMatrix', err);
@@ -760,13 +786,14 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             const manualCost = parseFloat(cost);
             if (isNaN(manualCost)) return;
 
+            const nowIso = new Date().toISOString();
             const { error } = await supabase
                 .from('commercial_cost_matrix')
                 .upsert({
                     product_id: productId,
                     manual_cost: manualCost,
-                    updated_at: new Date().toISOString(),
-                    updated_by: 'AI-DELTA-AUTO',
+                    updated_at: nowIso,
+                    updated_by: 'VOLATILITY_APPROVED',
                     is_active: true
                 });
 
@@ -774,7 +801,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             
             setManualOverrides(prev => ({
                 ...prev,
-                [productId]: { manual_cost: manualCost }
+                [productId]: { product_id: productId, manual_cost: manualCost, updated_at: nowIso, updated_by: 'VOLATILITY_APPROVED', is_active: true }
             }));
 
             // Propagación dinámica segura vía API server-side a modelos de precios y catálogo B2C Hogar
@@ -1061,28 +1088,150 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         }
     };
 
+    const getEffectiveManual = (productId: string) => {
+        const direct = manualOverrides[productId];
+        const prod = products.find(p => p.id === productId);
+        if (!prod?.parent_id) return direct;
+
+        const parentManual = manualOverrides[prod.parent_id];
+        if (!parentManual || !(parentManual.manual_cost > 0)) return direct;
+
+        const dTime = direct?.updated_at ? (safeGetValidDate(direct.updated_at)?.getTime() || 0) : 0;
+        const pTime = parentManual.updated_at ? (safeGetValidDate(parentManual.updated_at)?.getTime() || 0) : 0;
+
+        if (!direct || !(direct.manual_cost > 0) || pTime > dTime) {
+            const parentProd = products.find(p => p.id === prod.parent_id);
+            const converted = applyProductUnitConversion(
+                parentManual.manual_cost,
+                prod.id,
+                parentProd?.unit_of_measure,
+                prod.unit_of_measure,
+                productConversions
+            );
+            return {
+                ...parentManual,
+                product_id: prod.id,
+                manual_cost: converted,
+                isInheritedFromParent: true
+            };
+        }
+        return direct;
+    };
+
+    const getCombinedPurchases = (productId: string): Purchase[] => {
+        const prod = products.find(p => p.id === productId);
+        const rawHist = purchaseHistory[productId] || (prod?.parent_id ? purchaseHistory[prod.parent_id] || [] : []);
+        const manual = getEffectiveManual(productId);
+        const mHist = matrixHistory[productId] || (prod?.parent_id ? matrixHistory[prod.parent_id] || [] : []);
+        const parentProd = prod?.parent_id ? products.find(p => p.id === prod.parent_id) : null;
+        const isUsingParentHist = Boolean(prod?.parent_id && (!purchaseHistory[productId] || purchaseHistory[productId].length === 0));
+        const isUsingParentMatrixHist = Boolean(prod?.parent_id && (!matrixHistory[productId] || matrixHistory[productId].length === 0));
+
+        const candidates: Purchase[] = [];
+
+        rawHist.forEach(h => {
+            if (h.normalized_price > 0) {
+                const priceVal = isUsingParentHist
+                    ? applyProductUnitConversion(h.normalized_price, productId, parentProd?.unit_of_measure, prod?.unit_of_measure, productConversions)
+                    : h.normalized_price;
+                candidates.push({
+                    ...h,
+                    product_id: productId,
+                    unit_price: priceVal,
+                    normalized_price: priceVal
+                });
+            }
+        });
+
+        mHist.forEach((mh, idx) => {
+            if (mh.price > 0 && mh.date) {
+                const priceVal = isUsingParentMatrixHist
+                    ? applyProductUnitConversion(mh.price, productId, parentProd?.unit_of_measure, prod?.unit_of_measure, productConversions)
+                    : mh.price;
+                candidates.push({
+                    id: `mhist-${productId}-${idx}`,
+                    product_id: productId,
+                    unit_price: priceVal,
+                    purchase_unit: prod?.unit_of_measure || 'Kg',
+                    normalized_price: priceVal,
+                    created_at: mh.date,
+                    raw_data_source: mh.source === 'EXCEL-IMPORT' ? 'RECOTIZACION_MERCADO_EXCEL' : 'Cotización Manual'
+                });
+            }
+        });
+
+        if (manual && typeof manual.manual_cost === 'number' && manual.manual_cost > 0) {
+            candidates.push({
+                id: `manual-${productId}`,
+                product_id: productId,
+                unit_price: manual.manual_cost,
+                purchase_unit: prod?.unit_of_measure || 'Kg',
+                normalized_price: manual.manual_cost,
+                created_at: manual.updated_at || new Date().toISOString(),
+                raw_data_source: manual.updated_by === 'EXCEL-IMPORT'
+                    ? 'RECOTIZACION_MERCADO_EXCEL'
+                    : (manual.updated_by === 'MANUAL_OVERRIDE' ? 'Forzado Manual' : 'Cotización Manual')
+            });
+        }
+
+        // Ordenar de más reciente (col 0 = ÚLTIMA) a más antiguo (col 1..7 = COMPRA 2..8)
+        candidates.sort((a, b) => {
+            const tA = safeGetValidDate(a.created_at)?.getTime() || 0;
+            const tB = safeGetValidDate(b.created_at)?.getTime() || 0;
+            return tB - tA;
+        });
+
+        // Deduplicar registros del mismo día con idéntico costo redondeado
+        const deduped: Purchase[] = [];
+        for (const item of candidates) {
+            const itemDay = item.created_at ? String(item.created_at).slice(0, 10) : '';
+            const isDup = deduped.some(existing => {
+                const exDay = existing.created_at ? String(existing.created_at).slice(0, 10) : '';
+                return exDay === itemDay && Math.abs(Math.round(existing.normalized_price) - Math.round(item.normalized_price)) < 1;
+            });
+            if (!isDup) {
+                deduped.push(item);
+            }
+            if (deduped.length >= 8) break;
+        }
+
+        return deduped;
+    };
+
     const getProductCircuitBreaker = (productId: string): CircuitBreakerResult => {
-        const hist = purchaseHistory[productId] || [];
-        const manualObj = manualOverrides[productId];
-        const manual = manualObj?.manual_cost;
-        const latestPurchase = hist[0]?.normalized_price;
-        if (latestPurchase && manual && manual > 0) {
-            const histDate = hist[0]?.created_at ? safeGetValidDate(hist[0].created_at) : null;
-            const manualDate = manualObj?.updated_at ? safeGetValidDate(manualObj.updated_at) : null;
-            // El Circuit Breaker solo se activa cuando ingresa una compra física posterior al costo autorizado en matriz
-            if (histDate && (!manualDate || histDate.getTime() > manualDate.getTime()) && manualObj?.updated_by !== 'MANUAL_OVERRIDE') {
-                return checkVolatilityCircuitBreaker(latestPurchase, manual, 20);
+        const manualObj = getEffectiveManual(productId);
+        // Si el comercial ya forzó o ratificó manualmente el salto actual, se da por validada la alerta
+        if (manualObj?.updated_by === 'MANUAL_OVERRIDE' || manualObj?.updated_by === 'VOLATILITY_APPROVED') {
+            return { isTriggered: false, deltaPct: 0, previousPrice: manualObj?.manual_cost || 0, newPrice: manualObj?.manual_cost || 0, message: '' };
+        }
+
+        const combined = getCombinedPurchases(productId);
+        if (combined.length >= 2) {
+            const obsList: PriceObservation[] = combined.map(h => ({
+                price: h.normalized_price,
+                date: h.created_at,
+                purchaseUnit: h.purchase_unit
+            }));
+            const { validObservations } = filterPriceOutliers(obsList, manualObj?.manual_cost);
+            // combined está ordenado de más reciente (idx 0 = ÚLTIMA) a más antiguo (idx 1 = COMPRA 2)
+            const validChronDesc = combined.filter(c =>
+                validObservations.some(v => Math.abs(v.price - c.normalized_price) < 0.01 && v.date === c.created_at)
+            );
+            if (validChronDesc.length >= 2) {
+                const latestPrice = Math.round(validChronDesc[0].normalized_price);
+                const prevPrice = Math.round(validChronDesc[1].normalized_price);
+                return checkVolatilityCircuitBreaker(latestPrice, prevPrice, 20);
             }
         }
-        return { isTriggered: false, deltaPct: 0, previousPrice: manual || 0, newPrice: latestPurchase || 0, message: '' };
+        return { isTriggered: false, deltaPct: 0, previousPrice: manualObj?.manual_cost || 0, newPrice: combined[0]?.normalized_price || 0, message: '' };
     };
 
     const calculateSmartCost = (productId: string) => {
         const history = purchaseHistory[productId] || [];
-        const manual = manualOverrides[productId];
+        const manual = getEffectiveManual(productId);
         const refCost = manual?.manual_cost;
 
-        if (manual && manual.updated_by === 'MANUAL_OVERRIDE' && refCost && refCost > 0) {
+        if (manual && (manual.updated_by === 'MANUAL_OVERRIDE' || manual.updated_by === 'VOLATILITY_APPROVED') && refCost && refCost > 0) {
             return Math.round(refCost);
         }
 
@@ -1095,7 +1244,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             return Math.round(refCost);
         }
 
-        // Si la variación de una compra posterior excede el 20%, se congela preventivamente el costo anterior (Opción A - SPEC v1.7.0)
+        // Si ingresa una compra física en bodega posterior a la matriz y excede el 20%, se congela preventivamente el costo anterior (SPEC v1.7.0)
         const cb = getProductCircuitBreaker(productId);
         if (cb.isTriggered && refCost && refCost > 0) {
             return Math.round(refCost);
@@ -1130,7 +1279,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
     const getProductCostLifecycle = (productId: string) => {
         const hist = purchaseHistory[productId] || [];
-        const manual = manualOverrides[productId];
+        const manual = getEffectiveManual(productId);
         const tercil = productTerciles[productId] || 'T2';
         
         let latestSignalDate: Date | string | null = null;
@@ -1152,8 +1301,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             }
         } else if (histDate) {
             latestSignalDate = hist[0].created_at;
-                signalSource = 'COMPRAS';
-                currentCost = hist[0].normalized_price;
+            signalSource = 'COMPRAS';
+            currentCost = hist[0].normalized_price;
         } else if (manualDate) {
             latestSignalDate = manual.updated_at;
             signalSource = 'MANUAL';
@@ -1182,19 +1331,19 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         }
 
         const smart = calculateSmartCost(productId);
-        const manual = manualOverrides[productId];
+        const manual = getEffectiveManual(productId);
         const lifecycle = getProductCostLifecycle(productId);
         
         if (!manual) {
             if (smart === 0) {
                 return {
-                    bg: '#FEF2F2',
-                    textColor: '#991B1B',
-                    badgeBorder: '#FCA5A5',
-                    badgeBg: '#FEF2F2',
-                    badge: 'Sin Referencia',
-                    labelColor: '#EF4444',
-                    icon: <AlertCircle size={10} color="#EF4444" />
+                    bg: '#F8FAFC',
+                    textColor: '#64748B',
+                    badgeBorder: '#E2E8F0',
+                    badgeBg: '#F1F5F9',
+                    badge: 'Sin Costo Base',
+                    labelColor: '#64748B',
+                    icon: <AlertCircle size={10} color="#64748B" />
                 };
             } else {
                 return {
@@ -1641,7 +1790,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
         if (lifecycleFilter === 'vigente') return lifecycle.status === 'VIGENTE';
         if (lifecycleFilter === 'por_vencer') return lifecycle.status === 'POR_VENCER';
-        if (lifecycleFilter === 'vencido') return lifecycle.status === 'VENCIDO' || lifecycle.status === 'SIN_REFERENCIA';
+        if (lifecycleFilter === 'vencido') return lifecycle.status === 'VENCIDO';
 
         return true;
     });
@@ -1655,22 +1804,33 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         }
 
         if (sortField === 'last_price') {
-            const priceA = purchaseHistory[a.id]?.[0]?.normalized_price || 0;
-            const priceB = purchaseHistory[b.id]?.[0]?.normalized_price || 0;
+            const priceA = getCombinedPurchases(a.id)?.[0]?.normalized_price || 0;
+            const priceB = getCombinedPurchases(b.id)?.[0]?.normalized_price || 0;
             return sortOrder === 'asc' ? priceA - priceB : priceB - priceA;
         }
 
         if (sortField === 'cost') {
-            const costA = manualOverrides[a.id]?.manual_cost || calculateSmartCost(a.id) || 0;
-            const costB = manualOverrides[b.id]?.manual_cost || calculateSmartCost(b.id) || 0;
+            const costA = getEffectiveManual(a.id)?.manual_cost || calculateSmartCost(a.id) || 0;
+            const costB = getEffectiveManual(b.id)?.manual_cost || calculateSmartCost(b.id) || 0;
             return sortOrder === 'asc' ? costA - costB : costB - costA;
         }
 
         if (sortField === 'trend') {
             const getTrend = (pId: string) => {
-                const hist = purchaseHistory[pId] || [];
-                if (hist.length < 2 || !hist[1]?.normalized_price) return 0;
-                return ((hist[0].normalized_price - hist[1].normalized_price) / hist[1].normalized_price) * 100;
+                const comb = getCombinedPurchases(pId);
+                if (comb.length < 2) return 0;
+                const manualRef = getEffectiveManual(pId)?.manual_cost;
+                const obsList: PriceObservation[] = comb.map(h => ({
+                    price: h.normalized_price,
+                    date: h.created_at,
+                    purchaseUnit: h.purchase_unit
+                }));
+                const { validObservations } = filterPriceOutliers(obsList, manualRef);
+                const validDesc = comb.filter(c =>
+                    validObservations.some(v => Math.abs(v.price - c.normalized_price) < 0.01 && v.date === c.created_at)
+                );
+                if (validDesc.length < 2 || !validDesc[1]?.normalized_price) return 0;
+                return ((validDesc[0].normalized_price - validDesc[1].normalized_price) / validDesc[1].normalized_price) * 100;
             };
             const trendA = getTrend(a.id);
             const trendB = getTrend(b.id);
@@ -1690,6 +1850,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         falling: 0,
         expiringSoon: 0,
         pendingCost: 0,
+        noReferenceCost: 0,
         vigentes: 0,
         avgTrend: 0
     };
@@ -1710,17 +1871,20 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         if (lifecycle.status === 'VIGENTE') stats.vigentes++;
         if (lifecycle.isDueSoon) stats.expiringSoon++;
         if (lifecycle.isExpired) stats.pendingCost++;
+        if (lifecycle.status === 'SIN_REFERENCIA') stats.noReferenceCost++;
 
-        const history = purchaseHistory[p.id] || [];
-        if (history.length >= 2) {
-            const pCurrent = history[0].normalized_price;
-            const pPrev = history[1].normalized_price;
-            const diff = ((pCurrent - pPrev) / pPrev) * 100;
-            if (diff > 1) stats.rising++;
-            else if (diff < -1) stats.falling++;
+        const combined = getCombinedPurchases(p.id);
+        if (combined.length >= 2) {
+            const pCurrent = combined[0].normalized_price;
+            const pPrev = combined[1].normalized_price;
+            if (pPrev > 0) {
+                const diff = ((pCurrent - pPrev) / pPrev) * 100;
+                if (diff > 1) stats.rising++;
+                else if (diff < -1) stats.falling++;
 
-            totalTrendPercent += diff;
-            trendCount++;
+                totalTrendPercent += diff;
+                trendCount++;
+            }
         }
     });
 
@@ -2305,48 +2469,11 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                 <tbody>
                                     {sortedProducts.map((p, idx) => {
                                         const hist = purchaseHistory[p.id] || [];
-                                        const manual = manualOverrides[p.id];
+                                        const manual = getEffectiveManual(p.id);
                                         const cellState = getCostCellState(p.id);
                                         const lifecycle = getProductCostLifecycle(p.id);
                                         const currentManual = manual?.manual_cost;
-
-                                        // Historial cronológico real de compras y cotizaciones de mercado
-                                        const combinedPurchases: Purchase[] = [];
-                                        hist.forEach(h => {
-                                            if (h.normalized_price > 0) combinedPurchases.push(h);
-                                        });
-
-                                        // Precedencia cronológica canónica en columna ÚLTIMA (SDD v1.9.319):
-                                        // Si commercial_cost_matrix tiene un costo vigente con fecha >= a la última compra (o no existen compras),
-                                        // encabeza la columna ÚLTIMA (colIdx = 0) desplazando las compras previas a COMPRA -1 ... -7.
-                                        const hasManual = manual && typeof manual.manual_cost === 'number' && manual.manual_cost > 0;
-                                        if (hasManual) {
-                                            const histDate = combinedPurchases[0]?.created_at ? safeGetValidDate(combinedPurchases[0].created_at) : null;
-                                            const manualDate = manual.updated_at ? safeGetValidDate(manual.updated_at) : null;
-                                            const isManualNewerOrEqual = !histDate || (manualDate && manualDate.getTime() >= histDate.getTime());
-
-                                            if (combinedPurchases.length === 0 || isManualNewerOrEqual) {
-                                                const topPurchase = combinedPurchases[0];
-                                                const isDuplicateTop = topPurchase &&
-                                                    Math.round(topPurchase.normalized_price) === Math.round(manual.manual_cost) &&
-                                                    manualDate && histDate &&
-                                                    Math.abs(manualDate.getTime() - histDate.getTime()) < 60000;
-
-                                                if (!isDuplicateTop) {
-                                                    combinedPurchases.unshift({
-                                                        id: `manual-${p.id}`,
-                                                        product_id: p.id,
-                                                        unit_price: manual.manual_cost,
-                                                        purchase_unit: p.unit_of_measure || 'Kg',
-                                                        normalized_price: manual.manual_cost,
-                                                        created_at: manual.updated_at || new Date().toISOString(),
-                                                        raw_data_source: manual.updated_by === 'EXCEL-IMPORT'
-                                                            ? 'RECOTIZACION_MERCADO_EXCEL'
-                                                            : (manual.updated_by === 'MANUAL_OVERRIDE' ? 'Forzado Manual' : 'Cotización Manual')
-                                                    });
-                                                }
-                                            }
-                                        }
+                                        const combinedPurchases = getCombinedPurchases(p.id);
 
                                         // Category separator row only when not custom-sorted across categories
                                         const showCategorySeparator = !sortField || sortField === 'name';
@@ -2857,7 +2984,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
                                                     {/* Trend Indicator Cell with Interactive Sparkline */}
                                                     <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                        <Sparkline data={combinedPurchases} productId={p.id} />
+                                                        <Sparkline data={combinedPurchases} productId={p.id} referencePrice={manual?.manual_cost} />
                                                     </td>
                                                 </tr>
                                             </Fragment>

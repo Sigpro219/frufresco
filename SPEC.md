@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.333 (Capítulo 44: Simplificación y Blindaje de Listas Generales de 15 y 30 Días: Erradicación de Sugerido IA, Edición Directa % Utilidad / Nuevo Precio con Borrador Congelado, Filtros Rápidos y Guía de Vigencia 00:00 h a 23:59 h — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.335 (Capítulo 44: Trazabilidad Histórica de Matriz Comercial, Herencia Padre→Hijo en Importación Masiva, KPI de SKUs Activos en Maestro y Badge `Obsequio` con Ícono Lucide `Gift` en Gestión de Pedidos — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 350 Escenarios BDD Ininterrumpidos (1..350)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 352 Escenarios BDD Ininterrumpidos (1..352)
 
 ---
 
@@ -13167,5 +13167,29 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
   4. **Instructivo Operativo de 3 Pasos y Guía Visual de Vigencia (`00:00 h` a `23:59 h`) en el Modal de Consagración:**
      - Despliega en cabecera un instructivo colapsable de 3 pasos para el modo de Lista General (15 o 30 días) con indicador de borrador activo y botón `Restablecer Borrador`.
      - En el modal de consagración (`full_roster`), dentro de la sección `1. Vigencia y Duración del Ciclo de Precios`, incorpora el bloque de **Ayuda Visual Reactiva de Horario de Vigencia** (`Activación inmediata hoy mismo` vs `Activación programada a las 00:00 h`, rigiendo hasta las **`23:59 h`** del día de vencimiento).
+
+---
+
+### Escenario 351: Trazabilidad Histórica en Matriz de Costos (`commercial_cost_matrix_history`), Herencia Padre→Hijo en Importación Masiva Excel, Variación Inmediata en Sparkline y Conteo Explícito de SKUs Activos en Maestro de Productos (SDD v1.9.334)
+- **Given** la pantalla de **Matriz de Costos** (`/admin/commercial/cost-matrix`, `src/app/admin/commercial/cost-matrix/page.tsx`), el endpoint de importación masiva (`/api/commercial/cost-matrix/bulk-import/route.ts`), la política de vigencia (`src/lib/commercial/costFreshnessPolicy.ts`) y el **Maestro de Productos** (`/admin/master/products`, `src/app/admin/master/products/page.tsx`),
+- **When** el operador importa o audita costos en la Matriz Comercial o consulta los indicadores superiores del Maestro de Productos:
+- **Then** el sistema garantiza:
+  1. **Archivo Histórico de Cargas de Matriz Comercial (`app_settings.key = 'commercial_cost_matrix_history'`) sin Contaminar Órdenes de Compra:**
+     - Al importar un archivo Excel en `/api/commercial/cost-matrix/bulk-import` o guardar costos en la Matriz Comercial, el sistema archiva automáticamente el costo anterior vigente (`price`, `date`, `source`) en `app_settings` (`commercial_cost_matrix_history`, conservando hasta 7 eventos por SKU) antes de sobrescribir `commercial_cost_matrix`, poblando las columnas históricas `COMPRA 2..8` sin insertar compras ficticias en la tabla transaccional `purchases`.
+  2. **Propagación Automática Padre → Hijo (`parent_id`) con Conversión de Unidad en Bulk Import:**
+     - Durante la importación masiva de costos (`/api/commercial/cost-matrix/bulk-import`) y en la resolución en vivo de la Matriz de Costos, todo producto hijo (`parent_id`) que no venga explícitamente en la planilla hereda automáticamente el costo de su producto padre aplicando `applyProductUnitConversion`.
+  3. **Variación Inmediata Canónica en Sparkline (`Última` vs `Compra 2`) y Estado Neutro `Sin Costo Base`:**
+     - El componente `Sparkline` calcula su porcentaje principal e indicador de color comparando la señal más reciente (`prices[length - 1]`) contra la inmediatamente anterior (`prices[length - 2]`), exponiendo además la variación en ventana histórica en el tooltip.
+     - En `evaluateCostFreshness` (`src/lib/commercial/costFreshnessPolicy.ts`), los SKUs sin costo base registrado se clasifican en estado neutro informativo **`Sin Costo Base`** (`isExpired: false`, `#64748B` / `#F1F5F9`), diferenciándolos de los costos reales vencidos por antigüedad (`VENCIDO`).
+  4. **Conteo Explícito de SKUs Activos en Maestro de Productos:**
+     - En la tarjeta KPI **`Catálogo Activo`** de `/admin/master/products`, el indicador principal despliega tanto la cantidad absoluta de SKUs activos como su proporción porcentual sobre el total histórico (`{activeCount} ({porcentaje}%)`).
+
+---
+
+### Escenario 352: Identificación Visual de Pedidos de Obsequio de Un Solo SKU (`Obsequio`) con Ícono Oficial Lucide (`Gift`) en Gestión de Pedidos (`/admin/orders/loading`) (SDD v1.9.335)
+- **Given** la tabla principal de **Gestión y Cargue de Pedidos** (`/admin/orders/loading`, `src/app/admin/orders/loading/page.tsx`), donde la columna `VALOR` presenta el monto total del pedido acompañado de una etiqueta de clasificación comercial (`Acuerdo Institucional`, `B2C Estándar` o `Garantía / Sin Cobro`),
+- **When** un pedido contiene **exactamente 1 SKU** (`order.order_items.length === 1`) y dicho único SKU corresponde a un **Obsequio** (`products.accounting_id === 1062` o nombre/alias que contenga la palabra `"Obsequio"`):
+- **Then** el sistema reemplaza la etiqueta `Acuerdo Institucional` / `B2C Estándar` en la columna `VALOR` por el badge dedicado **`Obsequio`** acompañado exclusivamente del ícono vectorial `<Gift size={10} strokeWidth={2.5} />` de `lucide-react` (cumpliendo la prohibición estricta de emojis no-Lucide en UI industrial), estilizado en paleta violeta (`color: '#6D28D9'`, `backgroundColor: '#F3E8FF'`, `border: '1px solid #DDD6FE'`) bajo el total formateado (`$0`), permitiendo al operador distinguir a simple vista las remisiones de obsequio corporativo frente a los pedidos comerciales y a las reposiciones de garantía.
+
 
 

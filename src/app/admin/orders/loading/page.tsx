@@ -68,7 +68,8 @@ import {
     Star,
     History,
     ExternalLink,
-    Settings
+    Settings,
+    Gift
 } from 'lucide-react';
 
 
@@ -4519,6 +4520,44 @@ useEffect(() => {
                                                                             }}
                                                                         >
                                                                             Garantía / Sin Cobro
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            const itemsList = Array.isArray(order.order_items) ? order.order_items : [];
+                                                            const singleItem = itemsList.length === 1 ? itemsList[0] : null;
+                                                            const singleItemName = `${singleItem?.products?.name || ''} ${singleItem?.nickname || ''}`.trim();
+                                                            const isSingleSkuGift = Boolean(
+                                                                singleItem && (
+                                                                    Number(singleItem?.products?.accounting_id) === 1062 ||
+                                                                    /\bobsequio\b/i.test(singleItemName)
+                                                                )
+                                                            );
+                                                            if (isSingleSkuGift) {
+                                                                return (
+                                                                    <div>
+                                                                        <div style={{ fontWeight: '900', color: '#7C3AED', fontSize: '0.95rem' }}>
+                                                                            {formatMoney(order.total)}
+                                                                        </div>
+                                                                        <div 
+                                                                            title={`Pedido de un solo SKU: ${singleItem?.products?.name || singleItem?.nickname || 'Obsequio Corporativo'}`}
+                                                                            style={{
+                                                                                marginTop: '3px',
+                                                                                fontSize: '0.62rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#6D28D9',
+                                                                                backgroundColor: '#F3E8FF',
+                                                                                border: '1px solid #DDD6FE',
+                                                                                padding: '1px 6px',
+                                                                                borderRadius: '4px',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}
+                                                                        >
+                                                                            <Gift size={10} strokeWidth={2.5} />
+                                                                            <span>Obsequio</span>
                                                                         </div>
                                                                     </div>
                                                                 );

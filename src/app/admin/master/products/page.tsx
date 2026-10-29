@@ -1564,7 +1564,7 @@ export default function MasterProductsPage() {
                 }}>
                     {[
                         { label: 'Total Histórico', value: formatNumber(kpiMetrics.total), icon: <Database size={16} strokeWidth={1.5} />, color: '#6366F1', bg: '#EEF2FF' },
-                        { label: 'Catálogo Activo', value: `${kpiMetrics.total > 0 ? formatNumber((kpiMetrics.activeCount / kpiMetrics.total) * 100, 1) : 0}%`, icon: <CheckCircle size={16} strokeWidth={1.5} />, color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+                        { label: 'Catálogo Activo', value: `${formatNumber(kpiMetrics.activeCount)} (${kpiMetrics.total > 0 ? formatNumber((kpiMetrics.activeCount / kpiMetrics.total) * 100, 1) : 0}%)`, icon: <CheckCircle size={16} strokeWidth={1.5} />, color: THEME.colors.primary, bg: THEME.colors.primaryLight },
                         { label: 'Publicados en Web', value: formatNumber(kpiMetrics.webCount), icon: <Globe size={16} strokeWidth={1.5} />, color: '#3B82F6', bg: '#EFF6FF' },
                         { label: 'Cobertura Imagen', value: `${formatNumber(kpiMetrics.imageCoverage)}%`, icon: <Globe size={16} strokeWidth={1.5} />, color: '#F59E0B', bg: '#FFFBEB' }, // Replaced with Globe or Eye for styling, let's keep Globe for similarity
                         { label: 'Alertas Inventario', value: formatNumber(kpiMetrics.alerts), icon: <AlertTriangle size={16} strokeWidth={1.5} />, color: '#EF4444', bg: '#FEF2F2' },
