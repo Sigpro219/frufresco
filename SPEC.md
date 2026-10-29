@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.330 (Capítulo 44: Optimización Táctica del Modelo Grupo Nutresa SIPSA + Prima: Filtros de Excepción, Copiado de Guion de Negociación, Selector Multi-Hoja Excel y Edición Reactiva de Prima — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.331 (Capítulo 44: Optimización Táctica de Grupo Nutresa SIPSA + Prima y Aislamiento Quincenal de Colsubsidio — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 347 Escenarios BDD Ininterrumpidos (1..347)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 348 Escenarios BDD Ininterrumpidos (1..348)
 
 ---
 
@@ -13090,7 +13090,7 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 
 ---
 
-### Escenario 347: Aislamiento del Ciclo de Negociación Quincenal (1Q/2Q) de Colsubsidio Basado en Propuesta del Cliente, Variación de Pliego (`SUBIÓ` / `BAJÓ` / `IGUAL`), Filtros Rápidos, Congelamiento en Borrador y Homologación del Modal de Consagración (SDD v1.9.330)
+### Escenario 348: Aislamiento del Ciclo de Negociación Quincenal (1Q/2Q) de Colsubsidio Basado en Propuesta del Cliente, Variación de Pliego (`SUBIÓ` / `BAJÓ` / `IGUAL`), Filtros Rápidos, Congelamiento en Borrador y Homologación del Modal de Consagración (SDD v1.9.331)
 - **Given** el módulo de **Acuerdos Especiales** (`/admin/commercial?tab=operations&subtab=agreements`, `src/components/SpecialAgreementsModule.tsx`), donde **Colsubsidio** (32 sedes vinculadas: *Restaurantes, Hoteles Piscilago, Clubes y Sedes Recreativas*) opera bajo un ciclo quincenal (`1Q / 2Q`) en el cual **es el cliente Colsubsidio quien envía el pliego Excel con su propuesta de precios** (ej. `2Q SEPTIEMBRE-COLSUBSIDIO.xlsx`, `2Q OCTUBRE-COLSUBSIDIO.xlsx` con fila 1 de título `NIT: 901393217 INVESTMENTS CORTES SAS` y fila 2 de encabezados `Material`, `Descripcion`, `U.M`/`U.EM`, `NUE PRE`/`NUE PREC`, `ANT PRE`/`PRE ANT`, `DIFERE`/`DIFERENC`, `PORC`, `ESTADO`/`VARIACION`, `NUE PRE`, `PRECIO`/`NUEVO PRE`) sobre un portafolio oficial de **252 SKUs** consagrado en el Acuerdo Maestro `#189` (`445c8f85-f693-4e05-a1fd-7c3a74c47162`),
 - **When** el operador comercial selecciona la tarjeta **Colsubsidio** en `Acuerdos Especiales`:
 - **Then** el sistema aísla la vista y el flujo operativo de Colsubsidio cumpliendo las siguientes reglas contractuales e invariantes de negocio:
