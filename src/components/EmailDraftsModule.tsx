@@ -3942,7 +3942,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const { data: quotesData } = await supabase
         .from('quotes')
         .select('id, client_id, quote_number, start_date, valid_until, model_snapshot_name, created_at')
-        .in('status', ['agreement', 'expired', 'approved', 'active']);
+        .eq('status', 'agreement');
 
       if (quotesData && quotesData.length > 0) {
         setAgreements(quotesData);

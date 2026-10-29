@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.336 (Capítulo 44: Blindaje Arquitectural E2E de Acuerdos Comerciales, Resolución Canónica en Pedidos B2B, Evaluación Horaria Bogotá y Padrón Limpio sin Re-expansión Forzada — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.337 (Capítulo 44: Blindaje Estricto de Acuerdo Cerrado (`Solo Convenio`) en Creación e Ingesta de Pedidos y Resguardo de Tarifas Fijas `"No se mide"` en SIPSA para Nutresa — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 353 Escenarios BDD Ininterrumpidos (1..353)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 354 Escenarios BDD Ininterrumpidos (1..354)
 
 ---
 
@@ -13213,6 +13213,26 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
   6. **Control de Acuerdos Cerrados y Herencia Matriz en Borradores de Correo (`EmailDraftsModule.tsx`):**
      - En la resolución de acuerdos de `EmailDraftsModule`, se integra la herencia del puntero de Acuerdo Maestro desde la Casa Matriz (`parentObj?.logistics_data?.active_master_agreement_id`).
      - Si el acuerdo del cliente está configurado como estricto/cerrado (`!allowOffAgreementPurchases`), la mesa de borradores bloquea automáticamente la confirmación y la selección por autocompletado de SKUs ajenos al convenio comercial, desplegando un banner de bloqueo en el modal de aprobación y limpiando coincidencias inválidas para blindar el cumplimiento contractual.
+
+---
+
+### Escenario 354: Blindaje Estricto de Acuerdo Cerrado (`allowOffAgreementPurchases === false`) en Creación e Ingesta de Pedidos (`/admin/orders/create`, `EmailDraftsModule.tsx`) y Resguardo Canónico de Productos `"No se mide"` con Tarifa Fija en Nutresa (SDD v1.9.337)
+- **Given** los clientes institucionales con modalidad de **Acuerdo Cerrado (`Solo Convenio`, `allowOffAgreementPurchases === false`)** como **Grupo Nutresa** (`IRCC S.A.S` y `L&C S A S - LEÑOS Y CARBÓN`, vinculados al Acuerdo Maestro `Quote #96` `ab9c0c14-a27e-4317-9995-dfb4ba9bcb80`) y **CESNE (`PEDRO PABLO RUBIO`)** (vinculado a su acuerdo individual `Quote #37` `109ec879-8788-48ca-ac8f-685c0d155e24`),
+- **When** se crean pedidos manuales, se extraen documentos con IA en `/admin/orders/create`, se procesan borradores en `EmailDraftsModule.tsx` o se administra el acuerdo de **Nutresa (SIPSA)** en `SpecialAgreementsModule.tsx`:
+- **Then** el sistema garantiza el bloqueo de despachos fuera del acuerdo y la integridad de las tarifas fijas pactadas:
+  1. **Pre-Resolución Sincrónica y Sanitización Reactiva en `/admin/orders/create` (`src/app/admin/orders/create/page.tsx`):**
+     - En `processOrderInput`, apenas se resuelve el `targetClientId` (incluyendo cuando `autoMatchedProfile` detecta la sede en el documento antes del ciclo de efectos de React), el sistema consulta de forma inmediata `/api/orders/resolve-agreement-pricing` para poblar `effectiveAllowOff` y `effectiveAgrIds`, restringiendo `candidateProductPool` exclusivamente a `products.filter(p => effectiveAgrIds.has(p.id))` cuando `!effectiveAllowOff && !isGiftRemissionClient && effectiveAgrIds.size > 0`.
+     - En `resolveContract`, si existen filas previas en `stagedItems` al activarse un cliente de acuerdo cerrado (`isB2B && !resolvedAllowOff && !isGiftRemissionClient && resolvedAgrSet.size > 0`), cualquier fila cuyo `suggestedProduct.id` no pertenezca a `resolvedAgrSet` se des-homologa automáticamente (`suggestedProduct: null, status: 'PENDING'`).
+     - En `handleDirectConfirmOrder`, `handleConfirmImport` y `handleSubmit`, se bloquea cualquier intento de confirmar o inyectar productos cuyo `id` no pertenezca a `agreementProductIds` cuando `clientType === 'B2B' && !allowOffAgreementPurchases && !isGiftRemissionClient && orderNature !== 'replacement' && agreementProductIds.size > 0`.
+  2. **Bloqueo Estricto en Bandeja de Solicitudes (`src/components/EmailDraftsModule.tsx`):**
+     - En `resolveActiveAgreementForClient`, el Nivel 3 evalúa tanto `profileObj?.logistics_data?.active_master_agreement_id` como `parentObj?.logistics_data?.active_master_agreement_id`.
+     - En `resolveContract`, cuando `!allowOff && agrProdIds.size > 0`, cualquier `matched_product_id` en `editableItems` que no pertenezca a `agrProdIds` se limpia automáticamente (`matched_product_id: null, matched_product_name: null`).
+     - En los eventos `onBlur`, `Tab` y `Enter` del buscador de SKU, la coincidencia exacta opera exclusivamente sobre `eligiblePool` (`products.filter(p => agreementProductIds.has(p.id))`).
+     - En `handleConfirmOrder` y en el modal de aprobación, cuando `!allowOffAgreementPurchases && agreementProductIds.size > 0`, se prohíbe despachar productos fuera de acuerdo incluso a `$0 COP`, mostrando el banner rojo **`Acuerdo Cerrado (Solo Convenio) — Despacho Bloqueado`**.
+  3. **Modelado y Resguardo de Productos con Precio Fijo (`"No se mide"` en SIPSA) en el Acuerdo de Nutresa (`Quote #96`):**
+     - De los 66 SKUs del acuerdo cerrado de Nutresa, los **21 SKUs no medidos por el boletín SIPSA** (`sipsa_price === 0`, `unified_name === 'No se mide'`) almacenan su **Tarifa Fija acordada** en `prima_cop` (`Valor Base`) y `unit_price` (`0 + Valor Base = Tarifa Fija`), manteniendo sincronizadas las llaves `nutresa_sipsa_prima_meta` y `nutresa_negotiation_draft` en `app_settings` junto con `quote_items` de `Quote #96`.
+     - Las sedes de `L&C S A S - LEÑOS Y CARBÓN` operan bajo el mismo bloqueo estricto (`allow_off_agreement_purchases = false`) y puntero `active_master_agreement_id` del acuerdo maestro de Nutresa.
+
 
 
 
