@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2, RefreshCw, Copy, ArrowUpDown, ArrowUp, ArrowDown, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Trash2, Inbox, Plus, ChevronRight, ChevronDown, ChevronUp, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2, RefreshCw, Copy, ArrowUpDown, ArrowUp, ArrowDown, Clock, GitBranch, Edit3 } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 
 const getBogotaDateStr = (d: Date = new Date()): string => {
@@ -21,6 +21,20 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [sortField, setSortField] = useState<'quote_number' | 'created_at' | 'client_name' | 'model_snapshot_name' | 'total_amount' | 'status'>('created_at');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+    const [collapsedThreads, setCollapsedThreads] = useState<Record<string, boolean>>({});
+    const [threadSkuDiffs, setThreadSkuDiffs] = useState<Record<string, Array<{
+        productId: string;
+        name: string;
+        basePrice: number;
+        baseMargin: number;
+        currentPrice: number;
+        currentMargin: number;
+        diffPrice: number;
+    }>>>({});
+
+    const toggleThreadExpand = (rootId: string) => {
+        setCollapsedThreads(prev => ({ ...prev, [rootId]: !prev[rootId] }));
+    };
 
     const handleSort = (field: 'quote_number' | 'created_at' | 'client_name' | 'model_snapshot_name' | 'total_amount' | 'status') => {
         if (sortField === field) {
@@ -131,7 +145,71 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                 .neq('status', 'agreement')
                 .order('created_at', { ascending: false });
 
-            if (data) setQuotes(data);
+            if (data) {
+                setQuotes(data);
+                // Identificar cadenas multi-versión para calcular ajustes de precio/utilidad (v1 -> vN)
+                const byId = new Map<string, any>(data.map((q: any) => [q.id, q]));
+                const getRootId = (q: any): string => {
+                    let curr = q;
+                    const visited = new Set<string>();
+                    while (curr?.parent_quote_id && !visited.has(curr.id)) {
+                        visited.add(curr.id);
+                        const parent = byId.get(curr.parent_quote_id);
+                        if (parent) curr = parent;
+                        else return curr.parent_quote_id;
+                    }
+                    return curr?.id || q.id;
+                };
+                const groups = new Map<string, any[]>();
+                data.forEach((q: any) => {
+                    const rId = getRootId(q);
+                    if (!groups.has(rId)) groups.set(rId, []);
+                    groups.get(rId)!.push(q);
+                });
+
+                const multiGroups: Array<{ rootId: string; baseId: string; headId: string }> = [];
+                groups.forEach((g, rId) => {
+                    if (g.length > 1) {
+                        const sorted = [...g].sort((a, b) => (Number(a.version || 1) - Number(b.version || 1)) || (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
+                        multiGroups.push({ rootId: rId, baseId: sorted[0].id, headId: sorted[sorted.length - 1].id });
+                    }
+                });
+
+                if (multiGroups.length > 0) {
+                    const diffsRecord: Record<string, any[]> = {};
+                    await Promise.all(multiGroups.map(async ({ rootId, baseId, headId }) => {
+                        const [{ data: baseItems }, { data: headItems }] = await Promise.all([
+                            supabase.from('quote_items').select('product_id, product_name, unit_price, margin_percent').eq('quote_id', baseId),
+                            supabase.from('quote_items').select('product_id, product_name, unit_price, margin_percent').eq('quote_id', headId)
+                        ]);
+                        if (baseItems && headItems) {
+                            const baseMap = new Map<string, any>(baseItems.map((it: any) => [it.product_id, it]));
+                            const changed: any[] = [];
+                            headItems.forEach((curr: any) => {
+                                const b = baseMap.get(curr.product_id);
+                                if (!b) return;
+                                const bPrice = Number(b.unit_price || 0);
+                                const cPrice = Number(curr.unit_price || 0);
+                                const bMargin = Number(b.margin_percent || 0);
+                                const cMargin = Number(curr.margin_percent || 0);
+                                if (Math.abs(cPrice - bPrice) >= 1 || (cPrice > 0 && Math.abs(cMargin - bMargin) >= 0.1)) {
+                                    changed.push({
+                                        productId: curr.product_id,
+                                        name: curr.product_name || b.product_name || 'Producto',
+                                        basePrice: bPrice,
+                                        baseMargin: Math.round(bMargin * 10) / 10,
+                                        currentPrice: cPrice,
+                                        currentMargin: Math.round(cMargin * 10) / 10,
+                                        diffPrice: cPrice - bPrice
+                                    });
+                                }
+                            });
+                            diffsRecord[rootId] = changed;
+                        }
+                    }));
+                    setThreadSkuDiffs(diffsRecord);
+                }
+            }
         } catch (err) {
             console.error('Error fetching quotes:', err);
         } finally {
@@ -325,16 +403,68 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
         }
     };
 
-    const filteredQuotes = quotes.filter(q => {
-        const effStatus = getEffectiveStatus(q);
-        const term = searchTerm.toLowerCase();
-        const matchesSearch = !term || 
+    const filteredQuotes = useMemo(() => {
+        const term = searchTerm.toLowerCase().trim();
+        const matchesTerm = (q: any) => !term ||
             (q.client_name && q.client_name.toLowerCase().includes(term)) ||
             (q.quote_number && String(q.quote_number).toLowerCase().includes(term)) ||
+            (q.quote_number && formatQuoteNumber(q.quote_number, q.status, q.created_at, q).toLowerCase().includes(term)) ||
             (q.model_snapshot_name && q.model_snapshot_name.toLowerCase().includes(term));
-        const matchesStatus = filterStatus === 'all' || effStatus === filterStatus;
-        return matchesSearch && matchesStatus;
-    });
+
+        // Si el usuario filtra explícitamente 'Reemplazadas', mostrar los registros históricos individuales
+        if (filterStatus === 'superseded') {
+            return quotes.filter(q => getEffectiveStatus(q) === 'superseded' && matchesTerm(q)).map(q => ({
+                ...q,
+                _threadRootId: q.id,
+                _threadVersions: [q],
+                _baseQuote: q
+            }));
+        }
+
+        // Agrupación Canónica por Hilo de Negociación (Una Sola Cotización con Versiones v1 -> v2 -> v3)
+        const byId = new Map<string, any>(quotes.map(q => [q.id, q]));
+        const getRootId = (q: any): string => {
+            let curr = q;
+            const visited = new Set<string>();
+            while (curr?.parent_quote_id && !visited.has(curr.id)) {
+                visited.add(curr.id);
+                const parent = byId.get(curr.parent_quote_id);
+                if (parent) curr = parent;
+                else return curr.parent_quote_id;
+            }
+            return curr?.id || q.id;
+        };
+
+        const threadMap = new Map<string, any[]>();
+        quotes.forEach(q => {
+            const rId = getRootId(q);
+            if (!threadMap.has(rId)) threadMap.set(rId, []);
+            threadMap.get(rId)!.push(q);
+        });
+
+        const unifiedRows: any[] = [];
+        threadMap.forEach((group, rId) => {
+            const sorted = [...group].sort((a, b) =>
+                (Number(a.version || 1) - Number(b.version || 1)) ||
+                (new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            );
+            const baseQuote = sorted[0];
+            const headQuote = sorted[sorted.length - 1];
+            const effStatus = getEffectiveStatus(headQuote);
+            const statusMatch = filterStatus === 'all' || effStatus === filterStatus;
+            const searchMatch = sorted.some(matchesTerm);
+            if (statusMatch && searchMatch) {
+                unifiedRows.push({
+                    ...headQuote,
+                    model_snapshot_name: (headQuote.model_snapshot_name && headQuote.model_snapshot_name !== 'General institucional dinámico') ? headQuote.model_snapshot_name : (baseQuote.model_snapshot_name || headQuote.model_snapshot_name),
+                    _threadRootId: rId,
+                    _threadVersions: sorted,
+                    _baseQuote: baseQuote
+                });
+            }
+        });
+        return unifiedRows;
+    }, [quotes, searchTerm, filterStatus]);
 
     return (
         <main style={{ minHeight: embedded ? 'auto' : '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
@@ -601,224 +731,536 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                     else if (sortField === 'total_amount') cmp = Number(a.total_amount || a.total || 0) - Number(b.total_amount || b.total || 0);
                                     else if (sortField === 'status') cmp = getEffectiveStatus(a).localeCompare(getEffectiveStatus(b), 'es', { sensitivity: 'base' });
                                     return sortDir === 'asc' ? cmp : -cmp;
-                                }).map(quote => (
-                                    <tr 
-                                        key={quote.id} 
-                                        style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s ease' }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                            <span style={{ 
-                                                fontFamily: 'monospace', 
-                                                fontSize: '0.75rem', 
-                                                backgroundColor: '#F1F5F9', 
-                                                padding: '4px 8px', 
-                                                borderRadius: '6px', 
-                                                fontWeight: 'bold', 
-                                                color: '#475569',
-                                                border: '1px solid #E2E8F0'
-                                            }}>
-                                                {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.status, quote.created_at, quote) : '---'}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                            {formatDate(quote.created_at)}
-                                        </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                             <div style={{ fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
-                                                 {quote.client_name}
-                                             </div>
-                                             {renderClientTypeBadge(quote)}
-                                         </td>
-                                         <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                             {quote.model_snapshot_name || '---'}
-                                         </td>
-                                         <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.92rem', verticalAlign: 'middle', textAlign: 'right', fontFamily: 'monospace', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                             {formatMoney(quote.total_amount || quote.total || 0)}
-                                         </td>
-                                         <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                             {getStatusBadge(quote.status, quote)}
-                                         </td>
-                                         <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                                                 <Link href={`/admin/commercial/quotes/${quote.id}/print`} target="_blank" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-                                                     <button 
-                                                         title="Descargar PDF / Imprimir"
-                                                         style={{ 
-                                                             height: '32px',
-                                                             boxSizing: 'border-box',
-                                                             border: '1px solid transparent',
-                                                             backgroundColor: '#EFF6FF',
-                                                             color: '#1D4ED8',
-                                                             padding: '0 0.75rem',
-                                                             borderRadius: THEME.radius.sm,
-                                                             cursor: 'pointer', 
-                                                             fontWeight: '700',
-                                                             fontSize: '0.75rem',
-                                                             display: 'inline-flex',
-                                                             alignItems: 'center',
-                                                             justifyContent: 'center',
-                                                             gap: '4px',
-                                                             transition: 'all 0.2s'
-                                                         }}
-                                                         onMouseEnter={(e) => {
-                                                             e.currentTarget.style.backgroundColor = '#DBEAFE';
-                                                         }}
-                                                         onMouseLeave={(e) => {
-                                                             e.currentTarget.style.backgroundColor = '#EFF6FF';
-                                                         }}
-                                                     >
-                                                         <FileText size={12} strokeWidth={2} /> PDF
-                                                     </button>
-                                                 </Link>
-                                                 {(() => {
-                                                     const eff = getEffectiveStatus(quote);
-                                                     if (eff === 'sent' || eff === 'draft' || eff === 'accepted') {
-                                                         return (
-                                                             <button 
-                                                                 onClick={() => handleOpenApproveModal(quote)}
-                                                                 title="Aprobar propuesta vigente y congelar acuerdo de precios"
-                                                                 style={{ 
-                                                                     height: '32px',
-                                                                     boxSizing: 'border-box',
-                                                                     border: '1px solid #A7F3D0',
-                                                                     backgroundColor: '#ECFDF5',
-                                                                     color: '#047857',
-                                                                     padding: '0 0.75rem',
-                                                                     borderRadius: THEME.radius.sm,
-                                                                     cursor: 'pointer', 
-                                                                     fontWeight: '700',
-                                                                     fontSize: '0.75rem',
-                                                                     display: 'inline-flex',
-                                                                     alignItems: 'center',
-                                                                     justifyContent: 'center',
-                                                                     gap: '4px',
-                                                                     transition: 'all 0.2s'
-                                                                 }}
-                                                                 onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#D1FAE5'; }}
-                                                                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ECFDF5'; }}
-                                                             >
-                                                                 <Handshake size={13} strokeWidth={2} /> Aprobar y Congelar
-                                                             </button>
-                                                         );
-                                                     }
-                                                     if (eff === 'expired') {
-                                                         return (
-                                                             <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-                                                                 <button 
-                                                                     title="Recotizar canasta actualizando a costos vivos de hoy"
-                                                                     style={{ 
-                                                                         height: '32px',
-                                                                         boxSizing: 'border-box',
-                                                                         border: '1px solid #FDE68A',
-                                                                         backgroundColor: '#FFFBEB',
-                                                                         color: '#B45309',
-                                                                         padding: '0 0.75rem',
-                                                                         borderRadius: THEME.radius.sm,
-                                                                         cursor: 'pointer', 
-                                                                         fontWeight: '700',
-                                                                         fontSize: '0.75rem',
-                                                                         display: 'inline-flex',
-                                                                         alignItems: 'center',
-                                                                         justifyContent: 'center',
-                                                                         gap: '4px',
-                                                                         transition: 'all 0.2s'
-                                                                     }}
-                                                                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEF3C7'; }}
-                                                                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFBEB'; }}
-                                                                 >
-                                                                     <RefreshCw size={12} strokeWidth={2} /> Recotizar Hoy
-                                                                 </button>
-                                                             </Link>
-                                                         );
-                                                     }
-                                                     if (eff === 'superseded' || eff === 'rejected') {
-                                                         return (
-                                                             <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-                                                                 <button 
-                                                                     title="Duplicar como nueva cotización con precios actualizados"
-                                                                     style={{ 
-                                                                         height: '32px',
-                                                                         boxSizing: 'border-box',
-                                                                         border: '1px solid #CBD5E1',
-                                                                         backgroundColor: '#F8FAFC',
-                                                                         color: '#475569',
-                                                                         padding: '0 0.75rem',
-                                                                         borderRadius: THEME.radius.sm,
-                                                                         cursor: 'pointer', 
-                                                                         fontWeight: '700',
-                                                                         fontSize: '0.75rem',
-                                                                         display: 'inline-flex',
-                                                                         alignItems: 'center',
-                                                                         justifyContent: 'center',
-                                                                         gap: '4px',
-                                                                         transition: 'all 0.2s'
-                                                                     }}
-                                                                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F1F5F9'; }}
-                                                                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
-                                                                 >
-                                                                     <Copy size={12} strokeWidth={2} /> Duplicar
-                                                                 </button>
-                                                             </Link>
-                                                         );
-                                                     }
-                                                     return null;
-                                                 })()}
-                                                 <Link href={`/admin/commercial/quotes/${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-                                                     <button style={{ 
-                                                         height: '32px',
-                                                         boxSizing: 'border-box',
-                                                         border: `1px solid ${THEME.colors.borderActive}`,
-                                                         backgroundColor: 'white',
-                                                         color: THEME.colors.textSecondary,
-                                                         padding: '0 0.75rem',
-                                                         borderRadius: THEME.radius.sm,
-                                                         cursor: 'pointer', 
-                                                         fontWeight: '600',
-                                                         fontSize: '0.75rem',
-                                                         display: 'inline-flex',
-                                                         alignItems: 'center',
-                                                         justifyContent: 'center',
-                                                         gap: '4px',
-                                                         transition: 'all 0.2s'
-                                                     }}>
-                                                         Ver Detalle <ChevronRight size={12} strokeWidth={1.5} />
-                                                     </button>
-                                                 </Link>
-                                                 <button 
-                                                     onClick={() => handleDelete(quote.id, quote.quote_number)}
-                                                     style={{ 
-                                                         height: '32px',
-                                                         width: '32px',
-                                                         boxSizing: 'border-box',
-                                                         color: '#EF4444', 
-                                                         backgroundColor: 'white', 
-                                                         border: `1px solid ${THEME.colors.border}`, 
-                                                         cursor: 'pointer', 
-                                                         padding: 0, 
-                                                         borderRadius: THEME.radius.sm, 
-                                                         display: 'inline-flex', 
-                                                         alignItems: 'center', 
-                                                         justifyContent: 'center',
-                                                         transition: 'all 0.2s' 
-                                                     }}
-                                                     onMouseEnter={(e) => {
-                                                         e.currentTarget.style.backgroundColor = '#FEE2E2';
-                                                         e.currentTarget.style.borderColor = '#EF4444';
-                                                     }}
-                                                     onMouseLeave={(e) => {
-                                                         e.currentTarget.style.backgroundColor = 'white';
-                                                         e.currentTarget.style.borderColor = THEME.colors.border;
-                                                     }}
-                                                     title="Eliminar permanentemente"
-                                                 >
-                                                     <Trash2 size={14} strokeWidth={1.5} />
-                                                 </button>
-                                             </div>
-                                         </td>
-                                    </tr>
-                                ))}
+                                }).map(quote => {
+                                    const threadVersions: any[] = quote._threadVersions || [quote];
+                                    const isMultiVersion = threadVersions.length > 1;
+                                    const rootId = quote._threadRootId || quote.id;
+                                    const isExpanded = isMultiVersion && !collapsedThreads[rootId];
+                                    const baseQuote = quote._baseQuote || threadVersions[0];
+                                    const skuDiffs = threadSkuDiffs[rootId] || [];
+                                    const totalDelta = isMultiVersion ? (Number(quote.total_amount || 0) - Number(baseQuote?.total_amount || 0)) : 0;
+                                    const currentVerNum = quote.version || threadVersions.length;
+
+                                    return (
+                                        <React.Fragment key={quote.id}>
+                                            <tr 
+                                                style={{ 
+                                                    borderBottom: isExpanded ? 'none' : `1px solid ${THEME.colors.border}`, 
+                                                    transition: 'background 0.2s ease',
+                                                    backgroundColor: isMultiVersion ? '#FAFBFF' : 'transparent'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isMultiVersion ? '#F3F5FF' : '#F8FAF9'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isMultiVersion ? '#FAFBFF' : 'transparent'}
+                                            >
+                                                <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap', borderBottom: isExpanded ? 'none' : `1px solid ${THEME.colors.border}`, borderLeft: isMultiVersion ? '4px solid #4F46E5' : undefined }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{ 
+                                                                fontFamily: 'monospace', 
+                                                                fontSize: '0.75rem', 
+                                                                backgroundColor: '#F1F5F9', 
+                                                                padding: '4px 8px', 
+                                                                borderRadius: '6px', 
+                                                                fontWeight: 'bold', 
+                                                                color: '#475569',
+                                                                border: '1px solid #E2E8F0'
+                                                            }}>
+                                                                {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.status, quote.created_at, quote) : '---'}
+                                                            </span>
+                                                            {isMultiVersion && (
+                                                                <span style={{
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: 800,
+                                                                    backgroundColor: '#EEF2FF',
+                                                                    color: '#4338CA',
+                                                                    border: '1px solid #C7D2FE',
+                                                                    padding: '2px 7px',
+                                                                    borderRadius: '999px',
+                                                                    letterSpacing: '0.02em'
+                                                                }}>
+                                                                    v{currentVerNum} · Vigente
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {isMultiVersion && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleThreadExpand(rootId)}
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: 700,
+                                                                    color: '#4F46E5',
+                                                                    backgroundColor: '#FFFFFF',
+                                                                    border: '1px solid #C7D2FE',
+                                                                    borderRadius: '6px',
+                                                                    padding: '2px 7px',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <GitBranch size={11} />
+                                                                <span>Ciclo: v1 → v{currentVerNum} ({threadVersions.length} vers.)</span>
+                                                                {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', borderBottom: isExpanded ? 'none' : `1px solid ${THEME.colors.border}` }}>
+                                                    {formatDate(quote.created_at)}
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle', borderBottom: isExpanded ? 'none' : `1px solid ${THEME.colors.border}` }}>
+                                                    <div style={{ fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
+                                                        {quote.client_name}
+                                                    </div>
+                                                    {renderClientTypeBadge(quote)}
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', verticalAlign: 'middle', borderBottom: isExpanded ? 'none' : `1px solid ${THEME.colors.border}` }}>
+                                                    <div style={{ fontWeight: 600, color: '#334155' }}>
+                                                        {quote.model_snapshot_name || '---'}
+                                                    </div>
+                                                    {isMultiVersion && skuDiffs.length > 0 && (
+                                                        <div style={{
+                                                            marginTop: '4px',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: 700,
+                                                            color: '#0D7A57',
+                                                            backgroundColor: '#ECFDF5',
+                                                            border: '1px solid #A7F3D0',
+                                                            padding: '2px 7px',
+                                                            borderRadius: '6px'
+                                                        }}>
+                                                            <span>🔧 {skuDiffs.length} {skuDiffs.length === 1 ? 'precio ajustado' : 'precios ajustados'} vs. v1 Base</span>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.92rem', verticalAlign: 'middle', textAlign: 'right', fontFamily: 'monospace', borderBottom: isExpanded ? 'none' : `1px solid ${THEME.colors.border}` }}>
+                                                    <div>{formatMoney(quote.total_amount || quote.total || 0)}</div>
+                                                    {isMultiVersion && totalDelta !== 0 && (
+                                                        <div style={{
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: 700,
+                                                            color: totalDelta < 0 ? '#0369A1' : '#B45309',
+                                                            marginTop: '2px'
+                                                        }}>
+                                                            {totalDelta < 0 ? '↘ -' : '↗ +'}{formatMoney(Math.abs(totalDelta))} vs. v1
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle', borderBottom: isExpanded ? 'none' : `1px solid ${THEME.colors.border}` }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                                                        {getStatusBadge(quote.status, quote)}
+                                                        {isMultiVersion && (
+                                                            <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#4F46E5' }}>
+                                                                Negociación v{currentVerNum} → Por Congelar
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right', verticalAlign: 'middle', borderBottom: isExpanded ? 'none' : `1px solid ${THEME.colors.border}` }}>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                                        <Link href={`/admin/commercial/quotes/${quote.id}/print`} target="_blank" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                                            <button 
+                                                                title="Descargar PDF / Imprimir"
+                                                                style={{ 
+                                                                    height: '32px',
+                                                                    boxSizing: 'border-box',
+                                                                    border: '1px solid transparent',
+                                                                    backgroundColor: '#EFF6FF',
+                                                                    color: '#1D4ED8',
+                                                                    padding: '0 0.75rem',
+                                                                    borderRadius: THEME.radius.sm,
+                                                                    cursor: 'pointer', 
+                                                                    fontWeight: '700',
+                                                                    fontSize: '0.75rem',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '4px',
+                                                                    transition: 'all 0.2s'
+                                                                }}
+                                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#DBEAFE'; }}
+                                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#EFF6FF'; }}
+                                                            >
+                                                                <FileText size={12} strokeWidth={2} /> PDF
+                                                            </button>
+                                                        </Link>
+                                                        {(() => {
+                                                            const eff = getEffectiveStatus(quote);
+                                                            if (eff === 'sent' || eff === 'draft' || eff === 'accepted') {
+                                                                return (
+                                                                    <button 
+                                                                        onClick={() => handleOpenApproveModal(quote)}
+                                                                        title="Aprobar propuesta vigente y congelar acuerdo de precios"
+                                                                        style={{ 
+                                                                            height: '32px',
+                                                                            boxSizing: 'border-box',
+                                                                            border: '1px solid #A7F3D0',
+                                                                            backgroundColor: '#ECFDF5',
+                                                                            color: '#047857',
+                                                                            padding: '0 0.75rem',
+                                                                            borderRadius: THEME.radius.sm,
+                                                                            cursor: 'pointer', 
+                                                                            fontWeight: '700',
+                                                                            fontSize: '0.75rem',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            gap: '4px',
+                                                                            transition: 'all 0.2s'
+                                                                        }}
+                                                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#D1FAE5'; }}
+                                                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ECFDF5'; }}
+                                                                    >
+                                                                        <Handshake size={13} strokeWidth={2} /> Aprobar y Congelar
+                                                                    </button>
+                                                                );
+                                                            }
+                                                            if (eff === 'expired') {
+                                                                return (
+                                                                    <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                                                        <button 
+                                                                            title="Recotizar canasta actualizando a costos vivos de hoy"
+                                                                            style={{ 
+                                                                                height: '32px',
+                                                                                boxSizing: 'border-box',
+                                                                                border: '1px solid #FDE68A',
+                                                                                backgroundColor: '#FFFBEB',
+                                                                                color: '#B45309',
+                                                                                padding: '0 0.75rem',
+                                                                                borderRadius: THEME.radius.sm,
+                                                                                cursor: 'pointer', 
+                                                                                fontWeight: '700',
+                                                                                fontSize: '0.75rem',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                gap: '4px',
+                                                                                transition: 'all 0.2s'
+                                                                            }}
+                                                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEF3C7'; }}
+                                                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFBEB'; }}
+                                                                        >
+                                                                            <RefreshCw size={12} strokeWidth={2} /> Recotizar Hoy
+                                                                        </button>
+                                                                    </Link>
+                                                                );
+                                                            }
+                                                            if (eff === 'superseded' || eff === 'rejected') {
+                                                                return (
+                                                                    <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                                                        <button 
+                                                                            title="Duplicar como nueva cotización con precios actualizados"
+                                                                            style={{ 
+                                                                                height: '32px',
+                                                                                boxSizing: 'border-box',
+                                                                                border: '1px solid #CBD5E1',
+                                                                                backgroundColor: '#F8FAFC',
+                                                                                color: '#475569',
+                                                                                padding: '0 0.75rem',
+                                                                                borderRadius: THEME.radius.sm,
+                                                                                cursor: 'pointer', 
+                                                                                fontWeight: '700',
+                                                                                fontSize: '0.75rem',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                gap: '4px',
+                                                                                transition: 'all 0.2s'
+                                                                            }}
+                                                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F1F5F9'; }}
+                                                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                                                                        >
+                                                                            <Copy size={12} strokeWidth={2} /> Duplicar
+                                                                        </button>
+                                                                    </Link>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                        <Link href={`/admin/commercial/quotes/${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                                            <button style={{ 
+                                                                height: '32px',
+                                                                boxSizing: 'border-box',
+                                                                border: `1px solid ${THEME.colors.borderActive}`,
+                                                                backgroundColor: 'white',
+                                                                color: THEME.colors.textSecondary,
+                                                                padding: '0 0.75rem',
+                                                                borderRadius: THEME.radius.sm,
+                                                                cursor: 'pointer', 
+                                                                fontWeight: '600',
+                                                                fontSize: '0.75rem',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.2s'
+                                                            }}>
+                                                                Ver Detalle <ChevronRight size={12} strokeWidth={1.5} />
+                                                            </button>
+                                                        </Link>
+                                                        <button 
+                                                            onClick={() => handleDelete(quote.id, quote.quote_number)}
+                                                            style={{ 
+                                                                height: '32px',
+                                                                width: '32px',
+                                                                boxSizing: 'border-box',
+                                                                color: '#EF4444', 
+                                                                backgroundColor: 'white', 
+                                                                border: `1px solid ${THEME.colors.border}`, 
+                                                                cursor: 'pointer', 
+                                                                padding: 0, 
+                                                                borderRadius: THEME.radius.sm, 
+                                                                display: 'inline-flex', 
+                                                                alignItems: 'center', 
+                                                                justifyContent: 'center',
+                                                                transition: 'all 0.2s' 
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                                                e.currentTarget.style.borderColor = '#EF4444';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.currentTarget.style.backgroundColor = 'white';
+                                                                e.currentTarget.style.borderColor = THEME.colors.border;
+                                                            }}
+                                                            title="Eliminar permanentemente"
+                                                        >
+                                                            <Trash2 size={14} strokeWidth={1.5} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+
+                                            {/* SUB-FILA CONECTADA: LÍNEA DE TIEMPO DEL CICLO DE VIDA DE LA COTIZACIÓN (v1 -> v2 -> v3 -> ACUERDO) */}
+                                            {isMultiVersion && isExpanded && (
+                                                <tr>
+                                                    <td colSpan={7} style={{
+                                                        padding: '0.6rem 1.25rem 1.15rem 1.5rem',
+                                                        backgroundColor: '#F8FAFC',
+                                                        borderLeft: '4px solid #4F46E5',
+                                                        borderBottom: `1.5px solid ${THEME.colors.border}`
+                                                    }}>
+                                                        <div style={{
+                                                            backgroundColor: '#FFFFFF',
+                                                            border: '1px solid #E2E8F0',
+                                                            borderRadius: '12px',
+                                                            padding: '0.9rem 1.15rem',
+                                                            boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)'
+                                                        }}>
+                                                            {/* Cabecera del Hilo Evolutivo */}
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '0.75rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <span style={{
+                                                                        fontSize: '0.68rem',
+                                                                        fontWeight: 900,
+                                                                        textTransform: 'uppercase',
+                                                                        letterSpacing: '0.05em',
+                                                                        color: '#4338CA',
+                                                                        backgroundColor: '#EEF2FF',
+                                                                        padding: '3px 8px',
+                                                                        borderRadius: '6px',
+                                                                        border: '1px solid #C7D2FE'
+                                                                    }}>
+                                                                        Ciclo de Vida · 1 Sola Cotización en Negociación
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.76rem', color: '#475569', fontWeight: 600 }}>
+                                                                        Base estática inicial (<strong>v1</strong>) → Ajustes de precio solicitados → Conversión a <strong>Acuerdo Aplicado</strong>
+                                                                    </span>
+                                                                </div>
+                                                                <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        style={{
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: 700,
+                                                                            color: '#4338CA',
+                                                                            backgroundColor: '#EEF2FF',
+                                                                            border: '1px solid #C7D2FE',
+                                                                            borderRadius: '6px',
+                                                                            padding: '4px 10px',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '5px'
+                                                                        }}
+                                                                    >
+                                                                        <Edit3 size={11} /> + Nuevo Ajuste de Precios (Crear v{currentVerNum + 1})
+                                                                    </button>
+                                                                </Link>
+                                                            </div>
+
+                                                            {/* Stepper Horizontal de Versiones (v1 -> v2 -> v3 -> Meta Acuerdo) */}
+                                                            <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px', flexWrap: 'wrap' }}>
+                                                                {threadVersions.map((ver: any, idx: number) => {
+                                                                    const isFirst = idx === 0;
+                                                                    const isLatest = idx === threadVersions.length - 1;
+                                                                    const verNum = ver.version || (idx + 1);
+                                                                    const verTime = new Date(ver.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                                                                    const prevVer = idx > 0 ? threadVersions[idx - 1] : null;
+                                                                    const stepDelta = prevVer ? (Number(ver.total_amount || 0) - Number(prevVer.total_amount || 0)) : 0;
+
+                                                                    return (
+                                                                        <React.Fragment key={ver.id}>
+                                                                            <div style={{
+                                                                                flex: '1 1 210px',
+                                                                                backgroundColor: isLatest ? '#F0FDF4' : '#F8FAFC',
+                                                                                border: isLatest ? '1.5px solid #10B981' : '1px solid #E2E8F0',
+                                                                                borderRadius: '10px',
+                                                                                padding: '0.65rem 0.85rem',
+                                                                                display: 'flex',
+                                                                                flexDirection: 'column',
+                                                                                justifyContent: 'space-between',
+                                                                                gap: '6px'
+                                                                            }}>
+                                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
+                                                                                    <span style={{
+                                                                                        fontSize: '0.7rem',
+                                                                                        fontWeight: 800,
+                                                                                        color: isLatest ? '#065F46' : '#334155',
+                                                                                        backgroundColor: isLatest ? '#D1FAE5' : '#E2E8F0',
+                                                                                        padding: '2px 7px',
+                                                                                        borderRadius: '5px'
+                                                                                    }}>
+                                                                                        {isFirst ? `v${verNum} · Base Estática` : isLatest ? `v${verNum} · Ajuste Vigente` : `v${verNum} · Revisión`}
+                                                                                    </span>
+                                                                                    <span style={{ fontSize: '0.68rem', color: '#64748B', fontFamily: 'monospace', fontWeight: 700 }}>
+                                                                                        {formatQuoteNumber(ver.quote_number, ver.status, ver.created_at, ver)} · {verTime}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                                                                    <div style={{ fontSize: '0.88rem', fontWeight: 800, color: isLatest ? '#0D7A57' : '#475569', fontFamily: 'monospace' }}>
+                                                                                        {formatMoney(ver.total_amount || 0)}
+                                                                                        {stepDelta !== 0 && (
+                                                                                            <span style={{ fontSize: '0.68rem', marginLeft: '6px', color: stepDelta < 0 ? '#0369A1' : '#B45309' }}>
+                                                                                                ({stepDelta < 0 ? '-' : '+'}{formatMoney(Math.abs(stepDelta))})
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div style={{ display: 'inline-flex', gap: '6px' }}>
+                                                                                        <Link href={`/admin/commercial/quotes/${ver.id}/print`} target="_blank" style={{ fontSize: '0.68rem', fontWeight: 700, color: '#2563EB', textDecoration: 'none' }}>PDF</Link>
+                                                                                        <span style={{ color: '#CBD5E1', fontSize: '0.68rem' }}>|</span>
+                                                                                        <Link href={`/admin/commercial/quotes/${ver.id}`} style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569', textDecoration: 'none' }}>Ver v{verNum}</Link>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div style={{ fontSize: '0.68rem', color: isLatest ? '#047857' : '#64748B', fontWeight: 600 }}>
+                                                                                    {isFirst
+                                                                                        ? 'Precios y utilidad base inicial del modelo'
+                                                                                        : isLatest && skuDiffs.length > 0
+                                                                                            ? `${skuDiffs.length} ${skuDiffs.length === 1 ? 'producto ajustado' : 'productos ajustados'} sobre la base`
+                                                                                            : 'Iteración intermedia reemplazada'}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', color: '#94A3B8', fontWeight: 900, fontSize: '0.9rem' }}>→</div>
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })}
+
+                                                                {/* Paso Final del Ciclo: Acuerdo Aplicado */}
+                                                                <div style={{
+                                                                    flex: '1 1 200px',
+                                                                    backgroundColor: '#F8FAFC',
+                                                                    border: '1.5px dashed #10B981',
+                                                                    borderRadius: '10px',
+                                                                    padding: '0.65rem 0.85rem',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    justifyContent: 'space-between',
+                                                                    gap: '6px'
+                                                                }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                        <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#047857', backgroundColor: '#ECFDF5', padding: '2px 7px', borderRadius: '5px', border: '1px solid #A7F3D0' }}>
+                                                                            Meta · Acuerdo Aplicado
+                                                                        </span>
+                                                                        <span style={{ fontSize: '0.66rem', color: '#059669', fontWeight: 700 }}>Paso Final</span>
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.72rem', color: '#334155', fontWeight: 600 }}>
+                                                                        Congela los precios de <strong>v{currentVerNum}</strong> para pedidos del cliente.
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenApproveModal(quote)}
+                                                                        style={{
+                                                                            backgroundColor: '#0D7A57',
+                                                                            color: 'white',
+                                                                            border: 'none',
+                                                                            borderRadius: '6px',
+                                                                            padding: '5px 10px',
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: 800,
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            gap: '5px'
+                                                                        }}
+                                                                    >
+                                                                        <Handshake size={12} /> Convertir v{currentVerNum} en Acuerdo
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Desglose de SKUs Ajustados respecto a la v1 Base */}
+                                                            {skuDiffs.length > 0 && (
+                                                                <div style={{
+                                                                    marginTop: '0.75rem',
+                                                                    paddingTop: '0.65rem',
+                                                                    borderTop: '1px solid #F1F5F9',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '8px',
+                                                                    flexWrap: 'wrap'
+                                                                }}>
+                                                                    <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
+                                                                        Ajustes aplicados (v1 → v{currentVerNum}):
+                                                                    </span>
+                                                                    {skuDiffs.map(d => (
+                                                                        <div
+                                                                            key={d.productId}
+                                                                            style={{
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '6px',
+                                                                                backgroundColor: '#F8FAFC',
+                                                                                border: '1px solid #CBD5E1',
+                                                                                borderRadius: '7px',
+                                                                                padding: '3px 9px',
+                                                                                fontSize: '0.73rem'
+                                                                            }}
+                                                                        >
+                                                                            <strong style={{ color: '#0F172A' }}>{d.name}:</strong>
+                                                                            <span style={{ color: '#64748B', textDecoration: 'line-through', fontFamily: 'monospace' }}>
+                                                                                {formatMoney(d.basePrice)} ({d.baseMargin}%)
+                                                                            </span>
+                                                                            <span style={{ color: '#94A3B8' }}>→</span>
+                                                                            <strong style={{ color: '#0D7A57', fontFamily: 'monospace' }}>
+                                                                                {formatMoney(d.currentPrice)} ({d.currentMargin}%)
+                                                                            </strong>
+                                                                            <span style={{
+                                                                                fontSize: '0.66rem',
+                                                                                fontWeight: 800,
+                                                                                backgroundColor: d.diffPrice < 0 ? '#E0F2FE' : '#FEF3C7',
+                                                                                color: d.diffPrice < 0 ? '#0369A1' : '#B45309',
+                                                                                padding: '1px 5px',
+                                                                                borderRadius: '4px'
+                                                                            }}>
+                                                                                {d.diffPrice < 0 ? '-' : '+'}{formatMoney(Math.abs(d.diffPrice))}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     )}

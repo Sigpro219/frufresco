@@ -13014,3 +13014,23 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - Un margen se marca como personalizado (`isCustomMargin`) únicamente cuando existe un override explícito en `quote_template_margins:{templateId}` que difiere del margen base heredado de `General Institucional Dinámico`.
   3. **Ordenadores Tri-Estado en Columnas de Canasta:**
      - Las 10 columnas de datos de la tabla de Canastas (`ID ERP`, `Producto`, `Categoría`, `Costo Base`, `IVA`, `Utilidad`, `Sug. sin IVA`, `Precio Final`, `Consumo 30d`, `Utilidad Total`) implementan el protocolo Tri-Estado (`asc` $\to$ `desc` $\to$ `null`) de `estandar-galerias-frufresco`.
+
+
+---
+
+### Escenario 345: Agrupación por Hilo Evolutivo de Negociación ("Una Sola Cotización") y Línea de Tiempo del Ciclo de Vida con Trazabilidad de Ajustes SKU (SDD v1.9.328)
+- **Given** el **Historial de Cotizaciones** (`/admin/commercial?tab=operations&subtab=quotes`, `src/app/admin/commercial/quotes/page.tsx`), el generador (`/admin/commercial/quotes/create`) y la vista de detalle (`/admin/commercial/quotes/[id]`), donde una misma propuesta comercial iterada con el cliente (ej. **ADMINISTRADORA MONSERRATE S.A.S**: `COT 2910 0201` `v1` $\to$ `COT 2910 0202` `v2` $\to$ `COT 2910 0203` `v3`) se renderizaba previamente como tres filas planas desconectadas sin comunicar visualmente su evolución ni qué productos habían sido ajustados sobre la línea base inicial,
+- **When** el comercial o directivo consulta la galería de cotizaciones o inspecciona el detalle de una negociación con múltiples versiones encadenadas por `parent_quote_id`:
+- **Then** el sistema aplica las siguientes reglas contractuales de ciclo de vida:
+  1. **Consolidación por Hilo Evolutivo en Galería (`quotes/page.tsx`):**
+     - En las vistas operativas (`Todas`, `Enviadas`, `Borrador`, `Vencidas`), todas las versiones pertenecientes a la misma cadena genealógica (`parent_quote_id`) se unifican bajo una **Única Fila Maestra** encabezada por la versión vigente (`vN · Vigente`, ej. `COT 2910 0203 · v3`), reservando la vista individual plana para el filtro histórico `Reemplazadas`.
+     - La fila maestra expone el botón interactivo **`[Ciclo: v1 → vN (N vers.)]`**, el indicador de variación monetaria frente a la base (`↘ -$4.150 vs. v1`) y el contador de referencias modificadas (`🔧 2 precios ajustados vs. v1 Base`).
+  2. **Línea de Tiempo Conectada del Ciclo de Vida (`v1 Base Estática` $\to$ `Ajustes` $\to$ `Meta: Acuerdo Aplicado`):**
+     - Bajo la fila maestra se despliega el panel del **Ciclo de Vida de la Cotización**, proyectando de forma secuencial:
+       - **`v1 · Base Estática`**: Folio inicial, hora de emisión, valor total inicial y acceso directo a su PDF y vista de detalle.
+       - **`v2 .. vN · Revisiones y Ajuste Vigente`**: Eslabones intermedios y versión activa con su diferencial monetario y botón rápido **`[+ Nuevo Ajuste de Precios (Crear vN+1)]`**.
+       - **`Meta · Acuerdo Aplicado`**: Paso final del ciclo con acción directa **`[Convertir vN en Acuerdo]`** para congelar las tarifas negociadas.
+  3. **Auditoría Automática de Ajustes SKU a SKU (`v1` vs. `vN`):**
+     - El sistema compara automáticamente los `quote_items` de la versión vigente contra la versión base `v1` y estampa las píldoras de trazabilidad exacta de los productos negociados (ej. **`Habichuela: $19.450 (130%) → $16.900 (100%) [-$2.550]`**, **`Agraz seleccionado: $32.000 (100%) → $30.400 (90%) [-$1.600]`**), tanto en la línea de tiempo de la galería como en el banner superior y en las filas resaltadas de la vista de detalle (`/admin/commercial/quotes/[id]`).
+  4. **Preservación de Identidad de Canasta y Márgenes Negociados en Iteraciones (`quotes/create/page.tsx`):**
+     - Al generar una nueva versión desde una cotización activa (`?duplicate_from={id}`), `loadDuplicateQuote` preserva íntegramente el `model_snapshot_name` de la canasta del cliente y protege los precios/márgenes ya negociados (`has_custom_margin = true`) para que el ajuste puntual de 1 o 2 productos no sobrescriba el resto de la propuesta.

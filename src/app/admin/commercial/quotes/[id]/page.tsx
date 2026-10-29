@@ -118,6 +118,8 @@ export default function QuoteDetailPage() {
     const [lead, setLead] = useState<any>(null);
     const [clientProfile, setClientProfile] = useState<any>(null);
     const [items, setItems] = useState<any[]>([]);
+    const [threadVersions, setThreadVersions] = useState<any[]>([]);
+    const [baseItemsMap, setBaseItemsMap] = useState<Record<string, { unit_price: number; margin_percent: number }>>({});
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
 
@@ -217,6 +219,52 @@ export default function QuoteDetailPage() {
 
             if (iErr) throw iErr;
             if (iData) setItems(iData);
+
+            // 5. Cargar el hilo de versiones de esta cotización (v1 -> v2 -> v3)
+            let clientQuotesQuery = supabase.from('quotes').select('id, quote_number, version, status, total_amount, created_at, parent_quote_id, model_snapshot_name');
+            if (qData.client_id) {
+                clientQuotesQuery = clientQuotesQuery.eq('client_id', qData.client_id);
+            } else if (qData.client_name) {
+                clientQuotesQuery = clientQuotesQuery.eq('client_name', qData.client_name);
+            }
+            const { data: relatedQuotes } = await clientQuotesQuery;
+            if (relatedQuotes && relatedQuotes.length > 1) {
+                const byId = new Map<string, any>(relatedQuotes.map((rq: any) => [rq.id, rq]));
+                const getRoot = (rq: any): string => {
+                    let curr = rq;
+                    const vis = new Set<string>();
+                    while (curr?.parent_quote_id && !vis.has(curr.id)) {
+                        vis.add(curr.id);
+                        const p = byId.get(curr.parent_quote_id);
+                        if (p) curr = p;
+                        else return curr.parent_quote_id;
+                    }
+                    return curr?.id || rq.id;
+                };
+                const targetRoot = getRoot(qData);
+                const chain = relatedQuotes
+                    .filter((rq: any) => getRoot(rq) === targetRoot)
+                    .sort((a: any, b: any) => (Number(a.version || 1) - Number(b.version || 1)) || (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
+                setThreadVersions(chain);
+                if (chain.length > 1 && chain[0].id !== qData.id) {
+                    const { data: v1Items } = await supabase
+                        .from('quote_items')
+                        .select('product_id, unit_price, margin_percent')
+                        .eq('quote_id', chain[0].id);
+                    if (v1Items) {
+                        const bMap: Record<string, { unit_price: number; margin_percent: number }> = {};
+                        v1Items.forEach((bi: any) => {
+                            bMap[bi.product_id] = { unit_price: Number(bi.unit_price || 0), margin_percent: Number(bi.margin_percent || 0) };
+                        });
+                        setBaseItemsMap(bMap);
+                    }
+                } else {
+                    setBaseItemsMap({});
+                }
+            } else {
+                setThreadVersions([qData]);
+                setBaseItemsMap({});
+            }
         } catch (err: any) {
             console.error('Error fetching quote details:', err);
             alert('Error cargando cotización: ' + (err.message || err));
@@ -1089,6 +1137,109 @@ export default function QuoteDetailPage() {
                     </div>
                 )}
 
+                {/* BANNER DE CICLO DE VIDA Y TRAZABILIDAD DE AJUSTES (v1 -> vN -> Acuerdo) */}
+                {threadVersions.length > 1 && (() => {
+                    const modifiedItems = items.filter(it => {
+                        const baseIt = baseItemsMap[it.product_id];
+                        if (!baseIt) return false;
+                        return Math.abs(Number(it.unit_price || 0) - baseIt.unit_price) >= 1 || (Number(it.unit_price || 0) > 0 && Math.abs(Number(it.margin_percent || 0) - baseIt.margin_percent) >= 0.1);
+                    });
+                    const hasAgreement = threadVersions.some(v => v.status === 'agreement');
+                    return (
+                        <div style={{
+                            backgroundColor: 'white',
+                            border: '1.5px solid #C7D2FE',
+                            borderLeft: '5px solid #4F46E5',
+                            borderRadius: '14px',
+                            padding: '1.15rem 1.5rem',
+                            marginBottom: '1.5rem',
+                            boxShadow: '0 4px 14px rgba(79, 70, 229, 0.06)'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '0.85rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: '6px', border: '1px solid #C7D2FE' }}>
+                                        Ciclo de Vida de la Cotización ({threadVersions.length} versiones)
+                                    </span>
+                                    <span style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>
+                                        Evolución de una misma propuesta comercial desde su línea base estática (<strong>v1</strong>) hasta su conversión en acuerdo.
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                {threadVersions.map((ver, idx) => {
+                                    const isCurrent = ver.id === quote.id;
+                                    const verNum = ver.version || (idx + 1);
+                                    return (
+                                        <React.Fragment key={ver.id}>
+                                            <Link href={`/admin/commercial/quotes/${ver.id}`} style={{ textDecoration: 'none' }}>
+                                                <div style={{
+                                                    padding: '0.5rem 0.85rem',
+                                                    borderRadius: '9px',
+                                                    border: isCurrent ? '2px solid #4F46E5' : '1px solid #CBD5E1',
+                                                    backgroundColor: isCurrent ? '#EEF2FF' : '#F8FAFC',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '2px'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: isCurrent ? '#4338CA' : '#334155' }}>
+                                                            v{verNum} · {idx === 0 ? 'Base Estática' : (idx === threadVersions.length - 1 ? 'Ajuste Vigente' : 'Revisión')}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.68rem', color: '#64748B', fontFamily: 'monospace' }}>
+                                                            ({formatQuoteNumber(ver.quote_number, ver.status, ver.created_at)})
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.8rem', fontWeight: 800, color: isCurrent ? '#0D7A57' : '#475569', fontFamily: 'monospace' }}>
+                                                        ${formatPrice(ver.total_amount || 0)}
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                            <span style={{ color: '#94A3B8', fontWeight: 900 }}>→</span>
+                                        </React.Fragment>
+                                    );
+                                })}
+                                <div style={{
+                                    padding: '0.5rem 0.85rem',
+                                    borderRadius: '9px',
+                                    border: hasAgreement ? '2px solid #10B981' : '1.5px dashed #10B981',
+                                    backgroundColor: hasAgreement ? '#ECFDF5' : '#F8FAFC',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '2px'
+                                }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#047857' }}>
+                                        {hasAgreement ? '✅ Acuerdo Aplicado' : '⏳ Meta: Acuerdo Aplicado'}
+                                    </span>
+                                    <span style={{ fontSize: '0.68rem', color: '#065F46', fontWeight: 600 }}>
+                                        {hasAgreement ? 'Tarifas congeladas vigentes' : 'Al aprobar y congelar'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {modifiedItems.length > 0 && (
+                                <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
+                                        Precios / Márgenes ajustados respecto a v1 Base ({modifiedItems.length}):
+                                    </span>
+                                    {modifiedItems.map(it => {
+                                        const b = baseItemsMap[it.product_id];
+                                        return (
+                                            <span key={it.product_id} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', padding: '3px 8px', borderRadius: '6px', fontSize: '0.74rem' }}>
+                                                <strong>{it.product_name || it.products?.name}:</strong>
+                                                <span style={{ textDecoration: 'line-through', color: '#64748B', fontFamily: 'monospace' }}>${formatPrice(b.unit_price)} ({Math.round(b.margin_percent * 10) / 10}%)</span>
+                                                <span>→</span>
+                                                <strong style={{ color: '#0D7A57', fontFamily: 'monospace' }}>${formatPrice(it.unit_price || 0)} ({Math.round((it.margin_percent || 0) * 10) / 10}%)</strong>
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
+
                 {/* TABLA DE PRODUCTOS OFERTADOS */}
                 <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #E5E7EB' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1136,13 +1287,22 @@ export default function QuoteDetailPage() {
                                             const unitLabel = item.products?.unit_of_measure || item.unit || 'Kg';
                                             const minQtyLabel = formatMinQty(item);
 
+                                            const baseIt = baseItemsMap[item.product_id];
+                                            const isAdjustedVsBase = Boolean(baseIt && (Math.abs(Number(unitPrice) - baseIt.unit_price) >= 1 || (Number(unitPrice) > 0 && Math.abs(Number(item.margin_percent || 0) - baseIt.margin_percent) >= 0.1)));
                                             return (
-                                                <tr key={item.id || counter} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#94A3B8' }}>
+                                                <tr key={item.id || counter} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: isAdjustedVsBase ? '#F5F3FF' : 'transparent' }}>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#94A3B8', borderLeft: isAdjustedVsBase ? '3px solid #4F46E5' : undefined }}>
                                                         {String(counter).padStart(2, '0')}
                                                     </td>
                                                     <td style={{ padding: '0.45rem 0.85rem', fontWeight: '600', color: '#1E293B', fontSize: '0.84rem' }}>
-                                                        {item.product_name || item.products?.name || 'Producto'}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <span>{item.product_name || item.products?.name || 'Producto'}</span>
+                                                            {isAdjustedVsBase && baseIt && (
+                                                                <span style={{ fontSize: '0.68rem', fontWeight: 800, backgroundColor: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', padding: '1px 6px', borderRadius: '5px' }}>
+                                                                    🔧 Ajustado vs v1 (antes ${formatPrice(baseIt.unit_price)} · {Math.round(baseIt.margin_percent * 10) / 10}%)
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', color: '#475569', fontSize: '0.8rem' }}>
                                                         {unitLabel}
