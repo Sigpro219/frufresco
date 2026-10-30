@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.343 (Capítulo 45: Guardado Directo Universal en PDF/Excel con Selector Nativo `showSaveFilePicker`, Búsqueda Estricta de Producto en Sábana Oficial sin Colisión por Nombre de Célula y Acuerdos Comerciales de Octubre — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.344 (Capítulo 45: Aislamiento Asimétrico en Denegación Jerárquica RBAC — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 360 Escenarios BDD Ininterrumpidos (1..360)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 361 Escenarios BDD Ininterrumpidos (1..361)
 
 ---
 
@@ -13370,4 +13370,31 @@ Al confrontar forensemente la plantilla física en producción (`WorldOffice_Ped
 
 #### 3. Evidencias y Pruebas Automatizadas
 * **Auditoría Forense Celda por Celda (57 Columnas):** Ejecución de `scripts/test_1to1_sim.cjs` confirmando `100% IDENTICAL 1:1 CLONE` contra el archivo de referencia oficial de 930 registros.
+* **TypeScript Compilation:** `tsc --noEmit` con código de salida `0` (cero errores en todo el proyecto).
+
+
+### Escenario 361: Aislamiento Asimétrico en Denegación Jerárquica RBAC y Erradicación del Bloqueo Colateral de Módulos Padres por Denegación de Submódulos Hijos (`authContext.tsx`, `auth.ts`) (SDD v1.9.344)
+
+#### 1. Contexto y Justificación del Gemba
+En el marco de la operación comercial y de cartera, el usuario Nicolás Álvarez (`gestion.cartera@frufresco.com`, rol `LIDER DE CARTERA`) reportó que la barra de navegación del sistema le ocultaba por completo el acceso al área Comercial (`/admin/commercial`), a pesar de tener explícitamente configurados permisos de acceso comercial (`+admin.commercial`, `+admin.commercial.quotes`, `+admin.commercial.billing`).
+Al auditar forensemente el motor de permisos RBAC (`src/lib/authContext.tsx` y `src/lib/auth.ts`), se descubrió un defecto crítico de inversión lógica en la función de evaluación jerárquica (`matches`):
+* El perfil del usuario incluía la regla de denegación específica `-admin.commercial.inventory` (para impedir que el líder de cartera accediera a la toma física de inventario).
+* La función `matches` contenía la evaluación bidireccional: `if (cleanRule.startsWith(target + '.') || cleanRule.startsWith(target + ':')) return true;`.
+* Al consultar la barra de navegación si el usuario tenía acceso al módulo contenedor padre (`target = 'admin.commercial'`), la regla de denegación (`cleanRule = 'admin.commercial.inventory'`) evaluaba `cleanRule.startsWith('admin.commercial.')` como verdadero (`true`).
+* Como resultado colateral, el evaluador interpretaba que denegar el submódulo hijo (Inventario) implicaba **denegar todo el módulo padre contenedor (Comercial)**, bloqueando el acceso legítimo a Cotizaciones, Facturación y Cartera.
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Asimetría Estricta entre Denegaciones (`hasDeny`) y Permisiones (`hasAllow`):**
+   - **Regla de Denegación (Descendente Estricta):** Un permiso denegado (`-`) solo puede propagarse hacia abajo (de padre a hijos). Una regla `-admin.commercial` deniega `admin.commercial.billing`, pero una regla `-admin.commercial.inventory` **NUNCA** puede denegar al padre contenedor `admin.commercial`. Se erradica la coincidencia hijo-a-padre dentro de `matches`.
+   - **Regla de Permisión (Ascendente para Contenedores):** Si un usuario tiene permiso sobre un hijo (`+admin.commercial.billing`), el sistema le permite ver el contenedor padre (`admin.commercial`) en el menú de navegación para poder acceder a su submódulo autorizado (`cleanP.startsWith(target + '.')`).
+2. **Sincronización Cliente-Servidor:**
+   - Aplicado en el motor de frontend (`src/lib/authContext.tsx`, función `checkUserPermission`).
+   - Aplicado en el motor de backend (`src/lib/auth.ts`, función `checkUserPermissionBackend`).
+
+#### 3. Evidencias y Pruebas Automatizadas
+* **Matriz de Pruebas Unitarias:** Ejecución de pruebas con perfiles reales de Supabase confirmando:
+  - `check('admin.commercial')` $ightarrow$ `true`.
+  - `check('admin.commercial.billing')` $ightarrow$ `true`.
+  - `check('admin.commercial.inventory')` $ightarrow$ `false`.
+  - `check('admin.commercial.inventory.counts')` $ightarrow$ `false`.
 * **TypeScript Compilation:** `tsc --noEmit` con código de salida `0` (cero errores en todo el proyecto).

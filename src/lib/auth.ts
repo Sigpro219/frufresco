@@ -197,7 +197,6 @@ async function checkUserPermissionBackend(user: any, requiredPermission: string)
       if (cleanRule === '*' || cleanRule === target) return true;
       if (cleanRule.endsWith('*') && target.startsWith(cleanRule.slice(0, -1))) return true;
       if (target.startsWith(cleanRule + '.') || target.startsWith(cleanRule + ':')) return true;
-      if (cleanRule.startsWith(target + '.') || cleanRule.startsWith(target + ':')) return true;
       if ((cleanRule === 'admin.commercial.clients' || cleanRule.startsWith('admin.commercial.clients.')) && target.startsWith('admin.clients')) return true;
       if ((cleanRule === 'admin.clients' || cleanRule.startsWith('admin.clients.')) && target.startsWith('admin.commercial.clients')) return true;
       return false;
@@ -210,7 +209,13 @@ async function checkUserPermissionBackend(user: any, requiredPermission: string)
     }
 
     // 4. Check explicit allows (prefix '+' or no prefix)
-    const hasAllow = userPerms.some(p => !p.startsWith('-') && matches(p, requiredPermission));
+    const hasAllow = userPerms.some(p => {
+      if (p.startsWith('-')) return false;
+      const cleanP = p.replace(/^[+]/, '');
+      if (matches(p, requiredPermission)) return true;
+      if (cleanP.startsWith(requiredPermission + '.') || cleanP.startsWith(requiredPermission + ':')) return true;
+      return false;
+    });
     if (hasAllow) {
       return { authorized: true, user };
     }
