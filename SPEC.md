@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.341 (Capítulo 44: Guardado Directo Universal en PDF y Excel con Diálogo Nativo "Guardar como..." `window.showSaveFilePicker` sin Pasar por Impresora en los 7 Documentos Físicos y Asistente BCP — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.343 (Capítulo 45: Guardado Directo Universal en PDF/Excel con Selector Nativo `showSaveFilePicker`, Búsqueda Estricta de Producto en Sábana Oficial sin Colisión por Nombre de Célula y Acuerdos Comerciales de Octubre — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 357 Escenarios BDD Ininterrumpidos (1..357)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 359 Escenarios BDD Ininterrumpidos (1..359)
 
 ---
 
@@ -13294,3 +13294,51 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - El sistema operativo despliega siempre la ventana nativa **"Guardar como..."** para que el usuario elija libremente la carpeta de destino y el nombre del archivo antes de escribir el `Blob` en disco (con fallback automático a `<a download>` únicamente en navegadores que no implementen File System Access API).
   3. **Generación Directa en Segundo Plano desde el Asistente BCP (`ManualDispatchWizardModal.tsx`):**
      - Los botones `[PDF]` del Paso 1 (*Sábana de Alistamiento*), Paso 2 (*Planillas de Compra*, *Control de Ingreso y Báscula*, *Toma Física de Inventario*), Paso 3 (*Remisiones de Entrega*, *Manifiesto de Despacho*) y Paso 4 (*Rótulos Térmicos*) abren de inmediato el selector de archivos del sistema operativo, renderizan el documento oficial en un `<iframe>` aislado fuera de pantalla con telemetría de progreso (`PDF (1/N)...`) y escriben el archivo PDF directamente en la ruta seleccionada por el usuario.
+
+### Escenario 359: Acuerdos Comerciales de Octubre (22 Clientes/Canastas), Cálculo Paramétrico de Márgenes Fijos por Canasta (`quote_template_margins`), Desacople y Aislamiento Jerárquico Matriz vs Sede y Poda de Selector Redundante en Cargue de Pedidos (SDD v1.9.342)
+
+#### 1. Contexto y Justificación del Gemba
+En el marco de la operación comercial e industrial de FruFresco para el ciclo de acuerdos de octubre de 2026, la dirección comercial requirió asentar con exactitud milimétrica las listas de precios pactadas para 22 clientes/canastas corporativas provenientes de archivos `.xlsx` (`COLEGIO SAN JORGE`, `CORFERIAS`, `LA MONTAÑA`, y 19 clientes de la carpeta `Adicionales`). Se identificaron tres necesidades críticas del negocio:
+1. **Predominancia del Excel y Reconstrucción Fiel de Precios sin IVA:** La columna `SUG. SIN IVA` debía coincidir exactamente con los precios del Excel mediante el cálculo y fijación de la utilidad porcentual específica para cada producto y cliente.
+2. **Aislamiento Jerárquico Estricto (Matriz vs. Sede Específica):** La arquitectura debía soportar la herencia en cascada para Casas Matrices (`ALDIMARK`, `YANUBA / MILSEN`, `PUERTO PEÑALISA`, `CARNICOLAS`, `TACOCARDIA`) sin que las matrices pisaran los acuerdos puntuales de sedes con operaciones diferenciadas (`WOK FAMILIA` vs `WOK RESTAURANTE`, `CESAP` vs `CESNE`, `HOTEL CAPITAL`, `DIPLOMAT WYNDHAM`, `OXOHOTEL`, `TEQUENDAMA SUITES`).
+3. **Optimización de Toolbar en Cargue de Pedidos (`/admin/orders/loading`):** Se erradicó el selector redundante de canales en la barra superior para brindar un ancho amplio y desahogado al omnibox buscador en resoluciones medianas y laptops (1366px / 1440px), centralizando el filtro de canal en la cabecera de la tabla y en comandos rápidos (`@`).
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Fórmula Paramétrica de Utilidad Fija:**
+   $$\text{Utilidad \%} = \left(\frac{\text{Precio Excel (Sin IVA)} - \text{Costo Base}}{\text{Costo Base}}\right) \times 100$$
+   * Redondeo a 2 decimales para compatibilidad visual con los inputs numéricos de la interfaz.
+   * Si `Costo Base <= 0` (producto pendiente de compra o ingreso en Matriz Comercial), se preserva el margen o se asigna 0% hasta que ingrese el costo.
+2. **Persistencia en Base de Datos (`app_settings`):**
+   * Llave: `quote_template_margins:${templateId}`.
+   * Formato: `Record<productId, number>` serializado en JSON string en la columna `value` (`TEXT`).
+3. **Alta de 16 SKUs Nuevos en Catálogo Maestro (`products`):**
+   * Se crearon con `accounting_id` oficiales del ERP antiguo (`1658` al `1698`), llevando el catálogo maestro a 1.378 productos activos.
+4. **Nuevas Canastas Creadas en `quote_templates`:**
+   * `HOTELES EL SALITRE SAS - HOTEL CAPITAL`
+   * `OXOHOTEL S.A.S.`
+   * `FELIPE SANCHEZ - TACOCARDIA`
+   * `LAO KAO S.A. - WOK FAMILIA` (Independiente de `LAO KAO S.A. - RESTAURANTES WOK`).
+5. **Poda de Selector de Canales (`src/app/admin/orders/loading/page.tsx`):**
+   * Eliminado el bloque estático `<select value={selectedChannel}>...` de la toolbar superior.
+   * Preservado el filtrado de canal mediante `filterChannel` en el encabezado de columna de la tabla y los comandos rápidos del buscador (`@whatsapp`, `@web`, `@email`, etc.).
+
+#### 3. Evidencias y Pruebas Automatizadas
+* **TypeScript Compilation:** `tsc --noEmit` con código de salida `0` (cero errores en todo el proyecto).
+* **Capturas E2E:** 
+  - `verify_canastas_san_jorge.png` (232 SKUs, márgenes fijados en verde).
+  - `verify_canastas_corferias.png` (392 SKUs, márgenes fijados en verde).
+  - `verify_canastas_montana.png` (383 SKUs, márgenes fijados en verde).
+  - `verify_cargue_pedidos_no_selector.png` (Resolución 1366px, toolbar compacta en 1 sola fila).
+
+
+---
+
+### Escenario 360: Aislamiento de Búsqueda de Producto frente al Nombre Compuesto de Célula (`INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES`) y Auto-Expansión de Familias en la Sábana Oficial (`/admin/commercial/inventory`, `InventoryDailyBalanceTab.tsx`, `InventoryUnifiedDashboard.tsx`) (SDD v1.9.343)
+- **Given** la **Sábana Oficial y Modo Edición de Inventario** (`/admin/commercial/inventory`, `src/components/InventoryDailyBalanceTab.tsx` y `src/components/InventoryUnifiedDashboard.tsx`), donde la célula de tubérculos se denomina internamente en base de datos `INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES`,
+- **When** el usuario escribe el nombre de un producto en el buscador superior (por ejemplo `"tomate"`, `"aguacate"`, `"papa"` o `"platano"`):
+- **Then** el motor de búsqueda previene falsos positivos por colisión con el nombre largo de la célula:
+  1. **Exclusión de `inventory_group` / `cell` del Texto Libre de Búsqueda de Producto:**
+     - En `InventoryDailyBalanceTab.tsx` (`filteredRows`), `src/app/admin/commercial/inventory/page.tsx` (`baseFilteredProducts`) e `InventoryUnifiedDashboard.tsx` (`filteredProducts`), el texto libre del omnibox evalúa exclusivamente identidad del producto (`name`, `parentName`, `sku`, `accounting_id` y `category`), excluyendo `r.cell` / `p.inventory_group` para evitar que al buscar `"tomate"` se filtren los 76 SKUs de la célula *Papas* (plátanos, aguacates, etc.).
+     - El filtrado por célula se preserva de forma dedicada mediante las píldoras superiores de categoría (`Todas`, `Hortalizas`, `Verduras`, `Papas`, `Frutas`, `Abarrotes`, `Proce-Mora`), el filtro de columna `CÉLULA` (`colCell`) y el comando explícito `@celula:`.
+  2. **Poda de Hijos No Coincidentes y Auto-Expansión de Familias:**
+     - En `groupedDisplayRows` (`InventoryDailyBalanceTab.tsx`), cuando hay una búsqueda activa (`isSearching = Boolean(searchTerm.trim() || colProd.trim())`), un grupo familiar solo conserva las variantes hijas que coinciden con la búsqueda (o muestra todos los hijos únicamente si el nombre de la familia padre coincide directamente con el término buscado), auto-expandiendo las familias coincidentes para visualización inmediata sin clics adicionales.
