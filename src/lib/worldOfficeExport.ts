@@ -200,10 +200,11 @@ export function calculateDueDate(baseDateInput: string | Date | null | undefined
 }
 
 export function normalizeWorldOfficeUom(rawUom: string | null | undefined): string {
-    const clean = String(rawUom || 'kg').trim();
+    const clean = String(rawUom || 'Kg').trim();
     if (/^(lb|lbs|libra|libras)$/i.test(clean)) return 'LB';
-    if (/^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(clean)) return 'kg';
-    return 'Und.';
+    if (/^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(clean)) return 'Kg';
+    if (/^unid/i.test(clean)) return 'Unidad';
+    return clean || 'Kg';
 }
 
 /**
@@ -320,8 +321,8 @@ export async function downloadWorldOfficeExcel(
             ? Math.round(rawDocNum) 
             : (parseInt(String(rawDocNum).replace(/\D/g, ''), 10) || 1);
 
-        const numericTerceroInterno = Number(String(item.terceroInterno || '456282').replace(/\D/g, '')) || 456282;
-        const numericTerceroExterno = /^\d+$/.test(cleanNit) ? Number(cleanNit) : cleanNit;
+        const cleanTerceroInterno = String(item.terceroInterno || '456282').trim();
+        const cleanTerceroExterno = String(cleanNit).trim();
         const cleanSucursal = (item.sucursal && item.sucursal !== 'Principal')
             ? item.sucursal
             : (item.razonSocial || '');
@@ -335,8 +336,8 @@ export async function downloadWorldOfficeExcel(
             'Encab: Prefijo': item.prefijo || '',
             'Encab: Documento Número': cleanDocNum,
             'Encab: Fecha': docDateStr,
-            'Encab: Tercero Interno': numericTerceroInterno,
-            'Encab: Tercero Externo': numericTerceroExterno,
+            'Encab: Tercero Interno': cleanTerceroInterno,
+            'Encab: Tercero Externo': cleanTerceroExterno,
             'Encab: Nota': typeof item.notaEncabezado === 'string' && item.notaEncabezado.trim() ? item.notaEncabezado : (cleanSucursal || item.razonSocial || ''),
             'Encab: FormaPago': paymentMethod,
             'Encab: Fecha Entrega': deliveryDateStr,
@@ -360,9 +361,9 @@ export async function downloadWorldOfficeExcel(
             'Encab: Personalizado 14': '',
             'Encab: Personalizado 15': '',
             'Encab: Sucursal': cleanSucursal,
-            'Encab: Clasificación': item.clasificacion || 'Facturas de Venta',
+            'Encab: Clasificación': item.clasificacion || '',
             'Detalle: Producto': cleanProducto,
-            'Detalle: Bodega': item.bodega || 'BODEGA PRINCIPAL',
+            'Detalle: Bodega': item.bodega || 'Principal',
             'Detalle: UnidadDeMedida': normalizeWorldOfficeUom(item.unidadMedida),
             'Detalle: Cantidad': Number(item.cantidad) || 0,
             'Detalle: IVA': ivaDecimal,

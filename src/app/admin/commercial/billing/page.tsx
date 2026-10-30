@@ -856,8 +856,8 @@ export default function BillingDashboard() {
     const [rangeTo, setRangeTo] = useState(50000);
     const [savingConfig, setSavingConfig] = useState(false);
     // Escenario 302: Integración Contable World Office Desktop
-    const [woClassification, setWoClassification] = useState('Facturas de Venta');
-    const [woWarehouse, setWoWarehouse] = useState('BODEGA PRINCIPAL');
+    const [woClassification, setWoClassification] = useState('');
+    const [woWarehouse, setWoWarehouse] = useState('Principal');
 
     // Cut Preview Modal State
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -2890,8 +2890,8 @@ export default function BillingDashboard() {
                         diasCredito: paymentDays,
                         codigoProducto: prodCode,
                         descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
-                        bodega: woWarehouse || 'BODEGA PRINCIPAL',
-                        clasificacion: woClassification || 'Facturas de Venta',
+                        bodega: woWarehouse || 'Principal',
+                        clasificacion: woClassification || '',
                         unidadMedida: uom,
                         cantidad: qty,
                         valorUnitario: unitPrice,
@@ -3053,8 +3053,8 @@ export default function BillingDashboard() {
                         diasCredito: paymentDays,
                         codigoProducto: prodCode,
                         descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
-                        bodega: woWarehouse || 'BODEGA PRINCIPAL',
-                        clasificacion: woClassification || 'Facturas de Venta',
+                        bodega: woWarehouse || 'Principal',
+                        clasificacion: woClassification || '',
                         unidadMedida: uom,
                         cantidad: qty,
                         valorUnitario: unitPrice,
@@ -3561,8 +3561,8 @@ export default function BillingDashboard() {
                 { key: 'billing_range_to', value: String(rangeTo), description: 'Rango autorizado Hasta' },
                 { key: 'billing_delivery_grace_minutes', value: String(graceMinutes), description: 'Ventana de gracia en minutos post-entrega para auditoría de calidad y reclamaciones antes de facturación masiva' },
                 { key: 'billing_cut_close_time', value: String(cutCloseTime || '17:00'), description: 'Hora límite de cierre del corte de facturación (HH:MM) para el countdown de novedades de remisiones fuera de acuerdo a $0' },
-                { key: 'billing_wo_classification', value: String(woClassification || 'Facturas de Venta'), description: 'Clasificación oficial contable en World Office Desktop (Columna AE)' },
-                { key: 'billing_wo_warehouse', value: String(woWarehouse || 'BODEGA PRINCIPAL'), description: 'Nombre exacto de la bodega física en World Office Desktop (Columna AG)' },
+                { key: 'billing_wo_classification', value: String(woClassification || ''), description: 'Clasificación oficial contable en World Office Desktop (Columna AE) - Dejar vacío para importación estándar' },
+                { key: 'billing_wo_warehouse', value: String(woWarehouse || 'Principal'), description: 'Nombre exacto de la bodega física en World Office Desktop (Columna AG)' },
             ];
 
             for (const item of updates) {
@@ -6941,7 +6941,7 @@ export default function BillingDashboard() {
                                         value={woClassification}
                                         onChange={(e) => setWoClassification(e.target.value)}
                                         style={{ ...inputStyle, fontWeight: '700' }}
-                                        placeholder="Ej: Facturas de Venta"
+                                        placeholder="Dejar vacío para plantilla estándar (recomendado)"
                                         title="Nombre exacto de la clasificación contable en World Office Desktop"
                                     />
                                 </div>
@@ -6952,7 +6952,7 @@ export default function BillingDashboard() {
                                         value={woWarehouse}
                                         onChange={(e) => setWoWarehouse(e.target.value)}
                                         style={{ ...inputStyle, fontWeight: '700' }}
-                                        placeholder="Ej: BODEGA PRINCIPAL"
+                                        placeholder="Ej: Principal"
                                         title="Nombre exacto con el que está creada la bodega en World Office Desktop"
                                     />
                                 </div>
