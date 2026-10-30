@@ -35,6 +35,8 @@ import {
 } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import Link from 'next/link';
+import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } from '@/lib/fileSavePicker';
+import { DirectPdfDocKey, saveRemotePrintUrlAsPdfDirect } from '@/components/print/savePdfDirect';
 
 interface ManualDispatchWizardModalProps {
     isOpen: boolean;
@@ -58,6 +60,8 @@ export default function ManualDispatchWizardModal({
     const [savingSpaces, setSavingSpaces] = useState<boolean>(false);
     const [spacesSavedSuccess, setSpacesSavedSuccess] = useState<boolean>(false);
     const [finalizingLoading, setFinalizingLoading] = useState<boolean>(false);
+    const [pdfBusyDoc, setPdfBusyDoc] = useState<DirectPdfDocKey | null>(null);
+    const [pdfProgressText, setPdfProgressText] = useState<string>('');
 
     // Checklist de Conformidad por Bloque
     const [step1Confirmed, setStep1Confirmed] = useState<boolean>(false);
@@ -291,6 +295,32 @@ export default function ManualDispatchWizardModal({
         }
     };
 
+    // Guardado directo como archivo PDF preguntando siempre dónde guardar (sin abrir ventana de impresora)
+    const handleDirectPdfSave = async (
+        docType: DirectPdfDocKey,
+        targetUrl: string,
+        saveSpacesFirst = false
+    ) => {
+        if (pdfBusyDoc) return;
+        setPdfBusyDoc(docType);
+        setPdfProgressText('Preparando...');
+        try {
+            await saveRemotePrintUrlAsPdfDirect({
+                url: targetUrl,
+                docType,
+                selectedDate: deliveryDate,
+                beforeLoad: saveSpacesFirst ? () => handleSaveSpacesToDatabase() : undefined,
+                onProgress: (txt) => setPdfProgressText(txt),
+            });
+        } catch (err: any) {
+            console.error('[ManualDispatchWizardModal] Error guardando PDF directo:', err);
+            alert(err?.message || 'Error al generar el archivo PDF.');
+        } finally {
+            setPdfBusyDoc(null);
+            setPdfProgressText('');
+        }
+    };
+
     // Guardado atómico antes de abrir cualquier documento de impresión del Paso 1 (Poka-Yoke anti S/A)
     const handleOpenStep1Print = async (targetUrl: string) => {
         const printWin = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
@@ -488,6 +518,20 @@ export default function ManualDispatchWizardModal({
     // Generador oficial del Excel Maestro de Compras (11 Columnas) idéntico a compras_YYYY-MM-DD.xlsx
     const handleExportMasterPurchasesExcel = async () => {
         try {
+            const cleanDateStr = deliveryDate || new Date().toISOString().split('T')[0];
+            const fileName = `compras_${cleanDateStr}.xlsx`;
+            let fileHandle: any = null;
+            try {
+                fileHandle = await acquireSaveFileHandle({
+                    suggestedName: fileName,
+                    description: 'Libro de Microsoft Excel (.xlsx)',
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    extension: '.xlsx',
+                });
+            } catch (pickerErr) {
+                if (isSavePickerAborted(pickerErr)) return;
+            }
+
             // Recopilar y consolidar productos de todos los pedidos seleccionados
             const productMap = new Map<string, {
                 inventory: number | string;
@@ -627,12 +671,10 @@ export default function ManualDispatchWizardModal({
             ];
 
             const wb = XLSX.utils.book_new();
-            const cleanDateStr = deliveryDate || new Date().toISOString().split('T')[0];
             const sheetName = `Compra_${cleanDateStr}`.substring(0, 31);
             XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-            const fileName = `compras_${cleanDateStr}.xlsx`;
-            XLSX.writeFile(wb, fileName);
+            await saveWorkbookWithPicker(XLSX, wb, fileName, fileHandle);
         } catch (err: any) {
             console.error('Error generando Excel de compras:', err);
             alert(`Error al generar el archivo Excel: ${err?.message || 'Error desconocido'}`);
@@ -1064,15 +1106,16 @@ export default function ManualDispatchWizardModal({
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                 <button
                                     type="button"
-                                    onClick={() => handleOpenStep1Print(`/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`)}
+                                    disabled={pdfBusyDoc === 'alistamiento'}
+                                    onClick={() => handleDirectPdfSave('alistamiento', `/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`, true)}
                                     style={{
-                                        padding: '7px 12px', backgroundColor: '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
-                                        borderRadius: '8px', fontSize: '0.74rem', fontWeight: '900', cursor: 'pointer',
+                                        padding: '7px 12px', backgroundColor: pdfBusyDoc === 'alistamiento' ? '#ECFDF5' : '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
+                                        borderRadius: '8px', fontSize: '0.74rem', fontWeight: '900', cursor: pdfBusyDoc === 'alistamiento' ? 'wait' : 'pointer',
                                         display: 'inline-flex', alignItems: 'center', gap: '4px'
                                     }}
-                                    title="Guarda bahías y abre Sábana de Alistamiento en formato PDF (Oficio)"
+                                    title="Guarda bahías y pregunta dónde guardar la Sábana de Alistamiento en formato PDF (Oficio)"
                                 >
-                                    <Download size={13} /> Descargar PDF
+                                    <Download size={13} /> {pdfBusyDoc === 'alistamiento' ? (pdfProgressText || 'Guardando...') : 'Descargar PDF'}
                                 </button>
                                 <button
                                     type="button"
@@ -1171,18 +1214,19 @@ export default function ManualDispatchWizardModal({
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
-                                    <Link
-                                        href={`/admin/procurement/purchases-print?date=${deliveryDate}&orderIds=${orderIdsParam}`}
-                                        target="_blank"
+                                    <button
+                                        type="button"
+                                        disabled={pdfBusyDoc === 'purchases'}
+                                        onClick={() => handleDirectPdfSave('purchases', `/admin/procurement/purchases-print?date=${deliveryDate}&orderIds=${orderIdsParam}`)}
                                         style={{
-                                            flex: 1, padding: '7px 6px', backgroundColor: '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
-                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            flex: 1, padding: '7px 6px', backgroundColor: pdfBusyDoc === 'purchases' ? '#ECFDF5' : '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', cursor: pdfBusyDoc === 'purchases' ? 'wait' : 'pointer',
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
-                                        title="Descargar Planillas de Plaza en PDF"
+                                        title="Guardar Planillas de Plaza directamente en PDF preguntando carpeta de destino"
                                     >
-                                        <Download size={12} /> PDF
-                                    </Link>
+                                        <Download size={12} /> {pdfBusyDoc === 'purchases' ? (pdfProgressText || 'PDF...') : 'PDF'}
+                                    </button>
                                     <Link
                                         href={`/admin/procurement/purchases-print?date=${deliveryDate}&orderIds=${orderIdsParam}`}
                                         target="_blank"
@@ -1238,18 +1282,19 @@ export default function ManualDispatchWizardModal({
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
-                                    <Link
-                                        href={`/admin/procurement/receiving-print?date=${deliveryDate}&orderIds=${orderIdsParam}`}
-                                        target="_blank"
+                                    <button
+                                        type="button"
+                                        disabled={pdfBusyDoc === 'receiving'}
+                                        onClick={() => handleDirectPdfSave('receiving', `/admin/procurement/receiving-print?date=${deliveryDate}&orderIds=${orderIdsParam}`)}
                                         style={{
-                                            flex: 1, padding: '7px 6px', backgroundColor: '#FFFFFF', color: '#D97706', border: '1.5px solid #D97706',
-                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            flex: 1, padding: '7px 6px', backgroundColor: pdfBusyDoc === 'receiving' ? '#FFFBEB' : '#FFFFFF', color: '#D97706', border: '1.5px solid #D97706',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', cursor: pdfBusyDoc === 'receiving' ? 'wait' : 'pointer',
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
-                                        title="Descargar Control de Ingreso y Báscula en PDF"
+                                        title="Guardar Control de Ingreso y Báscula directamente en PDF preguntando carpeta de destino"
                                     >
-                                        <Download size={12} /> PDF
-                                    </Link>
+                                        <Download size={12} /> {pdfBusyDoc === 'receiving' ? (pdfProgressText || 'PDF...') : 'PDF'}
+                                    </button>
                                     <Link
                                         href={`/admin/procurement/receiving-print?date=${deliveryDate}&orderIds=${orderIdsParam}`}
                                         target="_blank"
@@ -1278,18 +1323,19 @@ export default function ManualDispatchWizardModal({
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
-                                    <Link
-                                        href={`/admin/inventory/physical-count-print?date=${deliveryDate}`}
-                                        target="_blank"
+                                    <button
+                                        type="button"
+                                        disabled={pdfBusyDoc === 'inventory'}
+                                        onClick={() => handleDirectPdfSave('inventory', `/admin/inventory/physical-count-print?date=${deliveryDate}`)}
                                         style={{
-                                            flex: 1, padding: '7px 6px', backgroundColor: '#FFFFFF', color: '#6D28D9', border: '1.5px solid #6D28D9',
-                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            flex: 1, padding: '7px 6px', backgroundColor: pdfBusyDoc === 'inventory' ? '#F5F3FF' : '#FFFFFF', color: '#6D28D9', border: '1.5px solid #6D28D9',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', cursor: pdfBusyDoc === 'inventory' ? 'wait' : 'pointer',
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
-                                        title="Descargar Toma Física de Inventario en PDF"
+                                        title="Guardar Toma Física de Inventario directamente en PDF preguntando carpeta de destino"
                                     >
-                                        <Download size={12} /> PDF
-                                    </Link>
+                                        <Download size={12} /> {pdfBusyDoc === 'inventory' ? (pdfProgressText || 'PDF...') : 'PDF'}
+                                    </button>
                                     <Link
                                         href={`/admin/inventory/physical-count-print?date=${deliveryDate}`}
                                         target="_blank"
@@ -1385,18 +1431,19 @@ export default function ManualDispatchWizardModal({
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '1.2rem' }}>
-                                    <Link
-                                        href={`/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}`}
-                                        target="_blank"
+                                    <button
+                                        type="button"
+                                        disabled={pdfBusyDoc === 'contingency'}
+                                        onClick={() => handleDirectPdfSave('contingency', `/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}`)}
                                         style={{
-                                            flex: 1, padding: '9px 10px', backgroundColor: '#FFFFFF', color: '#1D4ED8', border: '1.5px solid #1D4ED8',
-                                            borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                            flex: 1, padding: '9px 10px', backgroundColor: pdfBusyDoc === 'contingency' ? '#EFF6FF' : '#FFFFFF', color: '#1D4ED8', border: '1.5px solid #1D4ED8',
+                                            borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', cursor: pdfBusyDoc === 'contingency' ? 'wait' : 'pointer',
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                                         }}
-                                        title="Descargar Remisiones en formato PDF"
+                                        title="Guardar Remisiones en formato PDF preguntando carpeta de destino"
                                     >
-                                        <Download size={14} /> Descargar PDF
-                                    </Link>
+                                        <Download size={14} /> {pdfBusyDoc === 'contingency' ? (pdfProgressText || 'Guardando...') : 'Descargar PDF'}
+                                    </button>
                                     <Link
                                         href={`/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}`}
                                         target="_blank"
@@ -1431,18 +1478,19 @@ export default function ManualDispatchWizardModal({
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '1.2rem' }}>
-                                    <Link
-                                        href={`/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}`}
-                                        target="_blank"
+                                    <button
+                                        type="button"
+                                        disabled={pdfBusyDoc === 'manifest'}
+                                        onClick={() => handleDirectPdfSave('manifest', `/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}`)}
                                         style={{
-                                            flex: 1, padding: '9px 10px', backgroundColor: '#FFFFFF', color: '#0F172A', border: '1.5px solid #0F172A',
-                                            borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                            flex: 1, padding: '9px 10px', backgroundColor: pdfBusyDoc === 'manifest' ? '#F8FAFC' : '#FFFFFF', color: '#0F172A', border: '1.5px solid #0F172A',
+                                            borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', cursor: pdfBusyDoc === 'manifest' ? 'wait' : 'pointer',
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                                         }}
-                                        title="Descargar Manifiesto de Despacho en formato PDF"
+                                        title="Guardar Manifiesto de Despacho en formato PDF preguntando carpeta de destino"
                                     >
-                                        <Download size={14} /> Descargar PDF
-                                    </Link>
+                                        <Download size={14} /> {pdfBusyDoc === 'manifest' ? (pdfProgressText || 'Guardando...') : 'Descargar PDF'}
+                                    </button>
                                     <Link
                                         href={`/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}`}
                                         target="_blank"
@@ -1565,18 +1613,19 @@ export default function ManualDispatchWizardModal({
                             </div>
 
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <Link
-                                    href={`/admin/orders/print-labels?orderIds=${orderIdsParam}&type=product&filter=requires_label`}
-                                    target="_blank"
+                                <button
+                                    type="button"
+                                    disabled={pdfBusyDoc === 'labels'}
+                                    onClick={() => handleDirectPdfSave('labels', `/admin/orders/print-labels?orderIds=${orderIdsParam}&type=product&filter=requires_label`)}
                                     style={{
-                                        padding: '9px 12px', backgroundColor: '#FFFFFF', color: '#7E22CE', border: '1.5px solid #7E22CE',
-                                        borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                        padding: '9px 12px', backgroundColor: pdfBusyDoc === 'labels' ? '#FAF5FF' : '#FFFFFF', color: '#7E22CE', border: '1.5px solid #7E22CE',
+                                        borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', cursor: pdfBusyDoc === 'labels' ? 'wait' : 'pointer',
                                         display: 'inline-flex', alignItems: 'center', gap: '5px'
                                     }}
-                                    title="Abrir visor web y guardar en PDF (formato 100x50mm)"
+                                    title="Guardar etiquetas térmicas directamente en PDF (100x50mm) preguntando carpeta de destino"
                                 >
-                                    <Download size={14} /> Visor PDF
-                                </Link>
+                                    <Download size={14} /> {pdfBusyDoc === 'labels' ? (pdfProgressText || 'Guardando...') : 'Guardar PDF'}
+                                </button>
                                 <Link
                                     href={`/admin/orders/print-labels?orderIds=${orderIdsParam}&type=product&filter=requires_label`}
                                     target="_blank"

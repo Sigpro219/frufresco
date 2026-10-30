@@ -6,3 +6,5 @@ export { printViaNewWindow } from './printViaNewWindow';
 export type { PrintViaNewWindowOptions } from './printViaNewWindow';
 export { default as PrintDocumentSwitcher, PRINT_DOCUMENTS, getBogotaDate } from './PrintDocumentSwitcher';
 export type { PrintDocumentKey, PrintDocumentOption } from './PrintDocumentSwitcher';
+export { default as DirectPdfSaveButton } from './DirectPdfSaveButton';
+export * from './savePdfDirect';

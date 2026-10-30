@@ -7,7 +7,8 @@ import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruc
 import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, Gift, CheckSquare } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
-import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
+import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } from '@/lib/fileSavePicker';
 import { formatTimeWindow } from '@/lib/logistics-parser';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
 import { QRCodeSVG } from 'qrcode.react';
@@ -763,6 +764,20 @@ function ContingencyPrintContent() {
     };
 
     const handleExportExcel = async () => {
+        if (!orders || orders.length === 0) return;
+        const fileDateForPicker = orders[0]?.delivery_date || selectedDate || new Date().toISOString().split('T')[0];
+        const manifestExcelName = `Manifiesto_Ruta_${fileDateForPicker}.xlsx`;
+        let fileHandle: any = null;
+        try {
+            fileHandle = await acquireSaveFileHandle({
+                suggestedName: manifestExcelName,
+                description: 'Libro de Microsoft Excel (.xlsx)',
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                extension: '.xlsx',
+            });
+        } catch (err) {
+            if (isSavePickerAborted(err)) return;
+        }
         const XLSX = await import('xlsx');
         if (!orders || orders.length === 0) return;
 
@@ -820,7 +835,7 @@ function ContingencyPrintContent() {
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Manifiesto de Ruta');
         const fileDate = orders[0]?.delivery_date || selectedDate || new Date().toISOString().split('T')[0];
-        XLSX.writeFile(workbook, `Manifiesto_Ruta_${fileDate}.xlsx`);
+        await saveWorkbookWithPicker(XLSX, workbook, manifestExcelName, fileHandle);
     };
 
     if (loading) {
@@ -1014,7 +1029,13 @@ function ContingencyPrintContent() {
                         </button>
                     )}
 
-                    {/* Botón Descargar PDF */}
+                    <DirectPdfSaveButton
+                        docType={mode === 'dispatch' ? 'manifest' : 'contingency'}
+                        selectedDate={orders[0]?.delivery_date || selectedDate}
+                        containerRef={printDocRef}
+                    />
+                    {/* Botón Descargar PDF (Legacy Hidden) */}
+                    {false && (
                     <button
                         onClick={() => {
                             const docName = mode === 'purchases' 
@@ -1053,6 +1074,7 @@ function ContingencyPrintContent() {
                         <Download size={14} /> PDF
                     </button>
 
+                    )}
                     {/* Botón Imprimir Físico */}
                     <button
                         onClick={() => {

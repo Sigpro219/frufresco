@@ -7,7 +7,7 @@ import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUt
 import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
 import { Printer, ArrowLeft, Filter, Layers, CheckSquare, Download, Columns } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
-import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
@@ -979,7 +979,9 @@ export default function AlistamientoSabanaPrintPage() {
                         </select>
                     </div>
 
-                    {/* Botón Descargar PDF Oficio */}
+                    <DirectPdfSaveButton docType="alistamiento" selectedDate={selectedDate} containerRef={printDocRef} />
+                    {/* Botón Descargar PDF Oficio (Legacy Hidden) */}
+                    {false && (
                     <button
                         onClick={() => {
                             printViaNewWindow({
@@ -1005,11 +1007,12 @@ export default function AlistamientoSabanaPrintPage() {
                             boxShadow: '0 1px 3px rgba(2, 132, 199, 0.1)',
                             whiteSpace: 'nowrap'
                         }}
-                        title="Abre la ventana aislada de impresión 1 a 1 para guardar como archivo PDF en formato Oficio"
+                        title="Abre la ventana aislada de impresión 1 a 1 para guardar como archivo PDF en formato Oficio" hidden
                     >
                         <Download size={14} /> PDF
                     </button>
 
+                    )}
                     {/* Botón de Impresión en Oficio */}
                     <button
                         onClick={() => {

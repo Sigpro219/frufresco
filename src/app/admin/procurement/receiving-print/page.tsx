@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Printer, ArrowLeft, Truck, Calendar } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
-import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher, DirectPdfSaveButton } from '@/components/print';
 
 interface ProductEntry {
     product_id: string;
@@ -300,6 +300,7 @@ export default function ReceivingPrintPage() {
                         </select>
                     </div>
 
+                    <DirectPdfSaveButton docType="receiving" selectedDate={selectedDate} containerRef={printDocRef} />
                     {/* Parametrizador Dinámico de Filas por Hoja (Ocupar toda la hoja) */}
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 6px' }} title="Ajusta la cantidad de productos por hoja para ocupar toda la página">
                         <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>Filas/Hoja:</span>

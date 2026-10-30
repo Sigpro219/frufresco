@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.340 (Capítulo 44: Compuerta Poka-Yoke Estricta y Emergencia Condicional del Botón de Avance en Asistente de Despacho Manual — 76/76 Pantallas Certificadas) y Consolidación de Familias sin Doble Imputación en Carga de Inventario Diaria — 76/76 Pantallas Certificadas) en Creación e Ingesta de Pedidos y Resguardo de Tarifas Fijas `"No se mide"` en SIPSA para Nutresa — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.341 (Capítulo 44: Guardado Directo Universal en PDF y Excel con Diálogo Nativo "Guardar como..." `window.showSaveFilePicker` sin Pasar por Impresora en los 7 Documentos Físicos y Asistente BCP — 76/76 Pantallas Certificadas)
 > **Fecha:** 29 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -13278,3 +13278,19 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - En su lugar, el pie de página proyecta una píldora informativa de guía visual: `[ℹ️ Marca la casilla para habilitar el avance]`.
   3. **Activación Reactiva Poka-Yoke:**
      - Tan pronto el operario marca físicamente la casilla de verificación tras constatar la emisión de documentos de planta (Sábana de alistamiento en Paso 1, planillas de plaza en Paso 2, remisiones/manifiesto en Paso 3 o rótulos térmicos en Paso 4), el botón de avance emerge al instante con animación suave, permitiendo una transición consciente, deliberada y libre de errores operativos humanos en la nave de alistamiento.
+
+
+---
+
+### Escenario 358: Guardado Directo Universal en PDF y Excel con Selector Nativo de Carpeta ("Guardar como..." / `window.showSaveFilePicker`) sin Pasar por Impresora en los 7 Documentos Físicos y en el Asistente BCP (`DirectPdfSaveButton.tsx`, `savePdfDirect.ts`, `fileSavePicker.ts`, `ManualDispatchWizardModal.tsx`) (SDD v1.9.341)
+- **Given** los 7 documentos operativos de impresión física de FruFresco gobernados por `PrintDocumentSwitcher` (`alistamiento-print`, `purchases-print`, `receiving-print`, `physical-count-print`, `print-labels`, `contingency-print?mode=dispatch` y `contingency-print?mode=remissions`) y el **Asistente Guiado de Despacho Manual (BCP)** (`src/components/ManualDispatchWizardModal.tsx`),
+- **When** el usuario presiona el botón **`[Guardar PDF]`** en la barra superior de cualquiera de los 7 documentos o presiona cualquiera de los botones **`[PDF]`** / **`[Exportar Excel (.xlsx)]`** dentro de las estaciones del Asistente BCP:
+- **Then** el sistema garantiza la descarga directa del archivo preguntando siempre la carpeta de destino sin depender del diálogo de impresión del navegador (`window.print()`):
+  1. **Botón Universal `[Guardar PDF]` en la Barra Superior de los 7 Documentos Imprimibles (`DirectPdfSaveButton.tsx`):**
+     - Cada uno de los 7 documentos físicos incorpora en su barra de control superior (junto a `Excel` e `Imprimir`) el botón **`[Guardar PDF]`** (`src/components/print/DirectPdfSaveButton.tsx`).
+     - Al pulsarlo, compila directamente todas las hojas del documento (`.print-sheet`, `.letterhead-container`, `.label-container`) mediante `html2canvas` (escala 2x–3x) y `jsPDF` respetando el formato físico exacto de cada documento (`Oficio Landscape 355.6×215.9mm`, `Oficio Portrait 215.9×330mm`, `Carta Portrait 215.9×279.4mm` o `Rótulo Térmico 100×50mm`), sin abrir ventana de impresora.
+  2. **Diálogo Obligatorio "Guardar como..." mediante File System Access API (`src/lib/fileSavePicker.ts`):**
+     - Tanto las exportaciones PDF (`saveCurrentPageAsPdfDirect`, `saveRemotePrintUrlAsPdfDirect`) como las exportaciones Excel (`saveWorkbookWithPicker` en `purchases-print`, `contingency-print` y `ManualDispatchWizardModal`) invocan `window.showSaveFilePicker` **al inicio síncrono del clic** (preservando la activación de usuario transitoria del navegador).
+     - El sistema operativo despliega siempre la ventana nativa **"Guardar como..."** para que el usuario elija libremente la carpeta de destino y el nombre del archivo antes de escribir el `Blob` en disco (con fallback automático a `<a download>` únicamente en navegadores que no implementen File System Access API).
+  3. **Generación Directa en Segundo Plano desde el Asistente BCP (`ManualDispatchWizardModal.tsx`):**
+     - Los botones `[PDF]` del Paso 1 (*Sábana de Alistamiento*), Paso 2 (*Planillas de Compra*, *Control de Ingreso y Báscula*, *Toma Física de Inventario*), Paso 3 (*Remisiones de Entrega*, *Manifiesto de Despacho*) y Paso 4 (*Rótulos Térmicos*) abren de inmediato el selector de archivos del sistema operativo, renderizan el documento oficial en un `<iframe>` aislado fuera de pantalla con telemetría de progreso (`PDF (1/N)...`) y escriben el archivo PDF directamente en la ruta seleccionada por el usuario.

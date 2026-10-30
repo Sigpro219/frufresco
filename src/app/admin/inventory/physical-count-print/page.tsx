@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Printer, ArrowLeft, ClipboardList, Layers, Sparkles, Truck } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
-import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 
 interface ProductItem {
@@ -270,6 +270,7 @@ export default function PhysicalCountPrintPage() {
                         ))}
                     </select>
 
+                    <DirectPdfSaveButton docType="inventory" selectedDate={selectedDate} containerRef={printDocRef} />
                     {/* Toggle Catálogo Completo vs Existencias */}
                     <div style={{ display: 'inline-flex', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
                         <button

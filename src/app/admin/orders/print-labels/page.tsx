@@ -7,7 +7,7 @@ import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { QRCodeSVG } from 'qrcode.react';
 import { Printer, ArrowLeft, Tag, Package, Sparkles, Scale, Building2, Calendar, Truck, Clock } from 'lucide-react';
-import { PrintDocumentSwitcher } from '@/components/print';
+import { PrintDocumentSwitcher, DirectPdfSaveButton } from '@/components/print';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
 
 interface OrderItemData {
@@ -513,6 +513,7 @@ export default function BulkOrderPrintLabelsPage() {
                         </div>
                     )}
 
+                    <DirectPdfSaveButton docType="labels" selectedDate={selectedDate} />
                     {/* Botón Imprimir Rótulos */}
                     <button
                         onClick={() => window.print()}

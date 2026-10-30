@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { Printer, ArrowLeft, Download, Filter, ShoppingBag, FileSpreadsheet } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import Letterhead from '@/components/Letterhead';
-import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher, DirectPdfSaveButton } from '@/components/print';
+import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } from '@/lib/fileSavePicker';
 import { formatStructuredSpecification } from '@/lib/orderUtils';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
@@ -250,6 +251,18 @@ export default function PurchasesPrintPage() {
 
     // Export to Excel (10 Standard Columns - Stock and UM before Producto)
     const exportToExcel = async () => {
+        const pickerFilename = `compras_${selectedDate}.xlsx`;
+        let fileHandle: any = null;
+        try {
+            fileHandle = await acquireSaveFileHandle({
+                suggestedName: pickerFilename,
+                description: 'Libro de Microsoft Excel (.xlsx)',
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                extension: '.xlsx',
+            });
+        } catch (err) {
+            if (isSavePickerAborted(err)) return;
+        }
         const XLSX = await import('xlsx');
         const rows = items.map((it, idx) => ({
             '#': idx + 1,
@@ -284,8 +297,8 @@ export default function PurchasesPrintPage() {
             { wch: 28 }  // Puesto / Proveedor
         ];
 
-        const filename = `compras_${selectedDate}.xlsx`;
-        XLSX.writeFile(workbook, filename);
+        const finalFilename = `compras_${selectedDate}.xlsx`;
+        await saveWorkbookWithPicker(XLSX, workbook, finalFilename, fileHandle);
     };
 
     return (
@@ -415,6 +428,8 @@ export default function PurchasesPrintPage() {
                     >
                         <FileSpreadsheet size={14} /> Excel (10 cols)
                     </button>
+
+                    <DirectPdfSaveButton docType="purchases" selectedDate={selectedDate} containerRef={printDocRef} />
 
                     {/* Print */}
                     <button
