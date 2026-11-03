@@ -9876,24 +9876,25 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         return products.find(p => p.id === id);
     }, [products]);
 
-    const isRealLogisticalException = useCallback((exc: any) => {
-        const origProd = getProductDetails(exc.product_id);
-        const hasDiffNickname = Boolean(exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase());
-        const hasPickingNote = Boolean(exc.picking_note && exc.picking_note.trim());
-        const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
-        const hasSub = Boolean(exc.substitution_product_id);
-        const hasPreferredOptions = Boolean(exc.preferred_options && Object.keys(exc.preferred_options).length > 0);
-        return hasDiffNickname || hasPickingNote || hasRealDeliveryNote || hasSub || hasPreferredOptions;
-    }, [getProductDetails]);
-
     const normalizeSearch = (val: any) => {
         if (!val) return '';
         return String(val)
             .toLowerCase()
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
             .trim();
     };
+
+    const isRealLogisticalException = useCallback((exc: any) => {
+        const origProd = getProductDetails(exc.product_id);
+        const hasDiffNickname = Boolean(exc.nickname && origProd?.name && normalizeSearch(exc.nickname) !== normalizeSearch(origProd.name));
+        const hasPickingNote = Boolean(exc.picking_note && exc.picking_note.trim());
+        const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
+        const hasSub = Boolean(exc.substitution_product_id);
+        const hasPreferredOptions = Boolean(exc.preferred_options && Object.keys(exc.preferred_options).length > 0);
+        return hasDiffNickname || hasPickingNote || hasRealDeliveryNote || hasSub || hasPreferredOptions;
+    }, [getProductDetails]);
 
     const visibleExceptions = useMemo(() => {
         return exceptions.filter(isRealLogisticalException);
@@ -10607,7 +10608,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                             filteredExceptions.map(exc => {
                                 const origProd = getProductDetails(exc.product_id);
                                 const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
-                                const hasDiffNickname = Boolean(exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase());
+                                const hasDiffNickname = Boolean(exc.nickname && origProd?.name && normalizeSearch(exc.nickname) !== normalizeSearch(origProd.name));
                                 const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
 
                                 return (

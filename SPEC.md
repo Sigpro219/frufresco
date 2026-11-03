@@ -1350,7 +1350,7 @@ Toda cuenta institucional cuenta con su expediente estructurado:
      * `delivery_note` real (no vacío y excluyendo cadenas automáticas de telemetría como `"pareto demanda:"`).
      * `substitution_product_id` activo (producto de reemplazo autorizado).
      * `preferred_options` con al menos un atributo estructurado (`Object.keys(exc.preferred_options).length > 0`).
-     * `nickname` diferente al nombre oficial del producto en catálogo (`exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase()`).
+     * `nickname` genuinamente diferente al nombre oficial del producto en catálogo tras normalizar tildes, diacríticos y mayúsculas (`normalizeSearch(exc.nickname) !== normalizeSearch(origProd.name)`).
 2. **Las Cinco (5) Dimensiones de Parametrización por SKU en `ClientExceptionsModal`:**
    - **A. Producto Original (`product_id`):** Buscador predictivo por nombre, SKU o `accounting_id` con navegación por teclado (`ArrowUp`, `ArrowDown`, `Enter`).
    - **B. Variación Estandarizada Requerida (`preferred_options` JSONB):** Despliega selectores dinámicos generados a partir de `options_config` del SKU seleccionado (`Maduración: Pintón | Verde`, `Presentación: Unidad X gr | Bandeja | Granel | Kg | ...`, `Tamaño: Grande | Mediano | Pequeño | Jumbo`). Preselecciona automáticamente las variantes preferidas del cliente en los módulos de creación y edición de pedidos, respetando la regla canónica de que `Maduro`/`Madura` es el estándar implícito por defecto y nunca se almacena ni preselecciona como variante diferencial (§4, Deuda Técnica 15 y Escenario 114).
