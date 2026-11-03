@@ -79,8 +79,10 @@ export const GalleryOmnibox: React.FC<GalleryOmniboxProps> = ({
         placeholder={placeholder}
         style={{
           width: '100%',
+          height: '38px',
+          boxSizing: 'border-box',
           paddingLeft: '32px',
-          paddingRight: value.trim() ? '92px' : '65px',
+          paddingRight: value.trim() ? (filteredCount !== undefined ? '110px' : '36px') : (totalCount !== undefined ? '80px' : '32px'),
           paddingTop: '0.45rem',
           paddingBottom: '0.45rem',
           backgroundColor: '#F8FAFC',
@@ -179,9 +181,26 @@ export const GalleryOmnibox: React.FC<GalleryOmniboxProps> = ({
 };
 
 /**
- * Función utilitaria universal para evaluar si un registro coincide con la búsqueda multi-criterio:
+ * Normalizador fonético universal para búsquedas en español (SDD Escenario 57 / EFE-1):
  * - Insensible a acentos / tildes (normalización NFD)
  * - Insensible a mayúsculas
+ * - Tolerancia fonética a seseo y equivalencia Z <-> S (tuza <-> tusa, zapote <-> sapote, cebolla <-> sebolla)
+ */
+export const normalizeSearchText = (str: string): string => {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/ce/g, 'se')
+    .replace(/ci/g, 'si')
+    .replace(/z/g, 's')
+    .trim();
+};
+
+/**
+ * Función utilitaria universal para evaluar si un registro coincide con la búsqueda multi-criterio:
+ * - Insensible a acentos / tildes (normalización NFD)
+ * - Insensible a mayúsculas y seseo fonético (Z <-> S)
  * - Soporte de prefijo #ID para búsqueda exacta
  * - Búsqueda multi-palabra con AND (todas las palabras deben estar)
  * - Soporte de comas como OR (palabra1, palabra2)
@@ -194,10 +213,6 @@ export function matchesUniversalSearch<T = any>(
 ): boolean {
   const trimmed = (query || '').trim();
   if (!trimmed) return true;
-
-  // Función para remover acentos y pasar a minúsculas
-  const normalize = (str: string) =>
-    str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
   // 1. Coincidencia exacta por #ID (ej: #1002, #15)
   if (trimmed.startsWith('#')) {
@@ -220,14 +235,14 @@ export function matchesUniversalSearch<T = any>(
 
   const normalizedFields = rawFields
     .filter((f) => f !== null && f !== undefined)
-    .map((f) => normalize(String(f)));
+    .map((f) => normalizeSearchText(String(f)));
 
   // 2. Soporte para comas (OR de expresiones)
   const orSegments = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
 
   return orSegments.some((segment) => {
     // 3. Multi-término AND por espacio
-    const terms = segment.split(/\s+/).filter(Boolean).map(normalize);
+    const terms = segment.split(/\s+/).filter(Boolean).map(normalizeSearchText);
     return terms.every((term) =>
       normalizedFields.some((fieldStr) => fieldStr.includes(term))
     );

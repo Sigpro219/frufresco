@@ -14,6 +14,7 @@ import VariantModal from '@/components/VariantModal';
 import ManualDispatchWizardModal from '@/components/ManualDispatchWizardModal';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
+import { GalleryOmnibox, normalizeSearchText } from '@/components/common/GalleryOmnibox';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD } from '@/lib/colombianHolidays';
 import { 
     MessageSquare, 
@@ -369,6 +370,9 @@ function OrderLoadingContent() {
     const [showManualWizard, setShowManualWizard] = useState(false);
     const [targetStatusToConfirm, setTargetStatusToConfirm] = useState('');
     const [dispatchMode, setDispatchMode] = useState<'digital' | 'contingency'>('digital');
+    const [showLockWarningModal, setShowLockWarningModal] = useState(false);
+    const [showPostLaunchModal, setShowPostLaunchModal] = useState(false);
+    const [lastLaunchedOrderIds, setLastLaunchedOrderIds] = useState<string[]>([]);
 
     const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -1843,82 +1847,95 @@ useEffect(() => {
                 if (filterClientType === 'b2c' && isB2B) return false;
             }
 
-            // 5. Super-Buscador Multi-Criterio (ID, Cliente, NIT, Teléfono, Dirección, Ítems/Productos, Notas, Comandos @)
+            // 5. Super-Buscador Multi-Criterio FruFresco (ID, Cliente, NIT, Teléfono, Dirección, Ítems/Productos, Notas, Comandos @)
             if (searchTerm) {
-                const normalize = (text: string) => {
-                    return (text || '')
-                        .toLowerCase()
-                        .normalize('NFD')
-                        .replace(/[\u0300-\u036f]/g, '')
-                        .trim();
-                };
+                // Soporte universal de comas como disyunción OR: "colsubsidio, corral"
+                const orClauses = searchTerm.split(',').map(s => s.trim()).filter(Boolean);
 
-                const cleanTerm = normalize(searchTerm);
+                const matchesAnyClause = orClauses.some(clause => {
+                    const cleanClause = normalizeSearchText(clause);
+                    if (!cleanClause) return true;
 
-                // A. Comandos @ de Alta Precisión
-                if (cleanTerm.startsWith('@')) {
-                    const command = cleanTerm.substring(1).replace(/[\s-]+/g, '_');
-                    if (['sin_coordenadas', 'sin_coordinadas', 'sin_gps', 'nogps'].includes(command)) return !hasGPS;
-                    if (['con_coordenadas', 'con_coordinadas', 'con_gps', 'gps'].includes(command)) return hasGPS;
-                    if (['b2b', 'empresas', 'horeca', 'institucional'].includes(command)) return isB2B;
-                    if (['b2c', 'hogar', 'hogares', 'personas'].includes(command)) return !isB2B;
-                    if (['pendiente', 'pending', 'por_procesar', 'recibido'].includes(command)) return ['pending_approval', 'pending'].includes(order.status);
-                    if (['para_compra', 'compra', 'compras'].includes(command)) return order.status === 'para_compra';
-                    if (['aprobado', 'approved'].includes(command)) return order.status === 'approved';
-                    if (['enviado', 'shipped', 'en_ruta', 'ruta'].includes(command)) return order.status === 'shipped';
-                    if (['entregado', 'delivered', 'completado'].includes(command)) return ['delivered', 'completed'].includes(order.status);
-                    if (['puerta', 'cobrar_puerta', 'efectivo', 'contraentrega'].includes(command)) {
-                        return paymentMethodStr.includes('puerta') || paymentMethodStr.includes('contraentrega') || paymentMethodStr.includes('efectivo') || notes.includes('cobrar') || notes.includes('puerta');
+                    // A. Comandos @ de Alta Precisión
+                    if (cleanClause.startsWith('@')) {
+                        const command = cleanClause.substring(1).replace(/[\s-]+/g, '_');
+                        if (['sin_coordenadas', 'sin_coordinadas', 'sin_gps', 'nogps'].includes(command)) return !hasGPS;
+                        if (['con_coordenadas', 'con_coordinadas', 'con_gps', 'gps'].includes(command)) return hasGPS;
+                        if (['b2b', 'empresas', 'horeca', 'institucional'].includes(command)) return isB2B;
+                        if (['b2c', 'hogar', 'hogares', 'personas'].includes(command)) return !isB2B;
+                        if (['pendiente', 'pending', 'por_procesar', 'recibido'].includes(command)) return ['pending_approval', 'pending'].includes(order.status);
+                        if (['para_compra', 'compra', 'compras'].includes(command)) return order.status === 'para_compra';
+                        if (['aprobado', 'approved'].includes(command)) return order.status === 'approved';
+                        if (['enviado', 'shipped', 'en_ruta', 'ruta'].includes(command)) return order.status === 'shipped';
+                        if (['entregado', 'delivered', 'completado'].includes(command)) return ['delivered', 'completed'].includes(order.status);
+                        if (['puerta', 'cobrar_puerta', 'efectivo', 'contraentrega'].includes(command)) {
+                            return paymentMethodStr.includes('puerta') || paymentMethodStr.includes('contraentrega') || paymentMethodStr.includes('efectivo') || notes.includes('cobrar') || notes.includes('puerta');
+                        }
+                        if (['whatsapp'].includes(command)) return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
+                        if (['email', 'correo'].includes(command)) return order.origin_source === 'email' || notes.includes('[origin: email]');
+                        if (['web', 'app'].includes(command)) return order.origin_source?.startsWith('web') || notes.includes('[origin: web');
+                        if (['alerta', 'incompleto', 'sin_completar'].includes(command)) return !order.isComplete;
+                        if (['duplicado', 'duplicados', 'repetido', 'repetidos', 'doble', 'duplicada'].includes(command)) {
+                            return duplicatesMap.has(order.id);
+                        }
+                        if (['especial', 'cuidado', 'cuidado_especial'].includes(command)) return Boolean(order.special_attention?.isActive);
+                        if (['pqr', 'reclamo'].includes(command)) return order.special_attention?.code === 'recurring_pqr';
+                        if (['nuevo', 'cliente_nuevo'].includes(command)) return order.special_attention?.code === 'new_client';
+                        if (['seguimiento', 'consumo', 'bajo_consumo'].includes(command)) return order.special_attention?.code === 'low_consumption';
                     }
-                    if (['whatsapp'].includes(command)) return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
-                    if (['email', 'correo'].includes(command)) return order.origin_source === 'email' || notes.includes('[origin: email]');
-                    if (['web', 'app'].includes(command)) return order.origin_source?.startsWith('web') || notes.includes('[origin: web');
-                    if (['alerta', 'incompleto', 'sin_completar'].includes(command)) return !order.isComplete;
-                    if (['duplicado', 'duplicados', 'repetido', 'repetidos', 'doble', 'duplicada'].includes(command)) {
-                        return duplicatesMap.has(order.id);
+
+                    // B. Soporte de Prefijo #ID (#1373, #15)
+                    if (clause.startsWith('#')) {
+                        const targetId = clause.slice(1).trim().toLowerCase();
+                        const orderSeqId = (order.sequence_id || '').toString().toLowerCase();
+                        const orderFriendId = friendlyId.toLowerCase();
+                        const orderRawId = (order.id || '').toString().toLowerCase();
+                        return (
+                            orderSeqId === targetId ||
+                            orderFriendId === targetId ||
+                            orderFriendId.endsWith(targetId) ||
+                            orderFriendId.includes(targetId) ||
+                            orderRawId === targetId
+                        );
                     }
-                    if (['especial', 'cuidado', 'cuidado_especial'].includes(command)) return Boolean(order.special_attention?.isActive);
-                    if (['pqr', 'reclamo'].includes(command)) return order.special_attention?.code === 'recurring_pqr';
-                    if (['nuevo', 'cliente_nuevo'].includes(command)) return order.special_attention?.code === 'new_client';
-                    if (['seguimiento', 'consumo', 'bajo_consumo'].includes(command)) return order.special_attention?.code === 'low_consumption';
-                }
 
-                // B. Extracción de productos/SKUs dentro de los ítems del pedido
-                const productText = (order.order_items || [])
-                    .map((item: any) => `${item.nickname || ''} ${item.products?.name || ''} ${item.products?.sku || ''}`)
-                    .join(' ');
+                    // C. Extracción de productos/SKUs dentro de los ítems del pedido
+                    const productText = (order.order_items || [])
+                        .map((item: any) => `${item.nickname || ''} ${item.products?.name || ''} ${item.products?.sku || ''} ${item.products?.accounting_id || ''}`)
+                        .join(' ');
 
-                // C. Super-Corpus de Texto Consolidado para el Pedido
-                const searchableText = normalize([
-                    friendlyId,
-                    friendlyId.replace(/[_\s-]/g, ''),
-                    (order.sequence_id || '').toString(),
-                    order.id,
-                    order.customer_name,
-                    order.customer_nit,
-                    order.customer_phone,
-                    order.shipping_address,
-                    order.status,
-                    getStatusLabel(order.status),
-                    order.profiles?.company_name,
-                    order.profiles?.contact_name,
-                    order.profiles?.nit,
-                    order.profiles?.email,
-                    order.profiles?.contact_phone,
-                    order.profiles?.address,
-                    order.paymentMethod,
-                    order.admin_notes,
-                    order.special_notes,
-                    order.special_attention?.isActive ? `especial ${order.special_attention.badgeShort} ${order.special_attention.printCode} ${order.special_attention.title}` : '',
-                    duplicatesMap.has(order.id) ? 'duplicado repetido colision alerta_duplicado' : '',
-                    productText
-                ].filter(Boolean).join(' '));
+                    // D. Super-Corpus de Texto Consolidado con normalización fonética NFD (seseo / Z <-> S)
+                    const searchableText = normalizeSearchText([
+                        friendlyId,
+                        friendlyId.replace(/[\s_-]/g, ''),
+                        (order.sequence_id || '').toString(),
+                        order.id,
+                        order.customer_name,
+                        order.customer_nit,
+                        order.customer_phone,
+                        order.shipping_address,
+                        order.status,
+                        getStatusLabel(order.status),
+                        order.profiles?.company_name,
+                        order.profiles?.contact_name,
+                        order.profiles?.nit,
+                        order.profiles?.email,
+                        order.profiles?.contact_phone,
+                        order.profiles?.address,
+                        order.paymentMethod,
+                        order.admin_notes,
+                        order.special_notes,
+                        order.special_attention?.isActive ? `especial ${order.special_attention.badgeShort} ${order.special_attention.printCode} ${order.special_attention.title}` : '',
+                        duplicatesMap.has(order.id) ? 'duplicado repetido colision alerta_duplicado' : '',
+                        productText
+                    ].filter(Boolean).join(' '));
 
-                // D. Búsqueda Multi-Token: Cada palabra clave ingresada debe coincidir
-                const tokens = cleanTerm.split(/\s+/).filter(Boolean);
-                const matchesAllTokens = tokens.every(token => searchableText.includes(token));
+                    // E. Búsqueda Multi-Token AND: Todas las palabras de la cláusula deben coincidir
+                    const tokens = cleanClause.split(/[\s]+/).filter(Boolean);
+                    return tokens.every(token => searchableText.includes(token));
+                });
 
-                if (!matchesAllTokens) return false;
+                if (!matchesAnyClause) return false;
             }
 
 
@@ -1959,7 +1976,7 @@ useEffect(() => {
 
     const filteredMetrics = useMemo(() => {
         const count = filteredOrders.length;
-        const totalMoney = filteredOrders.reduce((acc, o) => acc + (parseFloat(o.total_amount) || 0), 0);
+        const totalMoney = filteredOrders.reduce((acc, o) => acc + (parseFloat(o.total || o.total_amount) || 0), 0);
         return { count, totalMoney };
     }, [filteredOrders]);
 
@@ -3027,7 +3044,7 @@ useEffect(() => {
             setSelectedOrders(new Set());
             setOrders(prev => prev.map(o => launchedIds.has(o.id) ? { ...o, status: targetStatus } : o));
             setRefreshTrigger(prev => prev + 1); // Trigger refresh
-            alert('Pedidos enviados a Proceso Logístico correctamente');
+            if (!skipNativeConfirm) alert('Pedidos enviados a Proceso Logístico correctamente');
 
         } catch (err: any) {
             console.error('Error in bulk update:', err);
@@ -3056,7 +3073,7 @@ useEffect(() => {
     return (
         <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
-            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0.4rem 2rem' }}>
                 <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -3617,63 +3634,16 @@ useEffect(() => {
 
                         </div>
 
-                        {/* Search Segment - Flexible & Spacious */}
-                        <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
-                            <Search size={15} strokeWidth={1.5} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
-                            <input 
-                                placeholder="Buscar por ID, empresa, @estado..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    padding: '0 2.2rem 0 2.3rem', 
-                                    borderRadius: '8px', 
-                                    border: '1px solid #E2E8F0', 
-                                    fontSize: '0.82rem',
-                                    fontWeight: '600',
-                                    outline: 'none',
-                                    height: '38px',
-                                    backgroundColor: '#F8FAFC',
-                                    transition: 'all 0.2s',
-                                    boxSizing: 'border-box'
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.backgroundColor = 'white';
-                                    e.target.style.borderColor = THEME.colors.primary;
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.backgroundColor = '#F8FAFC';
-                                    e.target.style.borderColor = '#E2E8F0';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                            {searchTerm && (
-                                <button
-                                    onClick={() => setSearchTerm('')}
-                                    style={{
-                                        position: 'absolute',
-                                        right: '0.6rem',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: '#E2E8F0',
-                                        border: 'none',
-                                        color: '#64748B',
-                                        width: '18px',
-                                        height: '18px',
-                                        borderRadius: '50%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        cursor: 'pointer',
-                                        fontSize: '0.65rem',
-                                    }}
-                                >
-                                    <X size={11} strokeWidth={2.5} />
-                                </button>
-                            )}
-                        </div>
-
+                        {/* Superbuscador Omnibox Universal FruFresco (SDD Escenario 57 / EFE-1) */}
+                        <GalleryOmnibox
+                            value={searchTerm}
+                            onChange={setSearchTerm}
+                            placeholder="Buscar por ID (#1373), cliente, nit, dirección, @comando..."
+                            filteredCount={filteredOrders.length}
+                            totalCount={totalOrders}
+                            style={{ flex: 1, minWidth: '240px', maxWidth: 'none' }}
+                        />
+
                         {/* Info Button for Commands */}
                         <div 
                             onMouseEnter={() => setShowHelpTooltip(true)}
@@ -4102,7 +4072,7 @@ useEffect(() => {
                     <>
                         {viewMode === 'table' ? (
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'visible', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                                     <thead style={{ position: 'sticky', top: `${85 + dockHeight - 1}px`, zIndex: openHeaderDropdown ? 95 : 35, backgroundColor: '#F8FAFB' }}>
                                         <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '2px solid #CBD5E1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)' }}>
 
@@ -4797,9 +4767,9 @@ useEffect(() => {
                                     </div>
                                 )}
 
-                                {/* 3. Las 2 Vías de Despacho (Planta vs Digital) - Arquitectura Lado a Lado */}
+                                {/* 3. Las 2 Vías de Despacho (Planta vs Digital) - Arquitectura Lado a Lado UX-First */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '10px' }}>
-                                    {/* Opción A: Asistente de Despacho en Planta (Modo Oficial FruFresco) */}
+                                    {/* Opción A: Operación Habitual (Digital + Papel de Ruta) */}
                                     <div style={{
                                         backgroundColor: '#0F172A',
                                         borderRadius: '14px',
@@ -4813,15 +4783,70 @@ useEffect(() => {
                                     }}>
                                         <div>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#FCD34D', fontWeight: '900', fontSize: '0.80rem' }}>
-                                                    <Layers size={15} /> Asistente de Planta
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#34D399', fontWeight: '900', fontSize: '0.80rem' }}>
+                                                    <Truck size={15} /> Operación Habitual (Digital + Ruta)
                                                 </div>
-                                                <span style={{ fontSize: '0.62rem', backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FDE68A', padding: '2px 6px', borderRadius: '6px', fontWeight: '900', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
-                                                    RECOMENDADO • POKA-YOKE
+                                                <span style={{ fontSize: '0.62rem', backgroundColor: 'rgba(16, 185, 129, 0.2)', color: '#A7F3D0', padding: '2px 6px', borderRadius: '6px', fontWeight: '900', border: '1px solid rgba(16, 185, 129, 0.4)' }}>
+                                                    ESTÁNDAR DIARIO • 95%
                                                 </span>
                                             </div>
                                             <div style={{ fontSize: '0.72rem', color: '#94A3B8', lineHeight: '1.35' }}>
-                                                Asignación de <strong>150 bahías</strong> en piso (LIFO), Sábana de alistamiento de 12 células, planillas Corabastos, báscula, remisiones en duplicado y rótulos.
+                                                Pasa las <strong>{selectedOrders.size} órdenes</strong> a compras y picking. Entrega inmediata de <strong>Remisiones en duplicado</strong> y <strong>Rótulos térmicos</strong> de canastilla para el camión.
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowConfirmModal(false);
+                                                setShowLockWarningModal(true);
+                                            }}
+                                            style={{
+                                                marginTop: '0.85rem',
+                                                padding: '9px 14px',
+                                                backgroundColor: '#0D7A57',
+                                                color: '#FFFFFF',
+                                                borderRadius: '9px',
+                                                fontSize: '0.80rem',
+                                                fontWeight: '900',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 3px 10px rgba(13, 122, 87, 0.35)',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#0B684A'}
+                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#0D7A57'}
+                                        >
+                                            <CheckCircle2 size={14} />
+                                            <span>CONTINUAR AL CIERRE DE OPERACIÓN -&gt;</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Opción B: Contingencia en Planta (Asistente 4 Pasos BCP) */}
+                                    <div style={{
+                                        backgroundColor: '#FFFFFF',
+                                        borderRadius: '14px',
+                                        padding: '1rem',
+                                        border: '1.5px solid #CBD5E1',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between'
+                                    }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B45309', fontWeight: '900', fontSize: '0.80rem' }}>
+                                                    <Layers size={15} /> Contingencia de Planta
+                                                </div>
+                                                <span style={{ fontSize: '0.62rem', backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 6px', borderRadius: '6px', fontWeight: '800', border: '1px solid #FDE68A' }}>
+                                                    EXCEPCIÓN • 5%
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: '1.35' }}>
+                                                Para emergencias sin red o cuando se requiere asignar físicamente las 150 bahías en piso (LIFO) e imprimir el paquete de 6 planillas de piso.
                                             </div>
                                         </div>
 
@@ -4834,72 +4859,13 @@ useEffect(() => {
                                             style={{
                                                 marginTop: '0.85rem',
                                                 padding: '9px 14px',
-                                                backgroundColor: '#F59E0B',
-                                                color: '#0F172A',
-                                                borderRadius: '9px',
-                                                fontSize: '0.80rem',
-                                                fontWeight: '900',
-                                                border: 'none',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '6px',
-                                                boxShadow: '0 3px 10px rgba(245, 158, 11, 0.35)',
-                                                transition: 'all 0.15s ease'
-                                            }}
-                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D97706'}
-                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F59E0B'}
-                                        >
-                                            <Sparkles size={14} />
-                                            <span>INICIAR ASISTENTE (4 PASOS) -&gt;</span>
-                                        </button>
-                                    </div>
-
-                                    {/* Opción B: Lanzamiento Rápido Digital (Sin Papel) */}
-                                    <div style={{
-                                        backgroundColor: '#FFFFFF',
-                                        borderRadius: '14px',
-                                        padding: '1rem',
-                                        border: '1.5px solid #CBD5E1',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        justifyContent: 'space-between'
-                                    }}>
-                                        <div>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.80rem' }}>
-                                                    <Truck size={15} /> Modo Digital
-                                                </div>
-                                                <span style={{ fontSize: '0.62rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '6px', fontWeight: '800', border: '1px solid #BFDBFE' }}>
-                                                    SIN PAPEL • TABLETS
-                                                </span>
-                                            </div>
-                                            <div style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: '1.35' }}>
-                                                Pasa las {selectedOrders.size} órdenes directo a <em>para_compra</em> para sincronización en tablets sin pasar por el asistente de impresión.
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (typeof window !== 'undefined' && !window.confirm(`¿Confirmas lanzar directamente ${selectedOrders.size} pedidos a compra sin pasar por el asistente de bahías ni generar documentos físicos?`)) {
-                                                    return;
-                                                }
-                                                setShowConfirmModal(false);
-                                                handleBulkAction(targetStatusToConfirm, true);
-                                            }}
-                                            disabled={updateLoading}
-                                            style={{
-                                                marginTop: '0.85rem',
-                                                padding: '9px 14px',
                                                 backgroundColor: '#FFFFFF',
                                                 color: '#0F172A',
                                                 border: '1.5px solid #0F172A',
                                                 borderRadius: '9px',
                                                 fontSize: '0.78rem',
                                                 fontWeight: '800',
-                                                cursor: updateLoading ? 'wait' : 'pointer',
+                                                cursor: 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -4915,42 +4881,14 @@ useEffect(() => {
                                                 e.currentTarget.style.color = '#0F172A';
                                             }}
                                         >
-                                            {updateLoading ? (
-                                                <>
-                                                    <Loader2 size={14} className="animate-spin" />
-                                                    <span>Lanzando...</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Truck size={14} />
-                                                    <span>Lanzar Directo a Compra</span>
-                                                </>
-                                            )}
+                                            <Layers size={14} />
+                                            <span>ABRIR ASISTENTE DE PISO (4 PASOS) -&gt;</span>
                                         </button>
                                     </div>
                                 </div>
 
-                                {/* 4. Barra Inferior de Acción y Contingencia */}
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #E2E8F0', paddingTop: '0.65rem' }}>
-                                    <Link
-                                        href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}&date=${selectedDate || getTomorrowDateStr()}`}
-                                        target="_blank"
-                                        style={{
-                                            fontSize: '0.70rem',
-                                            fontWeight: '700',
-                                            color: '#64748B',
-                                            textDecoration: 'none',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px'
-                                        }}
-                                        title="Imprime todas las planillas de contingencia en un solo tiraje físico"
-                                    >
-                                        <Printer size={12} color="#64748B" />
-                                        <span>¿Solo necesitas imprimir? <strong>Kit 1-Clic Completo</strong></span>
-                                        <ExternalLink size={10} color="#94A3B8" />
-                                    </Link>
-
+                                {/* 4. Barra Inferior de Acción Limpia */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: '0.65rem' }}>
                                     <button
                                         type="button"
                                         onClick={() => setShowConfirmModal(false)}
@@ -4973,6 +4911,280 @@ useEffect(() => {
                         </div>
                     );
                 })()}
+
+                {/* MODAL DE PUNTO DE NO RETORNO (ADVERTENCIA EXPLICITA DE CIERRE Y CONGELAMIENTO COMERCIAL) */}
+                {showLockWarningModal && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.70)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 2100, backdropFilter: 'blur(6px)', padding: '1rem'
+                    }} onClick={() => setShowLockWarningModal(false)}>
+                        <div style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '18px',
+                            width: '100%',
+                            maxWidth: '520px',
+                            padding: '1.5rem',
+                            boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.4), 0 0 0 1px rgba(15, 23, 42, 0.08)',
+                            display: 'flex', flexDirection: 'column', gap: '1rem',
+                            color: '#0F172A'
+                        }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                <div style={{
+                                    width: '44px', height: '44px', borderRadius: '12px',
+                                    backgroundColor: '#FEF3C7', color: '#D97706',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    flexShrink: 0
+                                }}>
+                                    <AlertTriangle size={24} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.01em' }}>
+                                        Cierre Definitivo de Tanda y Paso a Operación
+                                    </h3>
+                                    <div style={{ fontSize: '0.72rem', color: '#B45309', fontWeight: '700', marginTop: '2px' }}>
+                                        PUNTO DE NO RETORNO OPERATIVO
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{
+                                backgroundColor: '#FFFBEB',
+                                border: '1px solid #FDE68A',
+                                borderRadius: '12px',
+                                padding: '0.9rem',
+                                fontSize: '0.80rem',
+                                color: '#78350F',
+                                lineHeight: '1.45'
+                            }}>
+                                <p style={{ margin: '0 0 8px 0' }}>
+                                    Estás a punto de enviar <strong>{selectedOrders.size} pedidos</strong> a la operación de compras y bodega.
+                                </p>
+                                <p style={{ margin: 0, fontWeight: '700' }}>
+                                    A partir de este instante, los pedidos cambiarán de estado a <span style={{ color: '#0D7A57', textDecoration: 'underline' }}>para_compra</span> y <strong>quedarán congelados para edición comercial</strong> (ya no se podrán modificar cantidades, precios ni canastas desde esta vista).
+                                </p>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '0.25rem' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowLockWarningModal(false)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '10px',
+                                        backgroundColor: '#F1F5F9',
+                                        color: '#475569',
+                                        border: 'none',
+                                        borderRadius: '10px',
+                                        fontSize: '0.80rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Seguir Editando
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={updateLoading}
+                                    onClick={async () => {
+                                        const ids = Array.from(selectedOrders);
+                                        setLastLaunchedOrderIds(ids);
+                                        setShowLockWarningModal(false);
+                                        await handleBulkAction('para_compra', true);
+                                        setShowPostLaunchModal(true);
+                                    }}
+                                    style={{
+                                        flex: 1.5,
+                                        padding: '10px 14px',
+                                        backgroundColor: '#0D7A57',
+                                        color: '#FFFFFF',
+                                        border: 'none',
+                                        borderRadius: '10px',
+                                        fontSize: '0.82rem',
+                                        fontWeight: '900',
+                                        cursor: updateLoading ? 'wait' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.35)'
+                                    }}
+                                >
+                                    {updateLoading ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            <span>Procesando...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 size={16} />
+                                            <span>Confirmar y Enviar a Operación</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL DE ÉXITO Y ENTREGA INMEDIATA DE DOCUMENTOS (REMISIONES + RÓTULOS) */}
+                {showPostLaunchModal && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 2200, backdropFilter: 'blur(8px)', padding: '1rem'
+                    }} onClick={() => setShowPostLaunchModal(false)}>
+                        <div style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '20px',
+                            width: '100%',
+                            maxWidth: '580px',
+                            padding: '1.75rem',
+                            boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.4), 0 0 0 1px rgba(15, 23, 42, 0.08)',
+                            display: 'flex', flexDirection: 'column', gap: '1.25rem',
+                            color: '#0F172A'
+                        }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{
+                                    width: '48px', height: '48px', borderRadius: '14px',
+                                    backgroundColor: '#ECFDF5', color: '#0D7A57',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    border: '1px solid #A7F3D0'
+                                }}>
+                                    <CheckCircle2 size={26} strokeWidth={2.5} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
+                                        ¡Tanda Lanzada Exitosamente a Operación!
+                                    </h3>
+                                    <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: '700', marginTop: '2px' }}>
+                                        {lastLaunchedOrderIds.length} pedidos transferidos a compras y picking
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ fontSize: '0.80rem', color: '#475569', lineHeight: '1.4' }}>
+                                Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora los <strong>dos documentos físicos obligatorios</strong> para los transportadores y canastillas:
+                            </div>
+
+                            {/* Document Cards */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                {/* Remisiones */}
+                                <a
+                                    href={`/admin/orders/contingency-print?mode=remissions&orderIds=${lastLaunchedOrderIds.join(',')}&date=${selectedDate || getTomorrowDateStr()}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1.5px solid #0284C7',
+                                        borderRadius: '12px',
+                                        padding: '1rem',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        gap: '8px',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0F9FF'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                >
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.85rem' }}>
+                                            <Printer size={16} /> Remisiones
+                                        </div>
+                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
+                                            Juegos en duplicado (Original Cliente y Copia Archivo) para firma en entrega.
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        padding: '7px 10px',
+                                        backgroundColor: '#0284C7',
+                                        color: '#FFFFFF',
+                                        borderRadius: '8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        textAlign: 'center',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '5px'
+                                    }}>
+                                        <span>Imprimir Remisiones ({lastLaunchedOrderIds.length})</span>
+                                        <ExternalLink size={12} />
+                                    </div>
+                                </a>
+
+                                {/* Rótulos Térmicos */}
+                                <a
+                                    href={`/admin/orders/print-labels?orderIds=${lastLaunchedOrderIds.join(',')}&type=product&filter=requires_label`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1.5px solid #7E22CE',
+                                        borderRadius: '12px',
+                                        padding: '1rem',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        gap: '8px',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FAF5FF'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                >
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6B21A8', fontWeight: '900', fontSize: '0.85rem' }}>
+                                            <Tag size={16} /> Rótulos Térmicos
+                                        </div>
+                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
+                                            Etiquetas adhesivas con QR y célula para rotulado de canastillas en piso.
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        padding: '7px 10px',
+                                        backgroundColor: '#7E22CE',
+                                        color: '#FFFFFF',
+                                        borderRadius: '8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        textAlign: 'center',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '5px'
+                                    }}>
+                                        <span>Imprimir Rótulos</span>
+                                        <ExternalLink size={12} />
+                                    </div>
+                                </a>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPostLaunchModal(false)}
+                                    style={{
+                                        padding: '8px 18px',
+                                        backgroundColor: '#0F172A',
+                                        color: '#FFFFFF',
+                                        borderRadius: '9px',
+                                        fontSize: '0.80rem',
+                                        fontWeight: '800',
+                                        border: 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Ir a Monitoreo de Pedidos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Asistente Guiado de Despacho Manual (Poka-Yoke) */}
                 <ManualDispatchWizardModal
