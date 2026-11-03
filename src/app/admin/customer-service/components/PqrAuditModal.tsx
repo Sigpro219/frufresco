@@ -231,7 +231,7 @@ export default function PqrAuditModal({
     const [selectedItemId, setSelectedItemId] = useState('');
     const [noveltyQty, setNoveltyQty] = useState(0);
     const [noveltyQtyInput, setNoveltyQtyInput] = useState('');
-    const [noveltyType, setNoveltyType] = useState<'faltante' | 'averia' | 'producto_escaso' | 'error_digitacion' | 'no_solicitado'>('faltante');
+    const [noveltyType, setNoveltyType] = useState<'faltante' | 'averia' | 'producto_escaso' | 'error_digitacion' | 'no_solicitado' | 'caracteristica_calidad'>('faltante');
     const [noveltyReason, setNoveltyReason] = useState('');
     const [hasPhysicalReturn, setHasPhysicalReturn] = useState<boolean>(false);
 
@@ -1807,52 +1807,252 @@ export default function PqrAuditModal({
 
     const handleUpdateEntityPercent = (entityId: string, newPercent: number) => {
         const baseAmountToSplit = nominalNoveltiesCoQ;
-        if (imputedEntities.length <= 1) {
-            const clamped = Math.max(0, Math.min(100, newPercent));
-            const updated = imputedEntities.map(e => ({
-                ...e,
-                sharePercent: clamped,
-                deductionAmount: e.waiveDeduction ? 0 : Math.round((baseAmountToSplit * clamped) / 100)
-            }));
-            setImputedEntities(updated);
-            return;
-        }
+        const safePct = Number.isFinite(newPercent) ? Math.max(0, Math.min(100, newPercent)) : 0;
 
-        if (imputedEntities.length === 2) {
-            const clamped = Math.max(0, Math.min(100, newPercent));
-            const otherPercent = Number((100 - clamped).toFixed(2));
-            const amountA = Math.round((baseAmountToSplit * clamped) / 100);
-            const amountB = baseAmountToSplit - amountA; // Sum of COP always equals baseAmountToSplit
+        setItemMultiImputations(prev => {
+            const matchingKeys = Object.keys(prev).filter(k =>
+                (prev[k]?.collaborators || []).some(c => c.entityId === entityId)
+            );
+            if (matchingKeys.length === 1) {
+                const k = matchingKeys[0];
+                const newAmt = Math.round((baseAmountToSplit * safePct) / 100);
+                return {
+                    ...prev,
+                    [k]: {
+                        ...prev[k],
+                        collaborators: prev[k].collaborators.map(c =>
+                            c.entityId === entityId ? { ...c, amount: newAmt } : c
+                        )
+                    }
+                };
+            }
+            return prev;
+        });
+
+        if (imputedEntities.length <= 1) {
             const updated = imputedEntities.map(e => {
-                const isTarget = e.id === entityId;
+                const amt = Math.round((baseAmountToSplit * safePct) / 100);
                 return {
                     ...e,
-                    sharePercent: isTarget ? clamped : otherPercent,
-                    deductionAmount: e.waiveDeduction ? 0 : (isTarget ? amountA : amountB)
+                    sharePercent: Number(safePct.toFixed(1)),
+                    baseAmount: amt,
+                    deductionAmount: e.waiveDeduction ? 0 : amt
                 };
             });
             setImputedEntities(updated);
             return;
         }
 
-        // 3+ entities: clamp to 100 - otherEntitiesSum
-        const otherEntitiesSum = imputedEntities
-            .filter(e => e.id !== entityId)
-            .reduce((sum, e) => sum + (e.sharePercent || 0), 0);
-        const maxAllowed = Math.max(0, Number((100 - otherEntitiesSum).toFixed(2)));
-        const clamped = Math.max(0, Math.min(maxAllowed, newPercent));
+        if (imputedEntities.length === 2) {
+            const clamped = Number(safePct.toFixed(1));
+            const otherPercent = Number((100 - clamped).toFixed(1));
+            const amountA = Math.round((baseAmountToSplit * clamped) / 100);
+            const amountB = Math.max(0, baseAmountToSplit - amountA);
+            const updated = imputedEntities.map(e => {
+                const isTarget = e.id === entityId;
+                const amt = isTarget ? amountA : amountB;
+                return {
+                    ...e,
+                    sharePercent: isTarget ? clamped : otherPercent,
+                    baseAmount: amt,
+                    deductionAmount: e.waiveDeduction ? 0 : amt
+                };
+            });
+            setImputedEntities(updated);
+            return;
+        }
 
+        // 3+ entities: allow direct editing so analyst can adjust freely; validation enforces 100% on close
+        const clamped = Number(safePct.toFixed(1));
+        const newAmt = Math.round((baseAmountToSplit * clamped) / 100);
         const updated = imputedEntities.map(e => {
             if (e.id === entityId) {
                 return {
                     ...e,
                     sharePercent: clamped,
-                    deductionAmount: e.waiveDeduction ? 0 : Math.round((baseAmountToSplit * clamped) / 100)
+                    baseAmount: newAmt,
+                    deductionAmount: e.waiveDeduction ? 0 : newAmt
                 };
             }
             return e;
         });
         setImputedEntities(updated);
+    };
+
+    const getEntityProductBreakdowns = (entity: ImputedEntity) => {
+        const breakdowns: Array<{
+            returnId: string;
+            productId: string;
+            productName: string;
+            quantity: number;
+            uom: string;
+            unitPrice: number;
+            itemTotalAmount: number;
+            entityItemAmount: number;
+            entityItemPercent: number;
+            entityGlobalPercent: number;
+            reasonLabel: string;
+            waiveDeduction: boolean;
+        }> = [];
+
+        const totalCase = nominalNoveltiesCoQ > 0 ? nominalNoveltiesCoQ : 1;
+
+        caseReturns.forEach((ret: any) => {
+            const oi = orderItems.find(o => o.product_id === ret.product_id) ||
+                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+            const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+            const qty = Number(ret.quantity_returned) || 0;
+            const itemTotalAmount = Math.round(unitPrice * qty);
+            const pName = ret.products?.name || oi?.products?.name || 'Producto';
+            const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+            const reasonRaw = (ret.reason || '').replace(/\[[^\]]+\]\s*/g, '').trim() || 'Novedad';
+
+            const multiEntry = itemMultiImputations[ret.id];
+            const colabShare = multiEntry?.collaborators?.find(c => c.entityId === entity.id);
+            if (colabShare) {
+                const entityItemAmount = Number(colabShare.amount) || 0;
+                const entityItemPercent = itemTotalAmount > 0 ? Number(((entityItemAmount / itemTotalAmount) * 100).toFixed(1)) : 100;
+                const entityGlobalPercent = Number(((entityItemAmount / totalCase) * 100).toFixed(1));
+                breakdowns.push({
+                    returnId: ret.id,
+                    productId: ret.product_id,
+                    productName: pName,
+                    quantity: qty,
+                    uom,
+                    unitPrice,
+                    itemTotalAmount,
+                    entityItemAmount,
+                    entityItemPercent,
+                    entityGlobalPercent,
+                    reasonLabel: reasonRaw,
+                    waiveDeduction: Boolean(colabShare.waiveDeduction ?? entity.waiveDeduction)
+                });
+                return;
+            }
+
+            const singleImp = itemImputations[ret.id];
+            if (singleImp && singleImp.entityId === entity.id) {
+                breakdowns.push({
+                    returnId: ret.id,
+                    productId: ret.product_id,
+                    productName: pName,
+                    quantity: qty,
+                    uom,
+                    unitPrice,
+                    itemTotalAmount,
+                    entityItemAmount: itemTotalAmount,
+                    entityItemPercent: 100,
+                    entityGlobalPercent: Number(((itemTotalAmount / totalCase) * 100).toFixed(1)),
+                    reasonLabel: reasonRaw,
+                    waiveDeduction: Boolean(singleImp.waiveDeduction ?? entity.waiveDeduction)
+                });
+                return;
+            }
+
+            if (entity.assignedItemNames && entity.assignedItemNames.some(n => n.toLowerCase() === pName.toLowerCase())) {
+                const assignedCount = entity.assignedItemNames.length || 1;
+                const fallbackAmt = assignedCount === 1
+                    ? (entity.baseAmount ?? entity.deductionAmount ?? itemTotalAmount)
+                    : itemTotalAmount;
+                breakdowns.push({
+                    returnId: ret.id,
+                    productId: ret.product_id,
+                    productName: pName,
+                    quantity: qty,
+                    uom,
+                    unitPrice,
+                    itemTotalAmount,
+                    entityItemAmount: fallbackAmt,
+                    entityItemPercent: itemTotalAmount > 0 ? Number(((fallbackAmt / itemTotalAmount) * 100).toFixed(1)) : 100,
+                    entityGlobalPercent: Number(((fallbackAmt / totalCase) * 100).toFixed(1)),
+                    reasonLabel: reasonRaw,
+                    waiveDeduction: Boolean(entity.waiveDeduction)
+                });
+            }
+        });
+
+        // Fallback: if no direct item link found, match by exact or closest COP amount (e.g. SAC-0039)
+        if (breakdowns.length === 0 && caseReturns.length > 0) {
+            const entBase = entity.baseAmount ?? entity.deductionAmount ?? Math.round((totalCase * (entity.sharePercent || 0)) / 100);
+            const matchedRet = caseReturns.find((ret: any) => {
+                const oi = orderItems.find(o => o.product_id === ret.product_id) ||
+                           ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                const itemTotalAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+                return itemTotalAmount > 0 && Math.abs(itemTotalAmount - entBase) <= 250;
+            });
+
+            if (matchedRet) {
+                const oi = orderItems.find(o => o.product_id === matchedRet.product_id) ||
+                           matchedRet.orders?.order_items?.find((o: any) => o.product_id === matchedRet.product_id);
+                const unitPrice = Number(oi?.unit_price || matchedRet.unit_price || 0);
+                const qty = Number(matchedRet.quantity_returned) || 0;
+                const itemTotalAmount = Math.round(unitPrice * qty);
+                const pName = matchedRet.products?.name || oi?.products?.name || 'Producto';
+                const uom = matchedRet.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+                const reasonRaw = (matchedRet.reason || '').replace(/\[[^\]]+\]\s*/g, '').trim() || 'Novedad';
+                breakdowns.push({
+                    returnId: matchedRet.id,
+                    productId: matchedRet.product_id,
+                    productName: pName,
+                    quantity: qty,
+                    uom,
+                    unitPrice,
+                    itemTotalAmount,
+                    entityItemAmount: entBase,
+                    entityItemPercent: itemTotalAmount > 0 ? Number(((entBase / itemTotalAmount) * 100).toFixed(1)) : 100,
+                    entityGlobalPercent: Number((entity.sharePercent || ((entBase / totalCase) * 100)).toFixed(1)),
+                    reasonLabel: reasonRaw,
+                    waiveDeduction: Boolean(entity.waiveDeduction)
+                });
+            }
+        }
+
+        return breakdowns;
+    };
+
+    const buildSuggestedTechnicalSummaryText = () => {
+        const clientLabel = pqr?.profiles?.company_name || pqr?.profiles?.contact_name || 'EL CLIENTE';
+        const folioLabel = pqr?.orders?.sequence_id ? `Pedido #${pqr.orders.sequence_id}` : 'el pedido';
+        const lines: string[] = [];
+
+        if (caseReturns.length > 0) {
+            const productDescriptions = caseReturns.map((ret: any) => {
+                const oi = orderItems.find(o => o.product_id === ret.product_id) ||
+                           ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                const pName = ret.products?.name || oi?.products?.name || 'Producto';
+                const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+                const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                const qty = Number(ret.quantity_returned) || 0;
+                const itemTotal = Math.round(unitPrice * qty);
+                const cleanCausal = (ret.reason || '').replace(/\[[^\]]+\]\s*/g, '').trim() || 'Novedad de calidad';
+                return `- ${pName}: ${qty} ${uom} x ${formatMoney(unitPrice)}/${uom} = ${formatMoney(itemTotal)} (${cleanCausal})`;
+            });
+            lines.push(`Novedad reportada por ${clientLabel} (${folioLabel}) por valor total de ${formatMoney(nominalNoveltiesCoQ)}:`);
+            lines.push(...productDescriptions);
+        }
+
+        if (imputedEntities.length > 0) {
+            lines.push('');
+            lines.push('Responsabilidad e imputación por producto:');
+            imputedEntities.forEach(ent => {
+                const bds = getEntityProductBreakdowns(ent);
+                const entAmt = ent.baseAmount ?? ent.deductionAmount ?? Math.round((nominalNoveltiesCoQ * (ent.sharePercent || 0)) / 100);
+                const cobroTag = (resolutionOption === 'opt1' || ent.waiveDeduction)
+                    ? 'Exonerado de cobro ($0 COP)'
+                    : `Cobro en nómina: ${formatMoney(ent.deductionAmount ?? entAmt)}`;
+                if (bds.length > 0) {
+                    const prodDetail = bds.map(b =>
+                        `${b.productName} (${b.quantity} ${b.uom} @ ${formatMoney(b.unitPrice)} -> ${b.entityItemPercent}% ítem / ${b.entityGlobalPercent}% global = ${formatMoney(b.entityItemAmount)})`
+                    ).join('; ');
+                    lines.push(`- ${ent.name} (${ent.role || 'Operativo'} | ${Number(ent.sharePercent || 0).toFixed(1)}% del caso): ${prodDetail} [${cobroTag}].`);
+                } else {
+                    lines.push(`- ${ent.name} (${ent.role || 'Operativo'} | ${Number(ent.sharePercent || 0).toFixed(1)}% del caso): ${formatMoney(entAmt)} [${cobroTag}].`);
+                }
+            });
+        }
+
+        return lines.join('\n').trim();
     };
 
     const handleUpdateEntityAmount = (entityId: string, rawAmount: number) => {
@@ -2121,6 +2321,7 @@ export default function PqrAuditModal({
                     case 'producto_escaso': return 'Producto Escaso (Sin Cargue)';
                     case 'error_digitacion': return 'Error de Digitación';
                     case 'no_solicitado': return 'Producto No Solicitado';
+                    case 'caracteristica_calidad': return 'Devolución (Característica / Calidad)';
                     default: return 'Novedad de Producto';
                 }
             };
@@ -2304,7 +2505,11 @@ export default function PqrAuditModal({
         }
 
         const totalImputedPercent = Number(imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0).toFixed(1));
-        if (imputedEntities.length > 0 && totalImputedPercent > 100.1) {
+        if (status === 'resolved' && rcaResponsible !== 'proveedor' && imputedEntities.length > 0 && (totalImputedPercent < 99.5 || totalImputedPercent > 100.5)) {
+            showToast(`La sumatoria de responsabilidad debe cerrar en 100% (actualmente ${totalImputedPercent}%). Ajusta los porcentajes o valores en COP antes de cerrar el caso.`, 'error');
+            return;
+        }
+        if (imputedEntities.length > 0 && totalImputedPercent > 100.5) {
             showToast('El total imputado supera el 100%. Ajusta los porcentajes antes de resolver.', 'error');
             return;
         }
@@ -4000,6 +4205,28 @@ export default function PqrAuditModal({
                                                                 <X size={13} />
                                                                 <span>No Solicitado</span>
                                                             </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setNoveltyType('caracteristica_calidad')}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '4px',
+                                                                    padding: '6px 8px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    gridColumn: 'span 2',
+                                                                    border: noveltyType === 'caracteristica_calidad' ? '1px solid #0284C7' : '1px solid #CBD5E1',
+                                                                    backgroundColor: noveltyType === 'caracteristica_calidad' ? '#F0F9FF' : '#FFFFFF',
+                                                                    color: noveltyType === 'caracteristica_calidad' ? '#0369A1' : '#64748B',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <Sparkles size={13} />
+                                                                <span>Característica / Calidad</span>
+                                                            </button>
                                                         </div>
                                                     </div>
 
@@ -4051,7 +4278,7 @@ export default function PqrAuditModal({
                                                     </div>
                                                 </div>
 
-                                                {(noveltyType === 'averia' || noveltyType === 'no_solicitado') && (
+                                                {(noveltyType === 'averia' || noveltyType === 'no_solicitado' || noveltyType === 'caracteristica_calidad') && (
                                                     <div style={{ paddingTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                         <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#475569' }}>
                                                             Custodia Física del Producto Afectado:
@@ -4134,7 +4361,9 @@ export default function PqrAuditModal({
                                             const isErrorDigitacion = reasonLower.includes('digitaci');
                                             const isNoSolicitado = reasonLower.includes('no solicitado');
                                             const isFaltante = !isSinCargue && !isErrorDigitacion && !isNoSolicitado && reasonLower.includes('faltante');
+                                            const isCaracteristicaCalidad = reasonLower.includes('característica') || reasonLower.includes('caracteristica') || reasonLower.includes('devolución (característica');
                                             const causalLabel = isSinCargue ? 'Sin Cargue' :
+                                                                isCaracteristicaCalidad ? 'Característica / Calidad' :
                                                                 isErrorDigitacion ? 'Error Digitación' :
                                                                 isNoSolicitado ? 'No Solicitado' :
                                                                 isFaltante ? 'Faltante' : 'Avería';
@@ -4143,6 +4372,7 @@ export default function PqrAuditModal({
                                                 responsible: isSinCargue ? 'proveedor' :
                                                              isErrorDigitacion ? 'comercial' :
                                                              isNoSolicitado ? 'comercial' :
+                                                             isCaracteristicaCalidad ? 'picking' :
                                                              isFaltante ? 'picking' : 'transporte',
                                                 collaborators: []
                                             };
@@ -4184,6 +4414,7 @@ export default function PqrAuditModal({
                                                                 {isSinCargue ? <PackageMinus size={14} /> :
                                                                  isErrorDigitacion ? <FileText size={14} /> :
                                                                  isNoSolicitado ? <X size={14} /> :
+                                                                 isCaracteristicaCalidad ? <Sparkles size={14} /> :
                                                                  isFaltante ? <PackageX size={14} /> :
                                                                  <AlertTriangle size={14} />}
                                                             </div>
@@ -5348,7 +5579,7 @@ export default function PqrAuditModal({
                                 return (
                                     <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-                                            <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
                                                 {sectionNumber}. Dictamen Final de Auditoría & Plan de Acción (CAPA)
                                             </label>
                                             <span style={{ fontSize: '0.66rem', color: '#64748B' }}>
@@ -6091,12 +6322,52 @@ export default function PqrAuditModal({
                                                                     {entity.role}
                                                                 </span>
                                                             </div>
-                                                            {entity.documentId && <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Doc: {entity.documentId}</span>}
-                                                            {entity.assignedItemNames && entity.assignedItemNames.length > 0 && (
-                                                                <span style={{ fontSize: '0.66rem', color: '#0D7A57', fontWeight: '700', display: 'block', marginTop: '2px' }}>
-                                                                    Producto(s): {entity.assignedItemNames.join(', ')}
-                                                                </span>
-                                                            )}
+                                                            {entity.documentId && <span style={{ fontSize: '0.68rem', color: '#94A3B8', display: 'block' }}>Doc: {entity.documentId}</span>}
+                                                            {(() => {
+                                                                const entityProducts = getEntityProductBreakdowns(entity);
+                                                                if (entityProducts.length > 0) {
+                                                                    return (
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                                                                            {entityProducts.map((bp, bIdx) => (
+                                                                                <div
+                                                                                    key={`${bp.returnId}_${bIdx}`}
+                                                                                    style={{
+                                                                                        display: 'inline-flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '6px',
+                                                                                        flexWrap: 'wrap',
+                                                                                        padding: '4px 8px',
+                                                                                        borderRadius: '6px',
+                                                                                        backgroundColor: '#F0FDF4',
+                                                                                        border: '1px solid #BBF7D0',
+                                                                                        fontSize: '0.66rem',
+                                                                                        color: '#065F46'
+                                                                                    }}
+                                                                                >
+                                                                                    <strong style={{ color: '#0F172A' }}>{bp.productName}</strong>
+                                                                                    <span style={{ color: '#475569' }}>
+                                                                                        ({bp.quantity} {bp.uom} @ {formatMoney(bp.unitPrice)} = {formatMoney(bp.itemTotalAmount)})
+                                                                                    </span>
+                                                                                    <span style={{ fontWeight: '800', color: '#047857', backgroundColor: '#DCFCE7', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                        {bp.entityItemPercent}% prod. • {bp.entityGlobalPercent}% global
+                                                                                    </span>
+                                                                                    <span style={{ fontWeight: '800', color: '#BE123C' }}>
+                                                                                        {formatMoney(bp.entityItemAmount)}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                if (entity.assignedItemNames && entity.assignedItemNames.length > 0) {
+                                                                    return (
+                                                                        <span style={{ fontSize: '0.66rem', color: '#0D7A57', fontWeight: '700', display: 'block', marginTop: '2px' }}>
+                                                                            Producto(s): {entity.assignedItemNames.join(', ')}
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            })()}
                                                         </div>
 
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -6133,9 +6404,35 @@ export default function PqrAuditModal({
                                                                         />
                                                                     </div>
                                                                 )}
-                                                                <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.72rem', color: '#065F46', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', minWidth: '46px', textAlign: 'center' }}>
-                                                                    {Number(entity.sharePercent || 0).toFixed(1)}%
-                                                                </span>
+                                                                {!isReadOnlyClosed ? (
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1px 5px', borderRadius: '5px' }}>
+                                                                        <input
+                                                                            type="number"
+                                                                            step="0.1"
+                                                                            min="0"
+                                                                            max="100"
+                                                                            value={entity.sharePercent ?? 0}
+                                                                            onChange={e => handleUpdateEntityPercent(entity.id, parseFloat(e.target.value) || 0)}
+                                                                            title="Editar porcentaje de responsabilidad (%)"
+                                                                            style={{
+                                                                                width: '48px',
+                                                                                border: 'none',
+                                                                                backgroundColor: 'transparent',
+                                                                                fontFamily: 'monospace',
+                                                                                fontWeight: '800',
+                                                                                fontSize: '0.72rem',
+                                                                                color: '#065F46',
+                                                                                textAlign: 'right',
+                                                                                outline: 'none'
+                                                                            }}
+                                                                        />
+                                                                        <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.72rem', color: '#065F46' }}>%</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.72rem', color: '#065F46', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', minWidth: '46px', textAlign: 'center' }}>
+                                                                        {Number(entity.sharePercent || 0).toFixed(1)}%
+                                                                    </span>
+                                                                )}
                                                             </div>
 
                                                             {/* Calculated COP Deduction */}
@@ -6221,9 +6518,82 @@ export default function PqrAuditModal({
 
                             {/* Technical Evidence Notes Textarea */}
                             <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                    4. Justificación Técnica & Hallazgos de Inspección
-                                </label>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                    <label style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                        4. Justificación Técnica & Hallazgos de Inspección
+                                    </label>
+                                    {!isReadOnlyClosed && (caseReturns.length > 0 || imputedEntities.length > 0) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const generated = buildSuggestedTechnicalSummaryText();
+                                                if (!generated) return;
+                                                setRcaEvidenceNotes(prev => {
+                                                    const current = (prev || '').trim();
+                                                    if (!current) return generated;
+                                                    if (current.includes('Responsabilidad e imputación por producto:')) return generated;
+                                                    return `${current}\n\n${generated}`;
+                                                });
+                                            }}
+                                            style={{
+                                                padding: '4px 10px',
+                                                borderRadius: '6px',
+                                                border: '1px solid #0D7A57',
+                                                backgroundColor: '#ECFDF5',
+                                                color: '#065F46',
+                                                fontSize: '0.66rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px'
+                                            }}
+                                            title="Insertar descripción detallada de productos, porcentajes y precios por responsable en el informe final"
+                                        >
+                                            <Sparkles size={11} />
+                                            <span>+ Insertar Resumen de Productos y Responsables</span>
+                                        </button>
+                                    )}
+                                </div>
+                                {(caseReturns.length > 0 || imputedEntities.length > 0) && (
+                                    <div style={{
+                                        padding: '8px 10px',
+                                        backgroundColor: '#FFFFFF',
+                                        border: '1px dashed #A7F3D0',
+                                        borderRadius: '8px',
+                                        fontSize: '0.67rem',
+                                        color: '#334155',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '4px'
+                                    }}>
+                                        <span style={{ fontWeight: '800', color: '#065F46', fontSize: '0.64rem', textTransform: 'uppercase' }}>
+                                            Guía de Productos e Imputación para Informe Final:
+                                        </span>
+                                        {imputedEntities.map(ent => {
+                                            const bds = getEntityProductBreakdowns(ent);
+                                            const entAmt = ent.baseAmount ?? ent.deductionAmount ?? Math.round((nominalNoveltiesCoQ * (ent.sharePercent || 0)) / 100);
+                                            return (
+                                                <div key={`guide_${ent.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', borderBottom: '1px solid #F1F5F9', paddingBottom: '3px' }}>
+                                                    <div>
+                                                        <strong style={{ color: '#0F172A' }}>{ent.name}</strong>{' '}
+                                                        <span style={{ color: '#64748B' }}>({Number(ent.sharePercent || 0).toFixed(1)}% del caso):</span>{' '}
+                                                        {bds.length > 0 ? (
+                                                            <span style={{ color: '#047857', fontWeight: '700' }}>
+                                                                {bds.map(b => `${b.productName} (${b.quantity} ${b.uom} x ${formatMoney(b.unitPrice)} = ${formatMoney(b.entityItemAmount)} [${b.entityItemPercent}% prod.])`).join(' + ')}
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ color: '#64748B' }}>Prorrateo general ({formatMoney(entAmt)})</span>
+                                                        )}
+                                                    </div>
+                                                    <strong style={{ color: (resolutionOption === 'opt1' || ent.waiveDeduction) ? '#059669' : '#BE123C', fontFamily: 'monospace' }}>
+                                                        {(resolutionOption === 'opt1' || ent.waiveDeduction) ? '$0 COP (Exonerado)' : formatMoney(ent.deductionAmount ?? entAmt)}
+                                                    </strong>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                                 <textarea
                                     rows={3}
                                     value={rcaEvidenceNotes}

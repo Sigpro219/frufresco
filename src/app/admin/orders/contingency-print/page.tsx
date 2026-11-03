@@ -1364,8 +1364,8 @@ function ContingencyPrintContent() {
                         const priceB = Number(b.unit_price || 0);
                         const priceDiff = (priceB > 0 ? 1 : 0) - (priceA > 0 ? 1 : 0);
                         if (priceDiff !== 0) return priceDiff;
-                        const nameA = (a.products?.name || a.nickname || a.variant_label || '').trim();
-                        const nameB = (b.products?.name || b.nickname || b.variant_label || '').trim();
+                        const nameA = (a.products?.name || a.nickname || '').trim();
+                        const nameB = (b.products?.name || b.nickname || '').trim();
                         return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
                     });
                     const itemsCount = items.length;

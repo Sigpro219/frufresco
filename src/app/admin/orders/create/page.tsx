@@ -824,6 +824,7 @@ function CreateOrderContent() {
 
     // MODAL STATE (For Product Variants)
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
+    const [substitutedFromProduct, setSubstitutedFromProduct] = useState<any | null>(null);
     const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
     const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
     const [modalQuantity, setModalQuantity] = useState<string | number>(1);
@@ -1115,12 +1116,15 @@ function CreateOrderContent() {
                     }
                 });
             }
-            // Pre-populate with customer's structured preferred options if exist!
+            // Pre-populate with customer's structured preferred options and picking note if exist!
             const exc = clientExceptions.find(e => e.product_id === selectedProductForModal.id);
             if (exc?.preferred_options && typeof exc.preferred_options === 'object') {
                 Object.entries(exc.preferred_options).forEach(([k, v]) => {
                     if (v) initialOptions[k] = String(v);
                 });
+            }
+            if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+                initialOptions.nota_alistamiento = exc.picking_note.trim();
             }
 
             // SDD v1.9.177 / v1.9.305 (Escenario 324): 'Maduro'/'Madura' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
@@ -1811,7 +1815,7 @@ function CreateOrderContent() {
         );
     });
 
-    const handleProductClick = (product: any) => {
+    const handleProductClick = (product: any, bypassSubstitution = false, fromOriginalProduct?: any) => {
         if (scarcityLockedMap[product.id]) {
             showToast(`"${product.name}" no se puede agregar al pedido: Insumo bloqueado por escasez en el mercado.`, 'error');
             return;
@@ -1821,41 +1825,27 @@ function CreateOrderContent() {
         setModalQuantity(1);
         setSelectedOptions({});
 
-        // 1. Check for product substitution exception
+        // 1. Check for product substitution exception (applies by default, reversible inside modal)
         const exc = clientExceptions.find(e => e.product_id === product.id);
-        if (exc && exc.substitution_product_id) {
+        if (!bypassSubstitution && exc && exc.substitution_product_id) {
             const subProduct = products.find(p => p.id === exc.substitution_product_id);
             if (subProduct) {
-                const confirmSwap = window.confirm(`El cliente prefiere sustituir "${product.name}" por "${subProduct.name}". ¿Desea aplicar la sustitución?`);
-                if (confirmSwap) {
-                    handleProductClick(subProduct);
-                    return;
-                }
+                showToast(`Sustitución del cliente aplicada: "${product.name}" → "${subProduct.name}". Puedes cambiarla en el modal si lo deseas.`, 'info');
+                handleProductClick(subProduct, true, product);
+                return;
             }
         }
+        setSubstitutedFromProduct(fromOriginalProduct || null);
 
-        // 2. Pre-populate preferred variant options (if any)
+        // 2. Pre-populate preferred variant options and picking note (if any)
         const initialOptions: Record<string, string> = {};
         if (exc && exc.preferred_options && typeof exc.preferred_options === 'object') {
             Object.entries(exc.preferred_options).forEach(([k, v]) => {
                 initialOptions[k] = String(v);
             });
         }
-        // Auto-match picking note to options (ej. Nota: "Pintón" -> Maduración: "Pintón")
-        if (exc && exc.picking_note) {
-            const noteClean = exc.picking_note.trim().toLowerCase();
-            (product.options_config || []).forEach((opt: any) => {
-                if (!initialOptions[opt.name] && Array.isArray(opt.values)) {
-                    const matchedVal = opt.values.find((val: string) => {
-                        const vClean = (val.includes('|') ? val.split('|')[0] : val).trim().toLowerCase();
-                        if (vClean === 'maduro' || vClean === 'madura') return false; // SDD v1.9.177 / v1.9.305: Maduro nunca se preselecciona
-                        return noteClean.includes(vClean) || vClean.includes(noteClean);
-                    });
-                    if (matchedVal) {
-                        initialOptions[opt.name] = matchedVal;
-                    }
-                }
-            });
+        if (exc && exc.picking_note && exc.picking_note.trim()) {
+            initialOptions.nota_alistamiento = exc.picking_note.trim();
         }
         // SDD v1.9.177 / v1.9.305: 'Maduro'/'Madura' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
         Object.keys(initialOptions).forEach(k => {
@@ -2425,21 +2415,8 @@ function CreateOrderContent() {
             ? { ...(exc?.preferred_options && typeof exc.preferred_options === 'object' ? exc.preferred_options : {}), ...selectedOptionsMap }
             : (exc?.preferred_options && typeof exc.preferred_options === 'object' ? { ...exc.preferred_options } : {});
 
-        // Auto-match picking note to options (ej. Nota: "Pintón" -> Maduración: "Pintón")
-        if (exc && exc.picking_note) {
-            const noteClean = exc.picking_note.trim().toLowerCase();
-            (product.options_config || []).forEach((opt: any) => {
-                if (!mergedOptions[opt.name] && Array.isArray(opt.values)) {
-                    const matchedVal = opt.values.find((val: string) => {
-                        const vClean = (val.includes('|') ? val.split('|')[0] : val).trim().toLowerCase();
-                        if (vClean === 'maduro' || vClean === 'madura') return false; // SDD v1.9.177 / v1.9.305
-                        return noteClean.includes(vClean) || vClean.includes(noteClean);
-                    });
-                    if (matchedVal) {
-                        mergedOptions[opt.name] = matchedVal;
-                    }
-                }
-            });
+        if (exc && exc.picking_note && exc.picking_note.trim() && mergedOptions.nota_alistamiento === undefined) {
+            mergedOptions.nota_alistamiento = exc.picking_note.trim();
         }
         // SDD v1.9.177 / v1.9.305: 'Maduro'/'Madura' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
         Object.keys(mergedOptions).forEach(k => {
@@ -2463,6 +2440,7 @@ function CreateOrderContent() {
     const closeProductModal = () => {
         const currentStagedIdx = editingStagedItemIdx;
         setSelectedProductForModal(null);
+        setSubstitutedFromProduct(null);
         setEditingCartIndex(null);
         setEditingStagedItemId(null);
         setEditingStagedItemIdx(null);
@@ -2483,7 +2461,7 @@ function CreateOrderContent() {
     // --- MANEJO DE DUPLICADOS EN TABLA DE AUDITORÍA (STAGING) ---
     const selectStagedProduct = (
         stagedItemId: string,
-        product: any,
+        rawProduct: any,
         rowIdx: number,
         options?: any,
         qty?: number,
@@ -2492,7 +2470,20 @@ function CreateOrderContent() {
         unit?: string,
         factor?: number
     ) => {
-        if (!product) return;
+        if (!rawProduct) return;
+
+        // 1. Aplicar sustitución SKU por defecto si existe en las excepciones del cliente
+        const rawExc = clientExceptions.find(e => e.product_id === rawProduct.id);
+        const subProd = (rawExc && rawExc.substitution_product_id)
+            ? products.find(p => p.id === rawExc.substitution_product_id)
+            : null;
+        if (subProd) {
+            showToast(`Sustitución del cliente aplicada: "${rawProduct.name}" → "${subProd.name}".`, 'info');
+            setSubstitutedFromProduct(rawProduct);
+        } else {
+            setSubstitutedFromProduct(null);
+        }
+        const product = subProd || rawProduct;
 
         // Check if another active row in staged items already has this product
         const duplicateIndex = stagedItems.findIndex((item, idx) =>
@@ -2530,6 +2521,27 @@ function CreateOrderContent() {
         unit?: string,
         factor?: number
     ) => {
+        // Pre-poblar Variación Estructurada (2) y Nota de Alistamiento (3) del cliente para el producto seleccionado
+        const exc = clientExceptions.find(e => e.product_id === product.id);
+        const defaultExcOptions: Record<string, string> = {};
+        if (exc?.preferred_options && typeof exc.preferred_options === 'object') {
+            Object.entries(exc.preferred_options).forEach(([k, v]) => {
+                if (v) defaultExcOptions[k] = String(v);
+            });
+        }
+        if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+            defaultExcOptions.nota_alistamiento = exc.picking_note.trim();
+        }
+        const resolvedOptions = options !== undefined
+            ? { ...defaultExcOptions, ...options }
+            : defaultExcOptions;
+        const resolvedPublicValues = Object.entries(resolvedOptions)
+            .filter(([k, v]) => !k.startsWith('_') && k !== 'nota_alistamiento' && k !== 'Nota alistamiento' && k !== 'Nota de alistamiento' && typeof v === 'string' && v.trim())
+            .map(([_, v]) => String(v).trim());
+        const resolvedVariantLabel = variantLabel !== undefined
+            ? variantLabel
+            : (resolvedPublicValues.length > 0 ? resolvedPublicValues.join(', ') : undefined);
+
         setStagedItems(prev => prev.map((item, idx) => {
             if (item.id === stagedItemId || idx === rowIdx) {
                 const resolvedUnit = unit || item.originalUnit || product.unit_of_measure || 'Kg';
@@ -2541,8 +2553,8 @@ function CreateOrderContent() {
                     originalUnit: resolvedUnit,
                     conversion_factor: resolvedFactor,
                     quantity: resolvedQty,
-                    variant_label: variantLabel !== undefined ? variantLabel : item.variant_label,
-                    selected_options: options !== undefined ? options : item.selected_options,
+                    variant_label: resolvedVariantLabel,
+                    selected_options: resolvedOptions,
                     searchQuery: `${product.name} (${getAccountingIdDisplay(product)})`,
                     status: 'MATCH',
                     isConfirmed: true
@@ -2561,7 +2573,7 @@ function CreateOrderContent() {
                 product,
                 qty !== undefined ? qty : (item?.quantity || 1),
                 rowIdx,
-                options || item?.selected_options,
+                resolvedOptions,
                 item?.originalQty,
                 item?.originalUnit,
                 item?.conversion_factor
@@ -3435,7 +3447,15 @@ function CreateOrderContent() {
                 const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
 
                 const matchResult = findBestProductMatchDetails(originalName, candidateProductPool, learnedMemory);
-                const match = matchResult.product;
+                const rawMatch = matchResult.product;
+                const rawExc = rawMatch ? clientExceptions.find(e => e.product_id === rawMatch.id) : null;
+                const subProduct = (rawExc && rawExc.substitution_product_id)
+                    ? products.find(p => p.id === rawExc.substitution_product_id)
+                    : null;
+                const match = subProduct || rawMatch;
+                const effectiveReason = subProduct && rawMatch
+                    ? `${matchResult.matchReason || 'Match'} • Sustitución aplicada (${rawMatch.name} → ${subProduct.name})`
+                    : matchResult.matchReason;
 
                 const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
                 const detectedUnit = match 
@@ -3464,18 +3484,21 @@ function CreateOrderContent() {
                     confidence: matchResult.confidence,
                     confidenceScore: matchResult.confidenceScore,
                     matchSource: matchResult.matchSource,
-                    matchReason: matchResult.matchReason,
+                    matchReason: effectiveReason,
                     status: match ? 'MATCH' : 'PENDING',
                     observations: rawObs,
                     deliverySchedule: schedule,
                     selected_options: (() => {
                         const opts: any = {};
-                        // 1. Cargar preferencias fijas del cliente si existen
+                        // 1. Cargar preferencias fijas del cliente (Variación Estructurada y Nota de Alistamiento) si existen
                         const exc = match ? clientExceptions.find(e => e.product_id === match.id) : null;
                         if (exc?.preferred_options && typeof exc.preferred_options === 'object') {
                             Object.entries(exc.preferred_options).forEach(([k, v]) => {
                                 if (v) opts[k] = String(v);
                             });
+                        }
+                        if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+                            opts.nota_alistamiento = exc.picking_note.trim();
                         }
 
                         // 2. Mapear unidad de presentación detectada si aplica
@@ -3912,11 +3935,15 @@ function CreateOrderContent() {
                 const structuredSpec = getStructuredSpecKey(item);
                 const publicOptionValues = item.selected_options 
                     ? Object.entries(item.selected_options)
-                        .filter(([k, v]) => !k.startsWith('_') && typeof v === 'string' && v.trim())
+                        .filter(([k, v]) => !k.startsWith('_') && k !== 'nota_alistamiento' && k !== 'Nota alistamiento' && k !== 'Nota de alistamiento' && typeof v === 'string' && v.trim())
                         .map(([_, v]) => (v as string).trim())
                     : [];
                 const fallbackOptionLabel = publicOptionValues.length > 0 ? publicOptionValues.join(', ') : (item.observations || undefined);
                 const variantLabel = structuredSpec || item.variant_label || fallbackOptionLabel;
+                const prodExc = clientExceptions.find(e => e.product_id === prod.id);
+                const cleanAlias = (prodExc?.nickname || '').trim();
+                const cleanProdName = (prod.name || '').trim();
+                const validAlias = (cleanAlias && cleanAlias.toLowerCase() !== cleanProdName.toLowerCase()) ? cleanAlias : null;
 
                 return {
                     product_id: prod.id,
@@ -3924,7 +3951,7 @@ function CreateOrderContent() {
                     is_off_agreement: isOffAgreementItem,
                     quantity: qtyNum,
                     unit_price: unitPrice,
-                    nickname: item.originalName || prod.name,
+                    nickname: validAlias,
                     variant_label: variantLabel || null,
                     unit: item.originalUnit || prod.unit_of_measure || 'Kg',
                     selected_options: item.selected_options || {}
@@ -4231,7 +4258,7 @@ function CreateOrderContent() {
                     const structuredSpec = getStructuredSpecKey(item);
                     const publicOptionValues = item.selected_options 
                         ? Object.entries(item.selected_options)
-                            .filter(([k, v]) => !k.startsWith('_') && typeof v === 'string' && v.trim())
+                            .filter(([k, v]) => !k.startsWith('_') && k !== 'nota_alistamiento' && k !== 'Nota alistamiento' && k !== 'Nota de alistamiento' && typeof v === 'string' && v.trim())
                             .map(([_, v]) => (v as string).trim())
                         : [];
                     const fallbackOptionLabel = publicOptionValues.length > 0 ? publicOptionValues.join(', ') : (item.observations || undefined);
@@ -4245,11 +4272,19 @@ function CreateOrderContent() {
                             ? contractPrices[prodId]
                             : (item.price || (prodId && contractPrices[prodId]) || 0));
 
+                    const prodExc = prodId ? clientExceptions.find(e => e.product_id === prodId) : null;
+                    const resolvedNote = item.selected_options?.nota_alistamiento ?? prodExc?.picking_note ?? undefined;
+                    const finalSelectedOpts = { ...(item.selected_options || {}) };
+                    if (resolvedNote && finalSelectedOpts.nota_alistamiento === undefined) {
+                        finalSelectedOpts.nota_alistamiento = resolvedNote;
+                    }
+
                     return {
                         product: item.suggestedProduct,
                         qty: item.quantity,
                         variant_label: variantLabel,
-                        selected_options: item.selected_options,
+                        selected_options: finalSelectedOpts,
+                        picking_note: resolvedNote,
                         originalQty: item.originalQty !== undefined ? item.originalQty : item.quantity,
                         originalUnit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
                         conversion_factor: item.conversion_factor || 1,
@@ -4419,17 +4454,22 @@ function CreateOrderContent() {
                     const structuredSpec = getStructuredSpecKey(item);
                     const publicOptionValues = item.selected_options 
                         ? Object.entries(item.selected_options)
-                            .filter(([k, v]) => !k.startsWith('_') && typeof v === 'string' && v.trim())
+                            .filter(([k, v]) => !k.startsWith('_') && k !== 'nota_alistamiento' && k !== 'Nota alistamiento' && k !== 'Nota de alistamiento' && typeof v === 'string' && v.trim())
                             .map(([_, v]) => (v as string).trim())
                         : [];
                     const fallbackOptionLabel = publicOptionValues.length > 0 ? publicOptionValues.join(', ') : (item.observations || undefined);
                     const variantLabel = structuredSpec || item.variant_label || fallbackOptionLabel;
 
+                    const prodExc = clientExceptions.find(e => e.product_id === item.suggestedProduct.id);
+                    const cleanAlias = (prodExc?.nickname || '').trim();
+                    const cleanProdName = (item.suggestedProduct.name || '').trim();
+                    const validAlias = (cleanAlias && cleanAlias.toLowerCase() !== cleanProdName.toLowerCase()) ? cleanAlias : null;
+
                     return {
                         product_id: item.suggestedProduct.id,
                         quantity: qty,
                         unit_price: unitPrice,
-                        nickname: item.originalName || null,
+                        nickname: validAlias,
                         variant_label: variantLabel || null,
                         unit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
                         selected_options: item.selected_options || {}
@@ -5062,12 +5102,15 @@ ${primaryAdminNotes}`.trim();
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
                 const rawPrice = primaryForceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
                 const unitPrice = (clientType === 'B2C' && isCollaboratorOrder) ? Math.round(rawPrice * collabDiscountMultiplier) : rawPrice;
+                const cleanAlias = (item.nickname || '').trim();
+                const cleanProdName = (item.product?.name || '').trim();
+                const validAlias = (cleanAlias && cleanAlias.toLowerCase() !== cleanProdName.toLowerCase()) ? cleanAlias : null;
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
                     quantity: qtyNum,
                     unit_price: unitPrice,
-                    nickname: item.nickname || item.variant_label || null,
+                    nickname: validAlias,
                     variant_label: item.variant_label || null,
                     unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
                     selected_options: item.selected_options || {}
@@ -8427,20 +8470,56 @@ ${primaryAdminNotes}`.trim();
                                                                                                         Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
                                                                                                     </span>
                                                                                                 )}
+                                                                                                {exc?.substitution_product_id && (() => {
+                                                                                                    const subP = products.find(pr => pr.id === exc.substitution_product_id);
+                                                                                                    if (!subP) return null;
+                                                                                                    return (
+                                                                                                        <span style={{
+                                                                                                            fontSize: '0.66rem',
+                                                                                                            backgroundColor: '#FFFBEB',
+                                                                                                            color: '#B45309',
+                                                                                                            padding: '2px 6px',
+                                                                                                            borderRadius: '6px',
+                                                                                                            fontWeight: '800',
+                                                                                                            display: 'inline-flex',
+                                                                                                            alignItems: 'center',
+                                                                                                            gap: '3px',
+                                                                                                            border: '1px solid #FDE68A'
+                                                                                                        }}>
+                                                                                                            <RefreshCw size={10} /> Sustituir por: {subP.name}
+                                                                                                        </span>
+                                                                                                    );
+                                                                                                })()}
                                                                                                 {exc?.preferred_options && typeof exc.preferred_options === 'object' && Object.keys(exc.preferred_options).length > 0 && (
                                                                                                     <span style={{ 
                                                                                                         fontSize: '0.66rem', 
-                                                                                                        backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7', 
-                                                                                                        color: '#15803D', 
+                                                                                                        backgroundColor: '#EEF2FF', 
+                                                                                                        color: '#4338CA', 
                                                                                                         padding: '2px 6px', 
                                                                                                         borderRadius: '6px', 
                                                                                                         fontWeight: '800', 
                                                                                                         display: 'inline-flex', 
                                                                                                         alignItems: 'center', 
                                                                                                         gap: '3px',
-                                                                                                        border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
+                                                                                                        border: '1px solid #C7D2FE'
                                                                                                     }}>
-                                                                                                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} /> {Object.values(exc.preferred_options).join(' • ')}
+                                                                                                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#4F46E5', display: 'inline-block' }} /> {Object.values(exc.preferred_options).join(' • ')}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                                {exc?.picking_note && exc.picking_note.trim() && (
+                                                                                                    <span style={{
+                                                                                                        fontSize: '0.66rem',
+                                                                                                        backgroundColor: '#ECFDF5',
+                                                                                                        color: '#047857',
+                                                                                                        padding: '2px 6px',
+                                                                                                        borderRadius: '6px',
+                                                                                                        fontWeight: '800',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        gap: '3px',
+                                                                                                        border: '1px solid #A7F3D0'
+                                                                                                    }}>
+                                                                                                        <FileText size={10} /> Nota: {exc.picking_note.trim()}
                                                                                                     </span>
                                                                                                 )}
                                                                                                 {isScarcityLocked && (
@@ -9176,20 +9255,56 @@ ${primaryAdminNotes}`.trim();
                                                             Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
                                                         </span>
                                                     )}
+                                                    {exc?.substitution_product_id && (() => {
+                                                        const subP = products.find(pr => pr.id === exc.substitution_product_id);
+                                                        if (!subP) return null;
+                                                        return (
+                                                            <span style={{
+                                                                fontSize: '0.68rem',
+                                                                backgroundColor: '#FFFBEB',
+                                                                color: '#B45309',
+                                                                padding: '2px 7px',
+                                                                borderRadius: '6px',
+                                                                fontWeight: '800',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                border: '1px solid #FDE68A'
+                                                            }}>
+                                                                <RefreshCw size={11} /> Sustituir por: {subP.name}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                     {exc?.preferred_options && typeof exc.preferred_options === 'object' && Object.keys(exc.preferred_options).length > 0 && (
                                                         <span style={{ 
                                                             fontSize: '0.68rem', 
-                                                            backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7', 
-                                                            color: '#15803D', 
+                                                            backgroundColor: '#EEF2FF', 
+                                                            color: '#4338CA', 
                                                             padding: '2px 7px', 
                                                             borderRadius: '6px', 
                                                             fontWeight: '800', 
                                                             display: 'inline-flex', 
                                                             alignItems: 'center', 
                                                             gap: '3px',
-                                                            border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
+                                                            border: '1px solid #C7D2FE'
                                                         }}>
-                                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} /> {Object.values(exc.preferred_options).join(' • ')}
+                                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#4F46E5', display: 'inline-block' }} /> {Object.values(exc.preferred_options).join(' • ')}
+                                                        </span>
+                                                    )}
+                                                    {exc?.picking_note && exc.picking_note.trim() && (
+                                                        <span style={{
+                                                            fontSize: '0.68rem',
+                                                            backgroundColor: '#ECFDF5',
+                                                            color: '#047857',
+                                                            padding: '2px 7px',
+                                                            borderRadius: '6px',
+                                                            fontWeight: '800',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px',
+                                                            border: '1px solid #A7F3D0'
+                                                        }}>
+                                                            <FileText size={11} /> Nota: {exc.picking_note.trim()}
                                                         </span>
                                                     )}
                                                     {isScarcityLocked && (
@@ -9337,45 +9452,52 @@ ${primaryAdminNotes}`.trim();
                                                                 <span 
                                                                     onClick={() => startEditingCartItem(idx)}
                                                                     style={{ 
-                                                                        fontWeight: '600', 
-                                                                        color: '#0891B2', 
+                                                                        fontWeight: '700', 
+                                                                        color: '#4338CA', 
                                                                         fontSize: '0.8em', 
-                                                                        backgroundColor: '#ECFEFF', 
+                                                                        backgroundColor: '#EEF2FF', 
                                                                         padding: '2px 6px', 
                                                                         borderRadius: '4px', 
                                                                         cursor: 'pointer',
                                                                         display: 'inline-flex',
                                                                         alignItems: 'center',
                                                                         gap: '3px',
-                                                                        border: '1px solid #CFFAFE'
+                                                                        border: '1px solid #C7D2FE'
                                                                     }}
-                                                                    title="Parametrización Operativa: Atributos y especificaciones técnicas estandarizadas para el costeo, inventario y cubicaje."
+                                                                    title="Variación Estructurada: Clic para editar atributos o presentación en este pedido."
                                                                 >
                                                                     <Settings size={11} strokeWidth={2} />
                                                                     {item.variant_label}
                                                                 </span>
                                                             )}
-                                                            {item.picking_note && (
-                                                                <span 
-                                                                    style={{ 
-                                                                        fontWeight: '600', 
-                                                                        color: '#B45309', 
-                                                                        fontSize: '0.8em', 
-                                                                        backgroundColor: '#FEF3C7', 
-                                                                        padding: '2px 6px', 
-                                                                        borderRadius: '4px', 
-                                                                        border: '1px solid #FCD34D',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: '3px',
-                                                                        cursor: 'help'
-                                                                    }}
-                                                                    title="Requerimiento del Cliente: Instrucción comercial u observación de picking solicitada por el cliente."
-                                                                >
-                                                                    <FileText size={11} strokeWidth={2} />
-                                                                    Nota: {item.picking_note}
-                                                                </span>
-                                                            )}
+                                                            {(() => {
+                                                                const activeNote = item.selected_options?.nota_alistamiento !== undefined
+                                                                    ? String(item.selected_options.nota_alistamiento).trim()
+                                                                    : (item.picking_note || '').trim();
+                                                                if (!activeNote) return null;
+                                                                return (
+                                                                    <span 
+                                                                        onClick={() => startEditingCartItem(idx)}
+                                                                        style={{ 
+                                                                            fontWeight: '700', 
+                                                                            color: '#065F46', 
+                                                                            fontSize: '0.8em', 
+                                                                            backgroundColor: '#ECFDF5', 
+                                                                            padding: '2px 6px', 
+                                                                            borderRadius: '4px', 
+                                                                            border: '1px solid #A7F3D0',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '3px',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                        title="Nota de Alistamiento: Clic para editar o quitar esta instrucción para bodega en este pedido."
+                                                                    >
+                                                                        <FileText size={11} strokeWidth={2} />
+                                                                        Nota: {activeNote}
+                                                                    </span>
+                                                                );
+                                                            })()}
                                                             {/* Pricing Source Badge */}
                                                             {campaignPrices[item.product.id] ? (
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FCA5A5' }}>
@@ -10758,7 +10880,7 @@ ${primaryAdminNotes}`.trim();
                                 )}
                             </div>
 
-                            {/* CLIENT CUSTOM REQUIREMENT / STRUCTURED PREFERENCES BANNER */}
+                            {/* CLIENT CUSTOM REQUIREMENT / STRUCTURED PREFERENCES BANNER (TRÍADA 1, 2 Y 3) */}
                             {(() => {
                                 const hasStructuredPreference = Boolean(
                                     exc?.preferred_options && 
@@ -10766,16 +10888,20 @@ ${primaryAdminNotes}`.trim();
                                     Object.keys(exc.preferred_options).length > 0
                                 );
                                 const hasClientNote = Boolean(exc?.picking_note || exc?.delivery_note);
+                                const directSubProduct = exc?.substitution_product_id
+                                    ? products.find(pr => pr.id === exc.substitution_product_id)
+                                    : null;
+                                const hasSubstitutionRule = Boolean(substitutedFromProduct || directSubProduct);
                                 const activeClientObj = clientType === 'B2B' ? getSelectedClientDetails() : getSelectedB2CDetails();
                                 const clientDisplayName = activeClientObj?.company_name || activeClientObj?.contact_name || 'este cliente';
 
-                                // SOLO mostrar si el cliente tiene Nota de cliente, Preferencia estructurada activa, o venta mínima especial
-                                if (!hasStructuredPreference && !hasClientNote && !hasSpecialMinSale) return null;
+                                // SOLO mostrar si el cliente tiene Sustitución (1), Variación Estructurada (2), Nota (3) o venta mínima especial
+                                if (!hasSubstitutionRule && !hasStructuredPreference && !hasClientNote && !hasSpecialMinSale) return null;
 
                                 return (
                                     <div style={{
-                                        backgroundColor: hasStructuredPreference ? '#ECFDF5' : (hasClientNote ? '#FEF3C7' : '#F8FAFC'),
-                                        border: `1.5px solid ${hasStructuredPreference ? '#A7F3D0' : (hasClientNote ? '#FCD34D' : '#E2E8F0')}`,
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1.5px solid #E2E8F0',
                                         borderRadius: '16px',
                                         padding: '0.9rem 1.3rem',
                                         margin: '0.5rem 0 1.2rem 0',
@@ -10786,28 +10912,66 @@ ${primaryAdminNotes}`.trim();
                                         flexWrap: 'wrap',
                                         textAlign: 'left',
                                         fontSize: '0.84rem',
-                                        color: hasStructuredPreference ? '#065F46' : (hasClientNote ? '#92400E' : '#334155'),
+                                        color: '#334155',
                                         lineHeight: '1.4',
-                                        boxShadow: hasStructuredPreference ? '0 4px 14px rgba(16, 185, 129, 0.1)' : 'none',
                                         transition: 'all 0.3s ease'
                                     }}>
-                                        {/* Left: Requerimiento / Preferencia */}
-                                        <div style={{ flex: '1 1 auto', minWidth: '240px' }}>
-                                            {hasStructuredPreference ? (
-                                                <div>
-                                                    <div style={{ fontWeight: '900', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#047857', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <CheckCircle2 size={15} color="#059669" /> PREFERENCIA ESTRUCTURADA ACTIVA:
+                                        {/* Left: Tríada 1 (Sustitución), 2 (Variación) y 3 (Nota) */}
+                                        <div style={{ flex: '1 1 auto', minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {/* 1. SUSTITUCIÓN SKU (Ámbar) */}
+                                            {hasSubstitutionRule && (
+                                                <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderLeft: '4px solid #D97706', borderRadius: '8px', padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                        <RefreshCw size={14} color="#D97706" />
+                                                        <span style={{ fontWeight: '900', fontSize: '0.73rem', color: '#B45309', textTransform: 'uppercase' }}>
+                                                            1. Sustitución SKU:
+                                                        </span>
+                                                        {substitutedFromProduct ? (
+                                                            <span style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: '700' }}>
+                                                                Sustituido desde <strong>{substitutedFromProduct.name}</strong> → <strong>{selectedProductForModal.name}</strong>
+                                                            </span>
+                                                        ) : directSubProduct ? (
+                                                            <span style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: '700' }}>
+                                                                El cliente prefiere sustituir por <strong>{directSubProduct.name}</strong>
+                                                            </span>
+                                                        ) : null}
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                                    {substitutedFromProduct ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleProductClick(substitutedFromProduct, true)}
+                                                            style={{ backgroundColor: '#FFFFFF', color: '#B45309', border: '1px solid #F59E0B', borderRadius: '6px', padding: '3px 9px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer' }}
+                                                        >
+                                                            Usar original ({substitutedFromProduct.name})
+                                                        </button>
+                                                    ) : directSubProduct ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleProductClick(directSubProduct, true, selectedProductForModal)}
+                                                            style={{ backgroundColor: '#D97706', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '3px 9px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer' }}
+                                                        >
+                                                            Aplicar sustituto ({directSubProduct.name})
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                            )}
+
+                                            {/* 2. VARIACIÓN ESTRUCTURADA REQUERIDA (Índigo) */}
+                                            {hasStructuredPreference && (
+                                                <div style={{ backgroundColor: '#EEF2FF', border: '1px solid #C7D2FE', borderLeft: '4px solid #4F46E5', borderRadius: '8px', padding: '6px 10px' }}>
+                                                    <div style={{ fontWeight: '900', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#4338CA', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <CheckCircle2 size={14} color="#4F46E5" /> 2. VARIACIÓN ESTRUCTURADA PRESELECCIONADA (EDITABLE ABAJO):
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                         {Object.entries(exc.preferred_options).map(([k, v]) => (
                                                             <span key={k} style={{
-                                                                backgroundColor: '#D1FAE5',
-                                                                color: '#065F46',
-                                                                border: '1px solid #6EE7B7',
-                                                                padding: '3px 9px',
-                                                                borderRadius: '8px',
+                                                                backgroundColor: '#E0E7FF',
+                                                                color: '#3730A3',
+                                                                border: '1px solid #A5B4FC',
+                                                                padding: '2px 8px',
+                                                                borderRadius: '6px',
                                                                 fontWeight: '800',
-                                                                fontSize: '0.8rem',
+                                                                fontSize: '0.78rem',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
                                                                 gap: '4px'
@@ -10816,27 +10980,22 @@ ${primaryAdminNotes}`.trim();
                                                             </span>
                                                         ))}
                                                     </div>
-                                                    {exc.picking_note && (
-                                                        <div style={{ fontSize: '0.78rem', color: '#059669', marginTop: '4px', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            <FileText size={12} color="#059669" /> Nota origen: &quot;{exc.picking_note}&quot;
-                                                        </div>
-                                                    )}
                                                 </div>
-                                            ) : hasClientNote ? (
-                                                <div>
-                                                    <div style={{ fontWeight: '800', marginBottom: '3px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#B45309', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                        <FileText size={13} strokeWidth={2.2} /> NOTA INFORMAL DEL CLIENTE (SIN ESTRUCTURAR):
+                                            )}
+
+                                            {/* 3. NOTA DE ALISTAMIENTO (Esmeralda) */}
+                                            {hasClientNote && (
+                                                <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderLeft: '4px solid #047857', borderRadius: '8px', padding: '6px 10px' }}>
+                                                    <div style={{ fontWeight: '800', marginBottom: '3px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#047857', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                        <FileText size={13} strokeWidth={2.2} color="#059669" /> 3. NOTA DE ALISTAMIENTO DEL CLIENTE (PRE-CARGADA ABAJO):
                                                     </div>
-                                                    {exc?.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForModal.name.trim().toLowerCase() && (
-                                                        <div style={{ marginBottom: '2px' }}><strong>Alias Comercial:</strong> {exc.nickname}</div>
-                                                    )}
                                                     {exc?.picking_note && (
-                                                        <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#78350F', backgroundColor: 'rgba(254, 243, 199, 0.7)', padding: '2px 8px', borderRadius: '6px', display: 'inline-block' }}>
+                                                        <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #6EE7B7', padding: '2px 8px', borderRadius: '6px', display: 'inline-block' }}>
                                                             Nota: &quot;{exc.picking_note}&quot;
                                                         </div>
                                                     )}
                                                 </div>
-                                            ) : null}
+                                            )}
                                         </div>
 
                                         {/* Right: Botón para Fijar / Desfijar la combinación actual */}

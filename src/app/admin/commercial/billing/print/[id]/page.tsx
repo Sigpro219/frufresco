@@ -575,13 +575,6 @@ export default function BillingPrintPage() {
                                         </thead>
                                         <tbody>
                                             {order.order_items?.map((item: any, i: number) => {
-                                                const physicalInst = resolvePhysicalInstruction({
-                                                    quantity: item.quantity,
-                                                    unit: item.products?.unit_of_measure,
-                                                    variant_label: item.variant_label,
-                                                    nickname: item.nickname,
-                                                    selected_options: item.selected_options
-                                                });
                                                 const unitPrice = isObsequio ? 0 : (item.unit_price || 0);
                                                 const lineTotal = item.quantity * unitPrice;
 
@@ -595,13 +588,8 @@ export default function BillingPrintPage() {
                                                         </td>
                                                         <td>
                                                             <strong style={{ color: '#0F172A' }}>
-                                                                {item.nickname || item.products?.name}
+                                                                {item.products?.name || item.nickname || 'Producto'}
                                                             </strong>
-                                                            {physicalInst && (
-                                                                <div style={{ fontSize: '0.60rem', color: '#0D7A57', fontWeight: 700, marginTop: '1px' }}>
-                                                                    ↳ {physicalInst}
-                                                                </div>
-                                                            )}
                                                         </td>
                                                         <td className="text-right" style={{ fontWeight: 800 }}>
                                                             {item.quantity}{' '}

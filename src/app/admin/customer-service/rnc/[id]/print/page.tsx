@@ -596,28 +596,75 @@ export default function RncPrintPage() {
                                         <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '1px solid #CBD5E1', textAlign: 'left' }}>
                                             <th style={{ padding: '2px 5px', fontWeight: '800', color: '#475569' }}>Funcionario / Proveedor</th>
                                             <th style={{ padding: '2px 5px', fontWeight: '800', color: '#475569' }}>Cargo / Rol</th>
-                                            <th style={{ padding: '2px 5px', fontWeight: '800', color: '#475569', textAlign: 'center' }}>% Imputado</th>
+                                            <th style={{ padding: '2px 5px', fontWeight: '800', color: '#475569' }}>Producto(s) Responsabilizado(s) (Cant., % y Precio)</th>
+                                            <th style={{ padding: '2px 5px', fontWeight: '800', color: '#475569', textAlign: 'center' }}>% Global</th>
                                             <th style={{ padding: '2px 5px', fontWeight: '800', color: '#DC2626', textAlign: 'right' }}>Deducción COP</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {rca.imputedEntities.map((ent, eIdx) => (
-                                            <tr key={ent.id || eIdx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                <td style={{ padding: '2px 5px', fontWeight: '800', color: '#0F172A' }}>
-                                                    <div>{ent.name} {ent.documentId ? `(Doc: ${ent.documentId})` : ''}</div>
-                                                    {ent.assignedItemNames && ent.assignedItemNames.length > 0 && (
-                                                        <div style={{ color: '#0D7A57', fontSize: '5.8pt', fontWeight: '700' }}>
-                                                            Causante de: {ent.assignedItemNames.join(', ')}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: '2px 5px', color: '#475569' }}>{ent.role || rca.responsible}</td>
-                                                <td style={{ padding: '2px 5px', textAlign: 'center', fontWeight: '800', color: '#0D7A57' }}>{ent.sharePercent}%</td>
-                                                <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '900', color: '#DC2626' }}>
-                                                    {ent.deductionAmount ? `$${ent.deductionAmount.toLocaleString('es-CO')} COP` : '$0 COP'}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {rca.imputedEntities.map((ent, eIdx) => {
+                                            const totalCaseBase = totalImpactCoQ > 0 ? totalImpactCoQ : novelties.reduce((sum, item) => {
+                                                const oi = item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
+                                                const price = Number(oi?.unit_price || item.unit_price || 0);
+                                                return sum + Math.round(price * (Number(item.quantity_returned) || 0));
+                                            }, 0) || 1;
+                                            const entBaseAmt = ent.baseAmount ?? ent.deductionAmount ?? Math.round((totalCaseBase * (ent.sharePercent || 0)) / 100);
+                                            const matchedDetails: string[] = [];
+
+                                            if (rca.itemImputations && rca.itemImputations.length > 0) {
+                                                rca.itemImputations.forEach((it: any) => {
+                                                    const colShare = it.collaborators?.find((c: any) => c.entityId === ent.id || c.entityName === ent.name);
+                                                    if (colShare) {
+                                                        const itemAmt = Number(it.amount) || 1;
+                                                        const shareAmt = Number(colShare.amount) || 0;
+                                                        const itemPct = Number(((shareAmt / itemAmt) * 100).toFixed(1));
+                                                        matchedDetails.push(`${it.productName} (${it.quantity} ${it.unitOfMeasure || 'Kg'} x $${Number(it.unitPrice || 0).toLocaleString('es-CO')} -> ${itemPct}% prod. = $${shareAmt.toLocaleString('es-CO')})`);
+                                                    } else if (it.imputedEntity?.id === ent.id || it.imputedEntity?.name === ent.name) {
+                                                        const shareAmt = Number(it.imputedEntity?.baseAmount ?? it.imputedEntity?.deductionAmount ?? it.amount ?? 0);
+                                                        const itemAmt = Number(it.amount) || 1;
+                                                        const itemPct = Number(((shareAmt / itemAmt) * 100).toFixed(1));
+                                                        matchedDetails.push(`${it.productName} (${it.quantity} ${it.unitOfMeasure || 'Kg'} x $${Number(it.unitPrice || 0).toLocaleString('es-CO')} -> ${itemPct}% prod. = $${shareAmt.toLocaleString('es-CO')})`);
+                                                    }
+                                                });
+                                            }
+
+                                            if (matchedDetails.length === 0 && novelties.length > 0) {
+                                                novelties.forEach((nov: any) => {
+                                                    const oi = nov.orders?.order_items?.find((o: any) => o.product_id === nov.product_id);
+                                                    const uPrice = Number(oi?.unit_price || nov.unit_price || 0);
+                                                    const qty = Number(nov.quantity_returned) || 0;
+                                                    const novAmt = Math.round(uPrice * qty);
+                                                    const pName = nov.products?.name || 'Producto';
+                                                    const uom = nov.products?.unit_of_measure || 'Kg';
+                                                    const byName = ent.assignedItemNames?.some((n: string) => n.toLowerCase() === pName.toLowerCase());
+                                                    const byAmount = !ent.assignedItemNames?.length && novAmt > 0 && Math.abs(novAmt - entBaseAmt) <= 250;
+                                                    if (byName || byAmount) {
+                                                        const itemPct = novAmt > 0 ? Number(((entBaseAmt / novAmt) * 100).toFixed(1)) : 100;
+                                                        matchedDetails.push(`${pName} (${qty} ${uom} x $${uPrice.toLocaleString('es-CO')} -> ${Math.min(100, itemPct)}% prod. = $${novAmt.toLocaleString('es-CO')})`);
+                                                    }
+                                                });
+                                            }
+
+                                            return (
+                                                <tr key={ent.id || eIdx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                    <td style={{ padding: '2px 5px', fontWeight: '800', color: '#0F172A' }}>
+                                                        <div>{ent.name} {ent.documentId ? `(Doc: ${ent.documentId})` : ''}</div>
+                                                    </td>
+                                                    <td style={{ padding: '2px 5px', color: '#475569' }}>{ent.role || rca.responsible}</td>
+                                                    <td style={{ padding: '2px 5px', color: '#0D7A57', fontWeight: '700', fontSize: '5.9pt' }}>
+                                                        {matchedDetails.length > 0
+                                                            ? matchedDetails.join(' | ')
+                                                            : (ent.assignedItemNames && ent.assignedItemNames.length > 0
+                                                                ? ent.assignedItemNames.join(', ')
+                                                                : `Prorrateo general ($${entBaseAmt.toLocaleString('es-CO')} COP)`)}
+                                                    </td>
+                                                    <td style={{ padding: '2px 5px', textAlign: 'center', fontWeight: '800', color: '#0D7A57' }}>{ent.sharePercent}%</td>
+                                                    <td style={{ padding: '2px 5px', textAlign: 'right', fontWeight: '900', color: '#DC2626' }}>
+                                                        {ent.deductionAmount ? `$${ent.deductionAmount.toLocaleString('es-CO')} COP` : '$0 COP'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -688,13 +735,39 @@ export default function RncPrintPage() {
                                 {novelties.map((item, idx) => (
                                     <tr key={item.id || idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
                                         <td style={{ padding: '2.5px 6px', fontWeight: '800', color: '#0F172A' }}>
-                                            <div>{item.products?.name || 'Producto'}</div>
+                                            <div>
+                                                <span>{item.products?.name || 'Producto'}</span>
+                                                {(() => {
+                                                    const oi = item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
+                                                    const uPrice = Number(oi?.unit_price || item.unit_price || 0);
+                                                    const itemTotal = Math.round(uPrice * (Number(item.quantity_returned) || 0));
+                                                    if (uPrice > 0) {
+                                                        return (
+                                                            <span style={{ fontSize: '5.8pt', color: '#64748B', fontWeight: '700', marginLeft: '4px' }}>
+                                                                (${uPrice.toLocaleString('es-CO')}/{item.products?.unit_of_measure || 'Kg'} • Subtotal: ${itemTotal.toLocaleString('es-CO')} COP)
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
                                             {(() => {
                                                 const assignedImp = rca.itemImputations?.find((it: any) => it.returnId === item.id || it.productId === item.product_id);
+                                                if (assignedImp?.collaborators && assignedImp.collaborators.length > 0) {
+                                                    const itemAmt = Number(assignedImp.amount) || 1;
+                                                    return (
+                                                        <div style={{ fontSize: '5.6pt', color: '#0D7A57', fontWeight: '700' }}>
+                                                            Imputado a: {assignedImp.collaborators.map((c: any) => {
+                                                                const pct = Number((((Number(c.amount) || 0) / itemAmt) * 100).toFixed(1));
+                                                                return `${c.entityName} (${pct}% = $${Number(c.amount || 0).toLocaleString('es-CO')} COP)`;
+                                                            }).join(' | ')}
+                                                        </div>
+                                                    );
+                                                }
                                                 if (assignedImp?.imputedEntity?.name) {
                                                     return (
                                                         <div style={{ fontSize: '5.6pt', color: '#0D7A57', fontWeight: '700' }}>
-                                                            Imputado: {assignedImp.imputedEntity.name} ({assignedImp.responsible})
+                                                            Imputado: {assignedImp.imputedEntity.name} ({assignedImp.responsible} • 100% = ${Number(assignedImp.amount || 0).toLocaleString('es-CO')} COP)
                                                         </div>
                                                     );
                                                 }
