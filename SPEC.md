@@ -13670,24 +13670,47 @@ Durante las pruebas operativas del Asistente Guiado de Despacho Manual (BCP) en 
 4. **Restitución del Membrete Oficial en Manifiesto de Despacho (`contingency-print/page.tsx`):**
    - Se activa `showHeader={true}` en el membrete de tamaño Oficio legal, garantizando el encabezado institucional con logo, razón social, fecha programada, referencia de paradas y distintivo *"DESPACHO Y RUTA"*.
 
-### Escenario 372: Poda Radical de Grasa y Rediseño Raptor 3 en Modal de Lanzamiento Logístico (`loading/page.tsx`) (SDD v1.9.355)
+### Escenario 372: Rediseño Centrado en el Usuario (UX-First) y Realidad Operativa del Gemba en Lanzamiento de Tanda (`loading/page.tsx`) (SDD v1.9.356)
 
-#### 1. Contexto y Hallazgos del Gemba (Doctrina SpaceX: «The best part is no part»)
-En la pantalla de cargue y consolidación de pedidos (`/admin/orders/loading`), el modal de confirmación de lanzamiento de tanda presentaba severa sobre-ingeniería cosmética y de layout:
-1. **Desbordamiento Vertical Crítico:** `padding: 2.5rem`, tarjetas anidadas en cascada y textos duplicados forzaban un scroll vertical continuo en pantallas estándar (1366×768 / 1440×900), obligando al operador a desplazar la vista para encontrar los botones de acción primarios.
-2. **Bifurcación Ficticia y Redundante:** Un selector toggle (*Modo Digital* vs *Modo Manual*) escondía acordeones con explicaciones de 4 pasos por un lado y 4 tarjetas de enlaces por el otro, cuando en la práctica operativa existen exactamente dos vías canónicas: (A) Entrar al Asistente Guiado de 4 Pasos (operación en piso con bahías y papel), o (B) Lanzamiento directo a tablets/sistema (`para_compra`) sin asistente.
-3. **Poda de 505 Líneas de Grasa:** Se eliminó la duplicidad de enlaces auxiliares dispersos, se redujo el sobre-empaque y se unificó la telemetría en una sola línea.
+#### 1. Contexto, Empatía y Realidad Operativa del Usuario (Gemba UX)
+El diseño previo del modal de confirmación en `/admin/orders/loading` cometió el error clásico de ingeniería de modelar la lógica desde la abstracción técnica ("Digital puro vs Manual de contingencia") en lugar de ponerse en los zapatos del operador en su jornada diaria:
 
-#### 2. Especificación Técnica y Contrato Canónico
-1. **Garantía 100% Above-the-Fold (`src/app/admin/orders/loading/page.tsx`):**
-   - Modal re-estructurado con `maxWidth: '840px'`, `padding: '1.25rem 1.5rem'`, `gap: '0.85rem'`, visible por completo sin scroll vertical.
-2. **Franja Unificada de Telemetría (Single-Decker HUD):**
-   - 4 métricas canónicas en 1 fila: (1) Pedidos y Sedes, (2) Segmentación B2B/B2C, (3) Peso Total Estimado en Kg, y (4) Facturación Bruta en COP, acompañada de la insignia de cobertura 100% o alerta de pendientes.
-3. **Arquitectura Lado a Lado de 2 Vías de Despacho (Raptor 3 Two-Lane Launchpad):**
-   - **Vía A (Asistente de Planta Poka-Yoke):** Tarjeta ejecutiva oscura destacada con botón dorado directo: `[INICIAR ASISTENTE (4 PASOS) ->]`.
-   - **Vía B (Modo Digital Sin Papel):** Tarjeta limpia secundaria con botón directo: `[Lanzar Directo a Compra]`.
-4. **Barra Inferior de Seguridad y Contingencia:**
-   - Enlace discreto a `Kit 1-Clic Completo` para imprimir en bloque ante emergencias, y botón de retorno `Revisar de nuevo`.
-5. **Guardrail Poka-Yoke de Lanzamiento Directo y Reversión Segura:**
-   - La Vía B (*Modo Digital / Lanzar Directo a Compra*) incorpora mediación Poka-Yoke mediante confirmación explícita del operador (`window.confirm`) para evitar disparos accidentales a la operación de compras sin mediación de bahías ni documentos físicos.
-   - Reversión canónica auditada en Supabase de los 39 pedidos de la fecha 2026-11-04 al estado `pending_approval` para permitir ajustes y verificaciones continuas por el equipo comercial.
+1. **La Realidad Física del Despacho (El Camión no se mueve sin Remisiones ni Rótulos):**
+   - El operador comercial/logístico realiza el lanzamiento **de manera digital el 95% de las jornadas**: las órdenes deben pasar al estado `para_compra` para que los compradores en Corabastos y los operarios en tablets de bodega tengan la información en tiempo real.
+   - **Sin embargo, la operación digital NUNCA es 100% "sin papel":** Físicamente, el conductor no puede salir a ruta sin las **Remisiones de Entrega** (para que el cliente firme en físico el recibido a satisfacción) ni las canastillas pueden apilarse sin los **Rótulos Térmicos** (para identificar cliente, código y célula en piso).
+   - Presentar un botón seco de *"Lanzar a Terminales Digitales (Sin Papel)"* que mute el estado en la base de datos sin entregar inmediatamente las remisiones y rótulos genera ansiedad, rechazo e incertidumbre en el usuario ("¿dónde quedaron mis papeles?").
+
+2. **El Flujo Manual / Contingencia (BCP de Planta) es Excepcional:**
+   - El flujo guiado con asignación física de 150 bahías LIFO y descarga de las 6 planillas de piso (Sábana de 12 células, Compras, Báscula, Remisiones, Manifiesto, Rótulos) es una **operación de contingencia (5% de los casos)** ante fallas eléctricas, caída de red o emergencias en bodega.
+   - Tratar la contingencia como la opción "predeterminada recomendada" forzaba al usuario a interactuar con un asistente pesado de 4 pasos cuando solo requería lanzar su operación habitual e imprimir sus 2 documentos esenciales.
+
+3. **Poda de Elementos Redundantes:**
+   - La franja inferior *"¿Solo necesitas imprimir? Kit 1-Clic Completo"* constituye grasa innecesaria. El contrato del usuario es tajante:
+     - **En Flujo Manual (Contingencia):** Se imprime el kit completo paso a paso con el Asistente Guiado de Bahías.
+     - **En Flujo Digital (Habitual):** Se lanza la tanda a compras y se obtienen/imprimen directamente los 2 documentos mandatorios de ruta (**Remisiones de Entrega** y **Rótulos Térmicos**).
+
+#### 2. Especificación Técnica y Contrato Canónico UX-First
+
+1. **Jerarquía Visual y Experiencia del Usuario (100% Above-the-Fold, Sin Scroll):**
+   - El modal mantiene dimensiones compactas (`maxWidth: '840px'`, `padding: '1.25rem 1.5rem'`) garantizando visualización total inmediata en pantallas de portátil y monitores estándar (1366x768 / 1920x1080).
+   - Encabezado unificado con telemetría HUD en 1 sola fila: Pedidos y Sedes, Segmentación B2B/B2C, Peso Total Estimado en Kg, y Facturación Bruta en COP.
+
+2. **Carril Principal: Operación Habitual (Digital + Papel de Ruta) (95% del Uso):**
+   - Presenta la acción cotidiana con total claridad y sin tecnicismos intimidantes:
+     - Informa que las órdenes pasarán a compras y tablets.
+     - Ofrece acceso directo y explícito a los dos documentos físicos obligatorios de ruta:
+       - **Botón Remisiones de Entrega (Original + Copia):** Abre o descarga el consolidado de remisiones del lote.
+       - **Botón Rótulos Térmicos (Etiquetas QR):** Abre la interfaz de impresión térmica de etiquetas de canastilla.
+     - **Acción Primaria Unificada:** Botón destacado `[ LANZAR A COMPRA E IMPRIMIR REMISIONES + RÓTULOS ]` (o lanzar con botones de impresión listos con 1 clic sin salir del modal ni perder el contexto).
+
+3. **Carril Secundario: Contingencia / Asistente Manual de Planta (5% del Uso):**
+   - Tarjeta secundaria claramente rotulada como **Contingencia / Falla de Red / Modo Piso Analógico**:
+     - Explica que este flujo asigna las 150 bahías en piso y requiere imprimir el paquete completo de 6 planillas de piso.
+     - Botón de acceso directo: `[ ABRIR ASISTENTE DE PISO PASO A PASO (4 PASOS) -> ]` que activa `showManualWizard` para renderizar `ManualDispatchWizardModal`.
+
+4. **Eliminación Total de Grasa:**
+   - Se erradican permanentemente los selectores toggle confusos y los enlaces auxiliares duplicados (*"¿Solo necesitas imprimir? Kit 1-Clic"*).
+   - Cero pop-ups nativos bloqueantes o desorientadores (`window.confirm` con alertas genéricas de navegador) que interrumpan el flujo de trabajo sin aportar valor.
+
+5. **Integridad de Datos en Base de Datos (Auditoría Forense Supabase):**
+   - Se mantiene el registro de auditoría estricto en `order_audit_logs` para cualquier transición hacia `para_compra` o devoluciones a `pending_approval`.
