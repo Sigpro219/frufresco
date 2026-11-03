@@ -9644,14 +9644,20 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const handleSave = async () => {
         if (!newException.product_id) return;
         
+        const cleanPrefs = { ...(newException.preferred_options || {}) };
+        if (cleanPrefs['Maduración'] && /^madur[oa]$/i.test(cleanPrefs['Maduración'])) {
+            delete cleanPrefs['Maduración'];
+        }
+        const rawPickingNote = (newException.picking_note || '').trim();
+        const cleanPickingNote = (/^(madur[oa]s?)$/i.test(rawPickingNote) || (Object.keys(cleanPrefs).length > 0 && /^(pint[oó]n[ae]?s?|verdes?|muy\s*verde|grandes?|muy\s*grande|med|median[oa]s?|peq|peque[ñn][oa]s?|jumbo|bandeja|a\s*granel|unidad|(?:und(?:\.|idad)?\s*[x*]?\s*|de\s*|[x*]\s*)?\d{2,4}\s*(?:grs?\.?|gramos?|g)?|(?:mad\s*)?und\s*x\s*1\.8\s*kg)$/i.test(rawPickingNote))) ? '' : rawPickingNote;
         const payload = {
             customer_id: clientId,
             product_id: newException.product_id,
             nickname: newException.nickname || '',
-            picking_note: newException.picking_note || '',
+            picking_note: cleanPickingNote,
             substitution_product_id: newException.substitution_product_id || null,
             delivery_note: newException.delivery_note || '',
-            preferred_options: newException.preferred_options || {}
+            preferred_options: cleanPrefs
         };
 
         const { error } = editingId 
@@ -10532,7 +10538,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         label="Nota de Alistamiento / Picking" 
                                         value={newException.picking_note} 
                                         onChange={(v) => setNewException({...newException, picking_note: v})} 
-                                        placeholder="Ej: Maduración: Pintón / Con etiqueta"
+                                        placeholder="Ej: Sin malla / En caja / Con etiqueta"
                                     />
                                     <FormField 
                                         label="Demanda / Despacho" 

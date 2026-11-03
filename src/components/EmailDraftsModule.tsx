@@ -3125,9 +3125,15 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       
       let newRecord: any = null;
       if (exc?.id) {
+        const rawNote = (exc.picking_note || '').trim();
+        const shouldClearRedundantNote = !clear && Object.keys(optionsPayload).length > 0 && (
+          /^(madur[oa]s?|pint[oó]n[ae]?s?|verdes?|muy\s*verde|grandes?|muy\s*grande|med|median[oa]s?|peq|peque[ñn][oa]s?|jumbo|bandeja|a\s*granel|unidad|(?:und(?:\.|idad)?\s*[x*]?\s*|de\s*|[x*]\s*)?\d{2,4}\s*(?:grs?\.?|gramos?|g)?|(?:mad\s*)?und\s*x\s*1\.8\s*kg)$/i.test(rawNote)
+        );
+        const updateFields: any = { preferred_options: optionsPayload };
+        if (shouldClearRedundantNote) updateFields.picking_note = null;
         const { data, error } = await supabase
           .from('product_nicknames')
-          .update({ preferred_options: optionsPayload })
+          .update(updateFields)
           .eq('id', exc.id)
           .select()
           .single();
