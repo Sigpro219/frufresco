@@ -13670,26 +13670,80 @@ Durante las pruebas operativas del Asistente Guiado de Despacho Manual (BCP) en 
 4. **Restitución del Membrete Oficial en Manifiesto de Despacho (`contingency-print/page.tsx`):**
    - Se activa `showHeader={true}` en el membrete de tamaño Oficio legal, garantizando el encabezado institucional con logo, razón social, fecha programada, referencia de paradas y distintivo *"DESPACHO Y RUTA"*.
 
-### Escenario 372: Rediseño Centrado en el Usuario (UX-First) y Realidad Operativa del Gemba en Lanzamiento de Tanda (`loading/page.tsx`) (SDD v1.9.356)
+### Escenario 372: Rediseño Centrado en el Usuario (UX-First), Punto de No Retorno y Realidad Operativa del Gemba en Lanzamiento de Tanda (`loading/page.tsx`) (SDD v1.9.357)
 
 #### 1. Contexto, Empatía y Realidad Operativa del Usuario (Gemba UX)
-El diseño previo del modal de confirmación en `/admin/orders/loading` cometió el error clásico de ingeniería de modelar la lógica desde la abstracción técnica ("Digital puro vs Manual de contingencia") en lugar de ponerse en los zapatos del operador en su jornada diaria:
+El diseño del modal de confirmación en `/admin/orders/loading` debe reflejar fielmente la dinámica real del equipo comercial y de logística en planta:
 
 1. **La Realidad Física del Despacho (El Camión no se mueve sin Remisiones ni Rótulos):**
    - El operador comercial/logístico realiza el lanzamiento **de manera digital el 95% de las jornadas**: las órdenes deben pasar al estado `para_compra` para que los compradores en Corabastos y los operarios en tablets de bodega tengan la información en tiempo real.
    - **Sin embargo, la operación digital NUNCA es 100% "sin papel":** Físicamente, el conductor no puede salir a ruta sin las **Remisiones de Entrega** (para que el cliente firme en físico el recibido a satisfacción) ni las canastillas pueden apilarse sin los **Rótulos Térmicos** (para identificar cliente, código y célula en piso).
    - Presentar un botón seco de *"Lanzar a Terminales Digitales (Sin Papel)"* que mute el estado en la base de datos sin entregar inmediatamente las remisiones y rótulos genera ansiedad, rechazo e incertidumbre en el usuario ("¿dónde quedaron mis papeles?").
 
-2. **El Flujo Manual / Contingencia (BCP de Planta) es Excepcional:**
+2. **El Punto de No Retorno (Irreversible Operation Lock):**
+   - Una vez los pedidos pasan a `para_compra`, la operación arranca físicamente: los camiones de compras salen a Corabastos y el personal de bodega inicia el alistamiento.
+   - Modificar pedidos después de este punto genera descuadres graves en la báscula y quiebres de inventario.
+   - Por tanto, el usuario requiere una advertencia formal y transparente que le notifique: *"Ya acabamos. La lista de pedidos cambiará de estado y quedará congelada para edición comercial"*.
+
+3. **El Flujo Manual / Contingencia (BCP de Planta) es Excepcional:**
    - El flujo guiado con asignación física de 150 bahías LIFO y descarga de las 6 planillas de piso (Sábana de 12 células, Compras, Báscula, Remisiones, Manifiesto, Rótulos) es una **operación de contingencia (5% de los casos)** ante fallas eléctricas, caída de red o emergencias en bodega.
    - Tratar la contingencia como la opción "predeterminada recomendada" forzaba al usuario a interactuar con un asistente pesado de 4 pasos cuando solo requería lanzar su operación habitual e imprimir sus 2 documentos esenciales.
 
-3. **Poda de Elementos Redundantes:**
+4. **Poda de Elementos Redundantes:**
    - La franja inferior *"¿Solo necesitas imprimir? Kit 1-Clic Completo"* constituye grasa innecesaria. El contrato del usuario es tajante:
      - **En Flujo Manual (Contingencia):** Se imprime el kit completo paso a paso con el Asistente Guiado de Bahías.
      - **En Flujo Digital (Habitual):** Se lanza la tanda a compras y se obtienen/imprimen directamente los 2 documentos mandatorios de ruta (**Remisiones de Entrega** y **Rótulos Térmicos**).
 
-#### 2. Especificación Técnica y Contrato Canónico UX-First
+---
+
+#### 2. Máquina de Estados Finita (FSM) del Ciclo de Vida del Pedido
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending_approval: Pedidos Consolidados (Comercial Editable)
+    
+    state "pending_approval" as PA {
+        [*] --> EdicionComercial: Ajustes de precio, canasta y cantidades
+        EdicionComercial --> ValidacionTanda: Selección de pedidos para tanda
+    }
+    
+    PA --> ModalLanzamiento: Clic en [Aprobar y Lanzar Tanda]
+    
+    state ModalLanzamiento {
+        [*] --> SeleccionCarril
+        SeleccionCarril --> Carril1_Habitual: 95% Operación Digital + Papel
+        SeleccionCarril --> Carril2_Contingencia: 5% Asistente Piso 4 Pasos
+    }
+    
+    Carril2_Contingencia --> WizardManual4Pasos: Abre Asistente Bahías LIFO + 6 Docs
+    
+    Carril1_Habitual --> PuntoDeNoRetornoModal: Clic en [Lanzar Tanda a Operación]
+    
+    state PuntoDeNoRetornoModal {
+        [*] --> AdvertenciaCierre: Aviso de congelamiento comercial irreversible
+        AdvertenciaCierre --> RetornoEdicion: [Cancelar / Seguir Editando]
+        AdvertenciaCierre --> ConfirmacionDefinitiva: [Confirmar Cierre y Enviar]
+    }
+    
+    RetornoEdicion --> PA: Retorna a la tabla intacta
+    ConfirmacionDefinitiva --> TransicionAtomica: Mutación Supabase + order_audit_logs
+    
+    state TransicionAtomica {
+        [*] --> para_compra: status = 'para_compra'
+        para_compra --> BloqueoComercial: Inputs deshabilitados (Solo Lectura)
+    }
+    
+    TransicionAtomica --> DockEntregaDocumentos: Modal de Éxito con 2 Docs
+    
+    state DockEntregaDocumentos {
+        [*] --> DescargarRemisiones: [Imprimir Remisiones Duplicado (39)]
+        [*] --> ImprimirRotulos: [Imprimir Rótulos Térmicos SKUs]
+    }
+```
+
+---
+
+#### 3. Especificación Técnica y Contrato Canónico UX-First
 
 1. **Jerarquía Visual y Experiencia del Usuario (100% Above-the-Fold, Sin Scroll):**
    - El modal mantiene dimensiones compactas (`maxWidth: '840px'`, `padding: '1.25rem 1.5rem'`) garantizando visualización total inmediata en pantallas de portátil y monitores estándar (1366x768 / 1920x1080).
@@ -13699,24 +13753,34 @@ El diseño previo del modal de confirmación en `/admin/orders/loading` cometió
    - Presenta la acción cotidiana con total claridad y sin tecnicismos intimidantes:
      - Informa que las órdenes pasarán a compras y tablets.
      - Ofrece acceso directo y explícito a los dos documentos físicos obligatorios de ruta:
-       - **Botón Remisiones de Entrega (Original + Copia):** Abre o descarga el consolidado de remisiones del lote.
-       - **Botón Rótulos Térmicos (Etiquetas QR):** Abre la interfaz de impresión térmica de etiquetas de canastilla.
-     - **Acción Primaria Unificada:** Botón destacado `[ LANZAR A COMPRA E IMPRIMIR REMISIONES + RÓTULOS ]` (o lanzar con botones de impresión listos con 1 clic sin salir del modal ni perder el contexto).
+       - **Botón Remisiones de Entrega (Original + Copia):** `/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}&date=${deliveryDate}`
+       - **Botón Rótulos Térmicos (Etiquetas QR):** `/admin/orders/print-labels?orderIds=${orderIdsParam}&type=product&filter=requires_label`
+     - **Acción Primaria Unificada:** Botón destacado `[ LANZAR A OPERACIÓN E IMPRIMIR REMISIONES + RÓTULOS ]` que abre el modal de confirmación de Punto de No Retorno.
 
 3. **Carril Secundario: Contingencia / Asistente Manual de Planta (5% del Uso):**
    - Tarjeta secundaria claramente rotulada como **Contingencia / Falla de Red / Modo Piso Analógico**:
      - Explica que este flujo asigna las 150 bahías en piso y requiere imprimir el paquete completo de 6 planillas de piso.
      - Botón de acceso directo: `[ ABRIR ASISTENTE DE PISO PASO A PASO (4 PASOS) -> ]` que activa `showManualWizard` para renderizar `ManualDispatchWizardModal`.
 
-4. **Eliminación Total de Grasa:**
-   - Se erradican permanentemente los selectores toggle confusos y los enlaces auxiliares duplicados (*"¿Solo necesitas imprimir? Kit 1-Clic"*).
-   - Cero pop-ups nativos bloqueantes o desorientadores (`window.confirm` con alertas genéricas de navegador) que interrumpan el flujo de trabajo sin aportar valor.
-
-5. **Integridad de Datos en Base de Datos (Auditoría Forense Supabase):**
-   - Se mantiene el registro de auditoría estricto en `order_audit_logs` para cualquier transición hacia `para_compra` o devoluciones a `pending_approval`.
-6. **Modal de Punto de No Retorno (Irreversible Lock Modal): Advertencia Explícita de Cierre Operativo:**
-   - Antes de ejecutar la mutación de estado hacia `para_compra`, el sistema debe presentar una advertencia visual formal de **Punto de No Retorno**:
+4. **Modal / Pantalla de Punto de No Retorno (Irreversible Lock Guardrail):**
+   - Antes de ejecutar la mutación a `para_compra`, se despliega un diálogo con diseño sobrio y enfoque preventivo humano:
+     - **Ícono:** `Lock` o `ShieldAlert` en ámbar/esmeralda.
      - **Título:** *«Cierre Definitivo de Tanda y Paso a Operación»*
-     - **Mensaje al Operador:** *«Estás a punto de enviar {N} pedidos a la operación de compras y bodega. Ten en cuenta que a partir de este instante los pedidos cambiarán de estado a "para_compra" y quedarán congelados para edición comercial (no se podrán modificar cantidades, precios ni líneas de producto).»*
-     - **Botón de Escape:** *«Cancelar / Seguir Editando Pedidos»* (mantiene las órdenes intactas en `pending_approval`).
-     - **Botón de Compromiso:** *«Confirmar Cierre y Enviar a Operación»* (ejecuta la transición irreversible y dispara la generación de remisiones y rótulos).
+     - **Mensaje Principal:**
+       > *"Estás a punto de enviar **{N} pedidos** a la operación de compras y bodega.*  
+       > *A partir de este instante, los pedidos cambiarán de estado a `para_compra` y **quedarán congelados para edición comercial** (ya no se podrán modificar cantidades, precios ni canastas desde esta vista)."*
+     - **Botón de Escape:** `[ Cancelar / Seguir Editando Pedidos ]` (cierra el diálogo de confirmación y regresa a la tabla en `pending_approval`).
+     - **Botón de Compromiso:** `[ Confirmar Cierre y Enviar a Operación ]` (ejecuta el guardado atómico en Supabase y transiciona a la entrega de documentos).
+
+5. **Dock de Entrega de Documentos Post-Lanzamiento:**
+   - Una vez confirmada la mutación, el sistema despliega una pantalla de éxito inmediata con:
+     - Indicador de éxito: *«¡Tanda lanzada exitosamente a operación!»*
+     - Acceso inmediato en 1 clic a los dos documentos:
+       - `[ Imprimir Remisiones de Entrega ({N} juegos duplicados) ]`
+       - `[ Imprimir Rótulos Térmicos de Canastilla ]`
+     - Botón de cierre: `[ Ir a la Tabla de Monitoreo ]`.
+
+6. **Bloqueo Comercial en Tabla de Pedidos (`loading/page.tsx`):**
+   - Los pedidos en estado `para_compra` deben renderizarse con indicador visual de sólo lectura:
+     - Badge distintivo: `En Operación (Bloqueado)`.
+     - Inputs de cantidades y precios deshabilitados (`disabled={order.status === 'para_compra'}`) para impedir alteraciones comerciales accidentales tras la salida de compras.
