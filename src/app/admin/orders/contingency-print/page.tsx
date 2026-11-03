@@ -1745,7 +1745,7 @@ function ContingencyPrintContent() {
                                 className="page-break"
                                 paperSize="oficio"
                                 showWatermark={false}
-                                showHeader={false}
+                                showHeader={true}
                                 showFooter={false}
                             >
                                 <table>

@@ -13647,3 +13647,26 @@ Anteriormente, el algoritmo de detección en `areOrdersDuplicate` contenía una 
 3. **Comportamiento en Galería y Mesa de Control:**
    - Ambas órdenes se marcan con la insignia Poka-Yoke roja de duplicidad en la galería y tabla de pedidos, obligando al operador a revisar conscientemente antes de aprobar o despachar.
 
+### Escenario 371: Blindaje Anticolisión de Generación PDF Directa y Detección Estricta de Hojas Imprimibles en Asistente BCP (`savePdfDirect.ts`, `alistamiento-print`, `contingency-print`, `ManualDispatchWizardModal.tsx`) (SDD v1.9.354)
+
+#### 1. Contexto y Hallazgos del Gemba
+Durante las pruebas operativas del Asistente Guiado de Despacho Manual (BCP) en producción con tandas de 39 pedidos para entrega programada, el equipo de operaciones reportó dos anomalías críticas:
+1. **Bloqueo Silencioso por Concurrencia en Manifiesto de Despacho:** Al iniciar la descarga del juego de remisiones (78 hojas en proceso), el operador intentaba pulsar simultáneamente *"Descargar PDF"* en la tarjeta contigua del Manifiesto de Despacho. Como el estado de deshabilitación visual solo comprobaba `disabled={pdfBusyDoc === 'manifest'}`, el botón aparecía habilitado, pero la función ejecutaba un `if (pdfBusyDoc) return;` silencioso, descartando el clic sin retroalimentación visual ni mensaje, dando la apariencia de botón descompuesto.
+2. **Descarga Prematura de PDF Vacío en Sábana de Alistamiento ("El documento no tiene contenido"):** El usuario descargaba la Sábana de Alistamiento en su Escritorio, pero al abrirla en Adobe Acrobat o navegadores, se mostraba el mensaje de error de documento vacío o sin páginas. La investigación forense reveló que `findPrintableSheets` incluía un fallback genérico (`.print-doc-container, .print-doc-wrapper, main`). Como `alistamiento-print/page.tsx` envuelve la pantalla con `<div className="print-doc-container">` desde el milisegundo 0 mientras muestra el mensaje de carga (*"Cargando matriz de alistamiento nocturno..."*), el detector de hojas asumía a los 350 ms que el documento ya estaba listo (antes de que Supabase retornara los 39 pedidos y las 12 células), capturando un contenedor vacío y escribiendo un archivo en blanco en el Escritorio.
+3. **Omisión de Parámetros de Fecha y Retardo de Hidratación:** Las URLs de descarga directa del Manifiesto y Remisiones carecían del parámetro explícito `&date=${deliveryDate}`, y `alistamiento-print` dependía únicamente de `useSearchParams.get()`, sufriendo retardos de ciclo de renderizado en iframes cliente.
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Modo Estricto de Detección de Hojas Imprimibles (`src/components/print/savePdfDirect.ts`):**
+   - `findPrintableSheets(root, allowFallback = false)` se parametriza con modo estricto. Durante el sondeo de preparación en segundo plano (`saveRemotePrintUrlAsPdfDirect`), `allowFallback` es estrictamente `false`.
+   - Una página solo se considera lista si existen elementos reales `.print-sheet`, `.letterhead-container` o `.label-container` con altura útil > 20px, y se verifica de forma determinista que no existan spinners (`.animate-spin`), banderas `data-loading="true"`, ni textos de carga en el DOM (`Cargando matriz`, `Compilando remisiones`, etc.).
+   - Se amplía el timeout de seguridad de 25.000 ms a 45.000 ms y se otorgan 600 ms de reflow tras la detección positiva para garantizar fuentes, membretes y tablas completamente pintadas.
+2. **Desactivación Coordinada y Alerta Informativa en Asistente BCP (`ManualDispatchWizardModal.tsx`):**
+   - Todos los botones de guardado directo PDF (`alistamiento`, `purchases`, `receiving`, `inventory`, `contingency`, `manifest`, `labels`) se deshabilitan coordinadamente cuando cualquier documento está en proceso (`disabled={!!pdfBusyDoc}`).
+   - Si el operador hace clic mientras hay una generación activa, el manejador despliega de inmediato un mensaje informativo (*"Hay otra generación de PDF en curso. Por favor espera unos momentos a que termine para iniciar esta descarga."*).
+   - Se inyecta de forma obligatoria `&date=${deliveryDate}` en las rutas de descarga e impresión de Remisiones, Manifiesto y Kit 1-Clic Completo.
+3. **Sincronización Instantánea de Query Params y Estado de Carga en `alistamiento-print/page.tsx`:**
+   - La resolución de `orderIds` y `date` se ejecuta en el tick síncrono mediante `window.location.search` con respaldo a `useSearchParams`, erradicando discrepancias de hidratación en iframes.
+   - El contenedor principal expone `data-loading={loading ? "true" : undefined}` para sincronización hermética con el motor de PDF.
+4. **Restitución del Membrete Oficial en Manifiesto de Despacho (`contingency-print/page.tsx`):**
+   - Se activa `showHeader={true}` en el membrete de tamaño Oficio legal, garantizando el encabezado institucional con logo, razón social, fecha programada, referencia de paradas y distintivo *"DESPACHO Y RUTA"*.
+

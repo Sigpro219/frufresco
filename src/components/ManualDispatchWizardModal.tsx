@@ -301,7 +301,10 @@ export default function ManualDispatchWizardModal({
         targetUrl: string,
         saveSpacesFirst = false
     ) => {
-        if (pdfBusyDoc) return;
+        if (pdfBusyDoc) {
+            alert('Hay otra generación de PDF en curso. Por favor espera unos momentos a que termine para iniciar esta descarga.');
+            return;
+        }
         setPdfBusyDoc(docType);
         setPdfProgressText('Preparando...');
         try {
@@ -1106,7 +1109,7 @@ export default function ManualDispatchWizardModal({
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                 <button
                                     type="button"
-                                    disabled={pdfBusyDoc === 'alistamiento'}
+                                    disabled={!!pdfBusyDoc}
                                     onClick={() => handleDirectPdfSave('alistamiento', `/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`, true)}
                                     style={{
                                         padding: '7px 12px', backgroundColor: pdfBusyDoc === 'alistamiento' ? '#ECFDF5' : '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
@@ -1216,7 +1219,7 @@ export default function ManualDispatchWizardModal({
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
                                     <button
                                         type="button"
-                                        disabled={pdfBusyDoc === 'purchases'}
+                                        disabled={!!pdfBusyDoc}
                                         onClick={() => handleDirectPdfSave('purchases', `/admin/procurement/purchases-print?date=${deliveryDate}&orderIds=${orderIdsParam}`)}
                                         style={{
                                             flex: 1, padding: '7px 6px', backgroundColor: pdfBusyDoc === 'purchases' ? '#ECFDF5' : '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
@@ -1284,7 +1287,7 @@ export default function ManualDispatchWizardModal({
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
                                     <button
                                         type="button"
-                                        disabled={pdfBusyDoc === 'receiving'}
+                                        disabled={!!pdfBusyDoc}
                                         onClick={() => handleDirectPdfSave('receiving', `/admin/procurement/receiving-print?date=${deliveryDate}&orderIds=${orderIdsParam}`)}
                                         style={{
                                             flex: 1, padding: '7px 6px', backgroundColor: pdfBusyDoc === 'receiving' ? '#FFFBEB' : '#FFFFFF', color: '#D97706', border: '1.5px solid #D97706',
@@ -1325,7 +1328,7 @@ export default function ManualDispatchWizardModal({
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
                                     <button
                                         type="button"
-                                        disabled={pdfBusyDoc === 'inventory'}
+                                        disabled={!!pdfBusyDoc}
                                         onClick={() => handleDirectPdfSave('inventory', `/admin/inventory/physical-count-print?date=${deliveryDate}`)}
                                         style={{
                                             flex: 1, padding: '7px 6px', backgroundColor: pdfBusyDoc === 'inventory' ? '#F5F3FF' : '#FFFFFF', color: '#6D28D9', border: '1.5px solid #6D28D9',
@@ -1433,8 +1436,8 @@ export default function ManualDispatchWizardModal({
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '1.2rem' }}>
                                     <button
                                         type="button"
-                                        disabled={pdfBusyDoc === 'contingency'}
-                                        onClick={() => handleDirectPdfSave('contingency', `/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}`)}
+                                        disabled={!!pdfBusyDoc}
+                                        onClick={() => handleDirectPdfSave('contingency', `/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}&date=${deliveryDate}`)}
                                         style={{
                                             flex: 1, padding: '9px 10px', backgroundColor: pdfBusyDoc === 'contingency' ? '#EFF6FF' : '#FFFFFF', color: '#1D4ED8', border: '1.5px solid #1D4ED8',
                                             borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', cursor: pdfBusyDoc === 'contingency' ? 'wait' : 'pointer',
@@ -1445,7 +1448,7 @@ export default function ManualDispatchWizardModal({
                                         <Download size={14} /> {pdfBusyDoc === 'contingency' ? (pdfProgressText || 'Guardando...') : 'Descargar PDF'}
                                     </button>
                                     <Link
-                                        href={`/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}`}
+                                        href={`/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}&date=${deliveryDate}`}
                                         target="_blank"
                                         style={{
                                             flex: 1.4, padding: '9px 12px', backgroundColor: '#1D4ED8', color: '#FFFFFF',
@@ -1480,8 +1483,8 @@ export default function ManualDispatchWizardModal({
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '1.2rem' }}>
                                     <button
                                         type="button"
-                                        disabled={pdfBusyDoc === 'manifest'}
-                                        onClick={() => handleDirectPdfSave('manifest', `/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}`)}
+                                        disabled={!!pdfBusyDoc}
+                                        onClick={() => handleDirectPdfSave('manifest', `/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}&date=${deliveryDate}`)}
                                         style={{
                                             flex: 1, padding: '9px 10px', backgroundColor: pdfBusyDoc === 'manifest' ? '#F8FAFC' : '#FFFFFF', color: '#0F172A', border: '1.5px solid #0F172A',
                                             borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', cursor: pdfBusyDoc === 'manifest' ? 'wait' : 'pointer',
@@ -1492,7 +1495,7 @@ export default function ManualDispatchWizardModal({
                                         <Download size={14} /> {pdfBusyDoc === 'manifest' ? (pdfProgressText || 'Guardando...') : 'Descargar PDF'}
                                     </button>
                                     <Link
-                                        href={`/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}`}
+                                        href={`/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}&date=${deliveryDate}`}
                                         target="_blank"
                                         style={{
                                             flex: 1.4, padding: '9px 12px', backgroundColor: '#0F172A', color: '#FFFFFF',
@@ -1615,7 +1618,7 @@ export default function ManualDispatchWizardModal({
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <button
                                     type="button"
-                                    disabled={pdfBusyDoc === 'labels'}
+                                    disabled={!!pdfBusyDoc}
                                     onClick={() => handleDirectPdfSave('labels', `/admin/orders/print-labels?orderIds=${orderIdsParam}&type=product&filter=requires_label`)}
                                     style={{
                                         padding: '9px 12px', backgroundColor: pdfBusyDoc === 'labels' ? '#FAF5FF' : '#FFFFFF', color: '#7E22CE', border: '1.5px solid #7E22CE',
@@ -1687,7 +1690,7 @@ export default function ManualDispatchWizardModal({
                                 </div>
                             </div>
                             <Link
-                                href={`/admin/orders/contingency-print?mode=all&orderIds=${orderIdsParam}`}
+                                href={`/admin/orders/contingency-print?mode=all&orderIds=${orderIdsParam}&date=${deliveryDate}`}
                                 target="_blank"
                                 style={{
                                     padding: '8px 14px',

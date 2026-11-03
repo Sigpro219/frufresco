@@ -92,7 +92,7 @@ export function getSuggestedPdfFileName(docType: DirectPdfDocKey, selectedDate?:
 /**
  * Encuentra todas las hojas imprimibles dentro de un contenedor DOM.
  */
-function findPrintableSheets(root: ParentNode): HTMLElement[] {
+export function findPrintableSheets(root: ParentNode, allowFallback = false): HTMLElement[] {
     const selectors = [
         '.print-sheet',
         '.letterhead-container',
@@ -112,7 +112,7 @@ function findPrintableSheets(root: ParentNode): HTMLElement[] {
     const fallback = root.querySelector<HTMLElement>(
         '.print-doc-container, .print-doc-wrapper, main'
     );
-    return fallback ? [fallback] : [];
+    return allowFallback && fallback ? [fallback] : [];
 }
 
 /**
@@ -130,7 +130,7 @@ export async function generatePdfBlobFromDom(
     const html2canvas = html2canvasModule.default || (html2canvasModule as any);
 
     const spec = PDF_PAGE_SPECS[docType] || PDF_PAGE_SPECS.purchases;
-    const sheets = findPrintableSheets(root);
+    const sheets = findPrintableSheets(root, true);
 
     if (sheets.length === 0) {
         throw new Error('No hay páginas o registros cargados en el documento para exportar a PDF.');
@@ -283,7 +283,7 @@ export async function saveRemotePrintUrlAsPdfDirect(options: {
         // 3. Esperar a que las hojas imprimibles terminen de renderizarse en el iframe
         const iframeDoc = await new Promise<Document>((resolve, reject) => {
             const startTime = Date.now();
-            const timeoutMs = 25000;
+            const timeoutMs = 45000;
 
             const checkReady = () => {
                 if (!iframe) {
@@ -292,10 +292,13 @@ export async function saveRemotePrintUrlAsPdfDirect(options: {
                 }
                 const doc = iframe.contentDocument || iframe.contentWindow?.document;
                 if (doc) {
-                    const sheets = findPrintableSheets(doc);
-                    if (sheets.length > 0) {
+                    const hasSpinners = !!doc.querySelector('.animate-spin, [data-loading="true"]');
+                    const bodyText = doc.body ? (doc.body.innerText || '') : '';
+                    const isStillLoading = hasSpinners || bodyText.includes('Cargando matriz') || bodyText.includes('Compilando remisiones') || bodyText.includes('Cargando planilla') || bodyText.includes('Generando Kit');
+                    const sheets = findPrintableSheets(doc, false);
+                    if (sheets.length > 0 && !isStillLoading) {
                         // Dar 450ms adicionales para fuentes/imágenes/QR
-                        setTimeout(() => resolve(doc), 450);
+                        setTimeout(() => resolve(doc), 600);
                         return;
                     }
                 }

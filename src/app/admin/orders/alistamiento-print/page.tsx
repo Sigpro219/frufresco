@@ -381,8 +381,16 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
 export default function AlistamientoSabanaPrintPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const paramDate = searchParams.get('date');
-    const paramOrderIds = searchParams.get('orderIds');
+    const directOrderIds = typeof window !== 'undefined'
+        ? (new URLSearchParams(window.location.search).get('orderIds') ||
+           new URLSearchParams(window.location.search).get('ids') ||
+           new URLSearchParams(window.location.search).get('orderId') ||
+           new URLSearchParams(window.location.search).get('id') || '')
+        : '';
+    const rawOrderIds = (searchParams?.get('orderIds') || searchParams?.get('ids') || searchParams?.get('orderId') || searchParams?.get('id') || directOrderIds || '').trim();
+    const directDate = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('date') : null;
+    const paramDate = searchParams?.get('date') || directDate;
+    const paramOrderIds = rawOrderIds;
 
     const getTomorrowDateStr = () => {
         const d = new Date();
@@ -1046,7 +1054,7 @@ export default function AlistamientoSabanaPrintPage() {
             </div>
 
             {/* Contenedor del Documento (Proporción Oficio Landscape: 14in x 8.5in) */}
-            <div ref={printDocRef} className="print-doc-container" style={{ maxWidth: '1350px', margin: '0.75rem auto', padding: '0 1rem' }}>
+            <div ref={printDocRef} className="print-doc-container" data-loading={loading ? "true" : undefined} style={{ maxWidth: '1350px', margin: '0.75rem auto', padding: '0 1rem' }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748B' }}>
                         <p style={{ fontWeight: '700' }}>Cargando matriz de alistamiento nocturno...</p>
