@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.345 (Escenario 362: Taxonomía Estricta de Excepciones Logísticas, Variaciones Estructuradas y Purga de Falsos Alias por Tildes — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.347 (Escenarios 362 y 363: Taxonomía y Rediseño Swiss Precision de Excepciones Logísticas, Tabla Pareto con ID Contable y Blindaje Poka-Yoke de Bandeja de Correos — 76/76 Pantallas Certificadas)
 > **Fecha:** 3 de Noviembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 362 Escenarios BDD Ininterrumpidos (1..362)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 363 Escenarios BDD Ininterrumpidos (1..363)
 
 ---
 
@@ -1309,6 +1309,9 @@ Toda cuenta institucional cuenta con su expediente estructurado:
    - Panel de bloqueo temporal de productos en desabastecimiento generalizado con mensaje explicativo institucional para cotizaciones y pedidos abiertos, evitando sobreventas de inventario inexistente.
 6. **Saneamiento Preventivo en Importación / Exportación Masiva Excel (Regla 32K):**
    - El exportador e importador `.xlsx` analiza y sanea campos complejos de auditoría e historial para prevenir el desbordamiento de 32.767 caracteres por celda del estándar OpenXML/BIFF8.
+7. **Tabla de Análisis Pareto 80/20 de Consumo en Ficha de Cliente (`ClientFormModal` y `/api/b2b/consumption`):**
+   - En la pestaña/bloque de análisis de consumo dentro de la Consulta/Edición de Cliente B2B, la tabla Pareto clasifica los productos comprados en `Clase A (80%)`, `Clase B (15%)` y `Clase C (5%)`.
+   - **Supresión de Columna `SKU` y Subtítulo Discreto `accounting_id`:** Se elimina por completo la columna `SKU` de la tabla; en la columna `Producto / Insumo`, debajo del nombre del producto se renderiza de forma discreta su identificador contable (`ID: <accounting_id>` en fuente monoespaciada `#94A3B8`), habilitando el filtro rápido por nombre o `accounting_id`.
 
 #### F. Selector Canónico de Estructura Institucional en Creación B2B (`ClientFormModal`)
 1. **Problema Gemba Resuelto (Defecto Histórico de Sucursal Forzada):**
@@ -1360,12 +1363,15 @@ Toda cuenta institucional cuenta con su expediente estructurado:
    - **F. Regla Canónica de No-Duplicación Estructurada y Purga Automática (`sanitizePickingNoteAgainstPreferredOptions`):**
      * **Prohibición de Duplicidad:** Si un requisito del cliente ya está representado como dato estructurado en `preferred_options` (ej. `Maduración: Pintón`, `Presentación: Unidad 100 gr`, `Tamaño: Mediano`) o como `substitution_product_id`, **jamás debe existir simultáneamente como texto libre en `picking_note`**. Asimismo, dado que `Maduro`/`Madura` es el estado por defecto en FruFresco, las notas compuestas únicamente por `"Maduro"` / `"Madura"` se purgan a `null`.
      * **Autolimpieza Reactiva al Guardar Regla Fija:** Tanto en `ClientExceptionsModal` (`handleSave`) como en el fijado rápido desde pedidos (`handleSaveCustomerOptionPreference` en `/admin/orders/create` y `EmailDraftsModule`), al guardar `preferred_options` el sistema limpia automáticamente cualquier `picking_note` redundante que repita la variación estructurada (ej. `"Pinton"`, `"Undx 100gr"`, `"Med"`, `"Grande"`, `"Maduro"`).
-   - **G. Codificación Cromática e Iconográfica Semántica por Escenario en `ClientExceptionsModal`:**
-     * **Sustituir por (`substitution_product_id`):** Identidad **Ámbar** (avatar e ícono `RefreshCw` `#D97706`, fondo `#FFFBEB`, borde `#FDE68A`, texto `#B45309`).
-     * **Variación Requerida (`preferred_options`):** Identidad **Índigo Estructurado** (avatar e ícono `Palette` `#4F46E5`, fondo `#EEF2FF`, borde `#C7D2FE`, texto `#4338CA`).
-     * **Nota de Alistamiento (`picking_note`):** Identidad **Esmeralda Operativo** (avatar e ícono `ClipboardList` `#047857`, fondo `#ECFDF5`, borde `#A7F3D0`, texto `#065F46`).
-     * **Nota de Despacho (`delivery_note`):** Identidad **Azul Cielo** (avatar e ícono `Truck` `#0284C7`, fondo `#F0F9FF`, borde `#BAE6FD`).
-     * **Nombre en Factura (`nickname`):** Identidad **Violeta** (avatar e ícono `Tag` `#7C3AED`, fondo `#F5F3FF`, borde `#DDD6FE`).
+   - **G. Arquitectura Visual Swiss Precision, Barra de Control Fija, Píldoras de Filtro y Codificación Cromática por Escenario en `ClientExceptionsModal`:**
+     * **Barra de Control Fija fuera del Scroll (`scrollableRef`):** El buscador omnibox, los botones de acción (`Ver Instructivo`, `Descargar Planilla`, `Cargar Planilla`) y las píldoras de filtro residen en un contenedor superior fijo fuera del área con `overflowY: 'auto'`, evitando cualquier solapamiento o recorte sobre las tarjetas al desplazar la lista.
+     * **Píldoras Interactivas de Filtro por Escenario con Telemetría Reactiva (`activeCategoryFilter`):** Permite filtrar en 1 clic por `Todas`, `Sustituciones`, `Variaciones`, `Notas Alistamiento` y `Alias Factura`, mostrando el conteo en vivo de cada categoría.
+     * **Tarjetas con Borde Lateral Semántico (`4px`) sobre Lienzo `#F8FAFC`:** Cada tarjeta exhibe en su cabecera el nombre del producto en mayúscula, badge monoespaciado `ID: <accounting_id>` y píldora de categoría a la derecha:
+       - **Sustituir por (`substitution_product_id`):** Identidad **Ámbar** (borde izquierdo, avatar, badge `Sustitución SKU` e ícono `RefreshCw` `#D97706`, fondo `#FFFBEB`, borde `#FDE68A`, texto `#B45309`).
+       - **Variación Requerida (`preferred_options`):** Identidad **Índigo Estructurado** (borde izquierdo, avatar, badge `Variación Estructurada` e ícono `Palette` `#4F46E5`, fondo `#EEF2FF`, borde `#C7D2FE`, texto `#4338CA`).
+       - **Nota de Alistamiento (`picking_note`):** Identidad **Esmeralda Operativo** (borde izquierdo, avatar, badge `Nota de Alistamiento` e ícono `ClipboardList` `#047857`, fondo `#ECFDF5`, borde `#A7F3D0`, texto `#065F46`).
+       - **Nota de Despacho (`delivery_note`):** Identidad **Azul Cielo** (borde izquierdo, avatar, badge `Nota de Despacho` e ícono `Truck` `#0284C7`, fondo `#F0F9FF`, borde `#BAE6FD`).
+       - **Nombre en Factura (`nickname`):** Identidad **Violeta** (borde izquierdo, avatar, badge `Alias de Factura` e ícono `Tag` `#7C3AED`, fondo `#F5F3FF`, borde `#DDD6FE`).
 3. **Sincronización Masiva Bidireccional por Excel Bidual (`handleExportExcel` / `handleImportExcel`):**
    - **Exportación Estructurada de 2 Hojas (`Excepciones_Logisticas_B2B_<clientId>.xlsx`):**
      * **Hoja 1 (`Excepciones y Notas`):** Matriz completa del catálogo activo con las columnas `CODIGO_CONTABLE`, `PRODUCTO`, `NOMBRE_FACTURA`, `VARIACION_REQUERIDA` (formato `Atributo: Valor | Atributo: Valor`), `NOTA_PICKING`, `SUSTITUTO_CODIGO_CONTABLE` y `NOTA_ENTREGA`.
