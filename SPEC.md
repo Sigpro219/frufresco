@@ -13714,3 +13714,9 @@ El diseño previo del modal de confirmación en `/admin/orders/loading` cometió
 
 5. **Integridad de Datos en Base de Datos (Auditoría Forense Supabase):**
    - Se mantiene el registro de auditoría estricto en `order_audit_logs` para cualquier transición hacia `para_compra` o devoluciones a `pending_approval`.
+6. **Modal de Punto de No Retorno (Irreversible Lock Modal): Advertencia Explícita de Cierre Operativo:**
+   - Antes de ejecutar la mutación de estado hacia `para_compra`, el sistema debe presentar una advertencia visual formal de **Punto de No Retorno**:
+     - **Título:** *«Cierre Definitivo de Tanda y Paso a Operación»*
+     - **Mensaje al Operador:** *«Estás a punto de enviar {N} pedidos a la operación de compras y bodega. Ten en cuenta que a partir de este instante los pedidos cambiarán de estado a "para_compra" y quedarán congelados para edición comercial (no se podrán modificar cantidades, precios ni líneas de producto).»*
+     - **Botón de Escape:** *«Cancelar / Seguir Editando Pedidos»* (mantiene las órdenes intactas en `pending_approval`).
+     - **Botón de Compromiso:** *«Confirmar Cierre y Enviar a Operación»* (ejecuta la transición irreversible y dispara la generación de remisiones y rótulos).
