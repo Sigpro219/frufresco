@@ -13784,3 +13784,41 @@ stateDiagram-v2
    - Los pedidos en estado `para_compra` deben renderizarse con indicador visual de sólo lectura:
      - Badge distintivo: `En Operación (Bloqueado)`.
      - Inputs de cantidades y precios deshabilitados (`disabled={order.status === 'para_compra'}`) para impedir alteraciones comerciales accidentales tras la salida de compras.
+
+
+---
+
+### Escenario 373: Estandarización Universal del Superbuscador Omnibox, Telemetría Reactiva y Ancho Maestro de 1600px en Cargue de Pedidos (`loading/page.tsx`)
+
+#### 1. Contexto y Cumplimiento del Estándar de Galerías FruFresco
+En cumplimiento estricto del skill maestro `estandar-galerias-frufresco` (`C:\Users\German Higuera\.gemini\config\skills\estandar-galerias-frufresco\SKILL.md`), la consola operativa de Cargue de Pedidos (`/admin/orders/loading`) fue adaptada para reemplazar el buscador legacy rudimentario por el componente canónico **GalleryOmnibox** y homologar la arquitectura visual y espacial al estándar corporativo.
+
+#### 2. Componentes y Mejoras Implementadas
+
+1. **Integración del Superbuscador Canónico (`GalleryOmnibox.tsx`):**
+   - **Atajo Universal de Foco (`/`):** Presionar la barra diagonal fuera de inputs enfoca y selecciona inmediatamente el contenido del buscador.
+   - **Telemetría Reactiva en Pastilla HUD:**
+     - En estado de búsqueda activa: pastilla esmeralda `{filteredCount} de {totalCount}` (`#ECFDF5` con borde `#A7F3D0` y texto `#065F46`).
+     - En estado limpio: pastilla gris neutra `{totalCount} total` (`#FFFFFF` con borde `#E2E8F0` y texto `#64748B`).
+   - **Botón de Limpieza Rápida (`X`):** Botón circular con icono `X` de Lucide que borra la consulta y reenfoca el campo de entrada.
+   - **Padding y Dimensionamiento Industrial:** Alto unificado de 38px (`boxSizing: 'border-box'`) y `paddingRight` dinámico para garantizar que el texto consultado nunca quede cubierto por la pastilla numérica.
+
+2. **Motor de Búsqueda Multi-Criterio Avanzado:**
+   - **Normalizador Fonético NFD (`normalizeSearchText`):**
+     - Remueve tildes/acentos (`normalize('NFD')`).
+     - Insensible a mayúsculas/minúsculas.
+     - Aplica equivalencia fonética de seseo industrial: `z` $\leftrightarrow$ `s`, `ce` $\leftrightarrow$ `se`, `ci` $\leftrightarrow$ `si` (garantizando que *"tuza"* encuentre *"Mazorca en tuza"* o viceversa sin falsos negativos).
+   - **Disyunción Disyuntiva por Comas (`OR`):** Consultas como `colsubsidio, corral` evalúan cada cláusula independientemente y retornan pedidos coincidentes con cualquiera de los criterios.
+   - **Conjunción Multi-Token por Espacios (`AND`):** Consultas como `colsubsidio catering` exigen que todas las palabras clave estén presentes en el corpus consolidado del pedido.
+   - **Búsqueda Exacta con Prefijo `#ID`:** Si la consulta inicia con `#` (ej: `#1341`, `#1373`), compara directamente contra `sequence_id`, `friendly_id` (`0311_1341`) o `id` crudo.
+   - **Preservación de Comandos Rápidos (`@`):** Soporte total de comandos semánticos (`@pendiente`, `@aprobado`, `@compra`, `@duplicado`, `@sin_gps`, `@con_gps`, `@b2b`, `@b2c`, `@whatsapp`, `@email`, `@web`, `@alerta`, `@especial`, `@pqr`, `@nuevo`, `@seguimiento`).
+
+3. **Corrección de Métrica de Facturación en Filtros Activos (`filteredMetrics`):**
+   - **Causa Raíz:** La función `filteredMetrics` utilizaba `o.total_amount`, el cual no está mapeado en la interfaz de pedidos (`total` es la propiedad canónica), causando que la franja de filtros activos siempre mostrara `Total: $0`.
+   - **Resolución Quirúrgica:** Homologado a `Number(o.total || o.total_amount || 0)`, reflejando exactamente el monto acumulado en pesos COP de la selección visible.
+
+4. **Ampliación a Ancho Maestro (1600px):**
+   - El contenedor maestro de la página se actualizó de `maxWidth: '1440px'` a `maxWidth: '1600px'` (`margin: '0 auto', padding: '0.4rem 2rem'`), alineándose fielmente con la barra de navegación superior.
+
+5. **Regla de Tablas Chromium (`borderCollapse: 'separate'`):**
+   - La tabla principal de pedidos fue configurada con `borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left'`, erradicando el bug de Blink en el que `border-collapse: collapse` desincroniza las capas de composición de la GPU y permite que las filas del `tbody` se deslicen sobre los encabezados `thead` sticky.
