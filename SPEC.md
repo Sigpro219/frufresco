@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.344 (Capítulo 45: Aislamiento Asimétrico en Denegación Jerárquica RBAC — 76/76 Pantallas Certificadas)
-> **Fecha:** 29 de Octubre, 2026  
+> **Versión:** 1.9.345 (Escenario 362: Taxonomía Estricta de Excepciones Logísticas, Variaciones Estructuradas y Purga de Falsos Alias por Tildes — 76/76 Pantallas Certificadas)
+> **Fecha:** 3 de Noviembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 361 Escenarios BDD Ininterrumpidos (1..361)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 362 Escenarios BDD Ininterrumpidos (1..362)
 
 ---
 
@@ -1355,7 +1355,7 @@ Toda cuenta institucional cuenta con su expediente estructurado:
    - **A. Producto Original (`product_id`):** Buscador predictivo por nombre, SKU o `accounting_id` con navegación por teclado (`ArrowUp`, `ArrowDown`, `Enter`).
    - **B. Variación Estandarizada Requerida (`preferred_options` JSONB):** Despliega selectores dinámicos generados a partir de `options_config` del SKU seleccionado (`Maduración: Pintón | Verde`, `Presentación: Unidad X gr | Bandeja | Granel | Kg | ...`, `Tamaño: Grande | Mediano | Pequeño | Jumbo`). Preselecciona automáticamente las variantes preferidas del cliente en los módulos de creación y edición de pedidos, respetando la regla canónica de que `Maduro`/`Madura` es el estándar implícito por defecto y nunca se almacena ni preselecciona como variante diferencial (§4, Deuda Técnica 15 y Escenario 114).
    - **C. Producto de Reemplazo / Sustitución (`substitution_product_id`):** Permite vincular un SKU alternativo autorizado (bloqueando la auto-sustitución `p.id !== newException.product_id`). Al seleccionar el producto original en toma de pedidos (`/admin/orders/create`), el sistema sugiere e invita a conmutar al sustituto en 1 clic.
-   - **D. Nombre en Factura / Alias (`nickname`):** Sobrescribe la descripción comercial impresa en la factura o remisión del cliente y alimenta el motor de emparejamiento semántico en ingesta de órdenes (`findBestProductMatchDetails`).
+   - **D. Nombre en Factura / Alias (`nickname`):** Sobrescribe la descripción comercial impresa en la factura o remisión del cliente y alimenta el motor de emparejamiento semántico en ingesta de órdenes (`findBestProductMatchDetails`). Solo se considera y renderiza como un Alias de Factura activo (`hasDiffNickname`) cuando su cadena normalizada sin tildes ni diacríticos (`normalizeSearch(exc.nickname)`) difiere genuinamente del nombre oficial del producto (`normalizeSearch(origProd.name)`), evitando que variaciones ortográficas de acentuación o mayúsculas (ej. `"Pimenton Rojo Institucional"` vs `"Pimentón rojo institucional"`, `"Brocoli"` vs `"Brócoli"`) se clasifiquen como novedades o excepciones falsas.
    - **E. Notas Operativas (`picking_note` y `delivery_note`):** Almacenan exclusivamente instrucciones físicas o logísticas de alistamiento/empaque y despacho que no corresponden a variaciones estructuradas de catálogo ni a sustituciones de SKU (ej. `"Sin malla"`, `"En caja"`, `"Con etiqueta"`, `"Sin pelar"`, `"Máx 2 Kg"`, `"Llamar al cliente"`). En cumplimiento estricto del principio de **Guardián Humano (Escenarios 327 y 329)**, estas notas se exhiben en el modal de montaje de pedidos como alerta visual informativa (`PREFERENCIA ESTRUCTURADA ACTIVA` / `NOTA INFORMAL DEL CLIENTE`) y **nunca se inyectan a ciegas en la Sábana de Alistamiento (`alistamiento-print`)**, salvo que el operador de pedidos las valide o transcriba deliberadamente en `selected_options.nota_alistamiento`.
    - **F. Regla Canónica de No-Duplicación Estructurada y Purga Automática (`sanitizePickingNoteAgainstPreferredOptions`):**
      * **Prohibición de Duplicidad:** Si un requisito del cliente ya está representado como dato estructurado en `preferred_options` (ej. `Maduración: Pintón`, `Presentación: Unidad 100 gr`, `Tamaño: Mediano`) o como `substitution_product_id`, **jamás debe existir simultáneamente como texto libre en `picking_note`**. Asimismo, dado que `Maduro`/`Madura` es el estado por defecto en FruFresco, las notas compuestas únicamente por `"Maduro"` / `"Madura"` se purgan a `null`.
@@ -13425,3 +13425,26 @@ Al auditar forensemente el motor de permisos RBAC (`src/lib/authContext.tsx` y `
   - `check('admin.commercial.inventory')` $ightarrow$ `false`.
   - `check('admin.commercial.inventory.counts')` $ightarrow$ `false`.
 * **TypeScript Compilation:** `tsc --noEmit` con código de salida `0` (cero errores en todo el proyecto).
+
+
+
+### Escenario 362: Taxonomía Estricta de Excepciones Logísticas por Sede, No-Duplicación de Variaciones Estructuradas en Notas de Picking y Purga de Falsos Alias por Tildes (`ClientsModule.tsx`, `create/page.tsx`, `EmailDraftsModule.tsx`, `product_nicknames`) (SDD v1.9.345)
+
+#### 1. Contexto y Justificación del Gemba
+Al auditar la configuración de **Excepciones y Notas (Picking)** (`ClientExceptionsModal`) tomando como caso patrón la sede **CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - BOSQUES DE ATHAN (`363`)** y el universo de `product_nicknames`, se identificaron tres distorsiones operativas heredadas:
+1. **Sustituciones y Variaciones Estructuradas Atrapadas o Duplicadas en `picking_note`:** Reglas que correspondían a cambios de SKU (`substitution_product_id`) o a atributos estructurados del catálogo (`preferred_options` como `Maduración: Pintón`, `Presentación: Unidad 100 gr`, `Tamaño: Mediano`) permanecían escritas como texto libre en `picking_note` (ej. `"Pinton"`, `"Undx 100gr"`, `"Med"`), o coexistían duplicadas en ambos campos (`Variación Requerida: Maduración: Pintón` + `Nota de Alistamiento: Pinton`).
+2. **Notas Redundantes con el Estándar Implícito (`Maduro` / `Madura`):** Existían 69 registros cuya única nota era `"Maduro"` o `"Madura"`, contraviniendo el principio canónico de que el estado maduro es la línea base por defecto (Escenario 41).
+3. **Falsos Alias de Factura por Diferencia de Tildes (`hasDiffNickname`):** La comparación `exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase()` trataba como "Nombre en Factura (Alias)" nombres idénticos al producto que solo diferían por falta de tilde (`"Pimenton Rojo Institucional"` vs `"Pimentón rojo institucional"`, `"Platano Verde Institucional"` vs `"Plátano verde institucional"`, `"Brocoli"` vs `"Brócoli"`), generando tarjetas de excepción falsas.
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Separación Estricta de Responsabilidades en `product_nicknames` (§7.14.H.2):**
+   - `substitution_product_id`: Exclusivo para reemplazo de un SKU por otro SKU activo del catálogo.
+   - `preferred_options`: Exclusivo para variaciones estructuradas (`Maduración`, `Presentación`, `Tamaño`, `Gramaje`) respaldadas en `products.options_config`.
+   - `picking_note`: Reservado exclusivamente para instrucciones operativas/físicas no estructuradas (ej. `"Sin malla"`, `"En caja"`, `"Máx 2 Kg"`, `"Llamar al cliente"`). Prohibida la coexistencia de un dato estructurado en `preferred_options` y su equivalente textual en `picking_note`.
+   - `nickname`: Solo se considera Alias de Factura (`hasDiffNickname`) cuando `normalizeSearch(exc.nickname) !== normalizeSearch(origProd.name)` (ignorando tildes, diacríticos y mayúsculas).
+2. **Autolimpieza Reactiva (`sanitizePickingNoteAgainstPreferredOptions`):**
+   - Incorporada en `ClientsModule.tsx` (`handleSave`), `src/app/admin/orders/create/page.tsx` (`handleSaveCustomerOptionPreference`) y `src/components/EmailDraftsModule.tsx` (`handleSaveCustomerOptionPreference`) para purgar automáticamente de `picking_note` cualquier token redundante cuando el operador fija una variación estructurada.
+3. **Saneamiento Integral de Base de Datos (`product_nicknames` y `products`):**
+   - Migrados 110 grupos de sustituciones aprobadas a `substitution_product_id`.
+   - Migrados 320 registros de variaciones estructuradas a `preferred_options` (habilitando sus valores en `options_config` de 88 productos) y purgadas 69 notas redundantes de `"Maduro"`/`"Madura"`.
+   - Normalizados 143 `nickname` sin tilde al nombre canónico del producto y eliminadas 74 filas huérfanas sin reglas activas.
