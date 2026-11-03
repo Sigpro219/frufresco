@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.347 (Escenarios 362 y 363: Taxonomía y Rediseño Swiss Precision de Excepciones Logísticas, Tabla Pareto con ID Contable y Blindaje Poka-Yoke de Bandeja de Correos — 76/76 Pantallas Certificadas)
+> **Versión:** 1.9.349 (Escenarios 362 a 366: Tríada de Características del Cliente en Montaje de Pedidos, Sábana de Alistamiento y Supresión Total en Documentos del Cliente — 76/76 Pantallas Certificadas)
 > **Fecha:** 3 de Noviembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 363 Escenarios BDD Ininterrumpidos (1..363)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 366 Escenarios BDD Ininterrumpidos (1..366)
 
 ---
 
@@ -13486,3 +13486,73 @@ En la Bandeja de Entrada de Pedidos por Correo (`EmailDraftsModule.tsx`), exist�
 5. **Visibilidad de la Causal y Botón de Rescate (`Restaurar a Pendiente`):**
    - Los borradores con `status = 'rejected'` muestran un badge explícito con la causal de descarte (`NO ES PEDIDO`, `DUPLICADO`, `SIN COBERTURA`, `MONTO MÍNIMO`, `CARTERA`, etc.).
    - En lugar de eliminar permanentemente, los correos `rejected` disponen del botón **`Restaurar a Pendiente`** (`RotateCcw`), que permite devolver el correo a `status = 'pending'` limpiando `rejectReason` para su normal procesamiento.
+
+
+
+### Escenario 364: Sincronización Exacta en Pesos ($ COP) de Imputación de Nómina entre Paso 1 y Paso 3, Vinculación Reactiva de Pedidos con Rescate de Ítems de Nota Original y Nueva Causal de Devolución (Característica / Calidad) (`PqrAuditModal.tsx`, `FinancialAdjustmentModal.tsx`, `PQRFloatingWidget.tsx`, `rcaTaxonomy.ts`, `customer-service/page.tsx`) (SDD v1.9.347)
+
+#### 1. Contexto y Justificación del Gemba
+En la auditoría forense de **Gestión de Calidad (PQRs)** junto con el área de Calidad se identificaron y resolvieron tres hallazgos operativos en producción:
+1. **Hallazgo #1 — Desfase de Montos ($ COP) entre el Paso 1 (`Hecho & Evidencias`) y el Paso 3 (`Causa Raíz & Imputación`) (`SAC-0034`):**
+   - Al asignar valores exactos por línea de producto en el Paso 1 (ej. `$1.550` en Tomate chonto y `$22.200` en Limón tahití, total `$23.750`), el Paso 3 recalculaba la cuota mediante un control deslizante (`<input type="range" step="0.5">`) que redondeaba los porcentajes al `0.5%` más cercano (`94.5%` y `5.5%`), distorsionando las cuotas de nómina a `$22.444` y `$1.306`.
+   - Adicionalmente, `itemMultiImputations` no se persistía en el borrador local (`localStorage`) ni en `[RCA_METADATA]`, y cambiar el botón de `2. Área Responsable Imputada` en el Paso 3 vaciaba las cuotas individuales asignadas en el Paso 1.
+2. **Hallazgo #2 — Vinculación de Pedido Reactiva, Rescate de Productos en Nota Original (`[ORIGEN WHATSAPP / CHAT]`) y Priorización de Sede (`SAC-0037` / Pedido `#1183`):**
+   - Al seleccionar o vincular un pedido dentro de `PqrAuditModal.tsx`, `selectedAuditPqr` en `customer-service/page.tsx` permanecía estático hasta cerrar y reabrir el modal, dejando la vista congelada en `"Sin Pedido Vinculado"`.
+   - En pedidos ingresados por WhatsApp/Chat donde un ítem con precio `$0` o agotado no quedó en `order_items` pero sí en `orders.admin_notes` (ej. `0,3 UN de Lavanda` y `0,3 KG de Ajenjo` en el Pedido `#1183`), el producto no aparecía en el selector `Producto del Pedido`, haciendo creer al analista que el pedido vinculado era incorrecto.
+   - Al radicar PQRs o listar pedidos recientes, los perfiles espejo `-OBSEQUIO` bajo `INVESTMENTS CORTES (901393217)` no se cruzaban con el cliente comercial real y `PQRFloatingWidget.tsx` auto-seleccionaba `list[0]` incluso cuando era una reposición de `$0 COP` o de otra sede hermana.
+3. **Hallazgo #3 — Nueva Causal de Devolución (`Característica / Calidad`) (`SAC-0039`):**
+   - Devoluciones por estado de madurez, calibre, tamaño o especificación organoléptica (ej. *"Devuelve 2,44 Kg de Aguacate Hass por sobre maduro"*) carecían de una causal específica diferenciada del daño mecánico de transporte (`Avería`).
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Verdad Única en Pesos ($ COP) entre Paso 1, Paso 3 y Modal Financiero (`PqrAuditModal.tsx`, `FinancialAdjustmentModal.tsx`, `rcaTaxonomy.ts`):**
+   - Se incorpora `baseAmount?: number` en `ImputedEntity` y `collaborators?: ItemCollaboratorShare[]` en `ItemImputation`.
+   - Se elimina el slider porcentual `step="0.5%"` y las sub-pestañas duplicadas en el Paso 3, reemplazándolos por edición directa en `$ COP` sincronizada bidireccionalmente con las tarjetas de producto del Paso 1 y manteniendo siempre habilitado el botón `Cobrar Cuota` / `No Cobrar ($0)`.
+   - Se persiste e hidrata `itemMultiImputations` tanto en `localStorage` como en `[RCA_METADATA]`, con auto-curación automática de borradores heredados que presentaban deriva por redondeo de slider.
+2. **Vinculación Instantánea, Píldoras de Productos del Pedido y Rescate desde `admin_notes` (`PqrAuditModal.tsx`, `PQRFloatingWidget.tsx`, `customer-service/page.tsx`):**
+   - `customer-service/page.tsx` sincroniza reactivamente `selectedAuditPqr` ante cambios en `order_id`, `client_id`, `status`, fotos o notas, sin reiniciar el paso activo del modal.
+   - Seleccionar un pedido en el desplegable de `PqrAuditModal.tsx` (o ingresar cualquier `# de folio` directo) vincula y carga de inmediato los datos del pedido y sus productos en pantalla.
+   - La tarjeta `Pedido Asociado a la Reclamación` exhibe píldoras interactivas con todos los productos del pedido, fusionando mediante `mergeOrderItemsWithAdminNotes` los ítems facturados en `order_items` con los ítems solicitados en `orders.admin_notes` (`[ORIGEN WHATSAPP / CHAT]`) y habilitando búsqueda en el catálogo general para ítems no facturados.
+   - Se cruzan automáticamente los perfiles espejo Comercial $\leftrightarrow$ `-OBSEQUIO` por nombre limpio de sede y se priorizan pedidos comerciales (`total > 0`) de la sucursal exacta sobre órdenes de reposición (`$0 COP`).
+3. **Causal `Característica / Calidad` (`caracteristica_calidad`) (`PqrAuditModal.tsx`):**
+   - Se incorpora el botón **`Característica / Calidad`** en el selector `Tipo de Novedad / Causal` del Paso 1.
+   - Habilita el selector de **Custodia Física del Producto Afectado** (*"Se queda en Cliente"* vs. *"Devuelto en Camión a Bodega"*), registra el prefijo canónico `Devolución (Característica / Calidad)` en `billing_returns.reason` y pre-asigna por defecto el área responsable `Picking (Alistamiento)`.
+
+
+### Escenario 365: Validación Empática de Cliente en Ingesta de WhatsApp/Texto sin Razón Social Explícita y Supresión de Falsas Alertas por "Cliente Desconocido" (`src/app/admin/orders/create/page.tsx`) (SDD v1.9.348)
+
+#### 1. Contexto y Justificación del Gemba
+Al procesar un pedido en `/admin/orders/create` mediante la opción de texto de WhatsApp para un cliente institucional habitual ya seleccionado por el operador (ej. `EL CARNAL - EL CARNAL`), cuando el mensaje de chat contenía únicamente las líneas de productos sin mencionar la razón social del cliente, el sistema asignaba por defecto `clientInFile = 'Cliente Desconocido'`.
+Esto provocaba que el validador en vivo (`isAuditClientMatch`) comparara el literal `"CLIENTE DESCONOCIDO"` contra `"EL CARNAL - EL CARNAL"` como si fueran dos empresas distintas, mostrando una alerta naranja de conflicto (*"El documento parece ser para Cliente Desconocido, pero tienes seleccionada la empresa EL CARNAL"*), renderizando el botón confuso `Cambiar a "Cliente Desconocido"` y lanzando un `window.confirm` de alerta al confirmar el pedido.
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Detección Canónica de Cliente No Especificado en Texto/Documento (`isUnknownClientInDoc`):**
+   - Se define que un documento o texto de WhatsApp **no especifica cliente** cuando `clientInDocument` es vacío/nulo o coincide con placeholders genéricos (`"cliente desconocido"`, `"desconocido"`, `"no detectado"`, `"sin cliente"`, `"n/a"`).
+2. **Comportamiento de `isAuditClientMatch` y Confirmación sin Fricción:**
+   - Si el documento/texto no especifica una razón social explícita (`isUnknownClientInDoc === true`), `isAuditClientMatch` evalúa como `true` siempre que el operador tenga seleccionado un cliente en el buscador superior, suprimiendo cualquier alerta de conflicto y eliminando el `window.confirm` bloqueante al crear/importar el pedido.
+3. **Mensajería Empática en el Banner `Validación de Cliente (Auditoría en Vivo)`:**
+   - **Caso A (Sin nombre en el texto + Cliente ya seleccionado por el operador):** El banner se muestra en verde (`#F0FDF4`) indicando: *"Asignado a la empresa seleccionada: [Nombre Empresa]"* y el subtítulo explicativo: *"El mensaje o documento no incluye una razón social explícita; se asignará al cliente que seleccionaste arriba ([Nombre Empresa])."* No se muestra ningún botón de cambiar a `"Cliente Desconocido"`.
+   - **Caso B (Sin nombre en el texto + Ningún cliente seleccionado aún):** Muestra la instrucción clara: *"Sin nombre de cliente en el texto — Selecciona la empresa o cliente en el buscador superior para asignarle este pedido."* (sin renderizar el botón `Buscar "Cliente Desconocido"`).
+   - **Caso C (El documento SÍ menciona otra empresa distinta a la seleccionada):** Mantiene la alerta naranja de auditoría y el botón rápido `Cambiar a "[Empresa Detectada]"`.
+
+
+### Escenario 366: Gobernanza End-to-End de la Tríada de Características del Cliente (1. Sustitución, 2. Variación Estructurada, 3. Nota de Alistamiento) en Montaje de Pedidos, Sábana de Alistamiento e Invisibilidad en Remisiones y Facturas (`src/app/admin/orders/create/page.tsx`, `src/app/admin/orders/alistamiento-print/page.tsx`, `src/app/admin/orders/contingency-print/page.tsx`, `src/app/admin/commercial/billing/print/[id]/page.tsx`) (SDD v1.9.349)
+
+#### 1. Contexto y Regla de Negocio Canónica
+Una vez consolidada y depurada la taxonomía de tres tipos de características por cliente/sede en `product_nicknames` (**1. Sustitución SKU** `substitution_product_id`, **2. Variación Estructurada** `preferred_options`, **3. Nota de Alistamiento** `picking_note`), se establece la regla canónica de visibilidad y propagación a lo largo del ciclo de vida del pedido:
+1. **En el Montaje del Pedido (`/admin/orders/create`):** El analista debe poder visualizar **1, 2 y 3** al buscar y montar cada producto. Por defecto, la **Variación Estructurada (2)** y la **Nota de Alistamiento (3)** vienen preseleccionadas/pre-llenadas para ese producto específico y la **Sustitución (1)** se aplica (tanto en selección manual como en carga masiva IA/Excel), pero el analista puede cambiar cualquiera de las tres características libremente para ese pedido puntual.
+2. **En Documentos Impresos de Bodega (`alistamiento-print`):** Deben ser visibles únicamente **2 (Variación Estructurada)** y **3 (Nota de Alistamiento)**. **No debe verse 1 (Sustitución)**, ya que bodega alista directamente el SKU resultante.
+3. **En Documentos Impresos para el Cliente (`Remisiones` y `Facturas`):** **Nada de 1, 2 ni 3 debe ser visible para el cliente**, imprimiendo exclusivamente la descripción limpia del producto despachado, su cantidad, unidad y valores comerciales.
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Visibilidad Tríada Semántica y Preselección Editable en `/admin/orders/create`:**
+   - **Buscadores de Productos (Principal y Staging):** Muestran junto al producto las píldoras semánticas de los 3 tipos cuando existen para el cliente activo: **Ámbar** (`Sustituir por: [ID] Nombre`), **Índigo** (`Variación Estructurada`) y **Esmeralda** (`Nota: <picking_note>`).
+   - **Modal de Producto y Conmutación Reversible de Sustitución (1):** Al seleccionar un producto con `substitution_product_id`, el sistema conmuta al producto sustituto y guarda en estado `substitutedFromProduct` la referencia al producto original, mostrando en el modal un banner **Ámbar** (`Sustitución aplicada: [Original] → [Sustituto]`) con un botón `[Usar producto original en este pedido]` para revertir la sustitución en 1 clic si ese día el cliente pidió no sustituir. En importación masiva (`parseOrderWithAI`), si el ítem detectado tiene `substitution_product_id`, se conmuta automáticamente `suggestedProduct` al SKU sustituto informándolo en `matchReason`.
+   - **Preselección de Variación (2) y Nota (3) en Modal e Importación Masiva:**
+     * `preferred_options` se preselecciona por defecto en `selectedOptions` (banner **Índigo**) y sus selectores permanecen 100% editables.
+     * `exc.picking_note` se pre-llena por defecto en `selectedOptions.nota_alistamiento` (banner **Esmeralda**) tanto al abrir el modal como en `parseOrderWithAI` e `itemsToInject`, permitiendo al operador modificarla o vaciarla en el campo `Nota de Alistamiento (Excepcional)` antes de confirmar.
+     * En la fila del carrito (`cart`), el badge de nota muestra `item.selected_options?.nota_alistamiento || item.picking_note`, acompañando al producto en pantalla y viajando íntegramente a `order_items.selected_options.nota_alistamiento`.
+   - **No-Contaminación de `order_items.nickname`:** Al insertar en `order_items` (`handleSaveOrder` y `handleCreateMultiOrders`), se prohíbe usar `item.variant_label` como fallback de `nickname` (`nickname: item.nickname || null`), evitando que las variaciones estructuradas se filtren como nombre de producto en facturación.
+2. **Sábana de Alistamiento (`alistamiento-print/page.tsx`):**
+   - Renderiza debajo de los kilos de cada celda únicamente la **Variación Estructurada (2)** (`demand.note`) y la **Nota de Alistamiento (3)** (`demand.pickingNote` leída desde `selected_options.nota_alistamiento`), sin mostrar rastro de la sustitución (1).
+3. **Remisiones y Facturas del Cliente (`contingency-print/page.tsx` y `billing/print/[id]/page.tsx`):**
+   - En `contingency-print/page.tsx` (Remisiones) y `billing/print/[id]/page.tsx` (Facturas/Cortes), la columna de descripción del producto imprime únicamente el nombre comercial limpio del producto (`item.products?.name`), suprimiendo `↳ {physicalInst}`, `variant_label` y cualquier nota interna de alistamiento.

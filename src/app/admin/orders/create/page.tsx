@@ -3497,16 +3497,20 @@ function CreateOrderContent() {
 
             // Lógica de Validación de Cliente (Auditoría)
             const selectedDetails = autoMatchedProfile || (clientType === 'B2B' ? getSelectedClientDetails() : getSelectedB2CDetails());
-            const clientInFile = data.clientInDocument || 'Cliente Desconocido';
+            const rawDetectedClient = (data.clientInDocument || '').trim();
+            const isUnknownPlaceholder = !rawDetectedClient || /^(cliente\s+desconocido|desconocido|no\s+detectado|sin\s+cliente|n\/a|null|undefined)$/i.test(rawDetectedClient);
+            const clientInFile = isUnknownPlaceholder ? '' : rawDetectedClient;
             
-            // Verificamos si hay coincidencia entre el documento y el sistema
+            // Verificamos si hay coincidencia entre el documento y el sistema (si el texto no trae cliente, se respeta el seleccionado por el operador)
             const selectedName = (selectedDetails?.company_name || selectedDetails?.contact_name || '').toUpperCase();
             const detectedName = clientInFile.toUpperCase();
             
-            const isMatch = !!autoMatchedProfile || (selectedName && detectedName && (
-                selectedName.includes(detectedName.split(' ')[0]) || 
-                detectedName.includes(selectedName.split(' ')[0])
-            ));
+            const isMatch = isUnknownPlaceholder
+                ? Boolean(selectedDetails)
+                : (!!autoMatchedProfile || Boolean(selectedName && detectedName && (
+                    selectedName.includes(detectedName.split(' ')[0]) || 
+                    detectedName.includes(selectedName.split(' ')[0])
+                )));
 
             const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(1);
             setDigestionDuration(elapsedSec);
@@ -3750,7 +3754,7 @@ function CreateOrderContent() {
 
         const effectiveClientDisplayName = clientDetails?.company_name || clientDetails?.contact_name || (clientType === 'B2C' ? guestInfo.name : 'Cliente');
 
-        if (!importValidation?.isMatch && importValidation?.clientInDocument) {
+        if (!isAuditClientMatch && hasExplicitDetectedClient && importValidation?.clientInDocument) {
             const confirmed = window.confirm(
                 `ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes seleccionado:\n"${effectiveClientDisplayName}"\n\n¿Deseas continuar y crear este pedido directamente para ${effectiveClientDisplayName}?`
             );
@@ -4180,7 +4184,7 @@ function CreateOrderContent() {
                 ? (getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name || 'Cliente Hogar') 
                 : (guestInfo.name || 'Cliente Hogar Nuevo'));
 
-        if (!isAuditClientMatch && importValidation?.clientInDocument && targetClientDisplayName) {
+        if (!isAuditClientMatch && hasExplicitDetectedClient && importValidation?.clientInDocument && targetClientDisplayName) {
             const confirmed = window.confirm(
                 `ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes asignado:\n"${targetClientDisplayName}"\n\n¿Deseas continuar e importar este pedido para ${targetClientDisplayName}?`
             );
@@ -5549,9 +5553,16 @@ ${primaryAdminNotes}`.trim();
         });
     }, [siblingBranches, branchFilterQuery]);
 
+    const isPlaceholderClientName = (val?: string | null) => {
+        const clean = (val || '').trim();
+        return !clean || /^(cliente\s+desconocido|desconocido|no\s+detectado|sin\s+cliente|n\/a|null|undefined)$/i.test(clean);
+    };
+
+    const hasExplicitDetectedClient = Boolean(importValidation?.clientInDocument && !isPlaceholderClientName(importValidation.clientInDocument));
+
     // Detección contextual: ¿alguna sede hermana coincide con lo detectado en el documento (ej. "Cafetería", "Girardot")?
     const docSuggestedBranchId = useMemo(() => {
-        if (!importValidation?.clientInDocument || siblingBranches.length === 0) return null;
+        if (!hasExplicitDetectedClient || !importValidation?.clientInDocument || siblingBranches.length === 0) return null;
         const docText = (importValidation.clientInDocument + ' ' + (selectedClientDetails?.address || '')).toLowerCase();
         const match = siblingBranches.find(b => {
             const bName = (b.company_name || '')
@@ -5564,23 +5575,29 @@ ${primaryAdminNotes}`.trim();
             return false;
         });
         return match ? match.id : null;
-    }, [importValidation?.clientInDocument, selectedClientDetails, siblingBranches]);
+    }, [hasExplicitDetectedClient, importValidation?.clientInDocument, selectedClientDetails, siblingBranches]);
 
     // Validación Dinámica de Auditoría: compara en vivo la empresa/sede seleccionada con el cliente detectado en el documento
     const isAuditClientMatch = useMemo(() => {
-        if (!importValidation?.clientInDocument) return true;
+        if (!hasExplicitDetectedClient) {
+            // Si el texto/WhatsApp no incluye razón social explícita, es válido siempre que el operador ya haya seleccionado el cliente arriba
+            if (clientType === 'B2C') {
+                return b2cMode === 'new' ? Boolean(guestInfo.name?.trim()) : Boolean(selectedClientB2C);
+            }
+            return Boolean(selectedClientDetails);
+        }
         if (clientType === 'B2C') {
             if (b2cMode === 'new') return true;
             if (!selectedClientB2C) return false;
             const b2c = b2cClients.find(c => c.id === selectedClientB2C);
             const selectedName = (b2c?.contact_name || b2c?.company_name || '').toUpperCase();
-            const detectedName = (importValidation.clientInDocument || '').toUpperCase();
+            const detectedName = (importValidation?.clientInDocument || '').toUpperCase();
             if (!selectedName || !detectedName) return false;
             return selectedName.includes(detectedName.split(' ')[0]) || detectedName.includes(selectedName.split(' ')[0]);
         }
         if (!selectedClientDetails) return false;
         const selectedName = (selectedClientDetails.company_name || selectedClientDetails.contact_name || '').toUpperCase();
-        const detectedName = (importValidation.clientInDocument || '').toUpperCase();
+        const detectedName = (importValidation?.clientInDocument || '').toUpperCase();
         if (!selectedName || !detectedName) return false;
 
         // Regla 1: Ambas comparten Colsubsidio
@@ -5593,7 +5610,7 @@ ${primaryAdminNotes}`.trim();
 
         const hasTokenMatch = detectedTokens.some(t => selectedName.includes(t)) || selectedTokens.some(t => detectedName.includes(t));
         return hasTokenMatch || selectedName.includes(detectedName.slice(0, 6)) || detectedName.includes(selectedName.slice(0, 6));
-    }, [importValidation?.clientInDocument, selectedClientDetails, clientType, b2cMode, selectedClientB2C, b2cClients]);
+    }, [hasExplicitDetectedClient, importValidation?.clientInDocument, selectedClientDetails, clientType, b2cMode, selectedClientB2C, b2cClients, guestInfo.name]);
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
@@ -7131,7 +7148,7 @@ ${primaryAdminNotes}`.trim();
                                                             type="button"
                                                             onClick={() => {
                                                                 setClientType('B2C');
-                                                                if (!guestInfo.name && importValidation?.clientInDocument) {
+                                                                if (!guestInfo.name && hasExplicitDetectedClient && importValidation?.clientInDocument) {
                                                                     setGuestInfo(prev => ({ ...prev, name: importValidation.clientInDocument }));
                                                                 }
                                                                 showToast('Canal de importación: Hogar (B2C)', 'info');
@@ -7157,38 +7174,64 @@ ${primaryAdminNotes}`.trim();
                                                     </div>
                                                 </div>
                                                 <div style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                    <span>Documento detectado para:</span>
-                                                    <span style={{ textDecoration: 'underline', color: isAuditClientMatch ? '#15803D' : '#C2410C' }}>
-                                                        {importValidation.clientInDocument}
-                                                    </span>
+                                                    {hasExplicitDetectedClient ? (
+                                                        <>
+                                                            <span>Documento detectado para:</span>
+                                                            <span style={{ textDecoration: 'underline', color: isAuditClientMatch ? '#15803D' : '#C2410C' }}>
+                                                                {importValidation.clientInDocument}
+                                                            </span>
+                                                        </>
+                                                    ) : selectedClientDetails ? (
+                                                        <>
+                                                            <span>Pedido asignado a tu cliente seleccionado:</span>
+                                                            <span style={{ textDecoration: 'underline', color: '#15803D' }}>
+                                                                {selectedClientDetails.company_name || selectedClientDetails.contact_name}
+                                                            </span>
+                                                        </>
+                                                    ) : (clientType === 'B2C' && (selectedClientB2C || guestInfo.name?.trim())) ? (
+                                                        <>
+                                                            <span>Pedido asignado a cliente Hogar:</span>
+                                                            <span style={{ textDecoration: 'underline', color: '#15803D' }}>
+                                                                {b2cMode === 'search' ? (getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name) : guestInfo.name}
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <span style={{ color: '#9A3412' }}>
+                                                            El texto no menciona el nombre del cliente (selecciona el cliente arriba)
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {clientType === 'B2B' ? (
                                                     !selectedClient ? (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                                                             <span style={{ fontSize: '0.85rem', color: '#DC2626', fontWeight: '700' }}>
-                                                                No has seleccionado la empresa en el sistema.
+                                                                {hasExplicitDetectedClient
+                                                                    ? 'No has seleccionado la empresa en el sistema.'
+                                                                    : 'Como el mensaje de WhatsApp / texto solo contiene los productos, busca y selecciona la empresa en el panel superior.'}
                                                             </span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setClientSearch(importValidation.clientInDocument)}
-                                                                style={{
-                                                                    fontSize: '0.75rem',
-                                                                    fontWeight: '800',
-                                                                    backgroundColor: '#DC2626',
-                                                                    color: '#FFFFFF',
-                                                                    padding: '2px 8px',
-                                                                    borderRadius: '4px',
-                                                                    border: 'none',
-                                                                    cursor: 'pointer'
-                                                                }}
-                                                            >
-                                                                Buscar "{importValidation.clientInDocument}"
-                                                            </button>
+                                                            {hasExplicitDetectedClient && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setClientSearch(importValidation.clientInDocument)}
+                                                                    style={{
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: '800',
+                                                                        backgroundColor: '#DC2626',
+                                                                        color: '#FFFFFF',
+                                                                        padding: '2px 8px',
+                                                                        borderRadius: '4px',
+                                                                        border: 'none',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >
+                                                                    Buscar "{importValidation.clientInDocument}"
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setClientType('B2C');
-                                                                    if (!guestInfo.name && importValidation?.clientInDocument) {
+                                                                    if (!guestInfo.name && hasExplicitDetectedClient && importValidation?.clientInDocument) {
                                                                         setGuestInfo(prev => ({ ...prev, name: importValidation.clientInDocument }));
                                                                     }
                                                                     showToast('Cambiado a Pedido Hogar (B2C)', 'info');
@@ -7207,7 +7250,7 @@ ${primaryAdminNotes}`.trim();
                                                                 ¿Es Pedido Hogar? Cambiar a Hogar
                                                             </button>
                                                         </div>
-                                                    ) : !isAuditClientMatch ? (
+                                                    ) : !isAuditClientMatch && hasExplicitDetectedClient ? (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
                                                             <span style={{ fontSize: '0.84rem', color: '#C2410C', fontWeight: '600' }}>
                                                                 El documento parece ser para <b>{importValidation.clientInDocument}</b>, pero tienes seleccionada la empresa <b>{selectedClientDetails?.company_name}</b>.
@@ -7237,6 +7280,10 @@ ${primaryAdminNotes}`.trim();
                                                                 <Search size={12} />
                                                                 <span>Cambiar a "{importValidation.clientInDocument}"</span>
                                                             </button>
+                                                        </div>
+                                                    ) : !hasExplicitDetectedClient ? (
+                                                        <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
+                                                            El texto de WhatsApp no incluye razón social explícita; se cargará al cliente habitual seleccionado (<b>{selectedClientDetails?.company_name}</b>).
                                                         </div>
                                                     ) : (
                                                         <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
@@ -7268,7 +7315,7 @@ ${primaryAdminNotes}`.trim();
                                                                     type="button"
                                                                     onClick={() => {
                                                                         setB2CMode('new');
-                                                                        if (!guestInfo.name && importValidation?.clientInDocument) {
+                                                                        if (!guestInfo.name && hasExplicitDetectedClient && importValidation?.clientInDocument) {
                                                                             setGuestInfo(prev => ({ ...prev, name: importValidation.clientInDocument }));
                                                                         }
                                                                     }}
@@ -7336,7 +7383,7 @@ ${primaryAdminNotes}`.trim();
                                                                                 }}
                                                                             />
                                                                         </div>
-                                                                        {importValidation?.clientInDocument && (
+                                                                        {hasExplicitDetectedClient && importValidation?.clientInDocument && (
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => setClientSearchB2C(importValidation.clientInDocument)}
