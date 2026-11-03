@@ -226,7 +226,7 @@ export interface ItemImputation {
         entityId: string;
         entityName: string;
         entityRole?: string;
-        entityType?: any;
+        entityType?: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
         amount: number;
         waiveDeduction?: boolean;
     }[];

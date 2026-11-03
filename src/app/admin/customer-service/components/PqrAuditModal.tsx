@@ -31,7 +31,7 @@ export interface ItemCollaboratorShare {
     entityId: string;
     entityName: string;
     entityRole?: string;
-    entityType?: any;
+    entityType?: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
     amount: number;
     waiveDeduction?: boolean;
 }
@@ -209,7 +209,7 @@ export default function PqrAuditModal({
         entityId: string;
         entityName: string;
         entityRole?: string;
-        entityType?: any;
+        entityType?: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
         waiveDeduction?: boolean;
     }>>({});
 
@@ -250,7 +250,9 @@ export default function PqrAuditModal({
         const extraItems: any[] = [];
         const lines = String(adminNotes).split(/\r?\n/);
         for (const line of lines) {
-            const m = line.match(/^\s*\d+\s*\t\s*([^\t]+?)\t\s*([\d.,]+)\s*([a-zA-Z]+)?(?:\t\s*\$?\s*([\d.,]+))?/);
+            const mTsv = line.match(/^\s*\d+\s*\t\s*([^\t]+?)\t\s*([\d.,]+)\s*([a-zA-Z]+)?(?:\t\s*\$?\s*([\d.,]+))?/);
+            const mFree = !mTsv ? line.trim().match(/^([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+?)\s+(\d+(?:[.,]\d+)?)\s*(KG|UN|AT|LB|GR|BTO|CAJA)/i) : null;
+            const m = mTsv || mFree;
             if (!m) continue;
             const rawName = m[1].trim();
             const nName = norm(rawName);
@@ -739,7 +741,7 @@ export default function PqrAuditModal({
 
                     const { data: recentOrders } = await supabase
                         .from('orders')
-                        .select('id, sequence_id, profile_id, total, status, created_at, delivery_date, shipping_address, origin_source, admin_notes')
+                        .select('id, sequence_id, profile_id, total, status, created_at, delivery_date, shipping_address, origin_source, admin_notes, order_items(product_id, quantity, nickname, products(name, unit_of_measure))')
                         .in('profile_id', Array.from(familyIds))
                         .order('created_at', { ascending: false })
                         .limit(25);
@@ -775,7 +777,7 @@ export default function PqrAuditModal({
                         if (mirrorIds.length > 0) {
                             const { data: mirrorOrders } = await supabase
                                 .from('orders')
-                                .select('id, sequence_id, profile_id, total, status, created_at, delivery_date, shipping_address, origin_source, admin_notes')
+                                .select('id, sequence_id, profile_id, total, status, created_at, delivery_date, shipping_address, origin_source, admin_notes, order_items(product_id, quantity, nickname, products(name, unit_of_measure))')
                                 .in('profile_id', mirrorIds)
                                 .order('created_at', { ascending: false })
                                 .limit(20);
@@ -790,19 +792,101 @@ export default function PqrAuditModal({
                         }
                     }
 
-                    const sortedOrders = allOrders.sort((a: any, b: any) => {
+                    const normalizeMatchText = (txt: string) =>
+                        (txt || '')
+                            .toLowerCase()
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .replace(/[^a-z0-9\s]/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+
+                    const pqrCleanClaimText = normalizeMatchText(
+                        `${pqr.subject || ''} ${(pqr.description || '').replace(/\[Radicado por[^\]]+\]/gi, '')}`
+                    );
+                    const pqrCreatedTime = pqr.created_at ? new Date(pqr.created_at).getTime() : Date.now();
+                    const pqrDateStr = pqr.created_at ? pqr.created_at.slice(0, 10) : '';
+
+                    const scoredOrders = allOrders.map((o: any) => {
+                        const rawItemNames: string[] = (o.order_items || [])
+                            .map((it: any) => String(it?.products?.name || it?.nickname || '').trim())
+                            .filter(Boolean);
+
+                        const noteText = String(o.admin_notes || '');
+                        if (noteText.includes('[ORIGEN WHATSAPP / CHAT]')) {
+                            const afterHeader = noteText.split('[ORIGEN WHATSAPP / CHAT]')[1] || '';
+                            afterHeader.split(/\r?\n/).forEach(line => {
+                                const mTsv = line.match(/^\s*\d+\s*\t\s*([^\t]+?)\t\s*([\d.,]+)\s*([a-zA-Z]+)?/);
+                                const mFree = !mTsv ? line.trim().match(/^([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+?)\s+(\d+(?:[.,]\d+)?)\s*(KG|UN|AT|LB|GR|BTO|CAJA)/i) : null;
+                                const m = mTsv || mFree;
+                                if (m && m[1]) {
+                                    const nameCandidate = m[1].trim();
+                                    if (!rawItemNames.some(n => normalizeMatchText(n) === normalizeMatchText(nameCandidate))) {
+                                        rawItemNames.push(nameCandidate);
+                                    }
+                                }
+                            });
+                        }
+
+                        const matchedProducts: string[] = [];
+                        if (pqrCleanClaimText.length >= 3) {
+                            rawItemNames.forEach(pName => {
+                                const normProd = normalizeMatchText(pName);
+                                if (!normProd) return;
+                                const prodTokens = normProd.split(' ').filter(w => w.length >= 4 && !['para', 'importado', 'importada', 'lavada', 'lavado', 'mediana', 'extra', 'verde', 'blanca', 'blanco', 'rojo', 'roja'].includes(w));
+                                const fullMatch = pqrCleanClaimText.includes(normProd);
+                                const tokenMatch = prodTokens.length > 0 && prodTokens.some(tok => pqrCleanClaimText.includes(tok));
+                                if (fullMatch || tokenMatch) {
+                                    if (!matchedProducts.includes(pName)) matchedProducts.push(pName);
+                                }
+                            });
+                        }
+
+                        const orderDateStr = String(o.delivery_date || o.created_at || '').slice(0, 10);
+                        const orderTime = new Date(o.delivery_date || o.created_at || Date.now()).getTime();
+                        const daysDiff = Math.abs(pqrCreatedTime - orderTime) / (1000 * 60 * 60 * 24);
+                        const isSameOrPrevDay = (orderDateStr === pqrDateStr) || daysDiff <= 2.5;
+                        const isCommercial = Number(o.total || 0) > 0 && !noteText.includes('[REPOSICIÓN DE GARANTÍA');
+
+                        return {
+                            ...o,
+                            item_names_preview: rawItemNames,
+                            matched_claim_products: matchedProducts,
+                            match_count: matchedProducts.length,
+                            is_same_or_prev_day: isSameOrPrevDay,
+                            is_commercial_order: isCommercial
+                        };
+                    });
+
+                    const sortedOrders = scoredOrders.sort((a: any, b: any) => {
+                        if (a.match_count !== b.match_count) return b.match_count - a.match_count;
+                        if (a.is_commercial_order !== b.is_commercial_order) return (b.is_commercial_order ? 1 : 0) - (a.is_commercial_order ? 1 : 0);
+                        if (a.is_same_or_prev_day !== b.is_same_or_prev_day) return (b.is_same_or_prev_day ? 1 : 0) - (a.is_same_or_prev_day ? 1 : 0);
                         const aExact = a.profile_id === pqr.client_id ? 1 : 0;
                         const bExact = b.profile_id === pqr.client_id ? 1 : 0;
                         if (aExact !== bExact) return bExact - aExact;
                         const aNameMatch = cleanBranchToken.length >= 4 && (a.branch_name || '').toUpperCase().includes(cleanBranchToken) ? 1 : 0;
                         const bNameMatch = cleanBranchToken.length >= 4 && (b.branch_name || '').toUpperCase().includes(cleanBranchToken) ? 1 : 0;
                         if (aNameMatch !== bNameMatch) return bNameMatch - aNameMatch;
-                        const aCommercial = Number(a.total || 0) > 0 ? 1 : 0;
-                        const bCommercial = Number(b.total || 0) > 0 ? 1 : 0;
-                        if (aCommercial !== bCommercial) return bCommercial - aCommercial;
                         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
                     });
                     setClientRecentOrders(sortedOrders);
+
+                    // Auto-link bulletproof: if PQR has no order linked (or is linked to a $0 replacement without the claimed products) and top candidate matches claimed products
+                    const bestCandidate = sortedOrders[0];
+                    const currentLinkedOrder = sortedOrders.find((o: any) => o.id === pqr.order_id);
+                    const isCurrentMislinkedZero = Boolean(
+                        pqr.order_id &&
+                        currentLinkedOrder &&
+                        !currentLinkedOrder.is_commercial_order &&
+                        currentLinkedOrder.match_count === 0 &&
+                        bestCandidate &&
+                        bestCandidate.match_count > 0
+                    );
+                    if ((!pqr.order_id || isCurrentMislinkedZero) && bestCandidate && bestCandidate.match_count > 0 && pqr.status !== 'resolved' && pqr.status !== 'rejected') {
+                        setLinkingOrderId(bestCandidate.id);
+                        handleLinkOrder(bestCandidate.id);
+                    }
                 } catch (err) {
                     console.error('Error fetching client recent orders:', err);
                 } finally {
@@ -1813,18 +1897,41 @@ export default function PqrAuditModal({
             const matchingKeys = Object.keys(prev).filter(k =>
                 (prev[k]?.collaborators || []).some(c => c.entityId === entityId)
             );
-            if (matchingKeys.length === 1) {
-                const k = matchingKeys[0];
+            if (matchingKeys.length >= 1) {
                 const newAmt = Math.round((baseAmountToSplit * safePct) / 100);
-                return {
-                    ...prev,
-                    [k]: {
-                        ...prev[k],
-                        collaborators: prev[k].collaborators.map(c =>
-                            c.entityId === entityId ? { ...c, amount: newAmt } : c
+                if (matchingKeys.length === 1) {
+                    const k = matchingKeys[0];
+                    return {
+                        ...prev,
+                        [k]: {
+                            ...prev[k],
+                            collaborators: prev[k].collaborators.map(c =>
+                                c.entityId === entityId ? { ...c, amount: newAmt } : c
+                            )
+                        }
+                    };
+                }
+                const currentSum = matchingKeys.reduce((acc, k) => {
+                    const col = prev[k]?.collaborators?.find(c => c.entityId === entityId);
+                    return acc + (Number(col?.amount) || 0);
+                }, 0);
+                const next = { ...prev };
+                let allocated = 0;
+                matchingKeys.forEach((k, idx) => {
+                    const col = next[k]?.collaborators?.find(c => c.entityId === entityId);
+                    const oldColAmt = Number(col?.amount) || 0;
+                    const scaledAmt = idx === matchingKeys.length - 1
+                        ? Math.max(0, newAmt - allocated)
+                        : (currentSum > 0 ? Math.round((newAmt * oldColAmt) / currentSum) : Math.round(newAmt / matchingKeys.length));
+                    allocated += scaledAmt;
+                    next[k] = {
+                        ...next[k],
+                        collaborators: next[k].collaborators.map(c =>
+                            c.entityId === entityId ? { ...c, amount: scaledAmt } : c
                         )
-                    }
-                };
+                    };
+                });
+                return next;
             }
             return prev;
         });
@@ -2063,17 +2170,41 @@ export default function PqrAuditModal({
             const matchingKeys = Object.keys(prev).filter(k =>
                 (prev[k]?.collaborators || []).some(c => c.entityId === entityId)
             );
-            if (matchingKeys.length === 1) {
-                const k = matchingKeys[0];
-                return {
-                    ...prev,
-                    [k]: {
-                        ...prev[k],
-                        collaborators: prev[k].collaborators.map(c =>
-                            c.entityId === entityId ? { ...c, amount: cleanAmount } : c
+            if (matchingKeys.length >= 1) {
+                const newAmt = cleanAmount;
+                if (matchingKeys.length === 1) {
+                    const k = matchingKeys[0];
+                    return {
+                        ...prev,
+                        [k]: {
+                            ...prev[k],
+                            collaborators: prev[k].collaborators.map(c =>
+                                c.entityId === entityId ? { ...c, amount: newAmt } : c
+                            )
+                        }
+                    };
+                }
+                const currentSum = matchingKeys.reduce((acc, k) => {
+                    const col = prev[k]?.collaborators?.find(c => c.entityId === entityId);
+                    return acc + (Number(col?.amount) || 0);
+                }, 0);
+                const next = { ...prev };
+                let allocated = 0;
+                matchingKeys.forEach((k, idx) => {
+                    const col = next[k]?.collaborators?.find(c => c.entityId === entityId);
+                    const oldColAmt = Number(col?.amount) || 0;
+                    const scaledAmt = idx === matchingKeys.length - 1
+                        ? Math.max(0, newAmt - allocated)
+                        : (currentSum > 0 ? Math.round((newAmt * oldColAmt) / currentSum) : Math.round(newAmt / matchingKeys.length));
+                    allocated += scaledAmt;
+                    next[k] = {
+                        ...next[k],
+                        collaborators: next[k].collaborators.map(c =>
+                            c.entityId === entityId ? { ...c, amount: scaledAmt } : c
                         )
-                    }
-                };
+                    };
+                });
+                return next;
             }
             return prev;
         });
@@ -2864,6 +2995,12 @@ export default function PqrAuditModal({
 
     // Save audit edits for an already resolved case without re-triggering operations
     const handleSaveAuditUpdate = async () => {
+        const totalImputedPercent = Number(imputedEntities.reduce((sum, e) => sum + (e.sharePercent || 0), 0).toFixed(1));
+        if (rcaResponsible !== 'proveedor' && imputedEntities.length > 0 && (totalImputedPercent < 99.5 || totalImputedPercent > 100.5)) {
+            showToast(`La sumatoria de responsabilidad debe cerrar en 100% (actualmente ${totalImputedPercent}%). Ajusta los porcentajes o valores en COP antes de guardar la rectificación.`, 'error');
+            return;
+        }
+        setActionLoading(true);
         setActionLoading(true);
         try {
             let cleanNotes = cleanHumanResolutionNotes(resolutionNotes);
@@ -3659,6 +3796,39 @@ export default function PqrAuditModal({
                                                     <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Sin ítems registrados en este pedido</span>
                                                 )}<span style={{ display: 'none' }}>
                                                 </span>
+                                                {!isReadOnlyClosed && clientRecentOrders.length > 0 && (
+                                                    <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #E2E8F0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: '700' }}>
+                                                            ¿Cambiar a otro pedido?:
+                                                        </span>
+                                                        <div style={{ flex: 1, minWidth: '180px' }}>
+                                                            <SearchableSelect
+                                                                value={pqr.order_id || ''}
+                                                                onChange={(val) => {
+                                                                    if (val && val !== pqr.order_id) {
+                                                                        setLinkingOrderId(val);
+                                                                        handleLinkOrder(val);
+                                                                    }
+                                                                }}
+                                                                disabled={loadingRecentOrders || isLinkingOrder}
+                                                                placeholder="-- Cambiar de Pedido --"
+                                                                searchPlaceholder="Buscar por #pedido, producto o fecha..."
+                                                                options={clientRecentOrders.map((o: any) => {
+                                                                    const matchedList = (o.matched_claim_products || []) as string[];
+                                                                    const previewProds = (o.item_names_preview || []).slice(0, 4).join(', ');
+                                                                    const isZeroRep = Number(o.total || 0) === 0;
+                                                                    return {
+                                                                        value: o.id,
+                                                                        label: `Pedido #${o.sequence_id}${matchedList.length > 0 ? ` ★ Coincide (${matchedList.join(', ')})` : ''}${isZeroRep ? ' [REPOSICIÓN $0]' : ''}`,
+                                                                        sublabel: `${new Date(o.delivery_date || o.created_at).toLocaleDateString('es-CO')} • ${previewProds ? `Prod: ${previewProds}` : (o.branch_name || 'Sede')}`,
+                                                                        badge: formatMoney(o.total || 0)
+                                                                    };
+                                                                })}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}<span style={{ display: 'none' }}>
+                                                </span>
                                             </div>
                                         </div>
                                     ) : authorInfo.isInternalCase ? (
@@ -3717,12 +3887,17 @@ export default function PqrAuditModal({
                                                         placeholder="-- Seleccionar Pedido Reciente --"
                                                         searchPlaceholder="Buscar por #pedido, fecha o valor..."
                                                         clearable
-                                                        options={clientRecentOrders.map(o => ({
-                                                            value: o.id,
-                                                            label: `Pedido #${o.sequence_id}`,
-                                                            sublabel: `${new Date(o.created_at).toLocaleDateString('es-CO')} • ${o.branch_name || o.shipping_address || 'Sede'}`,
-                                                            badge: formatMoney(o.total || 0)
-                                                        }))}
+                                                        options={clientRecentOrders.map((o: any) => {
+                                                            const matchedList = (o.matched_claim_products || []) as string[];
+                                                            const previewProds = (o.item_names_preview || []).slice(0, 4).join(', ');
+                                                            const isZeroRep = Number(o.total || 0) === 0;
+                                                            return {
+                                                                value: o.id,
+                                                                label: `Pedido #${o.sequence_id}${matchedList.length > 0 ? ` ★ Coincide (${matchedList.join(', ')})` : ''}${isZeroRep ? ' [REPOSICIÓN $0]' : ''}`,
+                                                                sublabel: `${new Date(o.delivery_date || o.created_at).toLocaleDateString('es-CO')} • ${previewProds ? `Prod: ${previewProds}` : (o.branch_name || o.shipping_address || 'Sede')}`,
+                                                                badge: formatMoney(o.total || 0)
+                                                            };
+                                                        })}
                                                     />
                                                 </div>
                                                 <button
@@ -5776,53 +5951,6 @@ export default function PqrAuditModal({
                                             <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
                                                 3. Matriz de Imputabilidad Nominal & Descuento
                                             </span>
-                                            {false && caseReturns.length >= 2 && (
-                                                <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', padding: '2px', borderRadius: '6px' }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setImputationMode('global');
-                                                        }}
-                                                        style={{
-                                                            padding: '3px 8px',
-                                                            borderRadius: '4px',
-                                                            fontSize: '0.65rem',
-                                                            fontWeight: '700',
-                                                            border: 'none',
-                                                            cursor: 'pointer',
-                                                            backgroundColor: imputationMode === 'global' ? '#FFFFFF' : 'transparent',
-                                                            color: imputationMode === 'global' ? '#0F172A' : '#64748B',
-                                                            boxShadow: imputationMode === 'global' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
-                                                        }}
-                                                    >
-                                                        Global (Prorrateo)
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setImputationMode('global');
-                                                            recalculateImputedEntitiesFromItems(itemImputations);
-                                                        }}
-                                                        style={{
-                                                            padding: '3px 8px',
-                                                            borderRadius: '4px',
-                                                            fontSize: '0.65rem',
-                                                            fontWeight: '700',
-                                                            border: 'none',
-                                                            cursor: 'pointer',
-                                                            backgroundColor: imputationMode === 'by_item' ? '#0D7A57' : 'transparent',
-                                                            color: imputationMode === 'by_item' ? '#FFFFFF' : '#64748B',
-                                                            boxShadow: imputationMode === 'by_item' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '4px'
-                                                        }}
-                                                    >
-                                                        <Sparkles size={11} />
-                                                        <span>Por Producto Devuelto ({caseReturns.length})</span>
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                         <p style={{ fontSize: '0.68rem', color: '#64748B', margin: '2px 0 0 0' }}>
                                             {imputationMode === 'by_item' 
@@ -6373,15 +6501,6 @@ export default function PqrAuditModal({
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                                             {/* % Split Slider */}
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <input
-                                                                    type="range"
-                                                                    min="0"
-                                                                    max="100"
-                                                                    step="0.5"
-                                                                    value={entity.sharePercent || 0}
-                                                                    onChange={e => handleUpdateEntityPercent(entity.id, parseFloat(e.target.value))}
-                                                                    style={{ display: 'none' }}
-                                                                />
                                                                 {!entity.waiveDeduction && resolutionOption !== 'opt1' && !isReadOnlyClosed && (
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                                         <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>$</span>
