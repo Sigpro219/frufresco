@@ -637,15 +637,38 @@ function CreateOrderContent() {
         setSavingPreference(true);
         try {
             const exc = clientExceptions.find(e => e.product_id === productId);
-            const optionsPayload = clear ? {} : optionsToSave;
+            const targetProd = products.find(p => p.id === productId) || selectedProductForModal;
+            const validConfigNames = new Set<string>(
+                Array.isArray(targetProd?.options_config)
+                    ? targetProd.options_config.map((o: { name?: string }) => String(o.name || '').toLowerCase())
+                    : []
+            );
+            const filteredOptions: Record<string, string> = {};
+            if (!clear && optionsToSave && typeof optionsToSave === 'object') {
+                Object.entries(optionsToSave).forEach(([k, v]) => {
+                    if (
+                        !k.startsWith('_') &&
+                        k !== 'nota_alistamiento' &&
+                        k !== 'Nota alistamiento' &&
+                        k !== 'Nota de alistamiento' &&
+                        validConfigNames.has(k.toLowerCase()) &&
+                        typeof v === 'string' &&
+                        v.trim() &&
+                        !(k.toLowerCase().includes('madura') && /^madur[oa]$/i.test(v.trim()))
+                    ) {
+                        filteredOptions[k] = v.trim();
+                    }
+                });
+            }
+            const optionsPayload = clear ? {} : filteredOptions;
             
-            let newRecord: any = null;
+            let newRecord: Record<string, unknown> | null = null;
             if (exc?.id) {
                 const rawNote = (exc.picking_note || '').trim();
                 const shouldClearRedundantNote = !clear && Object.keys(optionsPayload).length > 0 && (
                     /^(madur[oa]s?|pint[oó]n[ae]?s?|verdes?|muy\s*verde|grandes?|muy\s*grande|med|median[oa]s?|peq|peque[ñn][oa]s?|jumbo|bandeja|a\s*granel|unidad|(?:und(?:\.|idad)?\s*[x*]?\s*|de\s*|[x*]\s*)?\d{2,4}\s*(?:grs?\.?|gramos?|g)?|(?:mad\s*)?und\s*x\s*1\.8\s*kg)$/i.test(rawNote)
                 );
-                const updateFields: any = { preferred_options: optionsPayload };
+                const updateFields: Record<string, unknown> = { preferred_options: optionsPayload };
                 if (shouldClearRedundantNote) updateFields.picking_note = null;
                 const { data, error } = await supabase
                     .from('product_nicknames')
@@ -662,7 +685,7 @@ function CreateOrderContent() {
                         customer_id: activeCustomerId,
                         product_id: productId,
                         preferred_options: optionsPayload,
-                        nickname: selectedProductForModal?.name || 'Producto',
+                        nickname: null,
                         picking_note: null
                     })
                     .select()
@@ -824,7 +847,7 @@ function CreateOrderContent() {
 
     // MODAL STATE (For Product Variants)
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
-    const [substitutedFromProduct, setSubstitutedFromProduct] = useState<any | null>(null);
+    const [substitutedFromProduct, setSubstitutedFromProduct] = useState<{ id: string; name: string; [key: string]: unknown } | null>(null);
     const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
     const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
     const [modalQuantity, setModalQuantity] = useState<string | number>(1);
@@ -1155,6 +1178,7 @@ function CreateOrderContent() {
         is_from_last_order?: boolean;
         observations?: string;
         deliverySchedule?: string;
+        substituted_from?: { id: string; name: string; [key: string]: unknown };
     }[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
@@ -1172,6 +1196,7 @@ function CreateOrderContent() {
         unit?: string;
         factor?: number;
         existingIndex: number;
+        substitutedFrom?: { id: string; name: string; [key: string]: unknown } | null;
     } | null>(null);
 
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -1199,6 +1224,7 @@ function CreateOrderContent() {
         pendingFactor?: number;
         pendingVariantLabel?: string;
         openModalAfterKeep?: boolean;
+        pendingSubstitutedFrom?: { id: string; name: string; [key: string]: unknown } | null;
     } | null>(null);
     const [selectedStagedIds, setSelectedStagedIds] = useState<string[]>([]);
     useEffect(() => {
@@ -1869,11 +1895,13 @@ function CreateOrderContent() {
         optionsRaw?: any,
         unit?: string,
         factor?: number,
-        bypassDuplicateCheck = false
+        bypassDuplicateCheck = false,
+        substitutedFrom?: { id: string; name: string; [key: string]: unknown } | null
     ) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
         let finalLabel = variantLabel || '';
         let finalNickname = exc?.nickname || product.name;
+        const resolvedSubstitutedFrom = substitutedFrom !== undefined ? (substitutedFrom || undefined) : (substitutedFromProduct || undefined);
 
         const isProdKg = (product.unit_of_measure || 'Kg').toLowerCase().includes('kg');
         const nominalWeight = !isProdKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
@@ -1910,7 +1938,8 @@ function CreateOrderContent() {
                     optionsRaw,
                     unit: resolvedUnit,
                     factor: resolvedFactor,
-                    existingIndex
+                    existingIndex,
+                    substitutedFrom: resolvedSubstitutedFrom
                 });
                 return;
             }
@@ -1940,7 +1969,8 @@ function CreateOrderContent() {
             nickname: finalNickname,
             observations: defaultObservations,
             picking_note: exc?.picking_note || undefined,
-            delivery_note: exc?.delivery_note || undefined
+            delivery_note: exc?.delivery_note || undefined,
+            substituted_from: resolvedSubstitutedFrom
         }, ...prev]);
     };
 
@@ -1964,8 +1994,8 @@ function CreateOrderContent() {
 
     const handleKeepDuplicateAsSeparate = () => {
         if (!duplicateConfirm) return;
-        const { product, qty, variantLabel, optionsRaw, unit, factor } = duplicateConfirm;
-        addToCartDirectly(product, qty, variantLabel, optionsRaw, unit, factor, true);
+        const { product, qty, variantLabel, optionsRaw, unit, factor, substitutedFrom } = duplicateConfirm;
+        addToCartDirectly(product, qty, variantLabel, optionsRaw, unit, factor, true, substitutedFrom);
         setDuplicateConfirm(null);
         showToast('Producto agregado como una fila separada.', 'success');
     };
@@ -2294,9 +2324,11 @@ function CreateOrderContent() {
                     pendingQty: baseQty,
                     pendingVariantLabel: variantLabel,
                     pendingUnit: resolvedUnit,
-                    pendingFactor: resolvedFactor
+                    pendingFactor: resolvedFactor,
+                    pendingSubstitutedFrom: substitutedFromProduct || undefined
                 });
                 setSelectedProductForModal(null);
+                setSubstitutedFromProduct(null);
                 setEditingCartIndex(null);
                 setEditingStagedItemId(null);
                 setEditingStagedItemIdx(null);
@@ -2308,6 +2340,7 @@ function CreateOrderContent() {
                     return {
                         ...item,
                         suggestedProduct: selectedProductForModal,
+                        substitutedFromProduct: substitutedFromProduct || undefined,
                         quantity: baseQty,
                         variant_label: variantLabel,
                         selected_options: enrichedOptions,
@@ -2323,6 +2356,7 @@ function CreateOrderContent() {
 
             // Close modal by resetting state
             setSelectedProductForModal(null);
+            setSubstitutedFromProduct(null);
             setEditingCartIndex(null);
             setEditingStagedItemId(null);
             setEditingStagedItemIdx(null);
@@ -2350,6 +2384,8 @@ function CreateOrderContent() {
 
             setCart(prev => prev.map((c, i) => i === editingCartIndex ? {
                 ...c,
+                product: selectedProductForModal,
+                substituted_from: substitutedFromProduct || undefined,
                 qty: baseQty,
                 originalQty: qtyNum,
                 originalUnit: resolvedUnit,
@@ -2365,7 +2401,9 @@ function CreateOrderContent() {
                 variantLabel, 
                 enrichedOptions,
                 resolvedUnit,
-                resolvedFactor
+                resolvedFactor,
+                false,
+                substitutedFromProduct
             );
             closeProductModal();
         }
@@ -2410,6 +2448,9 @@ function CreateOrderContent() {
         setEditingStagedItemIdx(rowIdx);
         setSelectedProductForModal(product);
 
+        const stagedItem = stagedItems.find(item => item.id === stagedId);
+        setSubstitutedFromProduct(stagedItem?.substitutedFromProduct || null);
+
         const exc = clientExceptions.find(e => e.product_id === product.id);
         const mergedOptions: Record<string, string> = (selectedOptionsMap && Object.keys(selectedOptionsMap).length > 0)
             ? { ...(exc?.preferred_options && typeof exc.preferred_options === 'object' ? exc.preferred_options : {}), ...selectedOptionsMap }
@@ -2427,7 +2468,6 @@ function CreateOrderContent() {
         });
         setSelectedOptions(mergedOptions);
         
-        const stagedItem = stagedItems.find(item => item.id === stagedId);
         const effectiveQty = stagedItem ? stagedItem.quantity : qty;
 
         setModalQuantity(effectiveQty);
@@ -2477,9 +2517,10 @@ function CreateOrderContent() {
         const subProd = (rawExc && rawExc.substitution_product_id)
             ? products.find(p => p.id === rawExc.substitution_product_id)
             : null;
+        const substitutedFrom = subProd ? rawProduct : null;
         if (subProd) {
             showToast(`Sustitución del cliente aplicada: "${rawProduct.name}" → "${subProd.name}".`, 'info');
-            setSubstitutedFromProduct(rawProduct);
+            setSubstitutedFromProduct(openModalAfter ? rawProduct : null);
         } else {
             setSubstitutedFromProduct(null);
         }
@@ -2502,12 +2543,13 @@ function CreateOrderContent() {
                 pendingUnit: unit,
                 pendingFactor: factor,
                 pendingVariantLabel: variantLabel,
-                openModalAfterKeep: openModalAfter
+                openModalAfterKeep: openModalAfter,
+                pendingSubstitutedFrom: substitutedFrom || undefined
             });
             return;
         }
 
-        executeSelectStagedProduct(stagedItemId, product, rowIdx, options, qty, openModalAfter, variantLabel, unit, factor);
+        executeSelectStagedProduct(stagedItemId, product, rowIdx, options, qty, openModalAfter, variantLabel, unit, factor, substitutedFrom);
     };
 
     const executeSelectStagedProduct = (
@@ -2519,7 +2561,8 @@ function CreateOrderContent() {
         openModalAfter?: boolean,
         variantLabel?: string,
         unit?: string,
-        factor?: number
+        factor?: number,
+        substitutedFrom?: { id: string; name: string; [key: string]: unknown } | null
     ) => {
         // Pre-poblar Variación Estructurada (2) y Nota de Alistamiento (3) del cliente para el producto seleccionado
         const exc = clientExceptions.find(e => e.product_id === product.id);
@@ -2550,6 +2593,7 @@ function CreateOrderContent() {
                 return {
                     ...item,
                     suggestedProduct: product,
+                    substitutedFromProduct: substitutedFrom || undefined,
                     originalUnit: resolvedUnit,
                     conversion_factor: resolvedFactor,
                     quantity: resolvedQty,
@@ -2578,6 +2622,7 @@ function CreateOrderContent() {
                 item?.originalUnit,
                 item?.conversion_factor
             );
+            setSubstitutedFromProduct(substitutedFrom || null);
         }
     };
 
@@ -2637,7 +2682,7 @@ function CreateOrderContent() {
 
     const handleKeepBothStagedMatches = () => {
         if (!duplicateStagedMatchConfirm) return;
-        const { stagedItemId, product, rowIndex, pendingOptions, pendingQty, openModalAfterKeep, pendingVariantLabel, pendingUnit, pendingFactor } = duplicateStagedMatchConfirm;
+        const { stagedItemId, product, rowIndex, pendingOptions, pendingQty, openModalAfterKeep, pendingVariantLabel, pendingUnit, pendingFactor, pendingSubstitutedFrom } = duplicateStagedMatchConfirm;
         executeSelectStagedProduct(
             stagedItemId,
             product,
@@ -2647,7 +2692,8 @@ function CreateOrderContent() {
             openModalAfterKeep,
             pendingVariantLabel,
             pendingUnit,
-            pendingFactor
+            pendingFactor,
+            pendingSubstitutedFrom
         );
         setDuplicateStagedMatchConfirm(null);
     };
@@ -2727,6 +2773,7 @@ function CreateOrderContent() {
         const item = cart[idx];
         setEditingCartIndex(idx);
         setSelectedProductForModal(item.product);
+        setSubstitutedFromProduct(item.substituted_from || null);
         setModalQuantity(item.originalQty || 1);
         setModalUnit(item.originalUnit || item.product.unit_of_measure || 'Kg');
         setModalFactor(item.conversion_factor || 1);
@@ -3481,6 +3528,7 @@ function CreateOrderContent() {
                     originalUnit: match?.unit_of_measure || 'Kg',
                     conversion_factor: 1,
                     suggestedProduct: match || null,
+                    substitutedFromProduct: (subProduct && rawMatch) ? rawMatch : undefined,
                     confidence: matchResult.confidence,
                     confidenceScore: matchResult.confidenceScore,
                     matchSource: matchResult.matchSource,
@@ -4278,9 +4326,14 @@ function CreateOrderContent() {
                     if (resolvedNote && finalSelectedOpts.nota_alistamiento === undefined) {
                         finalSelectedOpts.nota_alistamiento = resolvedNote;
                     }
+                    const cleanImportAlias = (prodExc?.nickname || '').trim();
+                    const cleanImportProdName = (item.suggestedProduct?.name || '').trim();
+                    const validImportAlias = (cleanImportAlias && cleanImportAlias.toLowerCase() !== cleanImportProdName.toLowerCase()) ? cleanImportAlias : undefined;
 
                     return {
                         product: item.suggestedProduct,
+                        substituted_from: item.substitutedFromProduct || undefined,
+                        nickname: validImportAlias,
                         qty: item.quantity,
                         variant_label: variantLabel,
                         selected_options: finalSelectedOpts,
@@ -5218,7 +5271,7 @@ ${primaryAdminNotes}`.trim();
                     const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
                     const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
                     return {
-                        name: item.product.name + (item.variant_label ? ` (${item.variant_label})` : ''),
+                        name: item.product.name,
                         quantity: qtyNum,
                         price: formatNumber(unitPrice),
                         total: formatNumber(unitPrice * qtyNum)
@@ -9448,6 +9501,28 @@ ${primaryAdminNotes}`.trim();
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                                                             <span>{item.product.name}</span>
+                                                            {item.substituted_from && (
+                                                                <span
+                                                                    onClick={() => startEditingCartItem(idx)}
+                                                                    style={{
+                                                                        fontWeight: '700',
+                                                                        color: '#B45309',
+                                                                        fontSize: '0.8em',
+                                                                        backgroundColor: '#FFFBEB',
+                                                                        padding: '2px 6px',
+                                                                        borderRadius: '4px',
+                                                                        cursor: 'pointer',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '3px',
+                                                                        border: '1px solid #FDE68A'
+                                                                    }}
+                                                                    title={`Sustitución SKU activa (solicitó: ${item.substituted_from.name}). Clic para abrir el modal y revertir al original si lo deseas.`}
+                                                                >
+                                                                    <RefreshCw size={11} strokeWidth={2} />
+                                                                    Sustituye a: {item.substituted_from.name}
+                                                                </span>
+                                                            )}
                                                             {item.variant_label && (
                                                                 <span 
                                                                     onClick={() => startEditingCartItem(idx)}

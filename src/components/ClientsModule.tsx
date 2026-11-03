@@ -9692,34 +9692,124 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const handleExportExcel = async () => {
         const XLSX = await import('xlsx');
         try {
-            // 1. Prepare data for sheet 1: Excepciones y Notas
-            const sheet1Data = products.map(p => {
+            const NA_PLACEHOLDER = '— N/A —';
+            type ProductOptionDef = { name?: string; values?: string[] };
+            type ProductItem = {
+                id: string;
+                name?: string;
+                accounting_id?: string | number | null;
+                options_config?: ProductOptionDef[];
+            };
+            const typedProducts = products as ProductItem[];
+            const sortedProducts = [...typedProducts].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            const catalogRangeEnd = Math.max(2, sortedProducts.length + 1);
+
+            const findProductOpt = (p: ProductItem, matchKey: string): ProductOptionDef | undefined =>
+                (p.options_config || []).find((opt: ProductOptionDef) =>
+                    (opt.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(matchKey)
+                );
+
+            // Map of formula1 -> list of cell coordinates for native OpenXML <dataValidations>
+            const dvBuckets = new Map<string, string[]>();
+            const addDvRule = (cellRef: string, allowedValues: string[]) => {
+                const sanitized = allowedValues
+                    .map(v => String(v).replace(/"/g, '""').replace(/,/g, ';').trim())
+                    .filter(Boolean);
+                const tokens = sanitized.length > 0 ? sanitized : [NA_PLACEHOLDER];
+                const fittedTokens: string[] = [];
+                let currentLen = 0;
+                for (const tok of tokens) {
+                    const nextLen = fittedTokens.length === 0 ? tok.length : currentLen + 1 + tok.length;
+                    if (nextLen <= 250) {
+                        fittedTokens.push(tok);
+                        currentLen = nextLen;
+                    } else {
+                        break;
+                    }
+                }
+                const formulaStr = `"${fittedTokens.length > 0 ? fittedTokens.join(',') : NA_PLACEHOLDER}"`;
+                const bucket = dvBuckets.get(formulaStr) || [];
+                bucket.push(cellRef);
+                dvBuckets.set(formulaStr, bucket);
+            };
+
+            const extraSuffixByRow: string[] = [];
+
+            // 1. Prepare data for Sheet 1: Excepciones y Notas (A..M Poka-Yoke Matrix)
+            const sheet1Data = sortedProducts.map((p, idx) => {
+                const rowNum = idx + 2;
                 const exc = exceptions.find(e => e.product_id === p.id);
-                const subProduct = exc?.substitution_product_id ? products.find(prod => prod.id === exc.substitution_product_id) : null;
-                
+                const subProduct = exc?.substitution_product_id ? typedProducts.find(prod => prod.id === exc.substitution_product_id) : null;
+
+                const presOpt = findProductOpt(p, 'presentaci');
+                const madOpt = findProductOpt(p, 'maduraci');
+                const tamOpt = findProductOpt(p, 'tamano');
+                const graOpt = findProductOpt(p, 'gramaje');
+
+                const prefOpts: Record<string, string> = (exc?.preferred_options && typeof exc.preferred_options === 'object')
+                    ? (exc.preferred_options as Record<string, string>)
+                    : {};
+
+                const valPres = presOpt?.name ? (prefOpts[presOpt.name] || '') : NA_PLACEHOLDER;
+                const valMad = madOpt?.name ? (prefOpts[madOpt.name] || '') : NA_PLACEHOLDER;
+                const valTam = tamOpt?.name ? (prefOpts[tamOpt.name] || '') : NA_PLACEHOLDER;
+                const valGra = graOpt?.name ? (prefOpts[graOpt.name] || '') : NA_PLACEHOLDER;
+
+                addDvRule(`E${rowNum}`, presOpt?.values || [NA_PLACEHOLDER]);
+                addDvRule(`F${rowNum}`, madOpt?.values || [NA_PLACEHOLDER]);
+                addDvRule(`G${rowNum}`, tamOpt?.values || [NA_PLACEHOLDER]);
+                addDvRule(`H${rowNum}`, graOpt?.values || [NA_PLACEHOLDER]);
+
+                const handledKeys = new Set<string>(
+                    [presOpt?.name, madOpt?.name, tamOpt?.name, graOpt?.name].filter((k): k is string => Boolean(k))
+                );
+                const extraEntries = Object.entries(prefOpts)
+                    .filter(([k, v]) => !handledKeys.has(k) && Boolean(String(v ?? '').trim()))
+                    .map(([k, v]) => `${k}: ${v}`);
+                extraSuffixByRow.push(extraEntries.join(' | '));
+
                 let varString = '';
-                if (exc?.preferred_options && Object.keys(exc.preferred_options).length > 0) {
-                    varString = Object.entries(exc.preferred_options)
+                if (Object.keys(prefOpts).length > 0) {
+                    varString = Object.entries(prefOpts)
                         .map(([k, v]) => `${k}: ${v}`)
                         .join(' | ');
                 }
 
+                const hasAnyRule = Boolean(
+                    subProduct ||
+                    varString ||
+                    (exc?.picking_note && String(exc.picking_note).trim()) ||
+                    (exc?.nickname && String(exc.nickname).trim()) ||
+                    (exc?.delivery_note && String(exc.delivery_note).trim())
+                );
+
                 return {
                     'CODIGO_CONTABLE': p.accounting_id || '',
                     'PRODUCTO': p.name || '',
-                    'NOMBRE_FACTURA': exc?.nickname || '',
+                    'SUSTITUTO_CODIGO_CONTABLE': subProduct?.accounting_id || '',
+                    'SUSTITUTO_NOMBRE_VALIDADO': subProduct ? (subProduct.name || '') : '',
+                    'VAR_PRESENTACION': valPres,
+                    'VAR_MADURACION': valMad,
+                    'VAR_TAMANO': valTam,
+                    'VAR_GRAMAJE': valGra,
                     'VARIACION_REQUERIDA': varString,
                     'NOTA_PICKING': exc?.picking_note || '',
-                    'SUSTITUTO_CODIGO_CONTABLE': subProduct?.accounting_id || '',
-                    'NOTA_ENTREGA': exc?.delivery_note || ''
+                    'NOMBRE_FACTURA': exc?.nickname || '',
+                    'NOTA_ENTREGA': exc?.delivery_note || '',
+                    'ESTADO_FILA': hasAnyRule ? '✅ CON REGLA ACTIVA' : '⚪ SIN EXCEPCIÓN'
                 };
             });
 
-            // 2. Prepare data for sheet 2: Variantes Estandarizadas
-            const sheet2Data: any[] = [];
-            products.forEach(p => {
+            // 2. Prepare data for Sheet 2: Variantes Estandarizadas (Diccionario de lectura)
+            const sheet2Data: Array<{
+                CODIGO_CONTABLE: string | number;
+                PRODUCTO: string;
+                ATRIBUTO: string;
+                VALORES_PERMITIDOS: string;
+            }> = [];
+            sortedProducts.forEach(p => {
                 if (p.options_config && p.options_config.length > 0) {
-                    p.options_config.forEach((opt: any) => {
+                    p.options_config.forEach((opt: ProductOptionDef) => {
                         sheet2Data.push({
                             'CODIGO_CONTABLE': p.accounting_id || '',
                             'PRODUCTO': p.name || '',
@@ -9732,23 +9822,138 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                         'CODIGO_CONTABLE': p.accounting_id || '',
                         'PRODUCTO': p.name || '',
                         'ATRIBUTO': 'Sin atributos',
-                        'VALORES_PERMITIDOS': 'Producto base'
+                        'VALORES_PERMITIDOS': 'Producto base (Usar NOTA_PICKING para instrucciones)'
                     });
                 }
             });
 
+            // 3. Prepare data for Sheet 3: Catalogo_SKUs (Motor VLOOKUP para SUSTITUTO_NOMBRE_VALIDADO)
+            const sheet3Data = sortedProducts.map(p => ({
+                'CODIGO_CONTABLE': p.accounting_id || '',
+                'PRODUCTO': p.name || ''
+            }));
+
             const wb = XLSX.utils.book_new();
             const ws1 = XLSX.utils.json_to_sheet(sheet1Data);
+
+            // Inject live Excel formulas into Columns D (SUSTITUTO_NOMBRE_VALIDADO), I (VARIACION_REQUERIDA), M (ESTADO_FILA)
+            sortedProducts.forEach((_, idx) => {
+                const r = idx + 2;
+                const rowData = sheet1Data[idx];
+                const extraSuffix = extraSuffixByRow[idx] || '';
+
+                ws1[`D${r}`] = {
+                    t: 's',
+                    f: `IF(C${r}="","",IF(C${r}=A${r},"⚠️ ERROR: MISMO SKU",IFERROR(VLOOKUP(C${r},Catalogo_SKUs!$A$2:$B$${catalogRangeEnd},2,FALSE),"⚠️ ERROR: CÓDIGO NO EXISTE")))`,
+                    v: rowData.SUSTITUTO_NOMBRE_VALIDADO
+                };
+
+                const hasPrevEFGH = `OR(AND(E${r}<>"",E${r}<>"${NA_PLACEHOLDER}"),AND(F${r}<>"",F${r}<>"${NA_PLACEHOLDER}"),AND(G${r}<>"",G${r}<>"${NA_PLACEHOLDER}"),AND(H${r}<>"",H${r}<>"${NA_PLACEHOLDER}"))`;
+                const partE = `IF(AND(E${r}<>"",E${r}<>"${NA_PLACEHOLDER}"),"Presentación: "&E${r},"")`;
+                const partF = `IF(AND(F${r}<>"",F${r}<>"${NA_PLACEHOLDER}"),IF(AND(E${r}<>"",E${r}<>"${NA_PLACEHOLDER}")," | ","")&"Maduración: "&F${r},"")`;
+                const partG = `IF(AND(G${r}<>"",G${r}<>"${NA_PLACEHOLDER}"),IF(OR(AND(E${r}<>"",E${r}<>"${NA_PLACEHOLDER}"),AND(F${r}<>"",F${r}<>"${NA_PLACEHOLDER}"))," | ","")&"Tamaño: "&G${r},"")`;
+                const partH = `IF(AND(H${r}<>"",H${r}<>"${NA_PLACEHOLDER}"),IF(OR(AND(E${r}<>"",E${r}<>"${NA_PLACEHOLDER}"),AND(F${r}<>"",F${r}<>"${NA_PLACEHOLDER}"),AND(G${r}<>"",G${r}<>"${NA_PLACEHOLDER}"))," | ","")&"Gramaje: "&H${r},"")`;
+                const escapedExtra = extraSuffix.replace(/"/g, '""');
+                const partExtra = escapedExtra
+                    ? `&IF(${hasPrevEFGH}," | ${escapedExtra}","${escapedExtra}")`
+                    : '';
+
+                ws1[`I${r}`] = {
+                    t: 's',
+                    f: `${partE}&${partF}&${partG}&${partH}${partExtra}`,
+                    v: rowData.VARIACION_REQUERIDA
+                };
+
+                ws1[`M${r}`] = {
+                    t: 's',
+                    f: `IF(LEFT(D${r},2)="⚠️","❌ ERROR EN SUSTITUTO",IF(OR(C${r}<>"",I${r}<>"",J${r}<>"",K${r}<>"",L${r}<>""),"✅ CON REGLA ACTIVA","⚪ SIN EXCEPCIÓN"))`,
+                    v: rowData.ESTADO_FILA
+                };
+            });
+
+            ws1['!cols'] = [
+                { wch: 18 }, // A: CODIGO_CONTABLE
+                { wch: 34 }, // B: PRODUCTO
+                { wch: 26 }, // C: SUSTITUTO_CODIGO_CONTABLE
+                { wch: 34 }, // D: SUSTITUTO_NOMBRE_VALIDADO
+                { wch: 22 }, // E: VAR_PRESENTACION
+                { wch: 18 }, // F: VAR_MADURACION
+                { wch: 18 }, // G: VAR_TAMANO
+                { wch: 18 }, // H: VAR_GRAMAJE
+                { wch: 36 }, // I: VARIACION_REQUERIDA
+                { wch: 28 }, // J: NOTA_PICKING
+                { wch: 28 }, // K: NOMBRE_FACTURA
+                { wch: 26 }, // L: NOTA_ENTREGA
+                { wch: 24 }  // M: ESTADO_FILA
+            ];
+
             XLSX.utils.book_append_sheet(wb, ws1, 'Excepciones y Notas');
-            
+
             const ws2 = XLSX.utils.json_to_sheet(sheet2Data);
+            ws2['!cols'] = [{ wch: 18 }, { wch: 34 }, { wch: 20 }, { wch: 50 }];
             XLSX.utils.book_append_sheet(wb, ws2, 'Variantes Estandarizadas');
 
-            XLSX.writeFile(wb, `Excepciones_Logisticas_B2B_${clientId.slice(0,8)}.xlsx`);
-            window.showToast?.('Planilla descargada con éxito', 'success');
-        } catch (err: any) {
+            const ws3 = XLSX.utils.json_to_sheet(sheet3Data);
+            ws3['!cols'] = [{ wch: 18 }, { wch: 36 }];
+            XLSX.utils.book_append_sheet(wb, ws3, 'Catalogo_SKUs');
+
+            // Inject OpenXML <dataValidations> into xl/worksheets/sheet1.xml via XLSX.CFB
+            const rawBytes = new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }));
+            const zip = XLSX.CFB.read(rawBytes, { type: 'array' });
+            const sheet1Entry = XLSX.CFB.find(zip, 'Root Entry/xl/worksheets/sheet1.xml');
+
+            if (sheet1Entry && sheet1Entry.content) {
+                const rawContent = sheet1Entry.content;
+                const byteArr = rawContent instanceof Uint8Array
+                    ? rawContent
+                    : new Uint8Array(Array.isArray(rawContent) ? rawContent : []);
+                const xmlStr = new TextDecoder().decode(byteArr);
+                const escapeXmlAttr = (s: string) =>
+                    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+                const dvNodes: string[] = [];
+                dvBuckets.forEach((refs, formulaStr) => {
+                    for (let i = 0; i < refs.length; i += 60) {
+                        const sqref = refs.slice(i, i + 60).join(' ');
+                        const isNaOnly = formulaStr === `"${NA_PLACEHOLDER}"`;
+                        const errTitle = isNaOnly ? 'Atributo no disponible' : 'Opción no válida para este SKU';
+                        const errMsg = isNaOnly
+                            ? 'Este producto no tiene configurada esta dimensión estructurada. Escribe cualquier instrucción especial en la columna NOTA_PICKING.'
+                            : 'Selecciona un valor de la lista desplegable del SKU o escribe instrucciones libres en la columna NOTA_PICKING.';
+                        dvNodes.push(
+                            `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" errorTitle="${errTitle}" error="${errMsg}" sqref="${sqref}"><formula1>${escapeXmlAttr(formulaStr)}</formula1></dataValidation>`
+                        );
+                    }
+                });
+
+                if (dvNodes.length > 0) {
+                    const dvBlock = `<dataValidations count="${dvNodes.length}">${dvNodes.join('')}</dataValidations>`;
+                    const anchorRe = /(<ignoredErrors|<pageMargins|<pageSetup|<headerFooter|<drawing|<\/worksheet>)/;
+                    const patchedXml = anchorRe.test(xmlStr)
+                        ? xmlStr.replace(anchorRe, `${dvBlock}$1`)
+                        : xmlStr.replace('</sheetData>', `</sheetData>${dvBlock}`);
+                    const encoded = new TextEncoder().encode(patchedXml);
+                    sheet1Entry.content = encoded;
+                    sheet1Entry.size = encoded.byteLength;
+                }
+            }
+
+            const finalZipBytes = new Uint8Array(XLSX.CFB.write(zip, { fileType: 'zip', type: 'array' }));
+            const blob = new Blob([finalZipBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Excepciones_Logisticas_B2B_${clientId.slice(0, 8)}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            window.showToast?.('Planilla Poka-Yoke con listas condicionadas por SKU descargada con éxito', 'success');
+        } catch (err: unknown) {
             console.error('Error exporting Excel:', err);
-            window.showToast?.('Error al descargar planilla: ' + err.message, 'error');
+            const errMsg = err instanceof Error ? err.message : String(err);
+            window.showToast?.('Error al descargar planilla: ' + errMsg, 'error');
         }
     };
 
@@ -9767,13 +9972,41 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                     
                     const wsname = wb.SheetNames[0];
                     const ws = wb.Sheets[wsname];
-                    const rawData: any[] = XLSX.utils.sheet_to_json(ws);
+                    const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
                     
                     if (rawData.length === 0) {
                         throw new Error('La planilla está vacía.');
                     }
 
-                    const upsertRows: any[] = [];
+                    const NA_PLACEHOLDER = '— N/A —';
+                    const isMeaningfulCell = (val: unknown): string => {
+                        const s = String(val ?? '').trim();
+                        if (!s || s === NA_PLACEHOLDER || /^[-—]+\s*n\/a\s*[-—]+$/i.test(s) || s.toLowerCase() === 'n/a') {
+                            return '';
+                        }
+                        return s;
+                    };
+
+                    type ProductOptionDef = { name?: string; values?: string[] };
+                    type ProductItem = {
+                        id: string;
+                        name?: string;
+                        accounting_id?: string | number | null;
+                        options_config?: ProductOptionDef[];
+                    };
+                    const typedProducts = products as ProductItem[];
+
+                    const upsertRows: Array<{
+                        id?: string;
+                        customer_id: string;
+                        product_id: string;
+                        nickname: string | null;
+                        picking_note: string | null;
+                        substitution_product_id: string | null;
+                        delivery_note: string | null;
+                        preferred_options: Record<string, string>;
+                    }> = [];
+                    let reclassifiedToPickingCount = 0;
                     
                     for (let i = 0; i < rawData.length; i++) {
                         const row = rawData[i];
@@ -9782,42 +10015,90 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                         const accId = row.CODIGO_CONTABLE;
                         if (accId === undefined || accId === '') continue;
 
-                        const product = products.find(p => String(p.accounting_id) === String(accId));
+                        const product = typedProducts.find(p => String(p.accounting_id) === String(accId).trim());
                         if (!product) {
                             throw new Error(`Fila ${rowNum}: El Código Contable "${accId}" no corresponde a ningún producto activo.`);
                         }
 
-                        const varReq = row.VARIACION_REQUERIDA || '';
+                        const existingExc = exceptions.find(e => e.product_id === product.id);
                         const parsedPrefOptions: Record<string, string> = {};
-                        
-                        if (varReq.trim()) {
-                            const parts = String(varReq).split('|');
-                            for (const part of parts) {
-                                const kv = part.split(':');
-                                if (kv.length !== 2) {
-                                    throw new Error(`Fila ${rowNum}: Formato de variación inválido en "${part}". Debe ser "Atributo: Valor" y estar separado por barra vertical (|).`);
-                                }
-                                const attrName = kv[0].trim();
-                                const attrVal = kv[1].trim();
-                                
-                                const configOpt = product.options_config?.find((opt: any) => opt.name.toLowerCase() === attrName.toLowerCase());
-                                if (!configOpt) {
-                                    throw new Error(`Fila ${rowNum}: El atributo "${attrName}" no está configurado para el producto "${product.name}".`);
-                                }
-                                
-                                const valAllowed = configOpt.values?.find((v: string) => v.toLowerCase() === attrVal.toLowerCase());
-                                if (!valAllowed) {
-                                    throw new Error(`Fila ${rowNum}: El valor "${attrVal}" no es válido para el atributo "${configOpt.name}". Opciones válidas: ${configOpt.values?.join(', ')}.`);
-                                }
+                        const reclassifiedNotes: string[] = [];
 
-                                parsedPrefOptions[configOpt.name] = valAllowed;
+                        const tryAssignStructuredOrReclassify = (attrHint: string, rawVal: unknown) => {
+                            const cleanVal = isMeaningfulCell(rawVal);
+                            if (!cleanVal) return;
+
+                            const normHint = attrHint.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const configOpt = product.options_config?.find((opt: ProductOptionDef) => {
+                                const optNorm = (opt.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                return Boolean(normHint) && (optNorm === normHint || optNorm.includes(normHint) || normHint.includes(optNorm));
+                            }) || (!normHint ? product.options_config?.find((opt: ProductOptionDef) =>
+                                opt.values?.some((v: string) => {
+                                    const cleanV = String(v).includes('|') ? String(v).split('|')[0].trim() : String(v).trim();
+                                    return v.toLowerCase() === cleanVal.toLowerCase() || cleanV.toLowerCase() === cleanVal.toLowerCase();
+                                })
+                            ) : undefined);
+
+                            if (configOpt && configOpt.name) {
+                                const valAllowed = configOpt.values?.find((v: string) => {
+                                    const cleanV = String(v).includes('|') ? String(v).split('|')[0].trim() : String(v).trim();
+                                    return v.toLowerCase() === cleanVal.toLowerCase() || cleanV.toLowerCase() === cleanVal.toLowerCase();
+                                });
+                                if (valAllowed) {
+                                    if (!(configOpt.name.toLowerCase().includes('madura') && /^madur[oa]$/i.test(valAllowed))) {
+                                        parsedPrefOptions[configOpt.name] = valAllowed;
+                                    }
+                                    return;
+                                }
+                            }
+
+                            // Regla SDD v1.9.350 (Escenario 367): Si no es una opción posible de este SKU en options_config, se trata automáticamente como Nota de Alistamiento (Tipo 3)
+                            const fallbackNote = cleanVal;
+                            if (fallbackNote && !/^madur[oa]s?$/i.test(fallbackNote) && !reclassifiedNotes.includes(fallbackNote)) {
+                                reclassifiedNotes.push(fallbackNote);
+                            }
+                        };
+
+                        // 1. Leer columnas dedicadas Poka-Yoke (E..H)
+                        tryAssignStructuredOrReclassify('Presentación', row.VAR_PRESENTACION);
+                        tryAssignStructuredOrReclassify('Maduración', row.VAR_MADURACION);
+                        tryAssignStructuredOrReclassify('Tamaño', row.VAR_TAMANO);
+                        tryAssignStructuredOrReclassify('Gramaje', row.VAR_GRAMAJE);
+
+                        // 2. Leer columna consolidada VARIACION_REQUERIDA (retrocompatible con plantillas previas o edición directa)
+                        const varReq = isMeaningfulCell(row.VARIACION_REQUERIDA);
+                        if (varReq) {
+                            const parts = varReq.split('|');
+                            for (const part of parts) {
+                                const trimmedPart = part.trim();
+                                if (!trimmedPart) continue;
+                                const kv = trimmedPart.split(':');
+                                if (kv.length >= 2) {
+                                    tryAssignStructuredOrReclassify(kv[0].trim(), kv.slice(1).join(':').trim());
+                                } else {
+                                    tryAssignStructuredOrReclassify('', trimmedPart);
+                                }
                             }
                         }
 
-                        let substitutionProductId = null;
-                        const subAccId = row.SUSTITUTO_CODIGO_CONTABLE;
-                        if (subAccId !== undefined && subAccId !== '') {
-                            const subProduct = products.find(p => String(p.accounting_id) === String(subAccId));
+                        // 3. Preservar en roundtrip cualquier dimensión extra previa en DB que no esté en las 4 columnas (Presentación, Maduración, Tamaño, Gramaje)
+                        if (existingExc?.preferred_options && typeof existingExc.preferred_options === 'object') {
+                            const existingPrefs = existingExc.preferred_options as Record<string, string>;
+                            const isFourColKey = (k: string) => {
+                                const nk = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                return nk.includes('presentaci') || nk.includes('maduraci') || nk.includes('tamano') || nk.includes('gramaje');
+                            };
+                            for (const [k, v] of Object.entries(existingPrefs)) {
+                                if (!isFourColKey(k) && !(k in parsedPrefOptions)) {
+                                    tryAssignStructuredOrReclassify(k, v);
+                                }
+                            }
+                        }
+
+                        let substitutionProductId: string | null = null;
+                        const subAccId = isMeaningfulCell(row.SUSTITUTO_CODIGO_CONTABLE);
+                        if (subAccId !== '') {
+                            const subProduct = typedProducts.find(p => String(p.accounting_id) === String(subAccId));
                             if (!subProduct) {
                                 throw new Error(`Fila ${rowNum}: El Código Contable del Sustituto "${subAccId}" no corresponde a ningún producto activo.`);
                             }
@@ -9827,19 +10108,28 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                             substitutionProductId = subProduct.id;
                         }
 
-                        const nickname = String(row.NOMBRE_FACTURA || '').trim();
-                        const pickingNote = String(row.NOTA_PICKING || '').trim();
-                        const deliveryNote = String(row.NOTA_ENTREGA || '').trim();
+                        const nickname = isMeaningfulCell(row.NOMBRE_FACTURA);
+                        const rawExplicitPicking = isMeaningfulCell(row.NOTA_PICKING);
+                        const deliveryNote = isMeaningfulCell(row.NOTA_ENTREGA);
 
-                        const existingExc = exceptions.find(e => e.product_id === product.id);
+                        const allPickingParts = [rawExplicitPicking, ...reclassifiedNotes].filter(Boolean);
+                        const combinedPickingRaw = Array.from(new Set(allPickingParts)).join(', ').trim();
+                        const cleanPickingNote = (/^(madur[oa]s?)$/i.test(combinedPickingRaw) || (Object.keys(parsedPrefOptions).length > 0 && /^(pint[oó]n[ae]?s?|verdes?|muy\s*verde|grandes?|muy\s*grande|med|median[oa]s?|peq|peque[ñn][oa]s?|jumbo|bandeja|a\s*granel|unidad|(?:und(?:\.|idad)?\s*[x*]?\s*|de\s*|[x*]\s*)?\d{2,4}\s*(?:grs?\.?|gramos?|g)?|(?:mad\s*)?und\s*x\s*1\.8\s*kg)$/i.test(combinedPickingRaw)))
+                            ? ''
+                            : combinedPickingRaw;
 
-                        if (nickname || pickingNote || deliveryNote || Object.keys(parsedPrefOptions).length > 0 || substitutionProductId) {
+                        if (cleanPickingNote && reclassifiedNotes.length > 0) {
+                            const survivingReclassified = reclassifiedNotes.filter(note => cleanPickingNote.includes(note));
+                            reclassifiedToPickingCount += survivingReclassified.length;
+                        }
+
+                        if (nickname || cleanPickingNote || deliveryNote || Object.keys(parsedPrefOptions).length > 0 || substitutionProductId) {
                             upsertRows.push({
                                 id: existingExc?.id || undefined,
                                 customer_id: clientId,
                                 product_id: product.id,
                                 nickname: nickname || null,
-                                picking_note: pickingNote || null,
+                                picking_note: cleanPickingNote || null,
                                 substitution_product_id: substitutionProductId,
                                 delivery_note: deliveryNote || null,
                                 preferred_options: parsedPrefOptions
@@ -9857,11 +10147,15 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                         if (upsertErr) throw upsertErr;
                     }
 
-                    window.showToast?.('Planilla cargada y excepciones sincronizadas con éxito', 'success');
+                    const successMsg = reclassifiedToPickingCount > 0
+                        ? `Planilla sincronizada con éxito (${reclassifiedToPickingCount} especificación(es) fuera del catálogo del SKU se guardaron como Nota de Alistamiento).`
+                        : 'Planilla cargada y excepciones sincronizadas con éxito';
+                    window.showToast?.(successMsg, 'success');
                     fetchData();
-                } catch (err: any) {
+                } catch (err: unknown) {
                     console.error('Error parsing sheet:', err);
-                    window.showToast?.(err.message || 'Error al procesar planilla', 'error');
+                    const errMsg = err instanceof Error ? err.message : 'Error al procesar planilla';
+                    window.showToast?.(errMsg, 'error');
                 } finally {
                     setLoading(false);
                     e.target.value = '';

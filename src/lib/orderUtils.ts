@@ -421,6 +421,46 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
             const weightStr = gr >= 1000 ? `${gr / 1000} kg` : `${gr} gr`;
             const isBandeja = /bandeja/i.test(pres);
             discretePart = `${count} ${isBandeja ? 'bandeja' : 'und'} de ${weightStr}`;
+        } else {
+            // Si Presentación no tiene peso en gramos/kilos (ej. "Bandeja", "Atado", "Unidad"), conservarla si no es "Kg"/"Estándar" ni redundante
+            const rawPresOnly = typeof (opts['Presentación'] || opts['Presentacion']) === 'string'
+                ? String(opts['Presentación'] || opts['Presentacion']).trim()
+                : '';
+            const cleanPresOnly = (rawPresOnly.includes('|') ? rawPresOnly.split('|')[0] : rawPresOnly).trim();
+            const lowerPresOnly = cleanPresOnly.toLowerCase();
+            if (
+                cleanPresOnly &&
+                lowerPresOnly !== 'kg' &&
+                lowerPresOnly !== 'kilo' &&
+                lowerPresOnly !== 'kilogramo' &&
+                lowerPresOnly !== 'estandar' &&
+                lowerPresOnly !== 'estándar' &&
+                !isRedundantAttribute(cleanPresOnly, prodName)
+            ) {
+                attributeParts.push(cleanPresOnly);
+            }
+
+            // Fallback 1.2: Gramaje explícito en selected_options (4.ª dimensión de products.options_config)
+            const rawGramaje = (opts['Gramaje'] || opts['gramaje'] || opts['Gramaje frutas'] || '');
+            const gramajeStr = typeof rawGramaje === 'string' ? rawGramaje.trim() : '';
+            if (gramajeStr && gramajeStr.toLowerCase() !== 'estándar' && gramajeStr.toLowerCase() !== 'estandar') {
+                const matchExplicitGr = gramajeStr.match(/(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)\b/i);
+                if (matchExplicitGr) {
+                    const gr = parseFloat(matchExplicitGr[1].replace(',', '.'));
+                    if (gr > 0) {
+                        const kgPerUnit = gr / 1000;
+                        const currentQty = Number(item.quantity) || 1;
+                        const currentUnit = (item.unit || 'kg').toLowerCase();
+                        const count = (currentUnit.includes('kg') || currentUnit.includes('kilo'))
+                            ? Math.max(1, Math.round(currentQty / kgPerUnit))
+                            : Math.max(1, Math.round(currentQty));
+                        const weightStr = gr >= 1000 ? `${gr / 1000} kg` : `${gr} gr`;
+                        discretePart = `${count} und de ${weightStr}`;
+                    }
+                } else if (!attributeParts.includes(gramajeStr)) {
+                    attributeParts.push(gramajeStr);
+                }
+            }
         }
     }
 

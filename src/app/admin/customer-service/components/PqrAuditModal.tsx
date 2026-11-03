@@ -1115,8 +1115,13 @@ export default function PqrAuditModal({
                     .from('order_items')
                     .update({
                         product_id: substituteProduct.id,
-                        nickname: `${substituteProduct.name} [Sustitución HORECA de ${targetItem.products?.name || 'original'}]`,
-                        variant_label: `Sustituido en Muelle / Bodega`
+                        nickname: null,
+                        variant_label: null,
+                        selected_options: {
+                            ...(targetItem.selected_options?.nota_alistamiento ? { nota_alistamiento: targetItem.selected_options.nota_alistamiento } : {}),
+                            _substituted_from: targetItem.products?.name || 'original',
+                            _substituted_in_pqr: pqr.id
+                        }
                     })
                     .eq('id', targetItem.id);
             }
@@ -1280,8 +1285,9 @@ export default function PqrAuditModal({
                     product_id: targetItem.product_id,
                     quantity: targetItem.quantity,
                     unit_price: targetItem.unit_price || 0,
-                    nickname: targetItem.nickname || targetItem.products?.name,
-                    variant_label: `Anexado desde PQR #${pqr.id.substring(0, 8)} (Próximo Pedido)`
+                    nickname: (targetItem.nickname && targetItem.nickname.trim().toLowerCase() !== (targetItem.products?.name || '').trim().toLowerCase()) ? targetItem.nickname.trim() : null,
+                    variant_label: targetItem.variant_label || null,
+                    selected_options: { ...(targetItem.selected_options || {}), _appended_from_pqr: pqr.id.substring(0, 8) }
                 }]);
 
                 await supabase.from('order_items').delete().eq('id', targetItem.id);

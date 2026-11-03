@@ -19,7 +19,7 @@ import {
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { getFriendlyOrderId, resolvePhysicalInstruction } from '@/lib/orderUtils';
+import { getFriendlyOrderId } from '@/lib/orderUtils';
 import Letterhead from '@/components/Letterhead';
 import { printViaNewWindow } from '@/components/print';
 

@@ -989,12 +989,22 @@ function OrderLoadingContent() {
 
     const handleExecuteReassignment = async () => {
         if (!selectedOrder || !reassignSelectedClient) return;
-        if (!reassignReason.trim()) {
-            alert('Por favor indica el motivo o justificación de la reasignación para auditoría.');
+        if (reassignReason.trim().length < 4) {
+            const msg = 'Por favor escribe el motivo o justificación de la reasignación (mínimo 4 caracteres).';
+            if (typeof window !== 'undefined' && (window as unknown as { showToast?: (m: string, t: string) => void }).showToast) {
+                (window as unknown as { showToast: (m: string, t: string) => void }).showToast(msg, 'error');
+            } else {
+                alert(msg);
+            }
             return;
         }
         if (!reassignConfirmedCheck) {
-            alert('Debes marcar la casilla de confirmación para proceder con la reasignación.');
+            const msg = 'Debes marcar la casilla de confirmación inferior ("Confirmo bajo mi responsabilidad...") para proceder.';
+            if (typeof window !== 'undefined' && (window as unknown as { showToast?: (m: string, t: string) => void }).showToast) {
+                (window as unknown as { showToast: (m: string, t: string) => void }).showToast(msg, 'error');
+            } else {
+                alert(msg);
+            }
             return;
         }
 
@@ -1002,7 +1012,7 @@ function OrderLoadingContent() {
         try {
             const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
             const nowDateStr = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const operatorName = profile?.contact_name || (profile as any)?.email || currentUser?.email || 'Mesa de Control';
+            const operatorName = profile?.contact_name || (profile as unknown as { email?: string })?.email || currentUser?.email || 'Mesa de Control';
 
             const isNewClientB2C = reassignSelectedClient.role === 'b2c_client' || (reassignSelectedClient.role === 'client' && !reassignSelectedClient.is_corporate_parent && !reassignSelectedClient.parent_id);
             const newOrderType = isNewClientB2C ? 'b2c' : 'b2b';
@@ -1037,12 +1047,10 @@ function OrderLoadingContent() {
                 throw new Error(`Error en orders: ${orderError.message}`);
             }
 
-            // 2. Insert into order_audit_logs for immutable trace
+            // 2. Insert into order_audit_logs for immutable trace (SDD v1.9.351 Escenario 368: real schema columns)
             const auditLog = {
                 order_id: selectedOrder.id,
-                changed_by: currentUser?.id || null,
-                change_type: 'client_reassignment',
-                reason: reassignReason.trim(),
+                action: 'CLIENT_REASSIGNMENT',
                 old_data: {
                     user_id: selectedOrder.user_id || selectedOrder.profiles?.id,
                     type: selectedOrder.type,
@@ -1061,7 +1069,10 @@ function OrderLoadingContent() {
                     customer_phone: reassignSelectedClient.phone || reassignSelectedClient.contact_phone,
                     shipping_address: newAddress,
                     latitude: newLat,
-                    longitude: newLng
+                    longitude: newLng,
+                    changed_by: currentUser?.id || null,
+                    operator_name: operatorName,
+                    reason: reassignReason.trim()
                 }
             };
             const { error: auditErr } = await supabase.from('order_audit_logs').insert([auditLog]);
@@ -7636,7 +7647,7 @@ useEffect(() => {
                             </div>
 
                             {/* Modal Body */}
-                            <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            <div style={{ padding: reassignStep === 'confirm' ? '1rem 1.5rem' : '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: reassignStep === 'confirm' ? '0.75rem' : '1.25rem' }}>
                                 {reassignStep === 'search' ? (
                                     <>
                                         {/* Current Client Banner */}
@@ -7912,37 +7923,37 @@ useEffect(() => {
                                     </>
                                 ) : (
                                     <>
-                                        {/* Step 2: Double Confirmation Screen */}
-                                        <div style={{ backgroundColor: '#FEF3C7', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #FCD34D' }}>
-                                            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#92400E', lineHeight: '1.4', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                                <AlertTriangle size={18} strokeWidth={2.5} style={{ color: '#D97706', flexShrink: 0, marginTop: '2px' }} />
-                                                <span><span style={{ textDecoration: 'underline' }}>{profile?.contact_name || (profile as any)?.email?.split('@')[0] || currentUser?.email?.split('@')[0] || 'Operador'}</span>, ¿estás seguro de que deseas reasignar este pedido a otro cliente?</span>
+                                        {/* Step 2: Double Confirmation Screen (SDD v1.9.351 Escenario 368: Compact Above-the-Fold) */}
+                                        <div style={{ backgroundColor: '#FEF3C7', padding: '0.7rem 1rem', borderRadius: '12px', border: '1px solid #FCD34D' }}>
+                                            <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: '#92400E', lineHeight: '1.35', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                <AlertTriangle size={17} strokeWidth={2.5} style={{ color: '#D97706', flexShrink: 0, marginTop: '1px' }} />
+                                                <span><span style={{ textDecoration: 'underline' }}>{profile?.contact_name || (profile as unknown as { email?: string })?.email?.split('@')[0] || currentUser?.email?.split('@')[0] || 'Operador'}</span>, ¿estás seguro de que deseas reasignar este pedido a otro cliente?</span>
                                             </p>
-                                            <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#B45309', lineHeight: '1.3' }}>
+                                            <p style={{ margin: '4px 0 0', fontSize: '0.74rem', color: '#B45309', lineHeight: '1.25' }}>
                                                 Esta acción cambiará la titularidad comercial, los datos fiscales y la dirección de entrega asignada a este pedido, y quedará registrada de forma inmutable en el historial de auditoría.
                                             </p>
                                         </div>
 
                                         {/* Comparison Origin -> Destination */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '0.75rem', alignItems: 'center' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '0.6rem', alignItems: 'center' }}>
                                             {/* Origen */}
                                             {(() => {
                                                 const isOrigB2B = selectedOrder.type?.startsWith('b2b') || selectedOrder.profiles?.role === 'b2b_client';
                                                 return (
-                                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                                    <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.85rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Origen (Actual)</div>
-                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isOrigB2B ? '#EEF2FF' : '#FCE7F3', color: isOrigB2B ? '#4F46E5' : '#BE185D', border: `1px solid ${isOrigB2B ? '#E0E7FF' : '#FBCFE8'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Origen (Actual)</div>
+                                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isOrigB2B ? '#EEF2FF' : '#FCE7F3', color: isOrigB2B ? '#4F46E5' : '#BE185D', border: `1px solid ${isOrigB2B ? '#E0E7FF' : '#FBCFE8'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                 {isOrigB2B ? <><Building2 size={10} style={{ flexShrink: 0 }} /> Institucional</> : <><Home size={10} style={{ flexShrink: 0 }} /> Hogar</>}
                                                             </span>
                                                         </div>
-                                                        <div style={{ fontWeight: '800', color: '#334155', fontSize: '0.88rem', marginTop: '4px' }}>
+                                                        <div style={{ fontWeight: '800', color: '#334155', fontSize: '0.82rem', marginTop: '3px', lineHeight: '1.25' }}>
                                                             {selectedOrder.customer_name}
                                                         </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '3px' }}>
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
                                                             {selectedOrder.customer_nit ? `NIT: ${selectedOrder.customer_nit}` : selectedOrder.customer_phone ? `Tel: ${selectedOrder.customer_phone}` : 'Doc: N/A'}
                                                         </div>
-                                                        <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '3px' }}>
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
                                                             {selectedOrder.shipping_address || 'Sin dirección'}
                                                         </div>
                                                     </div>
@@ -7950,7 +7961,7 @@ useEffect(() => {
                                             })()}
 
                                             <div style={{ display: 'flex', justifyContent: 'center', color: '#0D7A57' }}>
-                                                <ArrowRight size={24} strokeWidth={2.5} />
+                                                <ArrowRight size={20} strokeWidth={2.5} />
                                             </div>
 
                                             {/* Destino */}
@@ -7960,17 +7971,17 @@ useEffect(() => {
                                                 const destPhone = reassignSelectedClient.contact_phone || reassignSelectedClient.phone;
 
                                                 return (
-                                                    <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '12px', border: '1.5px solid #86EFAC' }}>
+                                                    <div style={{ backgroundColor: '#ECFDF5', padding: '0.75rem 0.85rem', borderRadius: '10px', border: '1.5px solid #86EFAC' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Destino (Nuevo)</div>
-                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isNewB2C ? '#FCE7F3' : '#EEF2FF', color: isNewB2C ? '#BE185D' : '#4F46E5', border: `1px solid ${isNewB2C ? '#FBCFE8' : '#E0E7FF'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Destino (Nuevo)</div>
+                                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isNewB2C ? '#FCE7F3' : '#EEF2FF', color: isNewB2C ? '#BE185D' : '#4F46E5', border: `1px solid ${isNewB2C ? '#FBCFE8' : '#E0E7FF'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                 {isNewB2C ? <><Home size={10} style={{ flexShrink: 0 }} /> Hogar</> : <><Building2 size={10} style={{ flexShrink: 0 }} /> Institucional</>}
                                                             </span>
                                                         </div>
-                                                        <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.88rem', marginTop: '4px' }}>
+                                                        <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.82rem', marginTop: '3px', lineHeight: '1.25' }}>
                                                             {destName}
                                                         </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#047857', marginTop: '3px' }}>
+                                                        <div style={{ fontSize: '0.72rem', color: '#047857', marginTop: '2px' }}>
                                                             {isNewB2C ? (
                                                                 <>
                                                                     {destPhone && <span>Tel: {destPhone} • </span>}
@@ -7980,7 +7991,7 @@ useEffect(() => {
                                                                 <>NIT: {reassignSelectedClient.nit || 'N/A'}</>
                                                             )}
                                                         </div>
-                                                        <div style={{ fontSize: '0.72rem', color: '#047857', marginTop: '3px' }}>
+                                                        <div style={{ fontSize: '0.7rem', color: '#047857', marginTop: '2px' }}>
                                                             {reassignSelectedClient.address || 'Sin dirección registrada'}
                                                         </div>
                                                     </div>
@@ -7990,20 +8001,21 @@ useEffect(() => {
 
                                         {/* Reason Input */}
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#1E293B', marginBottom: '6px' }}>
+                                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '800', color: '#1E293B', marginBottom: '4px' }}>
                                                 Motivo o Justificación de la Reasignación <span style={{ color: '#EF4444' }}>*</span>:
                                             </label>
                                             <textarea 
                                                 value={reassignReason}
                                                 onChange={(e) => setReassignReason(e.target.value)}
                                                 rows={2}
+                                                autoFocus
                                                 placeholder="Ej: Se seleccionó una sucursal equivocada durante la toma de pedido comercial..."
                                                 style={{
                                                     width: '100%',
-                                                    padding: '10px 12px',
+                                                    padding: '8px 10px',
                                                     borderRadius: '10px',
-                                                    border: '1.5px solid #CBD5E1',
-                                                    fontSize: '0.85rem',
+                                                    border: reassignReason.trim().length >= 4 ? '1.5px solid #86EFAC' : '1.5px solid #CBD5E1',
+                                                    fontSize: '0.82rem',
                                                     outline: 'none',
                                                     resize: 'none',
                                                     fontWeight: '600'
@@ -8012,15 +8024,15 @@ useEffect(() => {
                                         </div>
 
                                         {/* Security Checkbox */}
-                                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', padding: '0.75rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', padding: '0.65rem 0.85rem', backgroundColor: reassignConfirmedCheck ? '#ECFDF5' : '#FFFBEB', borderRadius: '10px', border: reassignConfirmedCheck ? '1.5px solid #86EFAC' : '1.5px solid #FCD34D' }}>
                                             <input 
                                                 type="checkbox"
                                                 checked={reassignConfirmedCheck}
                                                 onChange={(e) => setReassignConfirmedCheck(e.target.checked)}
-                                                style={{ width: '18px', height: '18px', marginTop: '2px', cursor: 'pointer' }}
+                                                style={{ width: '18px', height: '18px', marginTop: '1px', cursor: 'pointer', flexShrink: 0 }}
                                             />
-                                            <span style={{ fontSize: '0.78rem', color: '#334155', fontWeight: '700', lineHeight: '1.3' }}>
-                                                Confirmo bajo mi responsabilidad que he verificado que este pedido debe entregarse al nuevo cliente / sucursal y asumo el registro de auditoría.
+                                            <span style={{ fontSize: '0.76rem', color: '#1E293B', fontWeight: '700', lineHeight: '1.3' }}>
+                                                Confirmo bajo mi responsabilidad que he verificado que este pedido debe entregarse al nuevo cliente / sucursal y asumo el registro de auditoría. <span style={{ color: '#EF4444' }}>*</span>
                                             </span>
                                         </label>
                                     </>
@@ -8028,7 +8040,7 @@ useEffect(() => {
                             </div>
 
                             {/* Modal Footer */}
-                            <div style={{ padding: '1rem 1.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                            <div style={{ padding: '0.85rem 1.5rem', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
                                 {reassignStep === 'confirm' ? (
                                     <>
                                         <button 
@@ -8042,15 +8054,15 @@ useEffect(() => {
                                         <button 
                                             type="button"
                                             onClick={handleExecuteReassignment}
-                                            disabled={isReassigning || !reassignConfirmedCheck || reassignReason.trim().length < 4}
+                                            disabled={isReassigning}
                                             style={{
                                                 padding: '9px 24px',
                                                 borderRadius: '10px',
                                                 border: 'none',
-                                                backgroundColor: (reassignConfirmedCheck && reassignReason.trim().length >= 4) ? '#0D7A57' : '#94A3B8',
+                                                backgroundColor: (reassignConfirmedCheck && reassignReason.trim().length >= 4) ? '#0D7A57' : '#64748B',
                                                 color: 'white',
                                                 fontWeight: '800',
-                                                cursor: (reassignConfirmedCheck && reassignReason.trim().length >= 4 && !isReassigning) ? 'pointer' : 'not-allowed',
+                                                cursor: isReassigning ? 'not-allowed' : 'pointer',
                                                 fontSize: '0.85rem',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
