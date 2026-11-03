@@ -13670,3 +13670,22 @@ Durante las pruebas operativas del Asistente Guiado de Despacho Manual (BCP) en 
 4. **Restitución del Membrete Oficial en Manifiesto de Despacho (`contingency-print/page.tsx`):**
    - Se activa `showHeader={true}` en el membrete de tamaño Oficio legal, garantizando el encabezado institucional con logo, razón social, fecha programada, referencia de paradas y distintivo *"DESPACHO Y RUTA"*.
 
+### Escenario 372: Poda Radical de Grasa y Rediseño Raptor 3 en Modal de Lanzamiento Logístico (`loading/page.tsx`) (SDD v1.9.355)
+
+#### 1. Contexto y Hallazgos del Gemba (Doctrina SpaceX: «The best part is no part»)
+En la pantalla de cargue y consolidación de pedidos (`/admin/orders/loading`), el modal de confirmación de lanzamiento de tanda presentaba severa sobre-ingeniería cosmética y de layout:
+1. **Desbordamiento Vertical Crítico:** `padding: 2.5rem`, tarjetas anidadas en cascada y textos duplicados forzaban un scroll vertical continuo en pantallas estándar (1366×768 / 1440×900), obligando al operador a desplazar la vista para encontrar los botones de acción primarios.
+2. **Bifurcación Ficticia y Redundante:** Un selector toggle (*Modo Digital* vs *Modo Manual*) escondía acordeones con explicaciones de 4 pasos por un lado y 4 tarjetas de enlaces por el otro, cuando en la práctica operativa existen exactamente dos vías canónicas: (A) Entrar al Asistente Guiado de 4 Pasos (operación en piso con bahías y papel), o (B) Lanzamiento directo a tablets/sistema (`para_compra`) sin asistente.
+3. **Poda de 505 Líneas de Grasa:** Se eliminó la duplicidad de enlaces auxiliares dispersos, se redujo el sobre-empaque y se unificó la telemetría en una sola línea.
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Garantía 100% Above-the-Fold (`src/app/admin/orders/loading/page.tsx`):**
+   - Modal re-estructurado con `maxWidth: '840px'`, `padding: '1.25rem 1.5rem'`, `gap: '0.85rem'`, visible por completo sin scroll vertical.
+2. **Franja Unificada de Telemetría (Single-Decker HUD):**
+   - 4 métricas canónicas en 1 fila: (1) Pedidos y Sedes, (2) Segmentación B2B/B2C, (3) Peso Total Estimado en Kg, y (4) Facturación Bruta en COP, acompañada de la insignia de cobertura 100% o alerta de pendientes.
+3. **Arquitectura Lado a Lado de 2 Vías de Despacho (Raptor 3 Two-Lane Launchpad):**
+   - **Vía A (Asistente de Planta Poka-Yoke):** Tarjeta ejecutiva oscura destacada con botón dorado directo: `[INICIAR ASISTENTE (4 PASOS) ->]`.
+   - **Vía B (Modo Digital Sin Papel):** Tarjeta limpia secundaria con botón directo: `[Lanzar Directo a Compra]`.
+4. **Barra Inferior de Seguridad y Contingencia:**
+   - Enlace discreto a `Kit 1-Clic Completo` para imprimir en bloque ante emergencias, y botón de retorno `Revisar de nuevo`.
+

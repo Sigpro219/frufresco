@@ -44,6 +44,7 @@ import {
     Sparkles, 
     HelpCircle,
     FileText,
+    Layers,
     Eye,
     MapPin,
     Scale,
@@ -4689,567 +4690,280 @@ useEffect(() => {
                     return (
                         <div style={{
                             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.65)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            zIndex: 2000, backdropFilter: 'blur(8px)', padding: '1.5rem'
+                            zIndex: 2000, backdropFilter: 'blur(6px)', padding: '1rem'
                         }} onClick={() => setShowConfirmModal(false)}>
                             <div style={{
                                 backgroundColor: '#FFFFFF',
-                                borderRadius: '24px',
-                                width: '95%',
-                                maxWidth: '980px',
-                                maxHeight: '90vh',
+                                borderRadius: '20px',
+                                width: '100%',
+                                maxWidth: '840px',
+                                maxHeight: '92vh',
                                 overflowY: 'auto',
-                                padding: '2.5rem',
-                                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.05)',
-                                display: 'flex', flexDirection: 'column', gap: '1.5rem',
+                                padding: '1.25rem 1.5rem',
+                                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(15, 23, 42, 0.08)',
+                                display: 'flex', flexDirection: 'column', gap: '0.85rem',
                                 color: '#0F172A',
                                 position: 'relative'
                             }} onClick={e => e.stopPropagation()}>
 
-                                {/* Header */}
-                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '1.2rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', color: THEME.colors.primary }}>
-                                            <Sparkles size={28} strokeWidth={2} />
+                                {/* 1. Encabezado Compacto SpaceX */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', color: THEME.colors.primary, flexShrink: 0 }}>
+                                            <Sparkles size={20} strokeWidth={2.2} />
                                         </div>
                                         <div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
-                                                    Lanzamiento a Proceso Logístico
+                                                <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
+                                                    Lanzamiento de Tanda Logística
                                                 </h2>
-                                                <span style={{ fontSize: '0.72rem', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', padding: '2px 8px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
-                                                    TANDA MAÑANA ({getTomorrowDateStr()})
+                                                <span style={{ fontSize: '0.66rem', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', padding: '2px 7px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
+                                                    MAÑANA ({getTomorrowDateStr()})
                                                 </span>
                                             </div>
-                                            <p style={{ color: '#64748B', margin: '4px 0 0', fontSize: '0.85rem' }}>
-                                                Sincroniza los pedidos seleccionados con Abastecimiento (Corabastos), Picking y Ruteo de Despacho.
+                                            <p style={{ color: '#64748B', margin: '2px 0 0', fontSize: '0.74rem' }}>
+                                                Consolidación de tanda y transición operativa hacia compras, alistamiento y ruta.
                                             </p>
                                         </div>
                                     </div>
                                     <button 
                                         onClick={() => setShowConfirmModal(false)}
-                                        style={{ background: '#F1F5F9', border: 'none', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center' }}
+                                        style={{ background: '#F1F5F9', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center' }}
                                         title="Cerrar ventana"
                                     >
-                                        <X size={20} />
+                                        <X size={18} />
                                     </button>
                                 </div>
 
-                                {/* Metrics Summary Cards (Top Grid) */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '1.2rem' }}>
-                                     {/* Left: Tanda Metrics */}
-                                     <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                         <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Indicadores de Carga</div>
-                                         
-                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.8rem' }}>
-                                             <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                     <Package size={13} style={{ color: THEME.colors.primary }} /> Pedidos a Enviar
-                                                 </div>
-                                                 <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>{selectedOrders.size}</div>
-                                             </div>
-                                             
-                                             <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                     <Building2 size={13} style={{ color: '#4F46E5' }} /> Destinos Únicos
-                                                 </div>
-                                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '2px' }}>
-                                                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#4338CA' }}>{uniqueDestinations}</div>
-                                                      <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>({uniqueClients} clientes)</div>
-                                                  </div>
-                                             </div>
-
-                                             <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                     <Scale size={13} style={{ color: '#D97706' }} /> Peso Estimado
-                                                 </div>
-                                                 <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#B45309', marginTop: '2px' }}>
-                                                     {formatNumber(totalWeight, 1)} <span style={{ fontSize: '0.75rem', color: '#64748B' }}>kg</span>
-                                                 </div>
-                                             </div>
-
-                                             <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                     <Coins size={13} style={{ color: '#10B981' }} /> Facturación Bruta
-                                                 </div>
-                                                 <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#059669', marginTop: '2px' }}>
-                                                     {formatMoney(totalValue)}
-                                                 </div>
-                                             </div>
-                                         </div>
-                                     </div>
-
-                                     {/* Right: Segmentation & Coverage */}
-                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                                         <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.2rem', flex: 1 }}>
-                                             <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>Segmentación de Canales</div>
-                                             <div style={{ display: 'flex', gap: '0.8rem' }}>
-                                                 <div style={{ flex: 1, backgroundColor: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: '10px', padding: '0.8rem', textAlign: 'center' }}>
-                                                     <div style={{ fontSize: '1.3rem', fontWeight: '900', color: '#4338CA' }}>{b2bCount}</div>
-                                                     <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#4F46E5', marginTop: '2px' }}>B2B Institucional</div>
-                                                 </div>
-                                                 <div style={{ flex: 1, backgroundColor: '#FCE7F3', border: '1px solid #FBCFE8', borderRadius: '10px', padding: '0.8rem', textAlign: 'center' }}>
-                                                     <div style={{ fontSize: '1.3rem', fontWeight: '900', color: '#BE185D' }}>{b2cCount}</div>
-                                                     <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#9D174D', marginTop: '2px' }}>B2C Hogar</div>
-                                                 </div>
-                                             </div>
-                                         </div>
-
-                                         {unselectedOrdersCount > 0 ? (
-                                             <div style={{ backgroundColor: '#FFF1F2', border: '1px solid #FECDD3', borderRadius: '12px', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                 <AlertTriangle size={20} style={{ color: '#E11D48', flexShrink: 0 }} />
-                                                 <div style={{ fontSize: '0.75rem', color: '#9F1239', fontWeight: '700' }}>
-                                                     Hay <strong>{unselectedOrdersCount} pedido(s)</strong> sin seleccionar que quedarán en espera.
-                                                 </div>
-                                             </div>
-                                         ) : (
-                                             <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                 <CheckCircle2 size={20} style={{ color: '#16A34A', flexShrink: 0 }} />
-                                                 <div style={{ fontSize: '0.75rem', color: '#166534', fontWeight: '700' }}>
-                                                     <strong>Cobertura 100%:</strong> Todos los pedidos disponibles en pantalla están incluidos.
-                                                 </div>
-                                             </div>
-                                         )}
-                                     </div>
-                                </div>
-
-                                {/* Section: Document Printing & Operation Mode (Dual: Digital vs Contingencia) */}
-                                <div style={{ 
-                                    backgroundColor: dispatchMode === 'contingency' ? '#FFFBEB' : '#F8FAFC', 
-                                    border: `1.5px solid ${dispatchMode === 'contingency' ? '#FCD34D' : '#E2E8F0'}`, 
-                                    borderRadius: '16px', 
-                                    padding: '1.2rem',
-                                    transition: 'all 0.2s ease'
+                                {/* 2. Franja Unificada de Telemetría (Single-Decker HUD) */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(4, 1fr)',
+                                    gap: '8px',
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '12px',
+                                    padding: '8px 12px'
                                 }}>
-                                    {/* Mode Selector Header */}
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <Printer size={18} style={{ color: dispatchMode === 'contingency' ? '#B45309' : THEME.colors.primary }} />
-                                            <div>
-                                                <span style={{ fontSize: '0.82rem', fontWeight: '900', color: '#0F172A', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
-                                                    Documentación & Planillas Logísticas
-                                                </span>
-                                                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
-                                                    {dispatchMode === 'contingency' ? 'Modo Contingencia: Alistamiento y despacho físico en planta sin red' : 'Modo Digital: Sincronización en la nube con tablets y app de transporte'}
-                                                </div>
-                                            </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Package size={11} style={{ color: THEME.colors.primary }} /> Pedidos & Sedes
                                         </div>
-
-                                        {/* Toggle Buttons (Digital vs Manual) */}
-                                        <div style={{ display: 'flex', backgroundColor: '#E2E8F0', padding: '3px', borderRadius: '10px', gap: '3px' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => setDispatchMode('digital')}
-                                                style={{
-                                                    padding: '5px 12px',
-                                                    borderRadius: '8px',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    fontSize: '0.72rem',
-                                                    fontWeight: '800',
-                                                    backgroundColor: dispatchMode === 'digital' ? '#FFFFFF' : 'transparent',
-                                                    color: dispatchMode === 'digital' ? THEME.colors.primary : '#64748B',
-                                                    boxShadow: dispatchMode === 'digital' ? '0 2px 4px rgba(0,0,0,0.08)' : 'none',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    transition: 'all 0.15s'
-                                                }}
-                                            >
-                                                <Sparkles size={12} /> Modo Digital (Nube)
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setDispatchMode('contingency')}
-                                                style={{
-                                                    padding: '5px 12px',
-                                                    borderRadius: '8px',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    fontSize: '0.72rem',
-                                                    fontWeight: '800',
-                                                    backgroundColor: dispatchMode === 'contingency' ? '#B45309' : 'transparent',
-                                                    color: dispatchMode === 'contingency' ? '#FFFFFF' : '#64748B',
-                                                    boxShadow: dispatchMode === 'contingency' ? '0 2px 4px rgba(180, 83, 9, 0.25)' : 'none',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    transition: 'all 0.15s'
-                                                }}
-                                            >
-                                                <FileText size={12} /> Modo Manual (Piso/Emergencia)
-                                            </button>
+                                        <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0F172A', marginTop: '1px' }}>
+                                            {selectedOrders.size} <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>({uniqueDestinations} sedes)</span>
                                         </div>
                                     </div>
 
-                                    {/* Dispatch Mode Content: Contingency (Guided Linear Pipeline) vs Digital (Cards Grid) */}
-                                    {dispatchMode === 'contingency' ? (
-                                        <div style={{
-                                            backgroundColor: '#0F172A',
-                                            borderRadius: '14px',
-                                            padding: '1.25rem',
-                                            border: '1px solid #334155',
-                                            boxShadow: '0 8px 24px -4px rgba(15, 23, 42, 0.4)',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '1rem'
-                                        }}>
-                                            {/* Status & Intent Header */}
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <div style={{
-                                                        width: '34px',
-                                                        height: '34px',
-                                                        borderRadius: '10px',
-                                                        backgroundColor: 'rgba(245, 158, 11, 0.18)',
-                                                        border: '1px solid rgba(245, 158, 11, 0.35)',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        flexShrink: 0
-                                                    }}>
-                                                        <ShieldAlert size={18} color="#F59E0B" />
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                            <span style={{ fontSize: '0.82rem', fontWeight: '900', color: '#F8FAFC', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                                                                Flujo Secuencial Obligatorio (Poka-Yoke)
-                                                            </span>
-                                                            <span style={{ fontSize: '0.62rem', backgroundColor: '#B45309', color: '#FEF3C7', padding: '2px 7px', borderRadius: '12px', fontWeight: '900', letterSpacing: '0.04em' }}>
-                                                                PISO / CONTINGENCIA
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
-                                                            Para garantizar cero errores en planta, el asistente ejecutará las tareas en orden técnico estricto:
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div style={{ fontSize: '0.72rem', color: '#E2E8F0', backgroundColor: '#1E293B', padding: '4px 10px', borderRadius: '8px', border: '1px solid #334155' }}>
-                                                    Lote: <strong style={{ color: '#FCD34D' }}>{selectedOrders.size} pedidos</strong>
-                                                </div>
-                                            </div>
-
-                                            {/* 4-Step Visual Sequence Pipeline */}
-                                            <div style={{
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(4, 1fr)',
-                                                gap: '8px',
-                                                backgroundColor: '#1E293B',
-                                                borderRadius: '10px',
-                                                padding: '12px 10px',
-                                                border: '1px solid #334155'
-                                            }}>
-                                                {/* Step 1 */}
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#F59E0B', color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>1</div>
-                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Espacios / Bahías</span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
-                                                        Asigna y visualiza en piso (1-150) por ventana LIFO.
-                                                    </div>
-                                                </div>
-
-                                                {/* Step 2 */}
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid #334155', paddingLeft: '8px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#475569', color: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>2</div>
-                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Compras & Báscula</span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
-                                                        Planilla Corabastos + recibo ciego en plataforma.
-                                                    </div>
-                                                </div>
-
-                                                {/* Step 3 */}
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid #334155', paddingLeft: '8px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#475569', color: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>3</div>
-                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Remisiones Carta</span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
-                                                        Duplicado cliente con control de canastillas.
-                                                    </div>
-                                                </div>
-
-                                                {/* Step 4 */}
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid #334155', paddingLeft: '8px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#475569', color: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>4</div>
-                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Rótulos QR</span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
-                                                        Etiquetas térmicas y firma final de salida.
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Primary Single CTA Button */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setShowConfirmModal(false);
-                                                        setShowManualWizard(true);
-                                                    }}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '12px 18px',
-                                                        backgroundColor: '#F59E0B',
-                                                        color: '#0F172A',
-                                                        borderRadius: '10px',
-                                                        fontSize: '0.88rem',
-                                                        fontWeight: '900',
-                                                        border: 'none',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '8px',
-                                                        boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)',
-                                                        transition: 'all 0.15s ease'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D97706'}
-                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F59E0B'}
-                                                >
-                                                    <Sparkles size={16} />
-                                                    <span>INICIAR ASISTENTE GUIADO (PASO A PASO) -&gt;</span>
-                                                </button>
-                                                <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
-                                                    Te llevará pantalla a pantalla para asignar, imprimir y validar cada documento en orden.
-                                                </span>
-                                            </div>
-
-                                            {/* Discreet Emergency & Auxiliary Tools */}
-                                            <div style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                borderTop: '1px solid #334155',
-                                                paddingTop: '8px',
-                                                fontSize: '0.7rem',
-                                                color: '#94A3B8',
-                                                flexWrap: 'wrap',
-                                                gap: '8px'
-                                            }}>
-                                                <span style={{ fontWeight: '700', color: '#CBD5E1' }}>Herramientas auxiliares:</span>
-                                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                                    <Link
-                                                        href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
-                                                        target="_blank"
-                                                        style={{ color: '#FCD34D', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '700' }}
-                                                    >
-                                                        <Printer size={11} /> Kit 1-Clic <ExternalLink size={9} />
-                                                    </Link>
-                                                    <span style={{ color: '#475569' }}>•</span>
-                                                    <Link
-                                                        href={`/admin/logistics/staging-spaces?date=${selectedDate || getTomorrowDateStr()}`}
-                                                        target="_blank"
-                                                        style={{ color: '#CBD5E1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
-                                                    >
-                                                        <Grid size={11} /> Cuadrícula Bahías <ExternalLink size={9} />
-                                                    </Link>
-                                                    <span style={{ color: '#475569' }}>•</span>
-                                                    <Link
-                                                        href={`/admin/orders/alistamiento-print?orderIds=${Array.from(selectedOrders).join(',')}`}
-                                                        target="_blank"
-                                                        style={{ color: '#CBD5E1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
-                                                    >
-                                                        <FileText size={11} /> Sábana Alistamiento <ExternalLink size={9} />
-                                                    </Link>
-                                                    <span style={{ color: '#475569' }}>•</span>
-                                                    <Link
-                                                        href="/admin/orders/contingency-reconciliation"
-                                                        target="_blank"
-                                                        style={{ color: '#CBD5E1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
-                                                    >
-                                                        Conciliación <ExternalLink size={9} />
-                                                    </Link>
-                                                </div>
-                                            </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Building2 size={11} style={{ color: '#4F46E5' }} /> Segmentación
                                         </div>
-                                    ) : (
-                                        /* Document Cards Grid (MODO DIGITAL NUBE) */
-                                        <div>
-                                            <div style={{
-                                                backgroundColor: '#EFF6FF',
-                                                border: '1px solid #BFDBFE',
-                                                borderRadius: '10px',
-                                                padding: '8px 12px',
-                                                marginBottom: '0.75rem',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                flexWrap: 'wrap',
-                                                gap: '8px'
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <Info size={16} color="#1D4ED8" />
-                                                    <span style={{ fontSize: '0.72rem', color: '#1E40AF', fontWeight: '700' }}>
-                                                        <strong>Modo Digital (Sin Papel):</strong> Las órdenes pasarán a <em>para_compra</em> para sincronizarse en tablets y terminales de bodega. <u>No se imprimirán documentos físicos</u> automáticamente.
-                                                    </span>
-                                                </div>
-                                                <Link
-                                                    href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
-                                                    target="_blank"
-                                                    style={{
-                                                        padding: '4px 10px',
-                                                        backgroundColor: '#FFFFFF',
-                                                        border: '1px solid #2563EB',
-                                                        color: '#1D4ED8',
-                                                        borderRadius: '6px',
-                                                        fontSize: '0.70rem',
-                                                        fontWeight: '800',
-                                                        textDecoration: 'none',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}
-                                                >
-                                                    <Printer size={12} /> ¿Necesitas papel? Imprimir Kit 1-Clic
-                                                </Link>
-                                            </div>
-
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
-                                            {/* Doc 1: Compras */}
-                                            <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                        <FileText size={15} style={{ color: '#0D7A57' }} />
-                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Compras</span>
-                                                    </div>
-                                                    <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Consolidado Corabastos</div>
-                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Demanda neta por kilos y mermas</div>
-                                                </div>
-                                                <Link 
-                                                    href="/ops/compras" 
-                                                    target="_blank"
-                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                >
-                                                    <span>Ver Módulo</span> <ExternalLink size={10} />
-                                                </Link>
-                                            </div>
-
-                                            {/* Doc 2: Rótulos / Etiquetas */}
-                                            <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                        <Tag size={15} style={{ color: '#4F46E5' }} />
-                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#EEF2FF', color: '#4338CA', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Bodega</span>
-                                                    </div>
-                                                    <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Rótulos Térmicos</div>
-                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Etiquetas QR de canastilla</div>
-                                                </div>
-                                                <Link 
-                                                    href={`/admin/orders/print-labels?orderIds=${Array.from(selectedOrders).join(',')}`}
-                                                    target="_blank"
-                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#4F46E5', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                >
-                                                    <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
-                                                </Link>
-                                            </div>
-
-                                            {/* Doc 3: Hojas Picking */}
-                                            <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                        <Package size={15} style={{ color: '#D97706' }} />
-                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Alistamiento</span>
-                                                    </div>
-                                                    <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Hojas de Picking</div>
-                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Por zonas: Fruver / Abarrotes</div>
-                                                </div>
-                                                <Link 
-                                                    href="/ops/picking" 
-                                                    target="_blank"
-                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#D97706', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                >
-                                                    <span>Ver Terminal</span> <ExternalLink size={10} />
-                                                </Link>
-                                            </div>
-
-                                            {/* Doc 4: Remisiones & Guías */}
-                                            <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                        <Truck size={15} style={{ color: '#0284C7' }} />
-                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Ruta</span>
-                                                    </div>
-                                                    <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Remisiones & Guías</div>
-                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Manifiestos y remisiones B2B</div>
-                                                </div>
-                                                <Link 
-                                                    href={`/admin/orders/contingency-print?mode=remissions&orderIds=${Array.from(selectedOrders).join(',')}`} 
-                                                    target="_blank"
-                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#0284C7', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                >
-                                                    <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
-                                                </Link>
-                                            </div>
+                                        <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#4338CA', marginTop: '1px' }}>
+                                            {b2bCount} <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>B2B • {b2cCount} B2C</span>
                                         </div>
+                                    </div>
+
+                                    <div>
+                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Scale size={11} style={{ color: '#D97706' }} /> Peso Estimado
+                                        </div>
+                                        <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#B45309', marginTop: '1px' }}>
+                                            {formatNumber(totalWeight, 1)} <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>kg</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Coins size={11} style={{ color: '#10B981' }} /> Facturación Bruta
+                                        </div>
+                                        <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#059669', marginTop: '1px' }}>
+                                            {formatMoney(totalValue)}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Banner Condicional de Cobertura */}
+                                {unselectedOrdersCount > 0 ? (
+                                    <div style={{ backgroundColor: '#FFF1F2', border: '1px solid #FECDD3', borderRadius: '8px', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: '#9F1239' }}>
+                                        <AlertTriangle size={14} style={{ color: '#E11D48', flexShrink: 0 }} />
+                                        <span>Hay <strong>{unselectedOrdersCount} pedido(s)</strong> disponibles sin seleccionar que quedarán en espera para otra tanda.</span>
+                                    </div>
+                                ) : (
+                                    <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: '#166534' }}>
+                                        <CheckCircle2 size={14} style={{ color: '#16A34A', flexShrink: 0 }} />
+                                        <span><strong>Cobertura 100%:</strong> Todos los pedidos disponibles en pantalla están incluidos en este lote.</span>
                                     </div>
                                 )}
+
+                                {/* 3. Las 2 Vías de Despacho (Planta vs Digital) - Arquitectura Lado a Lado */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '10px' }}>
+                                    {/* Opción A: Asistente de Despacho en Planta (Modo Oficial FruFresco) */}
+                                    <div style={{
+                                        backgroundColor: '#0F172A',
+                                        borderRadius: '14px',
+                                        padding: '1rem',
+                                        color: '#FFFFFF',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.35)',
+                                        border: '1.5px solid #1E293B'
+                                    }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#FCD34D', fontWeight: '900', fontSize: '0.80rem' }}>
+                                                    <Layers size={15} /> Asistente de Planta
+                                                </div>
+                                                <span style={{ fontSize: '0.62rem', backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FDE68A', padding: '2px 6px', borderRadius: '6px', fontWeight: '900', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+                                                    RECOMENDADO • POKA-YOKE
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#94A3B8', lineHeight: '1.35' }}>
+                                                Asignación de <strong>150 bahías</strong> en piso (LIFO), Sábana de alistamiento de 12 células, planillas Corabastos, báscula, remisiones en duplicado y rótulos.
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowConfirmModal(false);
+                                                setShowManualWizard(true);
+                                            }}
+                                            style={{
+                                                marginTop: '0.85rem',
+                                                padding: '9px 14px',
+                                                backgroundColor: '#F59E0B',
+                                                color: '#0F172A',
+                                                borderRadius: '9px',
+                                                fontSize: '0.80rem',
+                                                fontWeight: '900',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 3px 10px rgba(245, 158, 11, 0.35)',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D97706'}
+                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F59E0B'}
+                                        >
+                                            <Sparkles size={14} />
+                                            <span>INICIAR ASISTENTE (4 PASOS) -&gt;</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Opción B: Lanzamiento Rápido Digital (Sin Papel) */}
+                                    <div style={{
+                                        backgroundColor: '#FFFFFF',
+                                        borderRadius: '14px',
+                                        padding: '1rem',
+                                        border: '1.5px solid #CBD5E1',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between'
+                                    }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.80rem' }}>
+                                                    <Truck size={15} /> Modo Digital
+                                                </div>
+                                                <span style={{ fontSize: '0.62rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '6px', fontWeight: '800', border: '1px solid #BFDBFE' }}>
+                                                    SIN PAPEL • TABLETS
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: '1.35' }}>
+                                                Pasa las {selectedOrders.size} órdenes directo a <em>para_compra</em> para sincronización en tablets sin pasar por el asistente de impresión.
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowConfirmModal(false);
+                                                handleBulkAction(targetStatusToConfirm, true);
+                                            }}
+                                            disabled={updateLoading}
+                                            style={{
+                                                marginTop: '0.85rem',
+                                                padding: '9px 14px',
+                                                backgroundColor: '#FFFFFF',
+                                                color: '#0F172A',
+                                                border: '1.5px solid #0F172A',
+                                                borderRadius: '9px',
+                                                fontSize: '0.78rem',
+                                                fontWeight: '800',
+                                                cursor: updateLoading ? 'wait' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            onMouseEnter={e => {
+                                                e.currentTarget.style.backgroundColor = '#0F172A';
+                                                e.currentTarget.style.color = '#FFFFFF';
+                                            }}
+                                            onMouseLeave={e => {
+                                                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                                e.currentTarget.style.color = '#0F172A';
+                                            }}
+                                        >
+                                            {updateLoading ? (
+                                                <>
+                                                    <Loader2 size={14} className="animate-spin" />
+                                                    <span>Lanzando...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Truck size={14} />
+                                                    <span>Lanzar Directo a Compra</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
 
-                                {/* Footer Action Buttons */}
-                                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                                    <button 
+                                {/* 4. Barra Inferior de Acción y Contingencia */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #E2E8F0', paddingTop: '0.65rem' }}>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}&date=${selectedDate || getTomorrowDateStr()}`}
+                                        target="_blank"
+                                        style={{
+                                            fontSize: '0.70rem',
+                                            fontWeight: '700',
+                                            color: '#64748B',
+                                            textDecoration: 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                        title="Imprime todas las planillas de contingencia en un solo tiraje físico"
+                                    >
+                                        <Printer size={12} color="#64748B" />
+                                        <span>¿Solo necesitas imprimir? <strong>Kit 1-Clic Completo</strong></span>
+                                        <ExternalLink size={10} color="#94A3B8" />
+                                    </Link>
+
+                                    <button
+                                        type="button"
                                         onClick={() => setShowConfirmModal(false)}
                                         style={{
-                                            flex: 1, padding: '0.9rem', backgroundColor: '#F8FAFC', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.15s', fontSize: '0.9rem'
+                                            padding: '6px 14px',
+                                            backgroundColor: '#F1F5F9',
+                                            color: '#475569',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer'
                                         }}
-                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E2E8F0'}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                     >
                                         Revisar de nuevo
                                     </button>
-                                    <button 
-                                        onClick={() => {
-                                            if (dispatchMode === 'contingency') {
-                                                setShowConfirmModal(false);
-                                                setShowManualWizard(true);
-                                            } else {
-                                                setShowConfirmModal(false);
-                                                handleBulkAction(targetStatusToConfirm, true);
-                                            }
-                                        }}
-                                        disabled={updateLoading}
-                                        style={{
-                                            flex: 2, padding: '0.9rem', 
-                                            backgroundColor: dispatchMode === 'contingency' ? '#B45309' : THEME.colors.primary, 
-                                            color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', 
-                                            cursor: updateLoading ? 'wait' : 'pointer', 
-                                            boxShadow: dispatchMode === 'contingency' ? '0 4px 14px rgba(180, 83, 9, 0.35)' : '0 4px 14px rgba(13, 122, 87, 0.35)', 
-                                            transition: 'all 0.15s', fontSize: '0.92rem', letterSpacing: '0.01em', 
-                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                                        }}
-                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = dispatchMode === 'contingency' ? '#92400E' : THEME.colors.primaryHover}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = dispatchMode === 'contingency' ? '#B45309' : THEME.colors.primary}
-                                    >
-                                        {updateLoading ? (
-                                            <>
-                                                <Loader2 size={18} className="animate-spin" />
-                                                <span>Procesando Despacho...</span>
-                                            </>
-                                        ) : dispatchMode === 'contingency' ? (
-                                            <>
-                                                <Sparkles size={18} strokeWidth={2} />
-                                                <span>INICIAR ASISTENTE GUIADO (PASO A PASO) -&gt;</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Truck size={18} strokeWidth={2} />
-                                                <span>LANZAR A TERMINALES DIGITALES (TABLETS / SIN PAPEL)</span>
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-
-                                <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '0.70rem', color: '#64748B' }}>
-                                    {dispatchMode === 'contingency' 
-                                        ? 'Modo Manual: Asignará bahías en piso y te guiará para imprimir la sábana, compras, remisiones y rótulos.' 
-                                        : 'Modo Digital: Sincronizará compras y picking directamente en tablets de bodega (Paperless sin papel).'}
                                 </div>
 
                             </div>
