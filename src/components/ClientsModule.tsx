@@ -7764,7 +7764,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                                         <input
                                             type="text"
-                                            placeholder="Filtrar por SKU o nombre de producto..."
+                                            placeholder="Filtrar por ID contable o nombre de producto..."
                                             value={paretoSearch}
                                             onChange={(e) => setParetoSearch(e.target.value)}
                                             style={{
@@ -7813,7 +7813,6 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 <tr style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: '800', zIndex: 1 }}>
                                                     <th style={{ padding: '8px 10px', width: '40px', textAlign: 'center' }}>#</th>
                                                     <th style={{ padding: '8px 10px', width: '90px' }}>Clase</th>
-                                                    <th style={{ padding: '8px 10px', width: '90px' }}>SKU</th>
                                                     <th style={{ padding: '8px 10px' }}>Producto / Insumo</th>
                                                     <th style={{ padding: '8px 10px', textAlign: 'right' }}>Cant. Total</th>
                                                     <th style={{ padding: '8px 10px', textAlign: 'right' }}>Facturación ($ COP)</th>
@@ -7826,12 +7825,13 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 {paretoData.paretoProducts
                                                     .filter(p => {
                                                         if (!paretoSearch.trim()) return true;
-                                                        const q = paretoSearch.toLowerCase();
-                                                        return (p.name || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q);
+                                                        const q = paretoSearch.toLowerCase().trim();
+                                                        return (p.name || '').toLowerCase().includes(q) || String(p.accounting_id ?? p.product?.accounting_id ?? '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q);
                                                     })
                                                     .map((prod, idx) => {
                                                         const isA = prod.paretoClass === 'A';
                                                         const isB = prod.paretoClass === 'B';
+                                                        const accId = prod.accounting_id ?? prod.product?.accounting_id;
                                                         return (
                                                             <tr 
                                                                 key={prod.id || idx}
@@ -7858,15 +7858,19 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                         {isA ? 'A (80%)' : isB ? 'B (15%)' : 'C (5%)'}
                                                                     </span>
                                                                 </td>
-                                                                <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: '700', color: '#475569' }}>
-                                                                    {prod.sku || '---'}
-                                                                </td>
                                                                 <td style={{ padding: '8px 10px', fontWeight: '750', color: '#1E293B' }}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                         {prod.image && (
-                                                                            <img src={prod.image} alt="" style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'cover' }} onError={(e) => { (e.target as any).style.display = 'none'; }} />
+                                                                            <img src={prod.image} alt="" style={{ width: '24px', height: '24px', borderRadius: '5px', objectFit: 'cover', flexShrink: 0 }} onError={(e) => { (e.target as any).style.display = 'none'; }} />
                                                                         )}
-                                                                        <span>{prod.name}</span>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                                                                            <span>{prod.name}</span>
+                                                                            {accId !== null && accId !== undefined && accId !== '' && (
+                                                                                <span style={{ fontSize: '0.64rem', fontWeight: '600', color: '#94A3B8', fontFamily: 'monospace', marginTop: '2px' }}>
+                                                                                    ID: {accId}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </td>
                                                                 <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '700', color: '#0F172A' }}>

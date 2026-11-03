@@ -147,7 +147,7 @@ export async function GET(request: Request) {
 
         const { data: itemsData, error: itemsError } = await supabaseAdmin
             .from('order_items')
-            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, sku, name, name_en, unit_of_measure, image_url, category)')
+            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, sku, accounting_id, name, name_en, unit_of_measure, image_url, category)')
             .in('order_id', orderIds);
 
         if (itemsError) {
@@ -236,6 +236,7 @@ export async function GET(request: Request) {
         const productMap: Record<string, {
             id: string,
             sku: string,
+            accounting_id: number | string | null,
             name: string,
             image: string,
             unit: string,
@@ -256,6 +257,7 @@ export async function GET(request: Request) {
                 productMap[pId] = {
                     id: pId,
                     sku: p?.sku || '',
+                    accounting_id: p?.accounting_id ?? null,
                     name: p?.name || it.nickname || 'Producto Insumo',
                     image: p?.image_url || '',
                     unit: p?.unit_of_measure || 'Kg',
@@ -264,7 +266,7 @@ export async function GET(request: Request) {
                     totalRevenue: 0,
                     ordersCount: 0,
                     orderIds: new Set<string>(),
-                    product: p || { id: pId, sku: p?.sku || '', name: it.nickname || 'Producto Insumo', unit_of_measure: 'Kg' }
+                    product: p || { id: pId, sku: p?.sku || '', accounting_id: p?.accounting_id ?? null, name: it.nickname || 'Producto Insumo', unit_of_measure: 'Kg' }
                 };
             }
 
@@ -279,6 +281,7 @@ export async function GET(request: Request) {
         const sortedProducts = Object.values(productMap).map(p => ({
             id: p.id,
             sku: p.sku,
+            accounting_id: p.accounting_id,
             name: p.name,
             image: p.image,
             unit: p.unit,
