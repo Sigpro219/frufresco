@@ -137,34 +137,27 @@ export function areOrdersDuplicate(orderA: any, orderB: any): boolean {
     const docA = getOrderDocumentSignature(orderA);
     const docB = getOrderDocumentSignature(orderB);
 
-    // Caso 1: Ambos tienen número de Orden de Compra explícito
-    if (docA.ocNumber && docB.ocNumber) {
-        return docA.ocNumber === docB.ocNumber;
+    // 1. Identificación documental estricta (Misma OC o Mismo Archivo PDF adjunto)
+    if (docA.ocNumber && docB.ocNumber && docA.ocNumber === docB.ocNumber) {
+        return true;
+    }
+    if (docA.filename && docB.filename && docA.filename === docB.filename) {
+        return true;
     }
 
-    // Caso 2: Ambos tienen documento / PDF
-    if (docA.filename && docB.filename) {
-        return docA.filename === docB.filename;
-    }
-
-    // Caso 3: Uno tiene documento y el otro no (ej. pedido por correo vs pedido adicional por teléfono)
-    if ((docA.filename || docA.ocNumber) && (!docB.filename && !docB.ocNumber)) {
-        return false;
-    }
-    if ((!docA.filename && !docA.ocNumber) && (docB.filename || docB.ocNumber)) {
-        return false;
-    }
-
-    // Caso 4: Ninguno tiene documento PDF (pedidos digitados manualmente o por WhatsApp)
+    // 2. Blindaje Omnicanal Poka-Yoke (Misma Sede + Misma Fecha):
+    // Si provienen de canales diferentes (ej. Correo vs WhatsApp vs Teléfono) o documentos distintos,
+    // el cruce de mismo valor total, mismo peso o idénticos productos CONSTITUYE ALERTA DE DUPLICIDAD INMEDIATA.
     const totalA = parseFloat(orderA.total || orderA.total_amount || 0);
     const totalB = parseFloat(orderB.total || orderB.total_amount || 0);
     const weightA = parseFloat(orderA.total_weight_kg || 0);
     const weightB = parseFloat(orderB.total_weight_kg || 0);
 
-    const sameTotal = Math.abs(totalA - totalB) < 1;
-    const sameWeight = Math.abs(weightA - weightB) < 0.1;
+    const sameTotal = totalA > 0 && totalB > 0 && Math.abs(totalA - totalB) < 1;
+    const sameWeight = weightA > 0 && weightB > 0 && Math.abs(weightA - weightB) < 0.1;
 
-    // Si los ítems están presentes, comparar la firma de los productos
+    // Comparación profunda de ítems y cantidades si están presentes
+    let sameItems = false;
     if (Array.isArray(orderA.order_items) && Array.isArray(orderB.order_items) && orderA.order_items.length > 0 && orderB.order_items.length > 0) {
         const getItemsSig = (items: any[]) => items
             .map((i: any) => (i.product_id || i.products?.id || i.nickname || '') + '_' + (parseFloat(i.quantity) || 0))
@@ -172,10 +165,14 @@ export function areOrdersDuplicate(orderA: any, orderB: any): boolean {
             .join(';');
         const sigA = getItemsSig(orderA.order_items);
         const sigB = getItemsSig(orderB.order_items);
-        return sigA === sigB;
+        sameItems = sigA === sigB;
     }
 
-    if (sameTotal && sameWeight && totalA > 0) {
+    if (sameItems) {
+        return true;
+    }
+
+    if (sameTotal && (sameWeight || weightA === 0 || weightB === 0)) {
         return true;
     }
 

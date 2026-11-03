@@ -13630,3 +13630,20 @@ Durante la auditoría forense de homologación de las plantillas de migración d
 4. **Formato Forzado de Dos Decimales en Cantidad (Columna AI):**
    - En el ensamble de la hoja OpenXML (downloadWorldOfficeExcel), se recorre el rango de celdas de la columna AI (índice 34) inyectando la propiedad de formato numérico cell.z = '0.00', asegurando que cualquier hoja de cálculo o importador contable visualice e interprete exactamente dos posiciones decimales.
 
+### Escenario 370: Blindaje Omnicanal Poka-Yoke contra Pedidos Duplicados Multicanal (src/lib/orderDuplicates.ts) (SDD v1.9.353)
+
+#### 1. Contexto y Hallazgo del Gemba
+En la operación diaria de la mesa de control de FruFresco, los pedidos de clientes institucionales ingresan de forma concurrente por múltiples canales (ej. la central de compras envía una Orden de Compra formal en PDF por correo electrónico, mientras que el jefe de cocina de la sede envía simultáneamente la misma lista de requerimientos digitada por WhatsApp o teléfono). 
+Anteriormente, el algoritmo de detección en `areOrdersDuplicate` contenía una excepción laxa ("Caso 3"): si una orden poseía documento PDF adjunto o número de OC explícito y la otra carecía de ellos, el sistema exoneraba la duplicidad asumiendo que eran pedidos distintos. Esto generaba un punto ciego crítico de alto riesgo operativo: dos operadores procesaban el mismo pedido por canales diferentes sin que el sistema disparara la tarjeta roja de colisión, resultando en alistamiento doble en bodega y despacho redundante en ruta.
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Erradicación de la Exoneración por Origen de Canal (`areOrdersDuplicate`):**
+   - Se elimina la condición que ignoraba la duplicidad cuando uno tenía archivo PDF/OC y el otro no.
+2. **Regla de Blindaje Omnicanal Canónica (Misma Sede + Misma Fecha de Entrega):**
+   - Cuando dos o más órdenes pertenecen al mismo cliente/sucursal (`getOrderClientKey`) y comparten idéntica fecha de entrega programada (`delivery_date`):
+     * **Criterio 1 (Documental):** Si ambas órdenes registran la misma Orden de Compra o el mismo nombre de archivo PDF adjunto -> **DUPLICADO CONFIRMADO**.
+     * **Criterio 2 (Firma de Ítems / Productos):** Si los ítems y cantidades coinciden exactamente (`sameItems`) sin importar el canal de origen -> **DUPLICADO CONFIRMADO**.
+     * **Criterio 3 (Mismo Valor Monetario o Kilaje):** Si ambas órdenes poseen el mismo valor monetario total (`sameTotal`, diferencia < $1 COP) y coinciden en kilaje o tienen peso base -> **ALERTA DE DUPLICIDAD INMEDIATA**.
+3. **Comportamiento en Galería y Mesa de Control:**
+   - Ambas órdenes se marcan con la insignia Poka-Yoke roja de duplicidad en la galería y tabla de pedidos, obligando al operador a revisar conscientemente antes de aprobar o despachar.
+
