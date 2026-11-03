@@ -9896,17 +9896,45 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         return hasDiffNickname || hasPickingNote || hasRealDeliveryNote || hasSub || hasPreferredOptions;
     }, [getProductDetails]);
 
+    const [activeCategoryFilter, setActiveCategoryFilter] = useState<'all' | 'sub' | 'var' | 'note' | 'alias'>('all');
+
     const visibleExceptions = useMemo(() => {
         return exceptions.filter(isRealLogisticalException);
     }, [exceptions, isRealLogisticalException]);
 
+    const categoryCounts = useMemo(() => {
+        let sub = 0, varCount = 0, note = 0, alias = 0;
+        visibleExceptions.forEach(exc => {
+            const origProd = getProductDetails(exc.product_id);
+            if (exc.substitution_product_id) sub++;
+            if (exc.preferred_options && Object.keys(exc.preferred_options).length > 0) varCount++;
+            if (exc.picking_note && exc.picking_note.trim()) note++;
+            if (exc.nickname && origProd?.name && normalizeSearch(exc.nickname) !== normalizeSearch(origProd.name)) alias++;
+        });
+        return { all: visibleExceptions.length, sub, var: varCount, note, alias };
+    }, [visibleExceptions, getProductDetails]);
+
     const filteredExceptions = useMemo(() => {
+        let base = visibleExceptions;
+        if (activeCategoryFilter === 'sub') {
+            base = base.filter(e => Boolean(e.substitution_product_id));
+        } else if (activeCategoryFilter === 'var') {
+            base = base.filter(e => Boolean(e.preferred_options && Object.keys(e.preferred_options).length > 0));
+        } else if (activeCategoryFilter === 'note') {
+            base = base.filter(e => Boolean(e.picking_note && e.picking_note.trim()));
+        } else if (activeCategoryFilter === 'alias') {
+            base = base.filter(e => {
+                const origProd = getProductDetails(e.product_id);
+                return Boolean(e.nickname && origProd?.name && normalizeSearch(e.nickname) !== normalizeSearch(origProd.name));
+            });
+        }
+
         const cleanQuery = normalizeSearch(searchQuery);
-        if (!cleanQuery) return visibleExceptions;
+        if (!cleanQuery) return base;
 
         const tokens = cleanQuery.split(/\s+/).filter(Boolean);
 
-        return visibleExceptions.filter(exc => {
+        return base.filter(exc => {
             const origProd = getProductDetails(exc.product_id);
             const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
             const optionsText = exc.preferred_options 
@@ -9928,59 +9956,66 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
             return tokens.every(tok => searchableBlob.includes(tok));
         });
-    }, [visibleExceptions, searchQuery, getProductDetails]);
+    }, [visibleExceptions, activeCategoryFilter, searchQuery, getProductDetails]);
 
     const selectedOriginalProd = getProductDetails(newException.product_id);
 
     return (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '2rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.xl, width: '100%', maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
-                <header style={{ padding: '2rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <Sliders size={20} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
-                                {readOnly ? 'Consulta de Excepciones' : 'Excepciones Logísticas'}
-                            </h3>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '1.5rem' }}>
+            <div style={{ backgroundColor: '#F8FAFC', borderRadius: '20px', width: '100%', maxWidth: '920px', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.28)', border: '1px solid #E2E8F0' }}>
+                <header style={{ padding: '1.25rem 1.75rem', borderBottom: '1px solid #E2E8F0', background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ width: '42px', height: '42px', borderRadius: '12px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Sliders size={20} strokeWidth={2} style={{ color: '#047857' }} />
                         </div>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>{readOnly ? 'Visualizando nombres de factura y especificaciones logísticas.' : 'Personaliza variantes, sustitutos y notas de picking/despacho para este cliente.'}</p>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#0F172A', fontFamily: THEME.typography.fontFamilyMain, letterSpacing: '-0.01em' }}>
+                                    {readOnly ? 'Consulta de Excepciones Logísticas' : 'Excepciones y Reglas Logísticas'}
+                                </h3>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 9px', borderRadius: '999px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                    {visibleExceptions.length} {visibleExceptions.length === 1 ? 'regla activa' : 'reglas activas'}
+                                </span>
+                            </div>
+                            <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#64748B', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                {readOnly ? 'Sustituciones de SKU, variaciones estructuradas y notas operativas de alistamiento.' : 'Personaliza sustitutos de SKU, variaciones preferidas y notas de alistamiento para esta sede.'}
+                            </p>
+                        </div>
                     </div>
                     <button 
                         onClick={onClose} 
                         style={{ 
-                            border: 'none', 
-                            background: '#F1F5F9', 
-                            width: '32px', 
-                            height: '32px', 
-                            borderRadius: '8px', 
+                            border: '1px solid #E2E8F0', 
+                            background: '#FFFFFF', 
+                            width: '34px', 
+                            height: '34px', 
+                            borderRadius: '10px', 
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            transition: 'all 0.2s'
+                            transition: 'all 0.2s',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = '#E2E8F0'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = '#F1F5F9'}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#F1F5F9'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#FFFFFF'}
                     >
-                        <X size={16} style={{ color: THEME.colors.textSecondary }} />
+                        <X size={16} style={{ color: '#475569' }} />
                     </button>
                 </header>
 
-                <div ref={scrollableRef} style={{ padding: '0 2rem 2rem 2rem', flex: 1, overflowY: 'auto' }}>
-                    {/* BARRA SUPERIOR STICKY: BUSCADOR UNIVERSAL Y ACCIONES */}
-                    <div style={{
-                        position: 'sticky',
-                        top: 0,
-                        zIndex: 30,
-                        backgroundColor: 'white',
-                        margin: '0 -2rem 1.25rem -2rem',
-                        padding: '1.25rem 2rem 1rem 2rem',
-                        borderBottom: '1px solid #E2E8F0',
-                        boxShadow: '0 4px 12px -2px rgba(0,0,0,0.03)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.75rem'
-                    }}>
+                {/* BARRA DE CONTROL FIJA (FUERA DEL SCROLL PARA NO RECORTAR TARJETAS) */}
+                <div style={{
+                    backgroundColor: '#FFFFFF',
+                    padding: '0.9rem 1.75rem',
+                    borderBottom: '1px solid #E2E8F0',
+                    boxShadow: '0 2px 8px -2px rgba(15, 23, 42, 0.04)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.7rem',
+                    flexShrink: 0,
+                    zIndex: 20
+                }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                             {/* BUSCADOR UNIVERSAL */}
                             <div style={{ position: 'relative', flex: '1 1 280px' }}>
@@ -10132,25 +10167,75 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                             </div>
                         </div>
 
-                        {/* FEEDBACK DE BÚSQUEDA ACTIVA */}
-                        {searchQuery && (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
-                                <span>
-                                    Resultados para &quot;<strong style={{ color: THEME.colors.textMain }}>{searchQuery}</strong>&quot;:
-                                </span>
-                                <span style={{
-                                    backgroundColor: filteredExceptions.length > 0 ? '#ECFDF5' : '#FEF2F2',
-                                    color: filteredExceptions.length > 0 ? '#047857' : '#B91C1C',
-                                    border: `1px solid ${filteredExceptions.length > 0 ? '#A7F3D0' : '#FECACA'}`,
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
-                                    fontWeight: '700'
-                                }}>
-                                    {filteredExceptions.length} de {visibleExceptions.length} {visibleExceptions.length === 1 ? 'excepción' : 'excepciones'}
-                                </span>
+                        {/* PÍLDORAS DE FILTRO POR ESCENARIO CON TELEMETRÍA REACTIVA */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', paddingTop: '2px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                {[
+                                    { key: 'all', label: 'Todas', count: categoryCounts.all, activeBg: '#0F172A', activeText: '#FFFFFF', activeBorder: '#0F172A', idleBg: '#F8FAFC', idleText: '#475569', idleBorder: '#E2E8F0', Icon: null },
+                                    { key: 'sub', label: 'Sustituciones', count: categoryCounts.sub, activeBg: '#D97706', activeText: '#FFFFFF', activeBorder: '#D97706', idleBg: '#FFFBEB', idleText: '#B45309', idleBorder: '#FDE68A', Icon: RefreshCw },
+                                    { key: 'var', label: 'Variaciones', count: categoryCounts.var, activeBg: '#4F46E5', activeText: '#FFFFFF', activeBorder: '#4F46E5', idleBg: '#EEF2FF', idleText: '#4338CA', idleBorder: '#C7D2FE', Icon: Palette },
+                                    { key: 'note', label: 'Notas Alistamiento', count: categoryCounts.note, activeBg: '#047857', activeText: '#FFFFFF', activeBorder: '#047857', idleBg: '#ECFDF5', idleText: '#047857', idleBorder: '#A7F3D0', Icon: ClipboardList },
+                                    ...(categoryCounts.alias > 0 ? [{ key: 'alias', label: 'Alias Factura', count: categoryCounts.alias, activeBg: '#7C3AED', activeText: '#FFFFFF', activeBorder: '#7C3AED', idleBg: '#F5F3FF', idleText: '#6D28D9', idleBorder: '#DDD6FE', Icon: Tag }] : [])
+                                ].map((pill: any) => {
+                                    const isActive = activeCategoryFilter === pill.key;
+                                    const PillIcon = pill.Icon;
+                                    return (
+                                        <button
+                                            key={pill.key}
+                                            type="button"
+                                            onClick={() => setActiveCategoryFilter(pill.key)}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                padding: '4px 10px',
+                                                borderRadius: '999px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s',
+                                                fontFamily: THEME.typography.fontFamilySecondary,
+                                                backgroundColor: isActive ? pill.activeBg : pill.idleBg,
+                                                color: isActive ? pill.activeText : pill.idleText,
+                                                border: `1px solid ${isActive ? pill.activeBorder : pill.idleBorder}`,
+                                                boxShadow: isActive ? '0 2px 5px rgba(15, 23, 42, 0.12)' : 'none'
+                                            }}
+                                        >
+                                            {PillIcon && <PillIcon size={12} strokeWidth={2.2} />}
+                                            <span>{pill.label}</span>
+                                            <span style={{
+                                                fontSize: '0.66rem',
+                                                padding: '0 5px',
+                                                borderRadius: '999px',
+                                                backgroundColor: isActive ? 'rgba(255,255,255,0.22)' : 'rgba(15,23,42,0.06)',
+                                                color: isActive ? '#FFFFFF' : 'inherit',
+                                                fontFamily: 'monospace'
+                                            }}>
+                                                {pill.count}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
                             </div>
-                        )}
+
+                            {(searchQuery || activeCategoryFilter !== 'all') && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                    <span style={{
+                                        backgroundColor: filteredExceptions.length > 0 ? '#ECFDF5' : '#FEF2F2',
+                                        color: filteredExceptions.length > 0 ? '#047857' : '#B91C1C',
+                                        border: `1px solid ${filteredExceptions.length > 0 ? '#A7F3D0' : '#FECACA'}`,
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        fontWeight: '700'
+                                    }}>
+                                        Mostrando {filteredExceptions.length} de {visibleExceptions.length}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
+
+                <div ref={scrollableRef} style={{ padding: '1.25rem 1.75rem 1.75rem 1.75rem', flex: 1, overflowY: 'auto' }}>
 
                     {/* INSTRUCTIVO DE USO (DESPLEGABLE) */}
                     {showGuide && (
@@ -10612,30 +10697,38 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                 const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
                                 const hasPrefOpts = Boolean(exc.preferred_options && Object.keys(exc.preferred_options).length > 0);
                                 const cardAccent = subProd
-                                    ? { bg: '#FFFBEB', border: '#FDE68A', color: '#D97706', Icon: RefreshCw }
+                                    ? { bg: '#FFFBEB', border: '#FDE68A', color: '#D97706', tagText: '#B45309', tagLabel: 'Sustitución SKU', Icon: RefreshCw }
                                     : hasPrefOpts
-                                    ? { bg: '#EEF2FF', border: '#C7D2FE', color: '#4F46E5', Icon: Palette }
+                                    ? { bg: '#EEF2FF', border: '#C7D2FE', color: '#4F46E5', tagText: '#4338CA', tagLabel: 'Variación Estructurada', Icon: Palette }
                                     : exc.picking_note
-                                    ? { bg: '#ECFDF5', border: '#A7F3D0', color: '#047857', Icon: ClipboardList }
+                                    ? { bg: '#ECFDF5', border: '#A7F3D0', color: '#047857', tagText: '#065F46', tagLabel: 'Nota de Alistamiento', Icon: ClipboardList }
                                     : hasRealDeliveryNote
-                                    ? { bg: '#F0F9FF', border: '#BAE6FD', color: '#0284C7', Icon: Truck }
-                                    : { bg: '#F5F3FF', border: '#DDD6FE', color: '#7C3AED', Icon: Tag };
+                                    ? { bg: '#F0F9FF', border: '#BAE6FD', color: '#0284C7', tagText: '#0369A1', tagLabel: 'Nota de Despacho', Icon: Truck }
+                                    : { bg: '#F5F3FF', border: '#DDD6FE', color: '#7C3AED', tagText: '#6D28D9', tagLabel: 'Alias de Factura', Icon: Tag };
                                 const CardIcon = cardAccent.Icon;
 
                                 return (
-                                    <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                                        <div style={{ width: '36px', height: '36px', backgroundColor: cardAccent.bg, border: `1px solid ${cardAccent.border}`, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px', flexShrink: 0 }}>
-                                            <CardIcon size={16} strokeWidth={1.8} style={{ color: cardAccent.color }} />
+                                    <div key={exc.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem 1.25rem', backgroundColor: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', borderLeft: `4px solid ${cardAccent.color}`, boxShadow: '0 2px 6px -1px rgba(15, 23, 42, 0.04)', transition: 'all 0.15s' }}>
+                                        <div style={{ width: '40px', height: '40px', backgroundColor: cardAccent.bg, border: `1px solid ${cardAccent.border}`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <CardIcon size={18} strokeWidth={2} style={{ color: cardAccent.color }} />
                                         </div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span style={{ color: '#1E293B' }}>Original: {origProd?.name || '---'}</span>
-                                                <span style={{ color: '#94A3B8' }}>|</span>
-                                                <span style={{ color: '#64748B' }}>ID: {origProd?.accounting_id || '---'}</span>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <span style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilyMain, letterSpacing: '-0.01em' }}>
+                                                        {origProd?.name || '---'}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#475569', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', padding: '1px 7px', borderRadius: '6px', fontFamily: 'monospace' }}>
+                                                        ID: {origProd?.accounting_id || '---'}
+                                                    </span>
+                                                </div>
+                                                <span style={{ fontSize: '0.64rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em', backgroundColor: cardAccent.bg, color: cardAccent.tagText, border: `1px solid ${cardAccent.border}`, padding: '2px 8px', borderRadius: '999px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                    {cardAccent.tagLabel}
+                                                </span>
                                             </div>
 
                                             {/* RENDER DETAILED RULES */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px', alignItems: 'center' }}>
                                                 
                                                 {/* Nickname alias (Only when different) */}
                                                 {hasDiffNickname && (
