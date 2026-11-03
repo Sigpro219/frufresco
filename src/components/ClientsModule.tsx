@@ -10610,11 +10610,22 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                 const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
                                 const hasDiffNickname = Boolean(exc.nickname && origProd?.name && normalizeSearch(exc.nickname) !== normalizeSearch(origProd.name));
                                 const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
+                                const hasPrefOpts = Boolean(exc.preferred_options && Object.keys(exc.preferred_options).length > 0);
+                                const cardAccent = subProd
+                                    ? { bg: '#FFFBEB', border: '#FDE68A', color: '#D97706', Icon: RefreshCw }
+                                    : hasPrefOpts
+                                    ? { bg: '#EEF2FF', border: '#C7D2FE', color: '#4F46E5', Icon: Palette }
+                                    : exc.picking_note
+                                    ? { bg: '#ECFDF5', border: '#A7F3D0', color: '#047857', Icon: ClipboardList }
+                                    : hasRealDeliveryNote
+                                    ? { bg: '#F0F9FF', border: '#BAE6FD', color: '#0284C7', Icon: Truck }
+                                    : { bg: '#F5F3FF', border: '#DDD6FE', color: '#7C3AED', Icon: Tag };
+                                const CardIcon = cardAccent.Icon;
 
                                 return (
                                     <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                                        <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px' }}>
-                                            <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                        <div style={{ width: '36px', height: '36px', backgroundColor: cardAccent.bg, border: `1px solid ${cardAccent.border}`, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px', flexShrink: 0 }}>
+                                            <CardIcon size={16} strokeWidth={1.8} style={{ color: cardAccent.color }} />
                                         </div>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -10629,26 +10640,26 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 {/* Nickname alias (Only when different) */}
                                                 {hasDiffNickname && (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                            <Tag size={13} style={{ color: THEME.colors.textSecondary }} />
+                                                        <span style={{ fontSize: '0.7rem', color: '#7C3AED', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Tag size={13} style={{ color: '#7C3AED' }} />
                                                             Nombre en Factura (Alias):
                                                         </span>
-                                                        <span style={{ fontSize: '0.78rem', color: THEME.colors.textMain, fontWeight: '700' }}>
+                                                        <span style={{ fontSize: '0.75rem', color: '#6D28D9', fontWeight: '800', backgroundColor: '#F5F3FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #DDD6FE' }}>
                                                             {exc.nickname}
                                                         </span>
                                                     </div>
                                                 )}
 
                                                 {/* Preferred options (Standardized variants) */}
-                                                {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
+                                                {hasPrefOpts && (
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                            <Palette size={13} style={{ color: THEME.colors.textSecondary }} />
+                                                        <span style={{ fontSize: '0.7rem', color: '#4F46E5', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Palette size={13} style={{ color: '#4F46E5' }} />
                                                             Variación Requerida:
                                                         </span>
                                                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                                             {Object.entries(exc.preferred_options).map(([key, val]) => (
-                                                                <span key={key} style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                                <span key={key} style={{ fontSize: '0.72rem', backgroundColor: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
                                                                     {key}: {val as string}
                                                                 </span>
                                                             ))}
@@ -10659,11 +10670,13 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 {/* Picking notes */}
                                                 {exc.picking_note && (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                            <ClipboardList size={13} style={{ color: THEME.colors.primary }} />
+                                                        <span style={{ fontSize: '0.7rem', color: '#047857', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <ClipboardList size={13} style={{ color: '#047857' }} />
                                                             Nota de Alistamiento:
                                                         </span>
-                                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note}</span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#065F46', fontWeight: '800', backgroundColor: '#ECFDF5', padding: '2px 6px', borderRadius: '4px', border: '1px solid #A7F3D0' }}>
+                                                            {exc.picking_note}
+                                                        </span>
                                                     </div>
                                                 )}
 

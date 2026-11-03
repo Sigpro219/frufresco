@@ -1360,6 +1360,12 @@ Toda cuenta institucional cuenta con su expediente estructurado:
    - **F. Regla Canónica de No-Duplicación Estructurada y Purga Automática (`sanitizePickingNoteAgainstPreferredOptions`):**
      * **Prohibición de Duplicidad:** Si un requisito del cliente ya está representado como dato estructurado en `preferred_options` (ej. `Maduración: Pintón`, `Presentación: Unidad 100 gr`, `Tamaño: Mediano`) o como `substitution_product_id`, **jamás debe existir simultáneamente como texto libre en `picking_note`**. Asimismo, dado que `Maduro`/`Madura` es el estado por defecto en FruFresco, las notas compuestas únicamente por `"Maduro"` / `"Madura"` se purgan a `null`.
      * **Autolimpieza Reactiva al Guardar Regla Fija:** Tanto en `ClientExceptionsModal` (`handleSave`) como en el fijado rápido desde pedidos (`handleSaveCustomerOptionPreference` en `/admin/orders/create` y `EmailDraftsModule`), al guardar `preferred_options` el sistema limpia automáticamente cualquier `picking_note` redundante que repita la variación estructurada (ej. `"Pinton"`, `"Undx 100gr"`, `"Med"`, `"Grande"`, `"Maduro"`).
+   - **G. Codificación Cromática e Iconográfica Semántica por Escenario en `ClientExceptionsModal`:**
+     * **Sustituir por (`substitution_product_id`):** Identidad **Ámbar** (avatar e ícono `RefreshCw` `#D97706`, fondo `#FFFBEB`, borde `#FDE68A`, texto `#B45309`).
+     * **Variación Requerida (`preferred_options`):** Identidad **Índigo Estructurado** (avatar e ícono `Palette` `#4F46E5`, fondo `#EEF2FF`, borde `#C7D2FE`, texto `#4338CA`).
+     * **Nota de Alistamiento (`picking_note`):** Identidad **Esmeralda Operativo** (avatar e ícono `ClipboardList` `#047857`, fondo `#ECFDF5`, borde `#A7F3D0`, texto `#065F46`).
+     * **Nota de Despacho (`delivery_note`):** Identidad **Azul Cielo** (avatar e ícono `Truck` `#0284C7`, fondo `#F0F9FF`, borde `#BAE6FD`).
+     * **Nombre en Factura (`nickname`):** Identidad **Violeta** (avatar e ícono `Tag` `#7C3AED`, fondo `#F5F3FF`, borde `#DDD6FE`).
 3. **Sincronización Masiva Bidireccional por Excel Bidual (`handleExportExcel` / `handleImportExcel`):**
    - **Exportación Estructurada de 2 Hojas (`Excepciones_Logisticas_B2B_<clientId>.xlsx`):**
      * **Hoja 1 (`Excepciones y Notas`):** Matriz completa del catálogo activo con las columnas `CODIGO_CONTABLE`, `PRODUCTO`, `NOMBRE_FACTURA`, `VARIACION_REQUERIDA` (formato `Atributo: Valor | Atributo: Valor`), `NOTA_PICKING`, `SUSTITUTO_CODIGO_CONTABLE` y `NOTA_ENTREGA`.
