@@ -4883,6 +4883,9 @@ useEffect(() => {
                                         <button
                                             type="button"
                                             onClick={() => {
+                                                if (typeof window !== 'undefined' && !window.confirm(`¿Confirmas lanzar directamente ${selectedOrders.size} pedidos a compra sin pasar por el asistente de bahías ni generar documentos físicos?`)) {
+                                                    return;
+                                                }
                                                 setShowConfirmModal(false);
                                                 handleBulkAction(targetStatusToConfirm, true);
                                             }}

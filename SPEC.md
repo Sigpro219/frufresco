@@ -13688,4 +13688,6 @@ En la pantalla de cargue y consolidación de pedidos (`/admin/orders/loading`), 
    - **Vía B (Modo Digital Sin Papel):** Tarjeta limpia secundaria con botón directo: `[Lanzar Directo a Compra]`.
 4. **Barra Inferior de Seguridad y Contingencia:**
    - Enlace discreto a `Kit 1-Clic Completo` para imprimir en bloque ante emergencias, y botón de retorno `Revisar de nuevo`.
-
+5. **Guardrail Poka-Yoke de Lanzamiento Directo y Reversión Segura:**
+   - La Vía B (*Modo Digital / Lanzar Directo a Compra*) incorpora mediación Poka-Yoke mediante confirmación explícita del operador (`window.confirm`) para evitar disparos accidentales a la operación de compras sin mediación de bahías ni documentos físicos.
+   - Reversión canónica auditada en Supabase de los 39 pedidos de la fecha 2026-11-04 al estado `pending_approval` para permitir ajustes y verificaciones continuas por el equipo comercial.
