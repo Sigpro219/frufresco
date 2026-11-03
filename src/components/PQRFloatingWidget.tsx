@@ -376,21 +376,47 @@ export default function PQRFloatingWidget() {
                 targetProfileIds.push(parentId);
             }
             clients.forEach(c => {
-                if ((c.parent_id === branchId || (parentId && c.parent_id === parentId)) && !targetProfileIds.includes(c.id)) {
+                const isInvCortes = parentId === '42bddbfa-377a-45ab-ac8c-800e00f94d87';
+                const branchObj = typeof target === 'string' ? clients.find(cl => cl.id === target) : target;
+                const cleanToken = (branchObj?.company_name || branchObj?.contact_name || '')
+                    .toUpperCase()
+                    .replace(/INVESTMENTS\s+CORTES/g, '')
+                    .replace(/OBSEQUIO(S)?(\s+NAVIDAD)?/g, '')
+                    .replace(/MUESTRA(S)?/g, '')
+                    .replace(/DE\s+INGLATERRA/g, '')
+                    .replace(/\b(S\.?A\.?S\.?|LTDA|S\.?A\.?)\b/g, '')
+                    .replace(/[^A-Z0-9ÁÉÍÓÚÑ\s]/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                const nameMatch = cleanToken.length >= 4 && (c.company_name || c.contact_name || '').toUpperCase().includes(cleanToken);
+                if (((c.parent_id === branchId || (!isInvCortes && parentId && c.parent_id === parentId)) || nameMatch) && !targetProfileIds.includes(c.id)) {
                     targetProfileIds.push(c.id);
                 }
             });
 
             const { data } = await supabase
                 .from('orders')
-                .select('id, sequence_id, total, delivery_date, created_at, status')
+                .select('id, sequence_id, total, delivery_date, created_at, status, profile_id')
                 .in('profile_id', targetProfileIds)
                 .neq('status', 'cancelled')
                 .order('created_at', { ascending: false })
                 .limit(20);
             const list = data || [];
             setBranchOrders(list);
-            setSelectedOrderId(list.length > 0 ? list[0].id : '');
+            const sortedList = [...list].sort((a: any, b: any) => {
+                const aExact = a.profile_id === branchId ? 1 : 0;
+                const bExact = b.profile_id === branchId ? 1 : 0;
+                if (aExact !== bExact) return bExact - aExact;
+                const aCommercial = Number(a.total || 0) > 0 ? 1 : 0;
+                const bCommercial = Number(b.total || 0) > 0 ? 1 : 0;
+                if (aCommercial !== bCommercial) return bCommercial - aCommercial;
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            });
+            setBranchOrders(sortedList);
+            const preferredOrder = sortedList.find((o: any) => o.profile_id === branchId && Number(o.total || 0) > 0)
+                || sortedList.find((o: any) => Number(o.total || 0) > 0)
+                || sortedList[0];
+            setSelectedOrderId(preferredOrder ? preferredOrder.id : '');
         } catch (err) {
             console.error('Error fetching branch orders for PQR:', err);
             setBranchOrders([]);

@@ -10,9 +10,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
     }
 
-    const { draftId, address, sourceEmail, reason } = await req.json();
-    if (!draftId || !sourceEmail) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    const { draftId, address, sourceEmail, reason, action } = await req.json();
+    if (!draftId) {
+      return NextResponse.json({ error: 'Missing draftId' }, { status: 400 });
     }
 
     const smtpUser = process.env.SMTP_USER;
@@ -20,27 +20,69 @@ export async function POST(req: Request) {
 
     const supabaseAdmin = createAdminClient();
 
-    // 1. Fetch draft items first to update metadata
+    // 1. Fetch draft items and current status first to enforce FSM invariants
     const { data: draftRecord } = await supabaseAdmin
       .from('order_drafts')
-      .select('extracted_items')
+      .select('status, extracted_items')
       .eq('id', draftId)
       .single();
 
-    let updatedExtractedItems = draftRecord?.extracted_items || [];
-    if (Array.isArray(updatedExtractedItems)) {
-      const metaIdx = updatedExtractedItems.findIndex((itm: any) => itm.isMetadata);
+    let updatedExtractedItems = Array.isArray(draftRecord?.extracted_items) ? [...draftRecord.extracted_items] : [];
+    const existingMeta = updatedExtractedItems.find((itm: any) => itm?.isMetadata);
+
+    if (draftRecord?.status === 'approved' || Boolean(existingMeta?.orderId)) {
+      return NextResponse.json(
+        { error: 'Protección Poka-Yoke: No se puede rechazar ni modificar el estado de un correo que ya fue procesado como pedido.' },
+        { status: 400 }
+      );
+    }
+
+    // Handle Restore to Pending action
+    if (action === 'restore') {
+      const metaIdx = updatedExtractedItems.findIndex((itm: any) => itm?.isMetadata);
       if (metaIdx > -1) {
-        updatedExtractedItems[metaIdx] = {
-          ...updatedExtractedItems[metaIdx],
-          rejectReason: reason || 'cobertura'
-        };
-      } else {
-        updatedExtractedItems.unshift({
-          isMetadata: true,
-          rejectReason: reason || 'cobertura'
-        });
+        const nextMeta = { ...updatedExtractedItems[metaIdx] };
+        delete nextMeta.rejectReason;
+        delete nextMeta.rejectedAt;
+        delete nextMeta.rejectedBy;
+        updatedExtractedItems[metaIdx] = nextMeta;
       }
+
+      const { error: restoreError } = await supabaseAdmin
+        .from('order_drafts')
+        .update({
+          status: 'pending',
+          extracted_items: updatedExtractedItems
+        })
+        .eq('id', draftId);
+
+      if (restoreError) {
+        return NextResponse.json({ error: `Error al restaurar borrador: ${restoreError.message}` }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, restored: true, extracted_items: updatedExtractedItems });
+    }
+
+    if (!sourceEmail || !reason) {
+      return NextResponse.json({ error: 'Debe seleccionar una causal obligatoria para descartar o rechazar el correo.' }, { status: 400 });
+    }
+
+    const metaIdx = updatedExtractedItems.findIndex((itm: any) => itm?.isMetadata);
+    const auditFields = {
+      rejectReason: reason,
+      rejectedAt: new Date().toISOString(),
+      rejectedBy: (auth as any).user?.email || 'operador'
+    };
+    if (metaIdx > -1) {
+      updatedExtractedItems[metaIdx] = {
+        ...updatedExtractedItems[metaIdx],
+        ...auditFields
+      };
+    } else {
+      updatedExtractedItems.unshift({
+        isMetadata: true,
+        ...auditFields
+      });
     }
 
     // 2. Update draft status to 'rejected' and save metadata
@@ -59,7 +101,7 @@ export async function POST(req: Request) {
 
     // If it is simply not an order (newsletter, spam, notification), do not send email notification
     if (reason === 'no_es_pedido' || reason === 'spam') {
-      return NextResponse.json({ success: true, emailSent: false });
+      return NextResponse.json({ success: true, emailSent: false, extracted_items: updatedExtractedItems });
     }
 
     // 2. Trigger email sending in the background without awaiting it
@@ -250,7 +292,7 @@ export async function POST(req: Request) {
     }
 
     // Return success
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, extracted_items: updatedExtractedItems });
 
   } catch (err: any) {
     console.error('[Reject Draft API] Critical Error:', err);

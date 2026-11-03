@@ -240,6 +240,53 @@ export default function PqrAuditModal({
     const [linkingOrderId, setLinkingOrderId] = useState<string>('');
     const [isLinkingOrder, setIsLinkingOrder] = useState<boolean>(false);
     const [loadingRecentOrders, setLoadingRecentOrders] = useState<boolean>(false);
+    const [manualOrderFolioInput, setManualOrderFolioInput] = useState<string>('');
+    const prevInitializedPqrIdRef = useRef<string | null>(null);
+
+    const mergeOrderItemsWithAdminNotes = (baseItems: any[], adminNotes: string | null | undefined, orderId: string, catalogList: any[]) => {
+        const cleanBase = (baseItems || []).filter((it: any) => !it.is_from_order_note);
+        if (!adminNotes || !orderId || !Array.isArray(catalogList) || catalogList.length === 0) return cleanBase;
+        const norm = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const extraItems: any[] = [];
+        const lines = String(adminNotes).split(/\r?\n/);
+        for (const line of lines) {
+            const m = line.match(/^\s*\d+\s*\t\s*([^\t]+?)\t\s*([\d.,]+)\s*([a-zA-Z]+)?(?:\t\s*\$?\s*([\d.,]+))?/);
+            if (!m) continue;
+            const rawName = m[1].trim();
+            const nName = norm(rawName);
+            if (!nName) continue;
+            const qty = parseFloat(m[2].replace(',', '.')) || 1;
+            const unit = (m[3] || 'Kg').trim();
+            const parsedPrice = m[4] ? (parseFloat(m[4].replace(/\./g, '').replace(',', '.')) || 0) : 0;
+
+            const alreadyInOrder = cleanBase.some((oi: any) => {
+                const oiName = norm(oi.products?.name || oi.nickname || '');
+                return oiName && (oiName === nName || oiName.includes(nName) || nName.includes(oiName));
+            });
+            if (alreadyInOrder) continue;
+
+            const matchedProd = catalogList.find(p => norm(p.name) === nName)
+                || catalogList.find(p => norm(p.name).startsWith(nName))
+                || catalogList.find(p => norm(p.name).includes(nName) || nName.includes(norm(p.name)));
+
+            if (matchedProd && !extraItems.some(e => e.product_id === matchedProd.id)) {
+                extraItems.push({
+                    id: `note-item-${matchedProd.id}`,
+                    order_id: orderId,
+                    product_id: matchedProd.id,
+                    quantity: qty,
+                    unit_price: parsedPrice > 0 ? parsedPrice : (Number(matchedProd.base_price) || 0),
+                    is_from_order_note: true,
+                    products: {
+                        name: matchedProd.name,
+                        sku: matchedProd.sku || 'N/A',
+                        unit_of_measure: unit || matchedProd.unit_of_measure || 'Kg'
+                    }
+                });
+            }
+        }
+        return [...cleanBase, ...extraItems];
+    };
 
     // Phone Editor State
     const [editingPhone, setEditingPhone] = useState(false);
@@ -427,6 +474,10 @@ export default function PqrAuditModal({
         if (!pqr) return;
 
         setCurrentStep(1);
+        let restoredFromDraft = false;
+        const isNewCase = prevInitializedPqrIdRef.current !== pqr.id;
+        if (isNewCase) {
+        prevInitializedPqrIdRef.current = pqr.id;
         setIsRectifyingClosedCase(false);
         setResolutionNotes(cleanHumanResolutionNotes(pqr.resolution_notes || ''));
         setActivePhotoIdx(0);
@@ -449,7 +500,7 @@ export default function PqrAuditModal({
         setImputedTargetType(rca.imputedTargetType || (currentResp === 'proveedor' ? 'provider' : currentResp === 'transporte' ? 'driver' : 'employee'));
 
         if (rca.imputationMode === 'by_item' && Array.isArray(rca.itemImputations) && rca.itemImputations.length > 0) {
-            setImputationMode('by_item');
+            setImputationMode('global');
             const loadedMap: Record<string, any> = {};
             rca.itemImputations.forEach(it => {
                 if (it.returnId) {
@@ -464,9 +515,30 @@ export default function PqrAuditModal({
                 }
             });
             setItemImputations(loadedMap);
+            const loadedMulti: Record<string, { responsible: any; collaborators: ItemCollaboratorShare[] }> = {};
+            rca.itemImputations.forEach(it => {
+                if (it.returnId) {
+                    const cols: ItemCollaboratorShare[] = Array.isArray(it.collaborators) && it.collaborators.length > 0
+                        ? it.collaborators
+                        : (it.imputedEntity?.id ? [{
+                            entityId: it.imputedEntity.id,
+                            entityName: it.imputedEntity.name,
+                            entityRole: it.imputedEntity.role,
+                            entityType: it.imputedEntity.entityType,
+                            amount: it.imputedEntity.baseAmount ?? it.amount ?? it.imputedEntity.deductionAmount ?? 0,
+                            waiveDeduction: Boolean(it.imputedEntity.waiveDeduction)
+                        }] : []);
+                    loadedMulti[it.returnId] = {
+                        responsible: (it.responsible || 'picking') as any,
+                        collaborators: cols
+                    };
+                }
+            });
+            setItemMultiImputations(loadedMulti);
         } else {
             setImputationMode('global');
             setItemImputations({});
+            setItemMultiImputations({});
         }
 
         if (rca.imputedEntities && rca.imputedEntities.length > 0) {
@@ -534,7 +606,7 @@ export default function PqrAuditModal({
 
         // Check for progressive draft saved in localStorage (only for active pending/in_progress cases)
         const draftKey = `pqr_audit_draft_${pqr.id}`;
-        let restoredFromDraft = false;
+        restoredFromDraft = false;
         const isCaseAlreadyClosed = pqr.status === 'resolved' || pqr.status === 'rejected';
         try {
             const rawDraft = !isCaseAlreadyClosed ? localStorage.getItem(draftKey) : null;
@@ -559,6 +631,7 @@ export default function PqrAuditModal({
                     if (draft.rcaEvidenceNotes !== undefined) setRcaEvidenceNotes(draft.rcaEvidenceNotes);
                     if (draft.imputedTargetType) setImputedTargetType(draft.imputedTargetType);
                     if (Array.isArray(draft.imputedEntities)) setImputedEntities(draft.imputedEntities);
+                    if (draft.itemMultiImputations && typeof draft.itemMultiImputations === 'object') setItemMultiImputations(draft.itemMultiImputations);
                     if (draft.sanitaryKey) setSanitaryKey(draft.sanitaryKey);
                     if (draft.selectedItemId) setSelectedItemId(draft.selectedItemId);
                     if (draft.noveltyQty !== undefined) setNoveltyQty(draft.noveltyQty);
@@ -594,6 +667,7 @@ export default function PqrAuditModal({
             setIsDraftRestored(false);
             setLastSavedDraftTime(null);
         }
+        }
 
         if (pqr.order_id) {
             setLoadingItems(true);
@@ -603,7 +677,7 @@ export default function PqrAuditModal({
                         .from('order_items')
                         .select(`*, products(name, sku, unit_of_measure)`)
                         .eq('order_id', pqr.order_id);
-                    setOrderItems(items || []);
+                    setOrderItems(mergeOrderItemsWithAdminNotes(items || [], pqr.orders?.admin_notes, pqr.order_id, availableCatalogProducts));
 
                     const { data: stopData } = await supabase
                         .from('route_stops')
@@ -630,7 +704,7 @@ export default function PqrAuditModal({
             setOrderItems([]);
         }
 
-        if (!restoredFromDraft) setLinkingOrderId('');
+        if (isNewCase && !restoredFromDraft) setLinkingOrderId('');
         if (pqr.client_id) {
             setLoadingRecentOrders(true);
             (async () => {
@@ -674,7 +748,61 @@ export default function PqrAuditModal({
                         ...o,
                         branch_name: branchNameMap.get(o.profile_id) || ''
                     }));
-                    setClientRecentOrders(enrichedOrders);
+                    const cleanBranchToken = (pqr.profiles?.company_name || pqr.profiles?.contact_name || '')
+                        .toUpperCase()
+                        .replace(/INVESTMENTS\s+CORTES/g, '')
+                        .replace(/OBSEQUIO(S)?(\s+NAVIDAD)?/g, '')
+                        .replace(/MUESTRA(S)?/g, '')
+                        .replace(/DE\s+INGLATERRA/g, '')
+                        .replace(/\b(S\.?A\.?S\.?|LTDA|S\.?A\.?)\b/g, '')
+                        .replace(/[^A-Z0-9ÁÉÍÓÚÑ\s]/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+
+                    let allOrders = [...enrichedOrders];
+                    if (cleanBranchToken.length >= 4) {
+                        const { data: mirrorProfs } = await supabase
+                            .from('profiles')
+                            .select('id, company_name')
+                            .ilike('company_name', `%${cleanBranchToken}%`)
+                            .limit(15);
+                        const mirrorIds = (mirrorProfs || [])
+                            .map((mp: any) => {
+                                if (mp.company_name) branchNameMap.set(mp.id, mp.company_name);
+                                return mp.id;
+                            })
+                            .filter((id: string) => !familyIds.has(id));
+                        if (mirrorIds.length > 0) {
+                            const { data: mirrorOrders } = await supabase
+                                .from('orders')
+                                .select('id, sequence_id, profile_id, total, status, created_at, delivery_date, shipping_address, origin_source, admin_notes')
+                                .in('profile_id', mirrorIds)
+                                .order('created_at', { ascending: false })
+                                .limit(20);
+                            (mirrorOrders || []).forEach((mo: any) => {
+                                if (!allOrders.some(existing => existing.id === mo.id)) {
+                                    allOrders.push({
+                                        ...mo,
+                                        branch_name: branchNameMap.get(mo.profile_id) || ''
+                                    });
+                                }
+                            });
+                        }
+                    }
+
+                    const sortedOrders = allOrders.sort((a: any, b: any) => {
+                        const aExact = a.profile_id === pqr.client_id ? 1 : 0;
+                        const bExact = b.profile_id === pqr.client_id ? 1 : 0;
+                        if (aExact !== bExact) return bExact - aExact;
+                        const aNameMatch = cleanBranchToken.length >= 4 && (a.branch_name || '').toUpperCase().includes(cleanBranchToken) ? 1 : 0;
+                        const bNameMatch = cleanBranchToken.length >= 4 && (b.branch_name || '').toUpperCase().includes(cleanBranchToken) ? 1 : 0;
+                        if (aNameMatch !== bNameMatch) return bNameMatch - aNameMatch;
+                        const aCommercial = Number(a.total || 0) > 0 ? 1 : 0;
+                        const bCommercial = Number(b.total || 0) > 0 ? 1 : 0;
+                        if (aCommercial !== bCommercial) return bCommercial - aCommercial;
+                        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                    });
+                    setClientRecentOrders(sortedOrders);
                 } catch (err) {
                     console.error('Error fetching client recent orders:', err);
                 } finally {
@@ -693,6 +821,88 @@ export default function PqrAuditModal({
         setReplacementPlanItems(defaults);
     }, [pqr?.id, caseReturns, orderItems, isReplacementPlanCustomized]);
 
+    // Enrich orderItems with unbilled products from admin_notes ([ORIGEN WHATSAPP / CHAT]) once catalog products load
+    useEffect(() => {
+        if (!pqr?.order_id || !pqr?.orders?.admin_notes || availableCatalogProducts.length === 0) return;
+        setOrderItems(prev => {
+            const merged = mergeOrderItemsWithAdminNotes(prev, pqr.orders?.admin_notes, pqr.order_id, availableCatalogProducts);
+            return merged.length !== prev.length ? merged : prev;
+        });
+    }, [pqr?.order_id, pqr?.orders?.admin_notes, availableCatalogProducts]);
+
+    useEffect(() => {
+        if (!pqr || isReplacementPlanCustomized) return;
+        const defaults = buildDefaultReplacementPlanItems(caseReturns, orderItems);
+        setReplacementPlanItems(defaults);
+    }, [pqr?.id, caseReturns, orderItems, isReplacementPlanCustomized]);
+
+    // Synchronize Step 1 itemMultiImputations <-> Step 3 imputedEntities and heal legacy slider drift
+    useEffect(() => {
+        if (!pqr || caseReturns.length === 0 || nominalNoveltiesCoQ <= 0) return;
+
+        const hasMultiAssigned = Object.values(itemMultiImputations).some(
+            entry => entry && ((entry.collaborators && entry.collaborators.length > 0) || entry.responsible === 'proveedor' || entry.responsible === 'cliente')
+        );
+
+        if (hasMultiAssigned) {
+            recalculateFromMultiMatrix(itemMultiImputations);
+            return;
+        }
+
+        // Heal legacy draft where itemMultiImputations was not persisted and slider rounded COP amounts (e.g. $22.444 / $1.306 vs $22.200 / $1.550)
+        if (imputedEntities.length > 0 && imputedEntities.length === caseReturns.length && imputedEntities.every(e => e.entityType !== 'provider')) {
+            const itemsWithAmounts = caseReturns.map((ret: any) => {
+                const oi = orderItems.find(o => o.product_id === ret.product_id) ||
+                           ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+                const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+                const reasonLower = (ret.reason || '').toLowerCase();
+                const isSinCargue = reasonLower.includes('escaso') || reasonLower.includes('sin cargue');
+                const isErrorDigitacion = reasonLower.includes('digitaci');
+                const isNoSolicitado = reasonLower.includes('no solicitado');
+                const isFaltante = !isSinCargue && !isErrorDigitacion && !isNoSolicitado && reasonLower.includes('faltante');
+                const defaultResp = isSinCargue ? 'proveedor' : (isErrorDigitacion || isNoSolicitado) ? 'comercial' : isFaltante ? 'picking' : 'picking';
+                return { ret, itemAmount, defaultResp };
+            }).filter(x => x.itemAmount > 0);
+
+            if (itemsWithAmounts.length === imputedEntities.length) {
+                const sortedItems = [...itemsWithAmounts].sort((a, b) => a.itemAmount - b.itemAmount);
+                const sortedEntities = [...imputedEntities].sort((a, b) => {
+                    const amtA = a.baseAmount || a.deductionAmount || Math.round((nominalNoveltiesCoQ * (a.sharePercent || 0)) / 100);
+                    const amtB = b.baseAmount || b.deductionAmount || Math.round((nominalNoveltiesCoQ * (b.sharePercent || 0)) / 100);
+                    return amtA - amtB;
+                });
+
+                const maxTolerance = Math.max(500, nominalNoveltiesCoQ * 0.05);
+                const allMatch = sortedItems.every((it, idx) => {
+                    const ent = sortedEntities[idx];
+                    const entAmt = ent.baseAmount || ent.deductionAmount || Math.round((nominalNoveltiesCoQ * (ent.sharePercent || 0)) / 100);
+                    return Math.abs(entAmt - it.itemAmount) <= maxTolerance;
+                });
+
+                if (allMatch) {
+                    const healedMatrix: Record<string, { responsible: any; collaborators: ItemCollaboratorShare[] }> = {};
+                    sortedItems.forEach((it, idx) => {
+                        const ent = sortedEntities[idx];
+                        healedMatrix[it.ret.id] = {
+                            responsible: it.defaultResp as any,
+                            collaborators: [{
+                                entityId: ent.id,
+                                entityName: ent.name,
+                                entityRole: ent.role || 'Operativo',
+                                entityType: ent.entityType || 'employee',
+                                amount: it.itemAmount,
+                                waiveDeduction: Boolean(ent.waiveDeduction)
+                            }]
+                        };
+                    });
+                    setItemMultiImputations(healedMatrix);
+                    recalculateFromMultiMatrix(healedMatrix);
+                }
+            }
+        }
+    }, [pqr?.id, caseReturns, orderItems, nominalNoveltiesCoQ]);
+
     // Progressive Auto-Save Draft to LocalStorage (Debounced 400ms)
     useEffect(() => {
         if (!pqr?.id || !isOpen || isRestoringDraftRef.current || isReadOnlyClosed) return;
@@ -709,6 +919,7 @@ export default function PqrAuditModal({
                     rcaEvidenceNotes,
                     imputedTargetType,
                     imputedEntities,
+                    itemMultiImputations,
                     sanitaryKey,
                     selectedItemId,
                     noveltyQty,
@@ -744,6 +955,7 @@ export default function PqrAuditModal({
         rcaEvidenceNotes,
         imputedTargetType,
         imputedEntities,
+        itemMultiImputations,
         sanitaryKey,
         selectedItemId,
         noveltyQty,
@@ -1064,6 +1276,18 @@ export default function PqrAuditModal({
 
         setImputedTargetType(newTargetType);
         setSelectedImputedToAdd('');
+        if (newResp !== 'proveedor') {
+            const hasMultiAssigned = Object.values(itemMultiImputations).some(
+                entry => entry && ((entry.collaborators && entry.collaborators.length > 0) || entry.responsible === 'proveedor' || entry.responsible === 'cliente')
+            );
+            if (hasMultiAssigned) {
+                recalculateFromMultiMatrix(itemMultiImputations);
+                return;
+            }
+            setImputedEntities(prev => prev.filter(e => e.entityType !== 'provider'));
+            return;
+        }
+        setSelectedImputedToAdd('');
         
         if (newResp === 'proveedor') {
             setImputedEntities([{
@@ -1088,6 +1312,7 @@ export default function PqrAuditModal({
             return [{
                 ...entities[0],
                 sharePercent: 100,
+                baseAmount: totalAmount,
                 deductionAmount: entities[0].waiveDeduction ? 0 : totalAmount
             }];
         }
@@ -1103,6 +1328,7 @@ export default function PqrAuditModal({
             return {
                 ...item,
                 sharePercent: pct,
+                baseAmount: amount,
                 deductionAmount: item.waiveDeduction ? 0 : amount
             };
         });
@@ -1173,6 +1399,18 @@ export default function PqrAuditModal({
     };
 
     const handleRemoveImputedEntity = (entityId: string) => {
+        setItemMultiImputations(prev => {
+            const next = { ...prev };
+            Object.keys(next).forEach(k => {
+                if (next[k]?.collaborators) {
+                    next[k] = {
+                        ...next[k],
+                        collaborators: next[k].collaborators.filter(c => c.entityId !== entityId)
+                    };
+                }
+            });
+            return next;
+        });
         const remaining = imputedEntities.filter(e => e.id !== entityId);
         if (remaining.length === 0) {
             setImputedEntities([]);
@@ -1251,11 +1489,14 @@ export default function PqrAuditModal({
             // Normal operational employees
             (entry.collaborators || []).forEach(colab => {
                 if (!colab.entityId) return;
-                const deduction = colab.waiveDeduction ? 0 : (Number(colab.amount) || 0);
+                const rawAmt = Number(colab.amount) || 0;
+                const deduction = colab.waiveDeduction ? 0 : rawAmt;
                 const existing = entityMap.get(colab.entityId);
 
                 if (existing) {
+                    existing.baseAmount = (existing.baseAmount || 0) + rawAmt;
                     existing.deductionAmount = (existing.deductionAmount || 0) + deduction;
+                    existing.waiveDeduction = Boolean(existing.waiveDeduction && colab.waiveDeduction);
                     if (!existing.assignedItemNames) existing.assignedItemNames = [];
                     if (!existing.assignedItemNames.includes(pName)) existing.assignedItemNames.push(pName);
                 } else {
@@ -1265,6 +1506,7 @@ export default function PqrAuditModal({
                         role: colab.entityRole || entry.responsible,
                         entityType: colab.entityType || 'employee',
                         sharePercent: 0,
+                        baseAmount: rawAmt,
                         deductionAmount: deduction,
                         waiveDeduction: colab.waiveDeduction,
                         assignedItemNames: [pName]
@@ -1277,7 +1519,7 @@ export default function PqrAuditModal({
         const totalBaseCoQ = nominalNoveltiesCoQ > 0 ? nominalNoveltiesCoQ : 1;
         const consolidated = list.map(e => ({
             ...e,
-            sharePercent: Number((((e.deductionAmount || 0) / totalBaseCoQ) * 100).toFixed(1))
+            sharePercent: Number((((e.baseAmount ?? e.deductionAmount ?? 0) / totalBaseCoQ) * 100).toFixed(1))
         }));
 
         setImputedEntities(consolidated);
@@ -1496,7 +1738,7 @@ export default function PqrAuditModal({
         const totalBaseCoQ = nominalNoveltiesCoQ > 0 ? nominalNoveltiesCoQ : 1;
         const consolidated = list.map(e => ({
             ...e,
-            sharePercent: Number((((e.deductionAmount || 0) / totalBaseCoQ) * 100).toFixed(1))
+            sharePercent: Number((((e.baseAmount ?? e.deductionAmount ?? 0) / totalBaseCoQ) * 100).toFixed(1))
         }));
 
         setImputedEntities(consolidated);
@@ -1613,14 +1855,70 @@ export default function PqrAuditModal({
         setImputedEntities(updated);
     };
 
+    const handleUpdateEntityAmount = (entityId: string, rawAmount: number) => {
+        const cleanAmount = Math.max(0, Math.round(Number(rawAmount) || 0));
+        const totalBase = nominalNoveltiesCoQ > 0 ? nominalNoveltiesCoQ : 1;
+
+        setItemMultiImputations(prev => {
+            const matchingKeys = Object.keys(prev).filter(k =>
+                (prev[k]?.collaborators || []).some(c => c.entityId === entityId)
+            );
+            if (matchingKeys.length === 1) {
+                const k = matchingKeys[0];
+                return {
+                    ...prev,
+                    [k]: {
+                        ...prev[k],
+                        collaborators: prev[k].collaborators.map(c =>
+                            c.entityId === entityId ? { ...c, amount: cleanAmount } : c
+                        )
+                    }
+                };
+            }
+            return prev;
+        });
+
+        setImputedEntities(prev => prev.map(e => {
+            if (e.id === entityId) {
+                const pct = Number(((cleanAmount / totalBase) * 100).toFixed(1));
+                return {
+                    ...e,
+                    baseAmount: cleanAmount,
+                    sharePercent: pct,
+                    deductionAmount: e.waiveDeduction ? 0 : cleanAmount
+                };
+            }
+            return e;
+        }));
+    };
+
     const handleToggleWaiveDeduction = (entityId: string) => {
+        const currentTarget = imputedEntities.find(e => e.id === entityId);
+        const targetNextWaive = currentTarget ? !currentTarget.waiveDeduction : true;
+        setItemMultiImputations(prev => {
+            let changed = false;
+            const next: typeof prev = { ...prev };
+            Object.keys(next).forEach(k => {
+                if ((next[k]?.collaborators || []).some(c => c.entityId === entityId)) {
+                    changed = true;
+                    next[k] = {
+                        ...next[k],
+                        collaborators: next[k].collaborators.map(c =>
+                            c.entityId === entityId ? { ...c, waiveDeduction: targetNextWaive } : c
+                        )
+                    };
+                }
+            });
+            return changed ? next : prev;
+        });
         setImputedEntities(prev => prev.map(e => {
             if (e.id === entityId) {
                 const nextWaive = !e.waiveDeduction;
                 return {
                     ...e,
                     waiveDeduction: nextWaive,
-                    deductionAmount: nextWaive ? 0 : Math.round((nominalNoveltiesCoQ * (e.sharePercent !== undefined ? e.sharePercent : 100)) / 100)
+                    baseAmount: e.baseAmount !== undefined && e.baseAmount > 0 ? e.baseAmount : (e.deductionAmount !== undefined && e.deductionAmount > 0 ? e.deductionAmount : Math.round((nominalNoveltiesCoQ * (e.sharePercent !== undefined ? e.sharePercent : 100)) / 100)),
+                    deductionAmount: nextWaive ? 0 : (e.baseAmount !== undefined && e.baseAmount > 0 ? e.baseAmount : (e.deductionAmount !== undefined && e.deductionAmount > 0 ? e.deductionAmount : Math.round((nominalNoveltiesCoQ * (e.sharePercent !== undefined ? e.sharePercent : 100)) / 100)))
                 };
             }
             return e;
@@ -1717,6 +2015,21 @@ export default function PqrAuditModal({
                 .eq('id', pqr.id);
             if (updateErr) throw updateErr;
 
+            pqr.order_id = orderData.id;
+            pqr.orders = orderData;
+            setLoadingItems(true);
+            const [{ data: linkedItems }, { data: stopData }] = await Promise.all([
+                supabase.from('order_items').select('*, products(name, sku, unit_of_measure)').eq('order_id', orderData.id),
+                supabase.from('route_stops').select('route_id, routes(id, vehicle_plate, driver_id, driver_name)').eq('order_id', orderData.id).maybeSingle()
+            ]);
+            setOrderItems(mergeOrderItemsWithAdminNotes(linkedItems || [], orderData.admin_notes, orderData.id, availableCatalogProducts));
+            if (stopData?.routes) {
+                const r = stopData.routes as any;
+                setAssignedRouteDriver({ id: r.driver_id, name: r.driver_name || 'Conductor Asignado en Ruta', plate: r.vehicle_plate });
+            } else {
+                setAssignedRouteDriver(null);
+            }
+            setLoadingItems(false);
             showToast(`Pedido #${orderData.sequence_id} vinculado exitosamente.`, 'success');
             onResolved();
         } catch (e: any) {
@@ -1735,11 +2048,44 @@ export default function PqrAuditModal({
                 .eq('id', pqr.id);
             if (updateErr) throw updateErr;
 
+            pqr.order_id = null;
+            pqr.orders = null;
+            setOrderItems([]);
+            setAssignedRouteDriver(null);
+            setLinkingOrderId('');
             showToast('Pedido desvinculado del caso.', 'success');
             onResolved();
         } catch (e: any) {
             showToast('Error al desvincular pedido: ' + e.message, 'error');
         } finally {
+            setIsLinkingOrder(false);
+        }
+    };
+
+    const handleSearchAndLinkByFolio = async () => {
+        const seq = parseInt(manualOrderFolioInput.replace(/\D/g, ''), 10);
+        if (!seq) {
+            showToast('Ingresa un número de pedido válido (ej. 1183).', 'warning');
+            return;
+        }
+        setIsLinkingOrder(true);
+        try {
+            const { data: foundOrd, error: findErr } = await supabase
+                .from('orders')
+                .select('id, sequence_id')
+                .eq('sequence_id', seq)
+                .maybeSingle();
+            if (findErr) throw findErr;
+            if (!foundOrd) {
+                showToast(`No se encontró el Pedido #${seq}.`, 'warning');
+                setIsLinkingOrder(false);
+                return;
+            }
+            setManualOrderFolioInput('');
+            setLinkingOrderId(foundOrd.id);
+            await handleLinkOrder(foundOrd.id);
+        } catch (err: any) {
+            showToast('Error al buscar pedido: ' + err.message, 'error');
             setIsLinkingOrder(false);
         }
     };
@@ -1750,7 +2096,19 @@ export default function PqrAuditModal({
             return;
         }
 
-        const selItem = orderItems.find(i => i.id === selectedItemId);
+        const catProd = selectedItemId.startsWith('catalog-')
+            ? availableCatalogProducts.find(p => `catalog-${p.id}` === selectedItemId)
+            : null;
+        const selItem = orderItems.find(i => i.id === selectedItemId) || (catProd ? {
+            id: selectedItemId,
+            product_id: catProd.id,
+            unit_price: Number(catProd.base_price) || 0,
+            products: {
+                name: catProd.name,
+                sku: catProd.sku || 'N/A',
+                unit_of_measure: catProd.unit_of_measure || 'Kg'
+            }
+        } : null);
         if (!selItem) return;
 
         setActionLoading(true);
@@ -1861,6 +2219,71 @@ export default function PqrAuditModal({
                 console.error('Error updating physical return custody:', e);
             }
         }
+    };
+
+    const buildSerializedItemImputations = (isZeroDeductionCase: boolean): ItemImputation[] | undefined => {
+        const hasMulti = Object.values(itemMultiImputations).some(
+            e => e && ((e.collaborators && e.collaborators.length > 0) || e.responsible === 'proveedor' || e.responsible === 'cliente')
+        );
+        if (!hasMulti && imputationMode !== 'by_item') return undefined;
+
+        return caseReturns.map((ret: any) => {
+            const oi = orderItems.find(o => o.product_id === ret.product_id) ||
+                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+            const unitPrice = Number(oi?.unit_price || ret.unit_price || 0);
+            const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
+            const pName = ret.products?.name || oi?.products?.name || 'Producto';
+
+            const multiEntry = itemMultiImputations[ret.id];
+            if (multiEntry && ((multiEntry.collaborators && multiEntry.collaborators.length > 0) || multiEntry.responsible === 'proveedor' || multiEntry.responsible === 'cliente')) {
+                const firstCol = multiEntry.collaborators?.[0];
+                return {
+                    returnId: ret.id,
+                    productId: ret.product_id,
+                    productName: pName,
+                    quantity: Number(ret.quantity_returned) || 0,
+                    unitOfMeasure: ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg',
+                    unitPrice: unitPrice,
+                    amount: itemAmount,
+                    responsible: multiEntry.responsible || rcaResponsible || 'picking',
+                    collaborators: multiEntry.collaborators,
+                    imputedEntity: firstCol ? {
+                        id: firstCol.entityId,
+                        name: firstCol.entityName,
+                        role: firstCol.entityRole,
+                        entityType: firstCol.entityType || 'employee',
+                        sharePercent: nominalNoveltiesCoQ > 0 ? Number((((Number(firstCol.amount) || 0) / nominalNoveltiesCoQ) * 100).toFixed(1)) : 100,
+                        baseAmount: Number(firstCol.amount) || 0,
+                        deductionAmount: isZeroDeductionCase ? 0 : (firstCol.waiveDeduction ? 0 : (Number(firstCol.amount) || 0)),
+                        waiveDeduction: firstCol.waiveDeduction,
+                        assignedItemNames: [pName]
+                    } : undefined
+                };
+            }
+
+            const imp = itemImputations[ret.id];
+            return {
+                returnId: ret.id,
+                productId: ret.product_id,
+                productName: pName,
+                quantity: Number(ret.quantity_returned) || 0,
+                unitOfMeasure: ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg',
+                unitPrice: unitPrice,
+                amount: itemAmount,
+                responsible: imp?.responsible || rcaResponsible || 'picking',
+                imputedEntity: imp && imp.entityId ? {
+                    id: imp.entityId,
+                    name: imp.entityName,
+                    role: imp.entityRole,
+                    entityType: imp.entityType,
+                    sharePercent: nominalNoveltiesCoQ > 0 ? Number(((itemAmount / nominalNoveltiesCoQ) * 100).toFixed(1)) : 100,
+                    baseAmount: itemAmount,
+                    deductionAmount: isZeroDeductionCase ? 0 : (imp.waiveDeduction ? 0 : itemAmount),
+                    waiveDeduction: imp.waiveDeduction,
+                    assignedItemNames: [pName]
+                } : undefined
+            };
+        });
     };
 
     const handleResolvePqr = async (status: 'resolved' | 'rejected') => {
@@ -2113,7 +2536,9 @@ export default function PqrAuditModal({
                         isReplacementRejection: isReplacementRejection,
                         imputedTargetType: imputedTargetType,
                         imputedEntities: imputedEntities,
-                        auditedBy: auditorDisplayName
+                        auditedBy: auditorDisplayName,
+                        imputationMode: buildSerializedItemImputations(false) ? 'by_item' : imputationMode,
+                        itemImputations: buildSerializedItemImputations(false)
                     });
                     const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
                     const prelimNotes = `${baseCleanNotes}\n\n${prelimConcept}\n\n${prelimRcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
@@ -2198,8 +2623,8 @@ export default function PqrAuditModal({
                 imputedTargetType: imputedTargetType,
                 imputedEntities: finalizedImputedEntities,
                 auditedBy: auditorDisplayName,
-                imputationMode: imputationMode,
-                itemImputations: itemImputationsList
+                imputationMode: (buildSerializedItemImputations(isZeroDeductionCase) || itemImputationsList) ? 'by_item' : imputationMode,
+                itemImputations: buildSerializedItemImputations(isZeroDeductionCase) || itemImputationsList
             });
             const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
             const finalNotes = `${baseCleanNotes}${conceptBlock ? `\n\n${conceptBlock}` : ''}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
@@ -2331,8 +2756,8 @@ export default function PqrAuditModal({
                 imputedTargetType: imputedTargetType,
                 imputedEntities: finalizedImputedEntities,
                 auditedBy: auditorDisplayName,
-                imputationMode: imputationMode,
-                itemImputations: itemImputationsList
+                imputationMode: (buildSerializedItemImputations(isZeroDeductionCase) || itemImputationsList) ? 'by_item' : imputationMode,
+                itemImputations: buildSerializedItemImputations(isZeroDeductionCase) || itemImputationsList
             });
             const respLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
             const finalNotes = `${cleanNotes}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
@@ -2973,6 +3398,63 @@ export default function PqrAuditModal({
                                                     {assignedRouteDriver ? `${assignedRouteDriver.name}${assignedRouteDriver.plate ? ` (${assignedRouteDriver.plate})` : ''}` : 'No asignado'}
                                                 </span>
                                             </div>
+                                            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #F1F5F9', paddingTop: '6px', marginTop: '2px' }}>
+                                                <span style={{ color: '#64748B', fontSize: '0.65rem', fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+                                                    Productos del Pedido ({orderItems.length}) — clic para seleccionar:
+                                                </span>
+                                                {loadingItems ? (
+                                                    <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Cargando productos del pedido...</span>
+                                                ) : orderItems.length > 0 ? (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '76px', overflowY: 'auto' }}>
+                                                        {orderItems.map((it: any) => {
+                                                            const isSelected = selectedItemId === it.id;
+                                                            const isFromNote = Boolean(it.is_from_order_note);
+                                                            return (
+                                                                <button
+                                                                    key={it.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setSelectedItemId(it.id);
+                                                                        if (it.quantity) {
+                                                                            setNoveltyQty(Number(it.quantity));
+                                                                            setNoveltyQtyInput(String(it.quantity));
+                                                                        }
+                                                                        noveltyQtyInputRef.current?.focus();
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '2px 7px',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '0.66rem',
+                                                                        fontWeight: isSelected ? '800' : '600',
+                                                                        cursor: 'pointer',
+                                                                        border: isSelected
+                                                                            ? '1px solid #0D7A57'
+                                                                            : isFromNote
+                                                                                ? '1px solid #FCD34D'
+                                                                                : '1px solid #E2E8F0',
+                                                                        backgroundColor: isSelected
+                                                                            ? '#ECFDF5'
+                                                                            : isFromNote
+                                                                                ? '#FFFBEB'
+                                                                                : '#F8FAFC',
+                                                                        color: isSelected
+                                                                            ? '#065F46'
+                                                                            : isFromNote
+                                                                                ? '#92400E'
+                                                                                : '#334155'
+                                                                    }}
+                                                                    title={isFromNote ? 'Solicitado en la nota original del pedido (no facturado en remisión)' : 'Producto facturado en el pedido'}
+                                                                >
+                                                                    {it.products?.name || it.nickname || 'Producto'} ({it.quantity} {it.products?.unit_of_measure || 'Kg'}{isFromNote ? ' • En nota original' : ''})
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Sin ítems registrados en este pedido</span>
+                                                )}<span style={{ display: 'none' }}>
+                                                </span>
+                                            </div>
                                         </div>
                                     ) : authorInfo.isInternalCase ? (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', backgroundColor: '#F0F9FF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #BAE6FD', fontSize: '0.74rem' }}>
@@ -2996,13 +3478,36 @@ export default function PqrAuditModal({
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: 'white', padding: '10px 12px', borderRadius: '8px', border: '1px dashed #CBD5E1' }}>
                                             <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                                                Este caso no tiene un pedido enlazado. Selecciona un pedido reciente del cliente para habilitar reposiciones:
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <span>Selecciona un pedido del cliente (se vincula al instante) o escribe el # de folio:</span>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <input
+                                                            type="text"
+                                                            value={manualOrderFolioInput}
+                                                            onChange={e => setManualOrderFolioInput(e.target.value)}
+                                                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearchAndLinkByFolio(); } }}
+                                                            placeholder="# Pedido (ej. 1183)"
+                                                            style={{ width: '115px', padding: '3px 7px', fontSize: '0.68rem', border: '1px solid #CBD5E1', borderRadius: '6px', fontWeight: '700', color: '#0F172A' }}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleSearchAndLinkByFolio}
+                                                            disabled={!manualOrderFolioInput.trim() || isLinkingOrder}
+                                                            style={{ padding: '3px 8px', backgroundColor: '#0F172A', color: 'white', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '700', border: 'none', cursor: 'pointer' }}
+                                                        >
+                                                            Ir
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <div style={{ flex: 1 }}>
                                                     <SearchableSelect
                                                         value={linkingOrderId}
-                                                        onChange={setLinkingOrderId}
+                                                        onChange={(val) => {
+                                                            setLinkingOrderId(val);
+                                                            if (val) handleLinkOrder(val);
+                                                        }}
                                                         disabled={loadingRecentOrders || isLinkingOrder}
                                                         placeholder="-- Seleccionar Pedido Reciente --"
                                                         searchPlaceholder="Buscar por #pedido, fecha o valor..."
@@ -3010,7 +3515,7 @@ export default function PqrAuditModal({
                                                         options={clientRecentOrders.map(o => ({
                                                             value: o.id,
                                                             label: `Pedido #${o.sequence_id}`,
-                                                            sublabel: `${new Date(o.created_at).toLocaleDateString('es-CO')} • ${o.shipping_address || 'Sede'}`,
+                                                            sublabel: `${new Date(o.created_at).toLocaleDateString('es-CO')} • ${o.branch_name || o.shipping_address || 'Sede'}`,
                                                             badge: formatMoney(o.total || 0)
                                                         }))}
                                                     />
@@ -3350,15 +3855,36 @@ export default function PqrAuditModal({
                                                     <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Producto del Pedido</label>
                                                     <SearchableSelect
                                                         value={selectedItemId}
-                                                        onChange={setSelectedItemId}
+                                                        onChange={(val) => {
+                                                            setSelectedItemId(val);
+                                                            const matchedOi = orderItems.find((it: any) => it.id === val);
+                                                            if (matchedOi && (matchedOi.is_from_order_note || noveltyQty <= 0) && matchedOi.quantity) {
+                                                                setNoveltyQty(Number(matchedOi.quantity));
+                                                                setNoveltyQtyInput(String(matchedOi.quantity));
+                                                            }
+                                                        }}
                                                         onSelectComplete={() => noveltyQtyInputRef.current?.focus()}
                                                         placeholder="-- Seleccionar Producto del Pedido --"
                                                         searchPlaceholder="Buscar producto por nombre..."
                                                         clearable
-                                                        options={orderItems.map(item => ({
+                                                        options={[
+                                                            ...orderItems.map(item => ({
                                                             value: item.id,
                                                             label: item.products?.name || item.nickname || 'Ítem sin nombre',
-                                                            sublabel: `Pedido: ${item.quantity} ${item.products?.unit_of_measure || 'ud'} • Precio: ${formatMoney(item.unit_price)}`
+                                                                sublabel: item.is_from_order_note
+                                                                    ? `Solicitado en Nota Original: ${item.quantity} ${item.products?.unit_of_measure || 'ud'} (No facturado en remisión)`
+                                                                    : `Pedido: ${item.quantity} ${item.products?.unit_of_measure || 'ud'} • Precio: ${formatMoney(item.unit_price)}`,
+                                                                badge: item.is_from_order_note ? 'En nota original' : formatMoney(item.unit_price || 0)
+                                                            })),
+                                                            ...availableCatalogProducts
+                                                                .filter(cp => !orderItems.some((oi: any) => oi.product_id === cp.id))
+                                                                .map(cp => ({
+                                                                    value: `catalog-${cp.id}`,
+                                                                    label: cp.name,
+                                                                    sublabel: `Catálogo General (No facturado en pedido) • Base: ${formatMoney(cp.base_price || 0)}`,
+                                                                    badge: 'Catálogo'
+                                                                }))
+                                                        ].map(opt => ({ ...opt
                                                         }))}
                                                     />
                                                 </div>
@@ -3785,13 +4311,16 @@ export default function PqrAuditModal({
                                                                                         borderRadius: '4px',
                                                                                         fontSize: '0.62rem',
                                                                                         fontWeight: '700',
-                                                                                        border: colab.waiveDeduction ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
-                                                                                        backgroundColor: colab.waiveDeduction ? '#ECFDF5' : '#FFFFFF',
-                                                                                        color: colab.waiveDeduction ? '#059669' : '#64748B',
+                                                                                        border: colab.waiveDeduction ? '1px solid #A7F3D0' : '1px solid #FECDD3',
+                                                                                        backgroundColor: colab.waiveDeduction ? '#ECFDF5' : '#FFF1F2',
+                                                                                        color: colab.waiveDeduction ? '#059669' : '#BE123C',
+                                                                                        display: 'inline-flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '3px',
                                                                                         cursor: 'pointer'
                                                                                     }}
                                                                                 >
-                                                                                    {colab.waiveDeduction ? 'Exonerado ($0)' : 'A Cobrar'}
+                                                                                    {colab.waiveDeduction ? <><ShieldCheck size={11} /><span>No Cobrar ($0)</span></> : <><DollarSign size={11} /><span>Cobrar Cuota</span></>}
                                                                                 </button>
 
                                                                                 {!colab.waiveDeduction && (
@@ -3799,7 +4328,8 @@ export default function PqrAuditModal({
                                                                                         <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>$</span>
                                                                                         <input
                                                                                             type="number"
-                                                                                            value={colab.amount}
+                                                                                            value={colab.amount === 0 ? '' : colab.amount}
+                                                                                            placeholder="0"
                                                                                             onChange={e => handleUpdateCollaboratorAmount(ret.id, colab.entityId, parseFloat(e.target.value) || 0)}
                                                                                             style={{
                                                                                                 width: '85px',
@@ -5015,7 +5545,7 @@ export default function PqrAuditModal({
                                             <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', display: 'block' }}>
                                                 3. Matriz de Imputabilidad Nominal & Descuento
                                             </span>
-                                            {caseReturns.length >= 2 && (
+                                            {false && caseReturns.length >= 2 && (
                                                 <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', padding: '2px', borderRadius: '6px' }}>
                                                     <button
                                                         type="button"
@@ -5039,7 +5569,7 @@ export default function PqrAuditModal({
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            setImputationMode('by_item');
+                                                            setImputationMode('global');
                                                             recalculateImputedEntitiesFromItems(itemImputations);
                                                         }}
                                                         style={{
@@ -5562,6 +6092,11 @@ export default function PqrAuditModal({
                                                                 </span>
                                                             </div>
                                                             {entity.documentId && <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Doc: {entity.documentId}</span>}
+                                                            {entity.assignedItemNames && entity.assignedItemNames.length > 0 && (
+                                                                <span style={{ fontSize: '0.66rem', color: '#0D7A57', fontWeight: '700', display: 'block', marginTop: '2px' }}>
+                                                                    Producto(s): {entity.assignedItemNames.join(', ')}
+                                                                </span>
+                                                            )}
                                                         </div>
 
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -5574,9 +6109,31 @@ export default function PqrAuditModal({
                                                                     step="0.5"
                                                                     value={entity.sharePercent || 0}
                                                                     onChange={e => handleUpdateEntityPercent(entity.id, parseFloat(e.target.value))}
-                                                                    style={{ width: '90px', accentColor: '#0D7A57', cursor: 'pointer' }}
+                                                                    style={{ display: 'none' }}
                                                                 />
-                                                                <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.75rem', color: '#334155', minWidth: '42px', textAlign: 'right' }}>
+                                                                {!entity.waiveDeduction && resolutionOption !== 'opt1' && !isReadOnlyClosed && (
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748B' }}>$</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={(entity.baseAmount ?? entity.deductionAmount ?? 0) === 0 ? '' : (entity.baseAmount ?? entity.deductionAmount ?? Math.round((nominalNoveltiesCoQ * (entity.sharePercent || 0)) / 100))}
+                                                                            placeholder="0"
+                                                                            onChange={e => handleUpdateEntityAmount(entity.id, parseFloat(e.target.value) || 0)}
+                                                                            style={{
+                                                                                width: '85px',
+                                                                                padding: '3px 6px',
+                                                                                borderRadius: '5px',
+                                                                                border: '1px solid #CBD5E1',
+                                                                                fontSize: '0.72rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#0F172A',
+                                                                                textAlign: 'right',
+                                                                                backgroundColor: '#FFFFFF'
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.72rem', color: '#065F46', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', minWidth: '46px', textAlign: 'center' }}>
                                                                     {Number(entity.sharePercent || 0).toFixed(1)}%
                                                                 </span>
                                                             </div>

@@ -3611,7 +3611,24 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     address: string;
     sourceEmail: string;
     totalValue: number;
+    subject?: string;
+    itemsCount?: number;
+    matchedItemsCount?: number;
+    draftObj?: any;
   } | null>(null);
+
+  const REJECT_REASON_LABELS: Record<string, string> = {
+    no_es_pedido: 'NO ES PEDIDO',
+    spam: 'NO ES PEDIDO',
+    pedido_duplicado: 'DUPLICADO',
+    cobertura: 'SIN COBERTURA',
+    monto_minimo: 'MONTO MÍNIMO',
+    no_comercializado: 'NO COMERCIALIZADO',
+    datos_incompletos: 'DATOS INCOMPLETOS',
+    bloqueo_cartera: 'CARTERA / MORA',
+    sin_stock: 'SIN STOCK',
+    fuera_de_horario: 'FUERA DE HORARIO'
+  };
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
@@ -4353,47 +4370,84 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     }
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const draftToModify = drafts.find(d => d.id === id);
-    const isAlreadyRejected = draftToModify?.status === 'rejected';
+  const handleRestoreDraft = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const draftToRestore = drafts.find(d => d.id === id);
+    if (!draftToRestore) return;
 
     setActionConfirm({
       isOpen: true,
-      title: isAlreadyRejected ? '¿Eliminar borrador permanentemente?' : '¿Rechazar y eliminar borrador?',
-      message: isAlreadyRejected 
-        ? 'Este borrador ya está rechazado. ¿Deseas eliminarlo de forma permanente del sistema?' 
-        : '¿Estás seguro de que deseas rechazar y eliminar este borrador de pedido?',
-      confirmText: isAlreadyRejected ? 'Eliminar Permanentemente' : 'Rechazar y Eliminar',
+      title: '¿Restaurar correo a Pendientes?',
+      message: `¿Deseas devolver el correo "${cleanSubject(draftToRestore.email_subject) || draftToRestore.source_email}" a la bandeja de Pendientes para poder procesarlo?`,
+      confirmText: 'Restaurar a Pendiente',
       cancelText: 'Cancelar',
-      isDanger: true,
+      isDanger: false,
       onConfirm: async () => {
         try {
-          if (isAlreadyRejected) {
-            const { error } = await supabase
-              .from('order_drafts')
-              .delete()
-              .eq('id', id);
-
-            if (error) throw error;
-            setDrafts(prev => prev.filter(d => d.id !== id));
-            showToast('Borrador eliminado permanentemente.', 'success');
-          } else {
-            const { error } = await supabase
-              .from('order_drafts')
-              .update({ status: 'rejected' })
-              .eq('id', id);
-
-            if (error) throw error;
-            setDrafts(prev => prev.map(d => d.id === id ? { ...d, status: 'rejected' } : d));
-            showToast('Borrador rechazado.', 'success');
+          const res = await fetch('/api/orders/reject-draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              draftId: id,
+              action: 'restore'
+            })
+          });
+          const data = await safeFetchJson(res);
+          setDrafts(prev => prev.map(d => d.id === id ? {
+            ...d,
+            status: 'pending',
+            extracted_items: data.extracted_items || d.extracted_items
+          } : d));
+          if (selectedDraft?.id === id) {
+            setSelectedDraft((prev: any) => prev ? {
+              ...prev,
+              status: 'pending',
+              extracted_items: data.extracted_items || prev.extracted_items
+            } : null);
           }
-          if (selectedDraft?.id === id) setSelectedDraft(null);
-        } catch (err) {
-          console.error('Error deleting draft:', err);
-          showToast('Error al procesar la solicitud.', 'error');
+          showToast('Correo restaurado a la bandeja de Pendientes.', 'success');
+        } catch (err: any) {
+          console.error('Error restoring draft:', err);
+          showToast(err.message || 'Error al restaurar el correo.', 'error');
         }
       }
+    });
+  };
+
+  const handleDelete = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const draftToModify = drafts.find(d => d.id === id) || (selectedDraft?.id === id ? selectedDraft : null);
+    if (!draftToModify) return;
+
+    const meta = getDraftMetadata(draftToModify);
+    if (draftToModify.status === 'approved' || Boolean(meta.orderId)) {
+      showToast('Protección activa: No se puede rechazar un correo que ya fue convertido en pedido.', 'error');
+      return;
+    }
+
+    if (draftToModify.status === 'rejected') {
+      handleRestoreDraft(id, e);
+      return;
+    }
+
+    const rawItems = getDraftItems(draftToModify);
+    const activeRawItems = (selectedDraft?.id === id ? editableItems : rawItems).filter((itm: any) => !itm.isDeleted && !itm.isMetadata);
+    const matchedCount = activeRawItems.filter((itm: any) => Boolean(itm.matched_product_id || (itm.originalName && findMatchedProduct(itm.originalName)))).length;
+    const draftTotals = draftTotalsMap.get(id);
+    const estimatedTotal = selectedDraft?.id === id ? totalPayable : (draftTotals?.total || 0);
+    const addressStr = (selectedDraft?.id === id ? editableAddress : meta.address) || 'No detectada';
+
+    setRejectReason(activeRawItems.length === 0 ? 'no_es_pedido' : '');
+    setRejectModal({
+      isOpen: true,
+      draftId: id,
+      address: addressStr,
+      sourceEmail: draftToModify.source_email || '',
+      totalValue: estimatedTotal,
+      subject: cleanSubject(draftToModify.email_subject) || 'Sin Asunto',
+      itemsCount: activeRawItems.length,
+      matchedItemsCount: matchedCount,
+      draftObj: draftToModify
     });
   };
 
@@ -5317,50 +5371,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         }
       }
       
-      if (e.key === 'Delete') {
-        // 1. If any delete-related confirmation modal is open, confirm the action
-        if (actionConfirm && actionConfirm.isOpen && actionConfirm.isDanger) {
-          e.preventDefault();
-          actionConfirm.onConfirm();
-          setActionConfirm(null);
-          return;
-        }
-        if (deleteConfirm && deleteConfirm.isOpen) {
-          e.preventDefault();
-          if (deleteConfirm.step === 1) {
-            setDeleteConfirm(prev => prev ? { ...prev, step: 2 } : null);
-          } else {
-            const runConfirm = async () => {
-              await deleteConfirm.onConfirmNotify();
-              setDeleteConfirm(null);
-            };
-            runConfirm();
-          }
-          return;
-        }
-        if (rejectModal && rejectModal.isOpen) {
-          e.preventDefault();
-          const confirmBtn = document.getElementById('btn-confirm-reject') as HTMLButtonElement | null;
-          if (confirmBtn && !confirmBtn.disabled) {
-            confirmBtn.click();
-          }
-          return;
-        }
-        
-        // 2. If the main draft details modal is open, trigger the rejection flow
-        if (selectedDraft && !showConfirmModal) {
-          e.preventDefault();
-          document.getElementById('btn-reject-draft')?.click();
-          return;
-        }
-
-        // 3. If selected drafts are present in the list, trigger the bulk delete
-        if (selectedDraftIds.length > 0 && !actionConfirm) {
-           e.preventDefault();
-           document.getElementById('btn-bulk-reject-delete')?.click();
-           return;
-        }
-      }
+      // Poka-Yoke SDD v1.9.346: Se deshabilita el atajo destructivo de la tecla Delete para evitar descartes accidentales
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -6594,105 +6605,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
       {/* Filter Bar */}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0', flexWrap: 'wrap', alignItems: 'center', minHeight: '38px' }}>
-        {selectedDraftIds.length > 0 ? (
-          <div style={{
-            flex: 1,
-            backgroundColor: '#FFFBEB',
-            border: '1px solid #FCD34D',
-            borderRadius: THEME.radius.md,
-            padding: '0.3rem 1rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            boxShadow: THEME.shadow.sm
-          }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#92400E' }}>
-              {selectedDraftIds.length} {selectedDraftIds.length === 1 ? 'borrador seleccionado' : 'borradores seleccionados'}
-            </span>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button
-                onClick={() => {
-                  setActionConfirm({
-                    isOpen: true,
-                    title: '¿Rechazar borradores seleccionados?',
-                    message: `¿Estás seguro de que deseas rechazar y eliminar los ${selectedDraftIds.length} borradores seleccionados?`,
-                    confirmText: 'Rechazar y Eliminar',
-                    cancelText: 'Cancelar',
-                    isDanger: true,
-                    onConfirm: async () => {
-                      try {
-                        const draftsToProcess = drafts.filter(d => selectedDraftIds.includes(d.id));
-                        const alreadyRejectedIds = draftsToProcess.filter(d => d.status === 'rejected').map(d => d.id);
-                        const otherIds = draftsToProcess.filter(d => d.status !== 'rejected').map(d => d.id);
-
-                        if (otherIds.length > 0) {
-                          const { error: err1 } = await supabase
-                            .from('order_drafts')
-                            .update({ status: 'rejected' })
-                            .in('id', otherIds);
-                          if (err1) throw err1;
-                        }
-
-                        if (alreadyRejectedIds.length > 0) {
-                          const { error: err2 } = await supabase
-                            .from('order_drafts')
-                            .delete()
-                            .in('id', alreadyRejectedIds);
-                          if (err2) throw err2;
-                        }
-
-                        setDrafts(prev => prev
-                          .filter(d => !alreadyRejectedIds.includes(d.id))
-                          .map(d => otherIds.includes(d.id) ? { ...d, status: 'rejected' } : d)
-                        );
-                        setSelectedDraftIds([]);
-                        
-                        const msg = alreadyRejectedIds.length > 0 
-                          ? (otherIds.length > 0 ? 'Borradores procesados (eliminados y rechazados).' : 'Borradores eliminados permanentemente.')
-                          : 'Borradores rechazados con éxito.';
-                          
-                        showToast(msg, 'success');
-                      } catch (err: any) {
-                        console.error('Error rejecting/deleting multiple drafts:', err);
-                        showToast('Error al procesar los borradores seleccionados.', 'error');
-                      }
-                    }
-                  });
-                }}
-                id="btn-bulk-reject-delete"
-                style={{
-                  backgroundColor: '#EF4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '0.4rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Trash2 size={16} /> Rechazar/Eliminar Seleccionados
-              </button>
-              <button
-                onClick={() => setSelectedDraftIds([])}
-                style={{
-                  backgroundColor: 'white',
-                  color: '#4B5563',
-                  border: `1px solid ${THEME.colors.border}`,
-                  borderRadius: '8px',
-                  padding: '0.4rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                Deseleccionar
-              </button>
-            </div>
-          </div>
+        {false && selectedDraftIds.length > 0 ? (
+          <div />
         ) : (
           <>
         {/* Date Filter Quick Group */}
@@ -7151,20 +7065,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '40px', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>
-                    <input
-                      type="checkbox"
-                      checked={sortedFilteredDrafts.length > 0 && selectedDraftIds.length === sortedFilteredDrafts.length}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedDraftIds(sortedFilteredDrafts.map(d => d.id));
-                        } else {
-                          setSelectedDraftIds([]);
-                        }
-                      }}
-                      style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
-                    />
-                  </th>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.85rem 0.25rem', width: '12px', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }} />
                   <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '38%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ASUNTO / FECHA & REMITENTE</th>
                   <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '20%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>CLIENTE / CANAL</th>
                   <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '17%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>DIRECCIÓN / GPS</th>
@@ -7205,20 +7106,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  <td style={{ padding: '0.85rem 0.65rem', textAlign: 'center', width: '36px', borderLeft: draft.status === 'pending' ? '4px solid #D97706' : draft.status === 'rejected' ? '4px solid #EF4444' : '4px solid #059669' }} onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedDraftIds.includes(draft.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedDraftIds(prev => [...prev, draft.id]);
-                        } else {
-                          setSelectedDraftIds(prev => prev.filter(id => id !== draft.id));
-                        }
-                      }}
-                      style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
-                    />
-                  </td>
+                  <td style={{ padding: '0.85rem 0.2rem', textAlign: 'center', width: '12px', borderLeft: draft.status === 'pending' ? '4px solid #D97706' : draft.status === 'rejected' ? '4px solid #EF4444' : '4px solid #059669' }} />
 
                   {/* 1. ASUNTO DEL PEDIDO / FECHA & REMITENTE (PROTAGONISTA) */}
                   <td style={{ padding: '0.85rem 0.85rem' }}>
@@ -7373,13 +7261,29 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                         <span>LISTO</span>
                       </div>
                     ) : draft.status === 'rejected' ? (
-                      <div style={{
-                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '800',
-                        backgroundColor: '#FDE8E8',
-                        color: '#9B1C1C',
-                        border: '1px solid #FCA5A5'
-                      }}>
-                        RECHAZADO
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                        <div style={{
+                          padding: '3px 8px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '800',
+                          backgroundColor: '#FDE8E8',
+                          color: '#9B1C1C',
+                          border: '1px solid #FCA5A5'
+                        }}>
+                          RECHAZADO
+                        </div>
+                        {meta.rejectReason && (
+                          <span style={{
+                            fontSize: '0.58rem',
+                            fontWeight: '800',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            backgroundColor: (meta.rejectReason === 'no_es_pedido' || meta.rejectReason === 'spam') ? '#F1F5F9' : '#FFF1F2',
+                            color: (meta.rejectReason === 'no_es_pedido' || meta.rejectReason === 'spam') ? '#475569' : '#BE123C',
+                            border: (meta.rejectReason === 'no_es_pedido' || meta.rejectReason === 'spam') ? '1px solid #CBD5E1' : '1px solid #FECDD3',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {REJECT_REASON_LABELS[meta.rejectReason] || meta.rejectReason.toUpperCase()}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div style={{
@@ -7395,32 +7299,53 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
                   {/* 7. ACCIONES */}
                   <td style={{ padding: '0.85rem 0.5rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    <button 
-                      onClick={(e) => handleDelete(draft.id, e)}
-                      style={{ 
-                        background: 'none', 
-                        border: 'none', 
-                        color: '#94A3B8', 
-                        cursor: 'pointer', 
-                        padding: '6px', 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        borderRadius: '6px',
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#FEE2E2';
-                        e.currentTarget.style.color = '#EF4444';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.color = '#94A3B8';
-                      }}
-                      title="Rechazar pedido"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {(draft.status === 'approved' || Boolean(meta.orderId)) ? null : draft.status === 'rejected' ? (
+                      <button
+                        onClick={(e) => handleRestoreDraft(draft.id, e)}
+                        style={{
+                          background: '#EFF6FF',
+                          border: '1px solid #BFDBFE',
+                          color: '#2563EB',
+                          cursor: 'pointer',
+                          padding: '5px 7px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '6px',
+                          transition: 'all 0.15s ease'
+                        }}
+                        title="Restaurar correo a la bandeja de Pendientes"
+                      >
+                        <RotateCcw size={13} />
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={(e) => handleDelete(draft.id, e)}
+                        style={{ 
+                          background: 'none', 
+                          border: 'none', 
+                          color: '#94A3B8', 
+                          cursor: 'pointer', 
+                          padding: '6px', 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          borderRadius: '6px',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#FEE2E2';
+                          e.currentTarget.style.color = '#EF4444';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.color = '#94A3B8';
+                        }}
+                        title="Descartar o rechazar correo (requiere seleccionar causal)"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </td>
                 </tr>
                 );
@@ -7484,7 +7409,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     )}
                     {draft.status === 'rejected' && (
                       <span style={{ backgroundColor: '#FDE8E8', color: '#9B1C1C', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
-                        RECHAZADO
+                        RECHAZADO {meta.rejectReason ? `• ${REJECT_REASON_LABELS[meta.rejectReason] || meta.rejectReason.toUpperCase()}` : ''}
                       </span>
                     )}
                     {draft.status === 'pending' && !meta.orderId && (
@@ -7554,26 +7479,47 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     >
                       <Edit2 size={16} />
                     </button>
-                    <button 
-                      onClick={(e) => handleDelete(draft.id, e)}
-                      style={{ 
-                        background: 'none', 
-                        border: 'none', 
-                        color: '#EF4444', 
-                        cursor: 'pointer', 
-                        padding: '4px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: '4px',
-                        transition: 'background-color 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                      title="Rechazar"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {(draft.status === 'approved' || Boolean(meta.orderId)) ? null : draft.status === 'rejected' ? (
+                      <button
+                        onClick={(e) => handleRestoreDraft(draft.id, e)}
+                        style={{
+                          background: '#EFF6FF',
+                          border: '1px solid #BFDBFE',
+                          color: '#2563EB',
+                          cursor: 'pointer',
+                          padding: '4px 6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        title="Restaurar a Pendientes"
+                      >
+                        <RotateCcw size={15} />
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={(e) => handleDelete(draft.id, e)}
+                        style={{ 
+                          background: 'none', 
+                          border: 'none', 
+                          color: '#EF4444', 
+                          cursor: 'pointer', 
+                          padding: '4px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        title="Descartar / Rechazar (con causal)"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -7913,13 +7859,38 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   );
                 })()}
 
-                {/* Botón de Descarte Rápido cuando no hay productos detectados */}
-                {editableItems.filter(it => !it.isDeleted).length === 0 && (
+                {/* Botón de Descarte / Rechazo con Causal o Restauración en Mesa de Trabajo */}
+                {(selectedDraft.status === 'approved' || Boolean(metadata.orderId)) ? null : selectedDraft.status === 'rejected' ? (
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={() => handleQuickRejectNonOrder()}
-                    title="Descartar este correo porque no contiene productos ni pedido"
+                    onClick={(e) => handleRestoreDraft(selectedDraft.id, e)}
+                    title="Restaurar este correo a la bandeja de Pendientes"
+                    style={{
+                      padding: '5px 12px',
+                      backgroundColor: '#EFF6FF',
+                      color: '#2563EB',
+                      border: '1.5px solid #93C5FD',
+                      borderRadius: '100px',
+                      fontSize: '0.76rem',
+                      fontWeight: '800',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <RotateCcw size={13} color="#2563EB" />
+                    <span>Restaurar a Pendiente</span>
+                  </button>
+                ) : (
+                  <button
+                    id="btn-reject-draft"
+                    type="button"
+                    disabled={saving}
+                    onClick={(e) => handleDelete(selectedDraft.id, e)}
+                    title="Descartar correo (No es pedido) o rechazar con causal comercial"
                     style={{
                       padding: '5px 12px',
                       backgroundColor: '#FEF2F2',
@@ -7939,7 +7910,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FEF2F2'; e.currentTarget.style.borderColor = '#FCA5A5'; }}
                   >
                     <Trash2 size={13} color="#DC2626" />
-                    <span>Rechazar (No es Pedido)</span>
+                    <span>{editableItems.filter(it => !it.isDeleted).length === 0 ? 'Descartar (No es Pedido)' : 'Descartar / Rechazar'}</span>
                   </button>
                 )}
 
@@ -10607,16 +10578,22 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       )}
 
       {rejectModal && rejectModal.isOpen && (() => {
+        const targetDraft = rejectModal.draftObj || selectedDraft;
+        const targetMeta = targetDraft ? getDraftMetadata(targetDraft) : ({} as any);
+        const targetItemsCount = rejectModal.itemsCount ?? editableItems.filter(itm => !itm.isDeleted && !itm.isMetadata).length;
+        const targetMatchedCount = rejectModal.matchedItemsCount ?? editableItems.filter(itm => !itm.isDeleted && !itm.isMetadata && itm.matched_product_id !== null).length;
+        const targetAddress = rejectModal.address || editableAddress || targetMeta.address || 'No detectada';
+
         const isRejectionInvalid = (() => {
           if (!rejectReason) return true;
           if (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) return true;
-          if (rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)) return true;
-          if (rejectReason === 'no_comercializado' && editableItems.length > 0 && editableItems.some(itm => itm.matched_product_id !== null)) return true;
-          if (rejectReason === 'datos_incompletos' && editableAddress && editableAddress.toLowerCase() !== 'no detectada' && rejectModal.sourceEmail && getDraftMetadata(selectedDraft).phone && getDraftMetadata(selectedDraft).phone !== '0') return true;
-          if (rejectReason === 'pedido_duplicado' && !drafts.some(d => d.id !== selectedDraft.id && d.source_email === selectedDraft.source_email && new Date(d.created_at).toDateString() === new Date(selectedDraft.created_at).toDateString())) return true;
-          if (rejectReason === 'bloqueo_cartera' && selectedDraft?.profiles?.is_active === true) return true;
-          if (rejectReason === 'sin_stock' && editableItems.length > 0 && editableItems.some(itm => itm.matched_product_id !== null)) return true;
-          if (rejectReason === 'fuera_de_horario' && new Date(selectedDraft.created_at).getHours() < 20) return true;
+          if (rejectReason === 'cobertura' && selectedDraft?.id === rejectModal.draftId && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)) return true;
+          if (rejectReason === 'no_comercializado' && targetMatchedCount > 0) return true;
+          if (rejectReason === 'datos_incompletos' && targetAddress && targetAddress.toLowerCase() !== 'no detectada' && targetAddress.toLowerCase() !== 'no detectado' && rejectModal.sourceEmail && targetMeta.phone && targetMeta.phone !== '0' && targetMeta.phone !== 'No detectado') return true;
+          if (rejectReason === 'pedido_duplicado' && targetDraft && !drafts.some(d => d.id !== targetDraft.id && d.source_email === targetDraft.source_email && new Date(d.created_at).toDateString() === new Date(targetDraft.created_at).toDateString())) return true;
+          if (rejectReason === 'bloqueo_cartera' && targetDraft?.profiles?.is_active === true) return true;
+          if (rejectReason === 'sin_stock' && targetMatchedCount > 0) return true;
+          if (rejectReason === 'fuera_de_horario' && targetDraft && new Date(targetDraft.created_at).getHours() < 20) return true;
           return false;
         })();
 
@@ -10639,7 +10616,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               borderRadius: '20px',
               padding: '2rem',
               width: '90%',
-              maxWidth: '420px',
+              maxWidth: '460px',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
               textAlign: 'left'
             }}>
@@ -10651,26 +10628,46 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 1.5rem',
+                margin: '0 auto 1rem',
                 color: '#EF4444'
               }}>
                 <AlertTriangle size={28} />
               </div>
               
               <h3 style={{
-                fontSize: '1.25rem',
+                fontSize: '1.2rem',
                 fontWeight: 800,
                 color: THEME.colors.textMain,
                 fontFamily: 'var(--font-outfit), sans-serif',
-                margin: '0 0 1rem 0',
+                margin: '0 0 0.5rem 0',
                 textAlign: 'center'
               }}>
-                Rechazar Solicitud de Pedido
+                Descartar o Rechazar Correo
               </h3>
+
+              <div style={{
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '10px',
+                padding: '0.65rem 0.85rem',
+                marginBottom: '1rem',
+                fontSize: '0.78rem',
+                color: '#334155'
+              }}>
+                <div style={{ fontWeight: 800, color: '#0F172A', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {rejectModal.subject || cleanSubject(targetDraft?.email_subject) || 'Sin Asunto'}
+                </div>
+                <div style={{ color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span>{rejectModal.sourceEmail}</span>
+                  <span style={{ fontWeight: 700, color: targetItemsCount > 0 ? '#0D7A57' : '#64748B' }}>
+                    {targetItemsCount} {targetItemsCount === 1 ? 'producto detectado' : 'productos detectados'}
+                  </span>
+                </div>
+              </div>
               
               <div style={{ marginBottom: '1.25rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem' }}>
-                  Causa de Reclamación / Cancelación:
+                  Causal Obligatoria de Descarte / Rechazo:
                 </label>
                 <select
                   autoFocus
@@ -10690,16 +10687,39 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 >
                   <option value="">-- Selecciona una causa --</option>
                   <option value="no_es_pedido">No es un pedido (Boletín / Spam / Notificación externa)</option>
+                  <option value="pedido_duplicado">Solicitud ya procesada (Pedido duplicado)</option>
                   <option value="cobertura">Falta de cobertura geográfica</option>
                   <option value="monto_minimo">Monto menor al mínimo ($100.000)</option>
                   <option value="no_comercializado">Productos no comercializados (Construcción, etc.)</option>
                   <option value="datos_incompletos">Datos de contacto o dirección insuficientes</option>
-                  <option value="pedido_duplicado">Solicitud ya procesada (Pedido duplicado)</option>
                   <option value="bloqueo_cartera">Cliente con bloqueo de cartera o saldo en mora</option>
                   <option value="sin_stock">Agotamiento de inventario en productos principales</option>
                   <option value="fuera_de_horario">Pedido recibido fuera del horario límite de programación</option>
                 </select>
               </div>
+
+              {rejectReason === 'no_es_pedido' && (
+                <div style={{
+                  backgroundColor: targetItemsCount > 0 ? '#FFFBEB' : '#F0FDF4',
+                  borderLeft: `4px solid ${targetItemsCount > 0 ? '#F59E0B' : '#10B981'}`,
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  color: targetItemsCount > 0 ? '#92400E' : '#065F46',
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px'
+                }}>
+                  <Info size={15} color={targetItemsCount > 0 ? '#D97706' : '#059669'} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <span>
+                    {targetItemsCount > 0
+                      ? `Atención: Este correo tiene ${targetItemsCount} producto(s) detectado(s). Confirma que realmente se trata de un correo informativo/spam y no de un pedido. No se enviará respuesta por correo al remitente.`
+                      : 'Se archivará como "NO ES PEDIDO" sin enviar ningún correo de respuesta al remitente y sin borrar el registro de trazabilidad.'}
+                  </span>
+                </div>
+              )}
 
               {rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000 && (
                 <div style={{
@@ -10720,7 +10740,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 </div>
               )}
 
-              {rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
+              {rejectReason === 'cobertura' && selectedDraft?.id === rejectModal.draftId && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -10739,7 +10759,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 </div>
               )}
 
-              {rejectReason === 'no_comercializado' && editableItems.length > 0 && editableItems.some(itm => itm.matched_product_id !== null) && (
+              {rejectReason === 'no_comercializado' && targetMatchedCount > 0 && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -10758,7 +10778,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 </div>
               )}
 
-              {rejectReason === 'datos_incompletos' && editableAddress && editableAddress.toLowerCase() !== 'no detectada' && rejectModal.sourceEmail && getDraftMetadata(selectedDraft).phone && getDraftMetadata(selectedDraft).phone !== '0' && (
+              {rejectReason === 'datos_incompletos' && targetAddress && targetAddress.toLowerCase() !== 'no detectada' && targetAddress.toLowerCase() !== 'no detectado' && rejectModal.sourceEmail && targetMeta.phone && targetMeta.phone !== '0' && targetMeta.phone !== 'No detectado' && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -10777,7 +10797,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 </div>
               )}
 
-              {rejectReason === 'pedido_duplicado' && !drafts.some(d => d.id !== selectedDraft.id && d.source_email === selectedDraft.source_email && new Date(d.created_at).toDateString() === new Date(selectedDraft.created_at).toDateString()) && (
+              {rejectReason === 'pedido_duplicado' && targetDraft && !drafts.some(d => d.id !== targetDraft.id && d.source_email === targetDraft.source_email && new Date(d.created_at).toDateString() === new Date(targetDraft.created_at).toDateString()) && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -10796,7 +10816,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 </div>
               )}
 
-              {rejectReason === 'bloqueo_cartera' && selectedDraft?.profiles?.is_active === true && (
+              {rejectReason === 'bloqueo_cartera' && targetDraft?.profiles?.is_active === true && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -10815,7 +10835,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 </div>
               )}
 
-              {rejectReason === 'sin_stock' && editableItems.length > 0 && editableItems.some(itm => itm.matched_product_id !== null) && (
+              {rejectReason === 'sin_stock' && targetMatchedCount > 0 && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -10834,7 +10854,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 </div>
               )}
 
-              {rejectReason === 'fuera_de_horario' && new Date(selectedDraft.created_at).getHours() < 20 && (
+              {rejectReason === 'fuera_de_horario' && targetDraft && new Date(targetDraft.created_at).getHours() < 20 && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -10889,14 +10909,23 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       });
 
                       const data = await safeFetchJson(res);
+                      setDrafts(prev => prev.map(d => d.id === rejectModal.draftId ? {
+                        ...d,
+                        status: 'rejected',
+                        extracted_items: data.extracted_items || d.extracted_items
+                      } : d));
                       if (data.warning) {
                         showToast(data.warning, 'info');
+                      } else if (rejectReason === 'no_es_pedido' || rejectReason === 'spam') {
+                        showToast('Correo descartado como "No es un pedido" (sin enviar correo al remitente).', 'success');
                       } else {
-                        showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente.`, 'success');
+                        showToast(`Solicitud rechazada (${REJECT_REASON_LABELS[rejectReason] || rejectReason}). Se ha notificado al cliente.`, 'success');
                       }
                       setRejectModal(null);
-                      setSelectedDraft(null);
-                      fetchDrafts();
+                      if (selectedDraft?.id === rejectModal.draftId) {
+                        setSelectedDraft(null);
+                      }
+                      fetchDrafts(true);
                     } catch (e: any) {
                       console.error('Error rejecting draft:', e);
                       showToast(`Error al rechazar el borrador: ${e.message}`, 'error');
@@ -10916,7 +10945,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     opacity: (isRejectionInvalid || saving) ? 0.5 : 1
                   }}
                 >
-                  {saving ? 'Procesando...' : 'Rechazar'}
+                  {saving ? 'Procesando...' : (rejectReason === 'no_es_pedido' ? 'Descartar Correo' : 'Confirmar Rechazo')}
                 </button>
               </div>
             </div>

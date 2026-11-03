@@ -204,6 +204,7 @@ export interface ImputedEntity {
     entityType: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
     sharePercent: number; // 0 a 100
     deductionAmount?: number; // Valor en COP
+    baseAmount?: number; // Valor nominal asignado en COP (antes de exoneración)
     notes?: string;
     waiveDeduction?: boolean;
     assignedItemNames?: string[];
@@ -221,6 +222,14 @@ export interface ItemImputation {
     subtypeL2?: string;
     responsible: 'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente';
     imputedEntity?: ImputedEntity;
+    collaborators?: {
+        entityId: string;
+        entityName: string;
+        entityRole?: string;
+        entityType?: any;
+        amount: number;
+        waiveDeduction?: boolean;
+    }[];
     notes?: string;
 }
 

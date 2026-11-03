@@ -13454,3 +13454,29 @@ Al auditar la configuración de **Excepciones y Notas (Picking)** (`ClientExcept
    - Migrados 110 grupos de sustituciones aprobadas a `substitution_product_id`.
    - Migrados 320 registros de variaciones estructuradas a `preferred_options` (habilitando sus valores en `options_config` de 88 productos) y purgadas 69 notas redundantes de `"Maduro"`/`"Madura"`.
    - Normalizados 143 `nickname` sin tilde al nombre canónico del producto y eliminadas 74 filas huérfanas sin reglas activas.
+
+
+### Escenario 363: Blindaje Poka-Yoke de la Bandeja de Entrada de Correos, Prohibición de Borrado Físico (`DELETE`), Rechazo Auditado con Causal Obligatoria y Restauración de Borradores (`EmailDraftsModule.tsx`, `/api/orders/reject-draft`) (SDD v1.9.346)
+
+#### 1. Contexto y Justificación del Gemba
+En la Bandeja de Entrada de Pedidos por Correo (`EmailDraftsModule.tsx`), existía un ícono de papelera (`handleDelete`) por fila/tarjeta, casillas de selección múltiple (`btn-bulk-reject-delete`) y un atajo de teclado con la tecla `Delete` (`Supr`) que presentaban riesgos operativos y de integridad de datos:
+1. **Destrucción Física Irreversible (`.delete()`):** Si un correo estaba en estado `rejected`, volver a pulsar la papelera ejecutaba `supabase.from('order_drafts').delete()` directamente desde el navegador, destruyendo el registro y su `message_id` (lo que arriesgaba re-importación del correo por el worker de ingesta y pérdida de trazabilidad).
+2. **Descarte sin Causal ni Auditoría:** En correos `pending`, pulsar la papelera hacía un `UPDATE status = 'rejected'` directo desde el cliente web sin exigir causal, omitiendo el motor formal `/api/orders/reject-draft`.
+3. **Vulnerabilidad sobre Correos Ya Procesados (`LISTO`):** Los correos con `status = 'approved'` o vinculados a un pedido (`orderId`) mantenían habilitado el botón de papelera.
+4. **Falta de Mecanismo de Recuperación:** Si un operador descartaba por error un correo legítimo, no existía acción en la interfaz para restaurarlo a estado `pending`.
+
+#### 2. Especificación Técnica y Contrato Canónico (Máquina de Estados Finita de `order_drafts`)
+1. **Prohibición Absoluta de Borrado Físico (`Zero Physical Delete Law`):**
+   - Queda terminantemente prohibido ejecutar `.delete()` sobre la tabla `order_drafts` desde cualquier flujo de usuario. Todo correo entrante debe conservar su registro en base de datos para preservar la idempotencia del `message_id` de Gmail/IMAP y la trazabilidad histórica.
+2. **Inmutabilidad de Correos Procesados (`status === 'approved'` o `meta.orderId`):**
+   - Los borradores que ya generaron un pedido oficial (`LISTO / PROCESADO`) quedan blindados contra descarte o rechazo; no renderizan botón de rechazo en la tabla, tarjetas ni mesa de trabajo.
+3. **Eliminación de Descarte Masivo Ciego y Atajo Peligroso `Delete`:**
+   - Se erradican los checkboxes de selección masiva para borrado en lote y se desactiva el disparo de descarte/confirmación automática mediante la tecla `Delete` (`Supr`).
+4. **Rechazo Formal con Causal Obligatoria (`rejectModal` + `/api/orders/reject-draft`):**
+   - Todo descarte o rechazo de un correo `pending` (tanto desde la fila/tarjeta de la bandeja como desde la cabecera de la mesa de trabajo) abre obligatoriamente el modal `Rechazar / Descartar Solicitud de Correo` (`rejectModal`).
+   - El modal distingue dos familias de causales:
+     * **A. Correos que NO son pedidos (`no_es_pedido`):** Boletines informativos, spam, facturas de terceros, respuestas de agradecimiento o notificaciones bancarias. Transiciona el registro a `status = 'rejected'` con `rejectReason = 'no_es_pedido'`, estampa la etiqueta visual `NO ES PEDIDO` y **omite por completo el envío de correo SMTP al remitente**. Si el borrador tiene productos detectados del catálogo, muestra una advertencia preventiva Poka-Yoke indicando cuántos productos detectó la IA antes de confirmar que no es un pedido.
+     * **B. Solicitudes de pedido rechazadas por causal comercial:** `pedido_duplicado`, `cobertura`, `monto_minimo`, `no_comercializado`, `datos_incompletos`, `bloqueo_cartera`, `sin_stock`, `fuera_de_horario`. Validadas por las reglas Poka-Yoke del modal, actualizan `status = 'rejected'`, persisten `rejectReason`, `rejectedAt` y `rejectedBy` en la metadata de `extracted_items`, y notifican formalmente al cliente vía `/api/orders/reject-draft`.
+5. **Visibilidad de la Causal y Botón de Rescate (`Restaurar a Pendiente`):**
+   - Los borradores con `status = 'rejected'` muestran un badge explícito con la causal de descarte (`NO ES PEDIDO`, `DUPLICADO`, `SIN COBERTURA`, `MONTO MÍNIMO`, `CARTERA`, etc.).
+   - En lugar de eliminar permanentemente, los correos `rejected` disponen del botón **`Restaurar a Pendiente`** (`RotateCcw`), que permite devolver el correo a `status = 'pending'` limpiando `rejectReason` para su normal procesamiento.

@@ -173,6 +173,24 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                 sequence_number: seqMap.get(p.id) || 1
             }));
             setPqrs(enrichedPqrs);
+            setSelectedAuditPqr(prev => {
+                if (!prev) return null;
+                const updated = enrichedPqrs.find(item => item.id === prev.id);
+                if (!updated) return prev;
+                if (
+                    updated.order_id !== prev.order_id ||
+                    updated.client_id !== prev.client_id ||
+                    updated.status !== prev.status ||
+                    updated.primary_photo_url !== prev.primary_photo_url ||
+                    JSON.stringify(updated.additional_photos) !== JSON.stringify(prev.additional_photos) ||
+                    updated.resolution_notes !== prev.resolution_notes ||
+                    updated.profiles?.phone !== prev.profiles?.phone ||
+                    updated.profiles?.contact_phone !== prev.profiles?.contact_phone
+                ) {
+                    return updated;
+                }
+                return prev;
+            });
 
             const { data: returnsData, error: returnsError } = await supabase
                 .from('billing_returns')

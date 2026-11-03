@@ -12,7 +12,8 @@ import {
     RCA_CATEGORIES_L1, 
     RESPONSIBLE_PARTIES, 
     DefectCategoryL1, 
-    buildRcaMetadataTag 
+    buildRcaMetadataTag,
+    parseRcaFromRecord
 } from '@/lib/rcaTaxonomy';
 
 export interface FinancialAdjustmentItem {
@@ -379,7 +380,7 @@ export default function FinancialAdjustmentModal({
 
             const finalizedEntities = (imputedEntities || []).map(e => ({
                 ...e,
-                deductionAmount: e.waiveDeduction ? 0 : Math.round((calculatedCreditAmount * (e.sharePercent !== undefined ? Number(e.sharePercent) : 100)) / 100)
+                deductionAmount: e.waiveDeduction ? 0 : (e.baseAmount !== undefined && e.baseAmount > 0 ? e.baseAmount : (e.deductionAmount !== undefined && e.deductionAmount > 0 ? e.deductionAmount : Math.round((calculatedCreditAmount * (e.sharePercent !== undefined ? Number(e.sharePercent) : 100)) / 100)))
             }));
 
             const entitiesFormatted = finalizedEntities.length > 0 
@@ -396,7 +397,9 @@ export default function FinancialAdjustmentModal({
                 imputedEntityId: primaryEntityId || undefined,
                 imputedEntityName: primaryEntityName || undefined,
                 imputedEvidenceNotes: technicalInspectionNotes || defaultImputedEvidenceNotes || notes,
-                deductionAmount: calculatedCreditAmount
+                deductionAmount: calculatedCreditAmount,
+                imputationMode: parseRcaFromRecord(pqr).imputationMode,
+                itemImputations: parseRcaFromRecord(pqr).itemImputations
             });
 
             const upsertApprovedReturn = async (item: FinancialAdjustmentItem, prefixTag: string) => {
@@ -1205,7 +1208,7 @@ export default function FinancialAdjustmentModal({
                                 {imputedEntities && imputedEntities.length > 0 ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
                                         {imputedEntities.map((ent, i) => {
-                                            const calcCop = ent.waiveDeduction ? 0 : Math.round((calculatedCreditAmount * (ent.sharePercent !== undefined ? Number(ent.sharePercent) : 100)) / 100);
+                                            const calcCop = ent.waiveDeduction ? 0 : (ent.baseAmount !== undefined && ent.baseAmount > 0 ? ent.baseAmount : (ent.deductionAmount !== undefined && ent.deductionAmount > 0 ? ent.deductionAmount : Math.round((calculatedCreditAmount * (ent.sharePercent !== undefined ? Number(ent.sharePercent) : 100)) / 100)));
                                             return (
                                                 <div key={i} style={{ fontSize: '0.72rem', fontWeight: '800', color: ent.waiveDeduction ? '#059669' : '#991B1B' }}>
                                                     {ent.name} ({ent.sharePercent}% = {ent.waiveDeduction ? '$0 COP (Exonerado / Reingreso)' : formatMoney(calcCop)})
