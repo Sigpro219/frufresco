@@ -13605,3 +13605,28 @@ En el modal **`Confirmar Reasignación de Pedido` (Paso 2 de 2)** del módulo de
    - Si el operador hace clic cuando falta el motivo (`reassignReason.trim().length < 4`) o falta marcar la casilla (`!reassignConfirmedCheck`), `handleExecuteReassignment` dispara retroalimentación visual inmediata (`window.showToast` o `alert` explicativo indicando exactamente qué campo falta completar) y conserva la distinción visual semántica (`#0D7A57` cuando ambos requisitos están listos vs `#64748B` cuando falta alguno, manteniendo `cursor: 'pointer'`).
 3. **Conformidad con el Esquema Real de `public.order_audit_logs`:**
    - Al ejecutar la reasignación, se registra en `order_audit_logs` con las columnas canónicas `{ order_id, action: 'CLIENT_REASSIGNMENT', old_data, new_data }`, empaquetando `changed_by`, `operator_name` y `reason` dentro de `new_data` para preservar trazabilidad forense sin error de esquema en PostgreSQL.
+
+### Escenario 369: Conformidad Estricta de Exportación Contable a World Office Desktop (57 Columnas) (src/lib/worldOfficeExport.ts) (SDD v1.9.352)
+
+#### 1. Contexto y Hallazgo del Gemba
+Durante la auditoría forense de homologación de las plantillas de migración de facturación y remisiones de Onfru frente al sistema anterior de World Office Desktop (archivos formato_migracion - *.xlsx y pantalla de importación del ERP), se identificaron discrepancias en tipos de dato, nomenclaturas y formatos de celda que provocaban rechazos en la carga masiva contable:
+1. **Columnas F (Encab: Tercero Interno) y G (Encab: Tercero Externo):** Se emitían con tipo cadena (string), mientras que World Office exige que ambos NITs sean enteros numéricos nativos (number, t: 'n').
+2. **Columna H (Encab: Nota):** Cuando el pedido registraba una Orden de Compra (purchase_order_number), el exportador anteponía el texto "Segun OC ", mientras que World Office exige el código alfanumérico limpio de la OC (ej. OC00073973, 00081, 4506448503) o el nombre de la sucursal cuando la OC es inexistente o contiene cadenas genéricas sin dígitos.
+3. **Columna AH (Detalle: UnidadDeMedida):** El catálogo de World Office Desktop rechaza cadenas con mayúscula o no abreviadas ("Kg", "Unidad"), exigiendo estrictamente minúscula para kilogramos ("kg") y abreviatura con punto para unidades ("Und.").
+4. **Columna AI (Detalle: Cantidad):** Las cantidades de producto exigen una máscara numérica fija de dos decimales (0.00, ej. 20.00, 200.00, 7.20) para alinearse con los motores de cálculo contable del ERP.
+5. **Columna AJ (Detalle: IVA):** Para productos exentos/excluidos de IVA se debe exportar 0 nativo (sin decimales superfluos), mientras que para productos gravados al 19% se exporta el valor decimal 0.19.
+
+#### 2. Especificación Técnica y Contrato Canónico
+1. **Tipos Numéricos Nativos en Terceros (Columnas F y G):**
+   - En src/lib/worldOfficeExport.ts, cleanTerceroInterno (456282) y cleanTerceroExterno (cleanNit) se tipan como Number nativo (t: 'n'), erradicando caracteres no numéricos antes de la exportación.
+2. **Regla de Resolución Canónica de la Nota de Encabezado (Columna H):**
+   - En resolveWorldOfficeNote, si cleanOc contiene al menos un dígito numérico (/d/.test(cleanOc)), se exporta exclusivamente el número/código limpio de la OC sin prefijos.
+   - Si no contiene dígitos (o es un valor ruidoso como "tubre"), se utiliza de inmediato el nombre limpio de la sucursal (resolveWorldOfficeBranch) o la razón social del cliente.
+3. **Normalización Canónica de Unidades de Medida (Columna AH):**
+   - normalizeWorldOfficeUom mapea:
+     * Kilos / Kilogramos / Kg -> "kg" (minúscula exacta).
+     * Unidades / Und / Und. / Pza -> "Und." (con punto).
+     * Libras -> "LB".
+4. **Formato Forzado de Dos Decimales en Cantidad (Columna AI):**
+   - En el ensamble de la hoja OpenXML (downloadWorldOfficeExcel), se recorre el rango de celdas de la columna AI (índice 34) inyectando la propiedad de formato numérico cell.z = '0.00', asegurando que cualquier hoja de cálculo o importador contable visualice e interprete exactamente dos posiciones decimales.
+

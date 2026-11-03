@@ -200,11 +200,11 @@ export function calculateDueDate(baseDateInput: string | Date | null | undefined
 }
 
 export function normalizeWorldOfficeUom(rawUom: string | null | undefined): string {
-    const clean = String(rawUom || 'Kg').trim();
+    const clean = String(rawUom || 'kg').trim();
     if (/^(lb|lbs|libra|libras)$/i.test(clean)) return 'LB';
-    if (/^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(clean)) return 'Kg';
-    if (/^unid/i.test(clean)) return 'Unidad';
-    return clean || 'Kg';
+    if (/^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(clean)) return 'kg';
+    if (/^(und|und\.|unidad|unidades|un|pz|pza)$/i.test(clean)) return 'Und.';
+    return clean || 'kg';
 }
 
 /**
@@ -264,11 +264,11 @@ export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): str
 export function resolveWorldOfficeNote(order: any, profile: any, branchName?: string, parentProfile?: any): string {
     const rawOc = (order?.purchase_order_number || '').trim();
     const cleanOc = rawOc
-        .replace(/^(fv\s*)?(segun\s*)?(orden\s*de\s*compra|oc)\s*[:#-]?\s*/i, '')
+        .replace(/^(?:fv\s*)?(?:seg[uú]n\s*)?(?:orden\s*de\s*compra\s*[:#-]?\s*|oc\b\s*[:#-]?\s+)/i, '')
         .trim();
 
     if (cleanOc) {
-        return `Segun OC ${cleanOc}`;
+        return /\d/.test(cleanOc) ? cleanOc : ((branchName && branchName !== 'Principal' ? branchName : resolveWorldOfficeBranch(profile, parentProfile)) || (profile?.razon_social || profile?.company_name || profile?.contact_name || '').trim());
     }
 
     const resolvedBranch = branchName && branchName !== 'Principal'
@@ -321,8 +321,8 @@ export async function downloadWorldOfficeExcel(
             ? Math.round(rawDocNum) 
             : (parseInt(String(rawDocNum).replace(/\D/g, ''), 10) || 1);
 
-        const cleanTerceroInterno = String(item.terceroInterno || '456282').trim();
-        const cleanTerceroExterno = String(cleanNit).trim();
+        const cleanTerceroInterno = Number(String(item.terceroInterno || '456282').replace(/\D/g, '')) || 456282;
+        const cleanTerceroExterno = Number(cleanNit) || 222222222222;
         const cleanSucursal = (item.sucursal && item.sucursal !== 'Principal')
             ? item.sucursal
             : (item.razonSocial || '');
@@ -394,6 +394,15 @@ export async function downloadWorldOfficeExcel(
     });
 
     const worksheet = XLSX.utils.json_to_sheet(formattedRows, { header: [...WORLD_OFFICE_57_COLUMNS] });
+
+    // Explicitly format AI (Detalle: Cantidad) as 0.00 to match World Office standard exactly
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:BE1');
+    for (let R = 1; R <= range.e.r; ++R) {
+        const aiAddr = XLSX.utils.encode_cell({ r: R, c: 34 });
+        if (worksheet[aiAddr] && worksheet[aiAddr].t === 'n') {
+            worksheet[aiAddr].z = '0.00';
+        }
+    }
 
     // Set auto-fit column widths
     const colWidths = WORLD_OFFICE_57_COLUMNS.map(col => ({
