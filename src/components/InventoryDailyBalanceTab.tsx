@@ -753,6 +753,29 @@ export default function InventoryDailyBalanceTab({
             } catch (prevErr) {
                 console.warn('No se pudo cargar cierre del día anterior:', prevErr);
             }
+
+            // 0.2 Si no hubo cierre oficial formal, buscar conteos físicos registrados previamente en inventory_movements (T de ayer)
+            try {
+                const { data: prevPhysicalMovs } = await supabase
+                    .from('inventory_movements')
+                    .select('product_id, quantity, notes, created_at')
+                    .in('reference_type', ['blind_count', 'blind_count_shift_close'])
+                    .lt('created_at', `${balanceDate}T00:00:00.000Z`)
+                    .order('created_at', { ascending: false });
+
+                if (prevPhysicalMovs && prevPhysicalMovs.length > 0) {
+                    prevPhysicalMovs.forEach((m: any) => {
+                        if (!m.product_id || prevClosingSnapshots[m.product_id] !== undefined) return;
+                        const counted = parseBlindCountQuantity(m.notes);
+                        if (counted !== null) {
+                            prevClosingSnapshots[m.product_id] = counted;
+                        }
+                    });
+                }
+            } catch (pCountErr) {
+                console.warn('Error cargando conteos físicos previos:', pCountErr);
+            }
+
             setPreviousClosingMap(prevClosingSnapshots);
 
             // 1. Cargar productos maestros con stock actual (ESTRICTAMENTE ACTIVOS)
@@ -1039,7 +1062,8 @@ export default function InventoryDailyBalanceTab({
             if (previousClosingMap[p.id] !== undefined) {
                 initialStock = previousClosingMap[p.id];
             } else if (balanceDate > todayStr) {
-                initialStock = 0;
+                // Fecha futura o de mañana: si no hay cierre previo, hereda el stock vivo disponible en bodega
+                initialStock = Math.max(0, currentStock);
             } else if (balanceDate === todayStr) {
                 const todayDeltas = dayMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0);
                 initialStock = Math.max(0, currentStock - todayDeltas);
