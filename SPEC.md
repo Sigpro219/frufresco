@@ -14145,3 +14145,59 @@ Se extenderá la arquitectura del balance diario (`src/components/InventoryDaily
 - [ ] Ingesta de PDFs de proveedores y fotos de remisiones mediante Gemini multimodal.
 - [ ] Staging de homologación con semáforo de confianza antes de guardar en base de datos.
 - [ ] Actualización reactiva instantánea del costo base en la Sábana Oficial de Inventarios en Modo Edición.
+
+---
+
+### Escenario 383: Principio de Entrada Única (Single-Write Authority) de Escasez entre Compras y Alistamiento: Blindaje Anti-Duplicidad en Columna K y Orquestación de PQRS (SDD v1.9.367)
+
+#### 1. Contexto Operativo y Causa Raíz
+En el Gemba de FruFresco, cuando un producto presenta desabastecimiento en plaza mayorista (ej. se demandan $50\text{ kg}$ para 5 clientes a $10\text{ kg}$ c/u, pero en Corabastos solo se consiguen $40\text{ kg}$), surge un riesgo crítico de **doble imputación contable** si los módulos de Compras y Alistamiento no respetan una estricta segregación de funciones (SoD):
+- Si el comprador en plaza declara $10\text{ kg}$ escasos e impacta la **Columna K** (`inventory_movements`), y luego el operario en mesa de alistamiento / picking marca el quinto pedido ($10\text{ kg}$) como no empacado e impacta nuevamente la Columna K, la sábana totalizaría $20\text{ kg}$ escasos, falseando destructivamente el cálculo de balance ($S$).
+- Idéntica distorsión ocurriría en un desabastecimiento total ($50\text{ kg}$ pedidos, $0\text{ kg}$ comprados), donde el faltante se duplicaría a $100\text{ kg}$.
+
+#### 2. Principio Canónico de Entrada Única (Single-Write Authority)
+Se formaliza el contrato estricto de responsabilidades entre ambos submódulos:
+
+| Atributo | Submódulo de Compras (`/ops/compras`) | Submódulo de Alistamiento (`/ops/picking`) |
+| :--- | :--- | :--- |
+| **Rol en Cadena** | **Autoridad de Abastecimiento Macro** | **Autoridad de Asignación y Entrega Micro** |
+| **Pregunta que Resuelve** | *«¿Cuánto producto físico existe en el mercado?»* | *«¿A qué cliente específico se le entrega la fruta disponible?»* |
+| **Impacto en Inventarios** | **SÍ escribe en Columna K** (`inventory_movements` con `reference_type = 'order_shortage'`). Única fuente de verdad de masa no abastecida. | **NUNCA escribe en Columna K.** Tiene veto técnico de inserción en kardex por escasez para erradicar la duplicidad. |
+| **Impacto Comercial / SAC** | Genera alerta temprana y crea registro proactivo en `customer_service_pqrs` para coordinar sustituciones HORECA. | - Ajusta la remisión física (`order_items.picked_quantity = 0` o parcial).<br>- Garantiza que el cliente no pague el faltante.<br>- Sincroniza/vincula la PQRS para trazabilidad del cliente si no existía previa. |
+
+#### 3. Implementación y Guardrails de Código
+1. **Compras (`src/app/ops/compras/page.tsx`):**  
+   Al confirmar escasez (`handleConfirmShortage`), persiste atómicamente el movimiento en `inventory_movements` (`ref: 'order_shortage'`) afectando la Columna K de la fecha correspondiente y dispara la PQRS preventiva a Servicio al Cliente.
+2. **Alistamiento (`src/app/ops/picking/cliente/[id]/page.tsx`):**  
+   - Se añadió el botón de un clic `[ ESCASO (0) ]` en el modal de alistamiento para agilizar la operación en mesa.
+   - En `handleSave`, el sistema actualiza `picked_quantity = 0` para blindar la remisión y valida/inserta la PQRS en `customer_service_pqrs`, **sin insertar ningún movimiento en kardex**, preservando la integridad del balance de masa.
+3. **Muelle / Rectificación (`src/app/ops/rectificacion/[routeId]/page.tsx`):**  
+   Al certificar carga, el checker ajusta `billing_returns` para facturación y `customer_service_pqrs`, manteniendo intacta la regla de oro de no duplicar la Columna K.
+
+
+---
+
+### Escenario 385: Consolidación Ergonómica de Ventas en Unidades: Supresión de Columna Redundante `PESO (UND)` (Col J) e Integración de Peso y Micro-Badges en `Col I` (Opción 1 Lean / SpaceX)
+
+#### 1. Diagnóstico de Redundancia y Optimización de Ancho de Pantalla
+En el diseño original heredado de planillas de cálculo de escritorio (Excel), existía una duplicidad obligada:
+- Columna I: `VENTA (UND)` (cantidad entera de unidades formuladas).
+- Columna J: `PESO (UND)` (kilogramos equivalentes que restan al balance físico $S$).
+
+Esta duplicación obedecía a una limitación técnica de Excel, donde no era posible operar algebraicamente celdas que mezclaran texto/unidades y cifras en kilogramos para la fórmula de stock ($S = E + F + G - H - J - ...$). En una aplicación web de alta densidad operativa (1600px standard), dedicar 95px a una columna exclusivamente para repetir el peso correspondiente a las unidades vendidas representa desperdicio visual y horizontal (Muda).
+
+#### 2. Regla Canónica de Consolidación (Opción 1)
+Bajo los principios de ingeniería Lean y el algoritmo de simplificación de SpaceX (*"The best part is no part"*):
+1. **Supresión de Columna J en Pantalla:**
+   - Se retira `J` de `DEFAULT_COLUMN_ORDER` y del almacenamiento local (`localStorage`).
+   - La sábana operativa se optimiza de 24 a 23 columnas activas en interfaz, ganando 95px de amplitud para las columnas de excepciones y cierres.
+2. **Consolidación en Columna I (`VENTA (UND)`):**
+   - **Valor Numérico Principal:** Despliega directamente el **peso físico equivalente en kilogramos** (`colJ_weightSalesUnits`, ej. `12,80` kg para 80 bananos, `8,40` kg para 60 mandarinas, `5,85` kg para 3 cubetas de huevos), con 2 decimales y tipografía tabular destacada.
+   - **Micro-Badges de Presentación e Instrucción:** Renderiza directamente bajo la cifra el desglose físico consolidado (ej. `80 und de 160 gr`), garantizando que la jefatura de inventarios y bodega tengan en un solo bloque visual tanto la masa a descargar como la especificación de empaque.
+   - **Borde Separador de Sección:** Al ser ahora la última columna del bloque comercial/ventas, `Col I` adquiere el borde derecho reforzado (`borderRight: '2px solid #334155'`).
+3. **Integridad del Balance Kardex:**
+   - La ecuación de balance contable de masa se preserva idéntica y exacta:
+     $$S = E + F + G - H - J - K + L - M - N + O - P - Q - R$$
+   - En el pie de totales de la sábana, la columna `I` totaliza la masa total en kilogramos correspondiente a las unidades vendidas (ej. `27,05 Kg`).
+4. **Resguardo de Compatibilidad Contable (World Office / Excel Export):**
+   - En el exportador formal a Excel, se mantienen las 24 columnas separadas para preservar 100% de compatibilidad con auditorías externas y sistemas ERP legacy.

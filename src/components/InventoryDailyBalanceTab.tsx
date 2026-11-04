@@ -208,7 +208,7 @@ interface InventoryDailyBalanceTabProps {
 }
 
 export const DEFAULT_COLUMN_ORDER = [
-    'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X'
+    'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X'
 ];
 
 export const COLUMN_METADATA: Record<string, {
@@ -227,8 +227,8 @@ export const COLUMN_METADATA: Record<string, {
     E: { letter: 'E', title: 'Inventario Inicial', shortName: 'Inv. Inicial', sign: '(+)', block: 'ENTRADAS (+)', effect: 'Heredado del Inventario de Bodega / Conteo Físico de la jornada anterior. Solo Lectura (+)', color: '#34D399' },
     F: { letter: 'F', title: 'Corrección', shortName: 'Corrección', sign: '(±)', block: 'ENTRADAS (±)', effect: 'Ajuste manual operativo de descuadre o ingreso extemporáneo (±)', color: '#34D399' },
     G: { letter: 'G', title: 'Compras', shortName: 'Compras', sign: '(+)', block: 'ENTRADAS (+)', effect: 'Compras plaza Corabastos o recepción de proveedores (+)', color: '#34D399', borderRight: '2px solid #334155' },
-    H: { letter: 'H', title: 'Venta (Kg)', shortName: 'Venta (Kg)', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Salidas facturadas a clientes en kilogramos (-)', color: '#60A5FA' },
-    I: { letter: 'I', title: 'Venta (Und)', shortName: 'Venta (Und)', sign: '(Info)', block: 'VENTAS & PEDIDOS (Info)', effect: 'Salidas facturadas a clientes en unidades (Informativo)', color: '#94A3B8' },
+    H: { letter: 'H', title: 'Venta (Kg)', shortName: 'Venta (Kg)', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Salidas facturadas a clientes en kilogramos puros (-)', color: '#60A5FA' },
+    I: { letter: 'I', title: 'Venta (Und)', shortName: 'Venta (Und)', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Salidas facturadas en unidades con peso en Kg deducido (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
     J: { letter: 'J', title: 'Peso (Und)', shortName: 'Peso (Und)', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Kilogramos equivalentes de productos vendidos por unidad (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
     K: { letter: 'K', title: 'Escasos', shortName: 'Escasos', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Faltante de despacho en alistamiento (-)', color: '#F87171' },
     L: { letter: 'L', title: 'Sin Enviar', shortName: 'Sin Enviar', sign: '(+)', block: 'EXCEPCIONES (+)', effect: 'Producto alistado que no salió en ruta (+)', color: '#34D399' },
@@ -357,7 +357,20 @@ export default function InventoryDailyBalanceTab({
     }, [onExitFullscreen]);
 
     // Arrastre y Reorganización de Columnas (SPEC.md §8.8.10)
-    const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
+    const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('frufresco_inventory_col_order');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        return parsed.filter(k => k !== 'J');
+                    }
+                }
+            } catch (e) {}
+        }
+        return DEFAULT_COLUMN_ORDER;
+    });
     const [draggedCol, setDraggedCol] = useState<string | null>(null);
     const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
@@ -1631,7 +1644,7 @@ interface CommittedSaleData {
                         case 'F': return matchNumericFilter(row.colF_corrections, filterStr);
                         case 'G': return matchNumericFilter(row.colG_purchases, filterStr);
                         case 'H': return matchNumericFilter(row.colH_salesKg, filterStr);
-                        case 'I': return matchNumericFilter(row.colI_salesUnits, filterStr);
+                        case 'I': return matchNumericFilter(row.colJ_weightSalesUnits > 0 ? row.colJ_weightSalesUnits : row.colI_salesUnits, filterStr);
                         case 'J': return matchNumericFilter(row.colJ_weightSalesUnits, filterStr);
                         case 'K': return matchNumericFilter(row.colK_shortage, filterStr);
                         case 'L': return matchNumericFilter(row.colL_unshipped, filterStr);
@@ -1843,7 +1856,7 @@ interface CommittedSaleData {
             totalF: list.reduce((acc, r) => acc + (r.colF_corrections || 0), 0),
             totalG: list.reduce((acc, r) => acc + (r.colG_purchases || 0), 0),
             totalH: list.reduce((acc, r) => acc + (r.colH_salesKg || 0), 0),
-            totalI: list.reduce((acc, r) => acc + (r.colI_salesUnits || 0), 0),
+            totalI: list.reduce((acc, r) => acc + (r.colJ_weightSalesUnits || 0), 0),
             totalJ: list.reduce((acc, r) => acc + (r.colJ_weightSalesUnits || 0), 0),
             totalK: list.reduce((acc, r) => acc + (r.colK_shortage || 0), 0),
             totalL: list.reduce((acc, r) => acc + (r.colL_unshipped || 0), 0),
@@ -3205,16 +3218,17 @@ interface CommittedSaleData {
                             key, 
                             row.productId, 
                             'I', 
-                            row.colI_salesUnits, 
+                            row.colJ_weightSalesUnits > 0 ? row.colJ_weightSalesUnits : (row.colI_salesUnits > 0 ? row.colI_salesUnits : 0), 
                             { 
                                 ...getColStyle('I', colIdx), 
                                 padding: '6px 8px', 
                                 textAlign: 'right', 
-                                color: row.colI_salesUnits > 0 ? '#1E40AF' : '#94A3B8', 
+                                color: (row.colJ_weightSalesUnits > 0 || row.colI_salesUnits > 0) ? '#1E40AF' : '#94A3B8', 
                                 fontWeight: isParent ? '800' : '700', 
+                                borderRight: '2px solid #334155',
                                 borderBottom: cellBorderBottom 
                             }, 
-                            0, 
+                            2, 
                             true,
                             row.colI_salesNotes && row.colI_salesNotes.length > 0 ? (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', justifyContent: 'flex-end', marginTop: '2px' }}>
@@ -4540,7 +4554,7 @@ interface CommittedSaleData {
                                     const isDragging = draggedCol === colKey;
                                     const isDragOver = dragOverCol === colKey;
                                     const isPianoDark = colIdx % 2 === 1;
-                                    const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
+                                    const hasRightBorder = colKey === 'G' || colKey === 'I' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
                                     const colWidth = getColWidth(colKey);
 
                                     // Tooltip con Bloque, Fórmula y Signo Contable (SPEC.md §8.8.8)
@@ -4694,7 +4708,7 @@ interface CommittedSaleData {
                                         const filterVal = columnFilters[colKey] || '';
                                         const isActive = filterVal.trim().length > 0;
                                         const isPianoDark = colIdx % 2 === 1;
-                                        const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
+                                        const hasRightBorder = colKey === 'G' || colKey === 'I' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
                                         const isMenuOpen = activeFilterPopover?.colKey === colKey;
                                         const colWidth = getColWidth(colKey);
 
@@ -4920,8 +4934,8 @@ interface CommittedSaleData {
                                 {columnOrder.map((colKey, colIdx) => {
                                     const meta = COLUMN_METADATA[colKey];
                                     const isPianoDark = colIdx % 2 === 1;
-                                    const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
-                                    const decimals = colKey === 'I' ? 0 : 2;
+                                    const hasRightBorder = colKey === 'G' || colKey === 'I' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
+                                    const decimals = 2;
 
                                     // Totales S unificados con el resto de columnas
 
