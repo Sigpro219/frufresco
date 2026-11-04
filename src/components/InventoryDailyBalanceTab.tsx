@@ -232,7 +232,7 @@ export const COLUMN_METADATA: Record<string, {
     J: { letter: 'J', title: 'Peso (Und)', shortName: 'Peso (Und)', sign: '(-)', block: 'VENTAS & PEDIDOS (-)', effect: 'Kilogramos equivalentes de productos vendidos por unidad (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
     K: { letter: 'K', title: 'Escasos', shortName: 'Escasos', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Faltante de despacho en alistamiento (-)', color: '#F87171' },
     L: { letter: 'L', title: 'Sin Enviar', shortName: 'Sin Enviar', sign: '(+)', block: 'EXCEPCIONES (+)', effect: 'Producto alistado que no salió en ruta (+)', color: '#34D399' },
-    M: { letter: 'M', title: 'Venta Extra', shortName: 'Vta. Extra', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta adicional en mostrador de bodega (-)', color: '#C084FC' },
+    M: { letter: 'M', title: 'Venta Adicional', shortName: 'Vta. Adicional', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta adicional extemporánea que ingresa con posterioridad a la hora de corte (-)', color: '#C084FC' },
     N: { letter: 'N', title: 'Venta Nómina', shortName: 'Vta. Nómina', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta autorizada descontada a colaboradores (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
     O: { letter: 'O', title: 'Devoluciones', shortName: 'Devoluciones', sign: '(+)', block: 'DEVOLUCIONES & MERMAS (+)', effect: 'Producto retornado por clientes al almacén (+)', color: '#FBBF24' },
     P: { letter: 'P', title: 'Merma Pesada', shortName: 'Pesada', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Merma por merma de peso, calibración o humedad (-)', color: '#FBBF24' },
