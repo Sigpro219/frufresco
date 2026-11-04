@@ -114,7 +114,7 @@ export async function POST(req: Request) {
             const parsedQty =
               typeof it.quantityKg === 'number' && it.quantityKg > 0
                 ? it.quantityKg
-                : parseHandwrittenQuantity(it.rawQuantityText as string | number);
+                : parseHandwrittenQuantity(it.rawQuantityText as string | number, it.rawPresentation ? String(it.rawPresentation) : null);
             return {
               rawProductName: String(it.rawProductName || '').trim(),
               rawQuantityText: String(it.rawQuantityText || parsedQty),
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
             const parsedQty =
               typeof it.quantityKg === 'number' && it.quantityKg > 0
                 ? it.quantityKg
-                : parseHandwrittenQuantity(it.rawQuantityText as string | number);
+                : parseHandwrittenQuantity(it.rawQuantityText as string | number, it.rawPresentation ? String(it.rawPresentation) : null);
             return {
               rawProductName: String(it.rawProductName || '').trim(),
               rawQuantityText: String(it.rawQuantityText || parsedQty),
