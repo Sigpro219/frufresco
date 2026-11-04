@@ -148,6 +148,7 @@ export interface InventoryDailyRow {
     colG_purchases: number;
     // H: Venta del día KG (-)
     colH_salesKg: number;
+    colH_salesNotes?: string[];
     // I: Venta del día UN (Informativo)
     colI_salesUnits: number;
     // J: Peso Venta UN (-)
@@ -399,6 +400,67 @@ export default function InventoryDailyBalanceTab({
         setColumnOrder(DEFAULT_COLUMN_ORDER);
     };
 
+    // Ancho dinámico de columnas redimensionables por arrastre (Opción 1 - SPEC.md §8.8.11)
+    const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('frufresco_inventory_col_widths');
+                if (saved) return JSON.parse(saved);
+            } catch (e) {}
+        }
+        return {};
+    });
+
+    const getColWidth = useCallback((colKey: string): number => {
+        return columnWidths[colKey] || 95;
+    }, [columnWidths]);
+
+    const handleResetColWidth = useCallback((colKey: string) => {
+        setColumnWidths(prev => {
+            const next = { ...prev };
+            delete next[colKey];
+            try {
+                localStorage.setItem('frufresco_inventory_col_widths', JSON.stringify(next));
+            } catch (e) {}
+            return next;
+        });
+    }, []);
+
+    const resizingRef = useRef<{ colKey: string; startX: number; startWidth: number } | null>(null);
+
+    const handleResizeStart = useCallback((e: React.MouseEvent, colKey: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const startWidth = columnWidths[colKey] || 95;
+        resizingRef.current = { colKey, startX: e.clientX, startWidth };
+
+        const handleMouseMove = (moveEvent: MouseEvent) => {
+            if (!resizingRef.current) return;
+            const deltaX = moveEvent.clientX - resizingRef.current.startX;
+            const newWidth = Math.max(50, Math.min(350, Math.round(resizingRef.current.startWidth + deltaX)));
+            setColumnWidths(prev => {
+                const next = { ...prev, [resizingRef.current!.colKey]: newWidth };
+                try {
+                    localStorage.setItem('frufresco_inventory_col_widths', JSON.stringify(next));
+                } catch (err) {}
+                return next;
+            });
+        };
+
+        const handleMouseUp = () => {
+            resizingRef.current = null;
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }, [columnWidths]);
+
     const isColumnOrderCustom = useMemo(() => {
         return columnOrder.some((col, idx) => col !== DEFAULT_COLUMN_ORDER[idx]);
     }, [columnOrder]);
@@ -510,9 +572,15 @@ export default function InventoryDailyBalanceTab({
     const [loading, setLoading] = useState<boolean>(true);
     const [refreshing, setRefreshing] = useState<boolean>(false);
 
+interface CommittedSaleData {
+    totalKg: number;
+    totalUnits: number;
+    unitNotes: string[];
+}
+
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [movements, setMovements] = useState<RawMovement[]>([]);
-    const [committedSalesMap, setCommittedSalesMap] = useState<Map<string, number>>(new Map());
+    const [committedSalesMap, setCommittedSalesMap] = useState<Map<string, CommittedSaleData>>(new Map());
     const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
 
     // Modales de apoyo
@@ -886,7 +954,7 @@ export default function InventoryDailyBalanceTab({
                 if (ordersErr) throw ordersErr;
 
                 const launchedOrderIds = (launchedOrders || []).map(o => o.id);
-                const salesMap = new Map<string, number>();
+                const salesMap = new Map<string, CommittedSaleData>();
 
                 if (launchedOrderIds.length > 0) {
                     const batchSize = 100;
@@ -894,7 +962,7 @@ export default function InventoryDailyBalanceTab({
                         const batch = launchedOrderIds.slice(i, i + batchSize);
                         const { data: items, error: itemsErr } = await supabase
                             .from('order_items')
-                            .select('product_id, quantity')
+                            .select('id, product_id, quantity, unit, variant_label, selected_options')
                             .in('order_id', batch);
 
                         if (itemsErr) {
@@ -904,8 +972,40 @@ export default function InventoryDailyBalanceTab({
 
                         (items || []).forEach(it => {
                             if (!it.product_id) return;
-                            const prevQty = salesMap.get(it.product_id) || 0;
-                            salesMap.set(it.product_id, prevQty + (Number(it.quantity) || 0));
+                            const qty = Number(it.quantity) || 0;
+                            const unit = (it.unit || '').toLowerCase();
+                            const isItemUnit = ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes(unit);
+
+                            let physicalNote: string | null = null;
+                            if (it.selected_options && typeof it.selected_options === 'object') {
+                                const sel: any = it.selected_options;
+                                if (sel._physical_instruction) {
+                                    physicalNote = String(sel._physical_instruction).trim();
+                                } else if (sel._original_qty && sel['Presentación']) {
+                                    physicalNote = `${sel._original_qty} und de ${String(sel['Presentación']).replace(/unidad\s*/i, '')}`.trim();
+                                }
+                            }
+                            if (!physicalNote && it.variant_label) {
+                                const vl = it.variant_label.trim();
+                                const match = vl.match(/(\d+)\s*(?:unidades|unds?|und)\s*(?:de\s*)?([0-9.,]+\s*(?:gr|g|kg|ml))/i);
+                                if (match) {
+                                    physicalNote = `${match[1]} und de ${match[2]}`;
+                                } else if (/und|unidad|gr/i.test(vl) && !/^(kg|kilo|unidad)$/i.test(vl)) {
+                                    physicalNote = vl;
+                                }
+                            }
+
+                            const prev = salesMap.get(it.product_id) || { totalKg: 0, totalUnits: 0, unitNotes: [] };
+                            const notes = [...prev.unitNotes];
+                            if (physicalNote && !notes.includes(physicalNote)) {
+                                notes.push(physicalNote);
+                            }
+
+                            salesMap.set(it.product_id, {
+                                totalKg: prev.totalKg + (isItemUnit ? 0 : qty),
+                                totalUnits: prev.totalUnits + (isItemUnit ? qty : 0),
+                                unitNotes: notes
+                            });
                         });
                     }
                 }
@@ -976,6 +1076,7 @@ export default function InventoryDailyBalanceTab({
             let f_corrections = 0;
             let g_purchases = 0;
             let h_salesKg = 0;
+            const h_salesNotes: string[] = [];
             let i_salesUnits = 0;
             let j_weightSalesUnits = 0;
             let k_shortage = 0;
@@ -998,14 +1099,28 @@ export default function InventoryDailyBalanceTab({
             const isUnit = ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes((p.unit_of_measure || '').toLowerCase());
 
             // Venta del día (Comprometida por lanzamiento de tanda de pedidos para_compra)
-            const launchedQty = committedSalesMap.get(p.id) || 0;
-            if (launchedQty > 0) {
+            const saleData = committedSalesMap.get(p.id);
+            if (saleData) {
                 if (isUnit) {
-                    i_salesUnits += launchedQty;
+                    // Producto con unidad de compra UNIDAD:
+                    // Se restringe y desagrega en unidades (Col I) y su peso equivalente (Col J). Col H queda en 0 (-).
+                    const units = saleData.totalUnits > 0 ? saleData.totalUnits : (saleData.totalKg > 0 ? Math.round(saleData.totalKg) : 0);
+                    i_salesUnits += units;
                     const unitWeight = Number(p.weight_kg) || 1;
-                    j_weightSalesUnits += (launchedQty * unitWeight);
+                    j_weightSalesUnits += (units * unitWeight);
                 } else {
-                    h_salesKg += launchedQty;
+                    // Producto con unidad de compra KILOS:
+                    // Todo va a Col H en Kg. Si se vendió en unidades de X gramos, se añade la micro-nota debajo.
+                    h_salesKg += saleData.totalKg;
+                    if (saleData.totalUnits > 0 && saleData.totalKg === 0) {
+                        const convWeight = saleData.totalUnits * (Number(p.weight_kg) || 1);
+                        h_salesKg += convWeight;
+                    }
+                    if (saleData.unitNotes && saleData.unitNotes.length > 0) {
+                        saleData.unitNotes.forEach(n => {
+                            if (!h_salesNotes.includes(n)) h_salesNotes.push(n);
+                        });
+                    }
                 }
             }
 
@@ -1031,11 +1146,15 @@ export default function InventoryDailyBalanceTab({
                         if (weightMatch) {
                             j_weightSalesUnits += parseFloat(weightMatch[1].replace(',', '.'));
                         } else {
-                            // Si no se reportó báscula separada, asumir peso proporcional o el mismo rawQty
-                            j_weightSalesUnits += rawQty;
+                            // Si no se reportó báscula separada, asumir peso proporcional
+                            j_weightSalesUnits += (rawQty * (Number(p.weight_kg) || 1));
                         }
                     } else {
                         h_salesKg += rawQty;
+                        const noteMatch = (m.notes || '').match(/(\d+\s*(?:unds?|unidades?)\s*(?:de\s*)?[0-9.,]+\s*(?:gr|g|kg))/i);
+                        if (noteMatch && !h_salesNotes.includes(noteMatch[1])) {
+                            h_salesNotes.push(noteMatch[1]);
+                        }
                     }
                 }
                 // K: Producto escaso (-)
@@ -1146,6 +1265,7 @@ export default function InventoryDailyBalanceTab({
                 colF_corrections: f_corrections,
                 colG_purchases: g_purchases,
                 colH_salesKg: h_salesKg,
+                colH_salesNotes: h_salesNotes,
                 colI_salesUnits: i_salesUnits,
                 colJ_weightSalesUnits: j_weightSalesUnits,
                 colK_shortage: k_shortage,
@@ -1211,6 +1331,10 @@ export default function InventoryDailyBalanceTab({
                 colF_corrections: row.colF_corrections + children.reduce((s, c) => s + c.colF_corrections, 0),
                 colG_purchases: row.colG_purchases + children.reduce((s, c) => s + c.colG_purchases, 0),
                 colH_salesKg: row.colH_salesKg + children.reduce((s, c) => s + c.colH_salesKg, 0),
+                colH_salesNotes: Array.from(new Set([
+                    ...(row.colH_salesNotes || []),
+                    ...children.flatMap(c => c.colH_salesNotes || [])
+                ])),
                 colI_salesUnits: row.colI_salesUnits + children.reduce((s, c) => s + c.colI_salesUnits, 0),
                 colJ_weightSalesUnits: row.colJ_weightSalesUnits + children.reduce((s, c) => s + c.colJ_weightSalesUnits, 0),
                 colK_shortage: row.colK_shortage + children.reduce((s, c) => s + c.colK_shortage, 0),
@@ -2438,8 +2562,10 @@ export default function InventoryDailyBalanceTab({
                 }}
                 title={sheetMode === 'view' ? 'Sábana Oficial (Solo Vista) • Conmuta a Modo Edición para editar' : (effectiveReadonly ? 'Celda calculada de solo lectura' : 'Clic para editar este valor')}
             >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
-                    {val !== null ? renderNumericCell(val, decimals) : <span style={{ color: '#94A3B8', fontWeight: '600' }}>-</span>}
+                <div style={{ display: 'flex', flexDirection: extraChildren ? 'column' : 'row', alignItems: 'flex-end', justifyContent: 'flex-end', gap: '2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                        {val !== null ? renderNumericCell(val, decimals) : <span style={{ color: '#94A3B8', fontWeight: '600' }}>-</span>}
+                    </div>
                     {extraChildren}
                 </div>
             </td>
@@ -2943,15 +3069,24 @@ export default function InventoryDailyBalanceTab({
                         return isPianoDark ? '#F1F5F9' : '#FFFFFF';
                     };
 
+                    const getColStyle = (colKey: string, colIdx: number) => {
+                        const w = `${getColWidth(colKey)}px`;
+                        return {
+                            width: w,
+                            minWidth: w,
+                            maxWidth: w,
+                            backgroundColor: getPianoCellBg(colIdx)
+                        };
+                    };
+
                     const numericalCellRenderers: Record<string, (colIdx: number) => React.ReactNode> = {
                         E: (colIdx) => (
                             <td key={`cell-${key}-E`} style={{
-                                width: '95px', minWidth: '95px', maxWidth: '95px',
+                                ...getColStyle('E', colIdx),
                                 padding: '4px 6px', textAlign: 'right',
                                 fontWeight: isParent ? '800' : '700',
                                 color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8',
-                                borderBottom: cellBorderBottom,
-                                backgroundColor: getPianoCellBg(colIdx)
+                                borderBottom: cellBorderBottom
                             }} title="Inventario Inicial oficial heredado (Solo Lectura. Para ajustes use Col F Corrección)">
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                     {renderNumericCell(row.colE_initialStock, 2)}
@@ -2959,25 +3094,62 @@ export default function InventoryDailyBalanceTab({
                             </td>
                         ),
                         F: (colIdx) => renderEditableCell(key, row.productId, 'F', row.colF_corrections, {
-                            width: '95px', minWidth: '95px', maxWidth: '95px',
+                            ...getColStyle('F', colIdx),
                             padding: '4px 6px',
                             textAlign: 'right',
                             fontWeight: isParent ? '800' : (row.colF_corrections !== 0 ? '700' : '400'),
                             color: row.colF_corrections > 0 ? '#059669' : row.colF_corrections < 0 ? '#DC2626' : '#94A3B8',
-                            backgroundColor: getPianoCellBg(colIdx),
                             borderBottom: cellBorderBottom
                         }, 2),
-                        G: (colIdx) => renderEditableCell(key, row.productId, 'G', row.colG_purchases, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
-                        H: (colIdx) => renderEditableCell(key, row.productId, 'H', row.colH_salesKg, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
-                        I: (colIdx) => renderEditableCell(key, row.productId, 'I', row.colI_salesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: '#64748B', fontWeight: isParent ? '700' : '400', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 0),
-                        J: (colIdx) => renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '400', backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
-                        K: (colIdx) => renderEditableCell(key, row.productId, 'K', row.colK_shortage, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
-                        L: (colIdx) => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
-                        M: (colIdx) => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
-                        N: (colIdx) => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
-                        O: (colIdx) => renderEditableCell(key, row.productId, 'O', row.colO_returns, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
-                        P: (colIdx) => renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
-                        Q: (colIdx) => renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2, false,
+                        G: (colIdx) => renderEditableCell(key, row.productId, 'G', row.colG_purchases, { ...getColStyle('G', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
+                        H: (colIdx) => renderEditableCell(
+                            key, 
+                            row.productId, 
+                            'H', 
+                            row.colH_salesKg, 
+                            { 
+                                ...getColStyle('H', colIdx), 
+                                padding: '6px 8px', 
+                                textAlign: 'right', 
+                                color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', 
+                                fontWeight: isParent ? '800' : '700', 
+                                borderBottom: cellBorderBottom 
+                            }, 
+                            2, 
+                            true,
+                            row.colH_salesNotes && row.colH_salesNotes.length > 0 ? (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', justifyContent: 'flex-end', marginTop: '2px' }}>
+                                    {row.colH_salesNotes.map((note, idx) => (
+                                        <span 
+                                            key={idx} 
+                                            style={{ 
+                                                fontSize: '0.62rem', 
+                                                lineHeight: '1.1', 
+                                                padding: '1.5px 5px', 
+                                                borderRadius: '3px', 
+                                                backgroundColor: '#FEF08A', 
+                                                color: '#854D0E', 
+                                                fontWeight: '700',
+                                                border: '1px solid #FDE047',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            title={`Instrucción física: ${note}`}
+                                        >
+                                            {note}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : null
+                        ),
+                        I: (colIdx) => renderEditableCell(key, row.productId, 'I', row.colI_salesUnits, { ...getColStyle('I', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colI_salesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderBottom: cellBorderBottom }, 0, true),
+                        J: (colIdx) => renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { ...getColStyle('J', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, true),
+                        K: (colIdx) => renderEditableCell(key, row.productId, 'K', row.colK_shortage, { ...getColStyle('K', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        L: (colIdx) => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { ...getColStyle('L', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2),
+                        M: (colIdx) => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { ...getColStyle('M', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        N: (colIdx) => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { ...getColStyle('N', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
+                        O: (colIdx) => renderEditableCell(key, row.productId, 'O', row.colO_returns, { ...getColStyle('O', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        P: (colIdx) => renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { ...getColStyle('P', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        Q: (colIdx) => renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { ...getColStyle('Q', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosQ?.length > 0 ? (
                                 <button
                                     type="button"
@@ -2989,7 +3161,7 @@ export default function InventoryDailyBalanceTab({
                                 </button>
                             ) : null
                         ),
-                        R: (colIdx) => renderEditableCell(key, row.productId, 'R', row.colR_cleaningWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
+                        R: (colIdx) => renderEditableCell(key, row.productId, 'R', row.colR_cleaningWaste, { ...getColStyle('R', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosR?.length > 0 ? (
                                 <button
                                     type="button"
@@ -3003,14 +3175,11 @@ export default function InventoryDailyBalanceTab({
                         ),
                         S: (colIdx) => (
                             <td key={`cell-${key}-S`} style={{ 
+                                ...getColStyle('S', colIdx),
                                 padding: '6px 8px', 
                                 textAlign: 'right', 
                                 fontWeight: isParent ? '800' : '700', 
-                                width: '95px',
-                                minWidth: '95px',
-                                maxWidth: '95px',
                                 color: isParent ? '#064E3B' : '#0F172A', 
-                                backgroundColor: getPianoCellBg(colIdx),
                                 borderRight: '1px solid #E2E8F0',
                                 borderBottom: cellBorderBottom,
                                 fontFamily: 'monospace, sans-serif'
@@ -3018,23 +3187,23 @@ export default function InventoryDailyBalanceTab({
                                 {renderNumericCell(row.colS_calculated)}
                             </td>
                         ),
-                        T: (colIdx) => renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
+                        T: (colIdx) => renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { ...getColStyle('T', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', borderBottom: cellBorderBottom }, 2),
                         U: (colIdx) => (
-                            <td key={`cell-${key}-U`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
+                            <td key={`cell-${key}-U`} style={{ ...getColStyle('U', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
                                 {row.colU_bodegaPost10am !== null ? renderNumericCell(row.colU_bodegaPost10am) : <span style={{ color: '#CBD5E1' }}>-</span>}
                             </td>
                         ),
                         V: (colIdx) => (
-                            <td key={`cell-${key}-V`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }}>
+                            <td key={`cell-${key}-V`} style={{ ...getColStyle('V', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }}>
                                 {row.colV_missing > 0 ? renderNumericCell(row.colV_missing) : <span style={{ color: '#CBD5E1' }}>-</span>}
                             </td>
                         ),
                         W: (colIdx) => (
-                            <td key={`cell-${key}-W`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
+                            <td key={`cell-${key}-W`} style={{ ...getColStyle('W', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
                                 {row.colW_surplus > 0 ? renderNumericCell(row.colW_surplus) : <span style={{ color: '#CBD5E1' }}>-</span>}
                             </td>
                         ),
-                        X: (colIdx) => renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2, false,
+                        X: (colIdx) => renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { ...getColStyle('X', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosX?.length > 0 ? (
                                 <button
                                     type="button"
@@ -3047,6 +3216,7 @@ export default function InventoryDailyBalanceTab({
                             ) : null
                         )
                     };
+
                     return columnOrder.map((colKey, colIdx) => numericalCellRenderers[colKey]?.(colIdx) ?? null);
                 })()}
             </tr>
@@ -3077,6 +3247,17 @@ export default function InventoryDailyBalanceTab({
             <style>{`
                 .daily-balance-table tr:hover td {
                     background-color: #F1F5F9 !important;
+                }
+                .col-resizer-handle {
+                    opacity: 0;
+                    transition: opacity 0.15s ease, background-color 0.15s ease;
+                }
+                th:hover .col-resizer-handle {
+                    opacity: 0.6;
+                }
+                .col-resizer-handle:hover {
+                    opacity: 1 !important;
+                    background-color: #38BDF8 !important;
                 }
                 @keyframes subtlePulseAmber {
                     0%, 100% {
@@ -4262,10 +4443,11 @@ export default function InventoryDailyBalanceTab({
                                     const isDragOver = dragOverCol === colKey;
                                     const isPianoDark = colIdx % 2 === 1;
                                     const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
+                                    const colWidth = getColWidth(colKey);
 
                                     // Tooltip con Bloque, Fórmula y Signo Contable (SPEC.md §8.8.8)
                                     const tooltipText = meta 
-                                        ? `[${meta.block}] Columna ${colKey}: ${meta.title} ${meta.sign}\n• Efecto: ${meta.effect}${meta.formula ? `\n• Lógica / Fórmula: ${meta.formula}` : ''}\n\n(Arrastra para comparar y colocar columnas juntas)`
+                                        ? `[${meta.block}] Columna ${colKey}: ${meta.title} ${meta.sign}\n• Efecto: ${meta.effect}${meta.formula ? `\n• Lógica / Fórmula: ${meta.formula}` : ''}\n\n(Arrastra para reordenar • Ajusta el ancho en el borde derecho • Doble clic para reiniciar)`
                                         : `${colKey}: Columna Kardex`;
 
                                     return (
@@ -4287,23 +4469,45 @@ export default function InventoryDailyBalanceTab({
                                                 padding: colKey === 'U' ? '4px 4px' : '4px 8px',
                                                 textAlign: 'right',
                                                 color: meta?.color || '#F8FAFC',
-                                                width: '95px',
-                                                minWidth: '95px',
-                                                maxWidth: '95px',
+                                                width: `${colWidth}px`,
+                                                minWidth: `${colWidth}px`,
+                                                maxWidth: `${colWidth}px`,
+                                                borderRight: hasRightBorder ? '2px solid #334155' : '1px solid #1E293B',
+                                                borderBottom: '1px solid #334155',
                                                 cursor: 'grab',
                                                 userSelect: 'none',
-                                                borderRight: hasRightBorder ? '2px solid #334155' : '1px solid #1E293B',
-                                                outline: isDragOver ? '2px dashed #10B981' : undefined,
                                                 opacity: isDragging ? 0.35 : 1,
-                                                transition: 'background-color 0.15s ease, outline 0.15s ease, opacity 0.15s ease'
+                                                borderLeft: isDragOver ? '3px solid #10B981' : undefined
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
                                                 <GripVertical size={10} color="#64748B" style={{ opacity: 0.6, flexShrink: 0 }} />
-                                                <span style={{ fontSize: '0.69rem', fontWeight: '800', letterSpacing: '0.02em' }}>
+                                                <span style={{ fontSize: '0.69rem', fontWeight: '800', letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {meta?.shortName || meta?.title || colKey}
                                                 </span>
                                             </div>
+
+                                            {/* Tirador Interactivo de Redimensión por Arrastre (Opción 1 - Excel Col-Resize) */}
+                                            <div
+                                                className="col-resizer-handle"
+                                                onMouseDown={(e) => handleResizeStart(e, colKey)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onDoubleClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleResetColWidth(colKey);
+                                                }}
+                                                title={`Arrastra para cambiar ancho (${colWidth}px) • Doble clic para reiniciar (95px)`}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    right: 0,
+                                                    bottom: 0,
+                                                    width: '6px',
+                                                    cursor: 'col-resize',
+                                                    zIndex: 50,
+                                                    userSelect: 'none'
+                                                }}
+                                            />
                                         </th>
                                     );
                                 })}
@@ -4394,12 +4598,16 @@ export default function InventoryDailyBalanceTab({
                                         const isPianoDark = colIdx % 2 === 1;
                                         const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
                                         const isMenuOpen = activeFilterPopover?.colKey === colKey;
+                                        const colWidth = getColWidth(colKey);
 
                                         return (
                                             <th
                                                 key={`filter-${colKey}`}
                                                 style={{
                                                     height: '28px',
+                                                    width: `${colWidth}px`,
+                                                    minWidth: `${colWidth}px`,
+                                                    maxWidth: `${colWidth}px`,
                                                     padding: '2px 4px',
                                                     position: 'sticky',
                                                     top: '32px',
