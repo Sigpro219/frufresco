@@ -14063,26 +14063,32 @@ En la Sábana Oficial de Balance Diario de 24 Columnas (`src/components/Inventor
 
 ---
 
-### Escenario 383: Desagregación Dual de Ventas: Restricción Canónica Kg vs Unidades y Micro-Badges de Presentación Física (`Col H` vs `Col I/J`)
+### Escenario 383: Desagregación Dual Canónica de Ventas: Discriminación de Kilos Puros (`Col H`) vs Unidades Físicas Consolidadas (`Col I/J`)
 
-#### 1. Principio de Gobernanza Operativa y Separación Estricta de Unidades
-En la Sábana Oficial de Balance Diario de 24 Columnas (`src/components/InventoryDailyBalanceTab.tsx`), los productos frutihortícolas conviven en dos regímenes de compra y venta:
-1. **Régimen de Compra por Kilogramos (`unit_of_measure === 'kg'`):**
-   - Productos como Banano urabá, Mandarina arrayana, Mango tommy, Apio, etc.
-   - **Gobernanza Columna H (`VENTA (KG)`):** Registra el peso total consolidado en Kilogramos (ej. `11,20` kg).
-   - **Restricción Canónica Columna I (`VENTA (UND)`) y Columna J (`PESO (UND)`):** Se restringen estrictamente a guión neutro (`-`), impidiendo contaminación o duplicidad en las columnas de unidades.
-   - **Micro-Badges de Presentación Física:** Cuando el pedido fue formulado por unidades de calibre/gramaje específico (ej. 70 unidades de 160 gr = 11.2 Kg), la Columna H renderiza directamente bajo la cifra numérica un micro-badge compacto en tono amarillo cálido (`#FEF08A` / texto `#854D0E`, borde `#FDE047`) con la instrucción física exacta (ej. `70 und de 160 gr`).
-2. **Régimen de Compra por Unidades (`unit_of_measure === 'Unidad'`):**
-   - Productos como Cubeta de huevos, Flores, Bandejas, etc.
-   - **Gobernanza Columna H (`VENTA (KG)`):** Permanece estrictamente en guión neutro (`-`).
-   - **Gobernanza Columna I (`VENTA (UND)`):** Registra la cantidad entera en unidades despachadas (ej. `3` unidades).
-   - **Gobernanza Columna J (`PESO (UND)`):** Registra la equivalencia de peso en kilogramos calculada a partir del peso unitario del catálogo (`units * weight_kg`, ej. `5,85` kg), restando dicho peso de la ecuación de balance $S = E + F + G - H - J - ...$.
+#### 1. Principio Canónico de Discriminación y Sumatoria de Unidades
+En la Sábana Oficial de Balance Diario de 24 Columnas (`src/components/InventoryDailyBalanceTab.tsx`), la venta de cualquier producto frutihortícola (independientemente de que su unidad base de compra en catálogo sea `Kg` o `Unidad`) se discrimina estrictamente según el canal y forma en que el cliente formuló el pedido:
 
-#### 2. Transducción de Datos Estructurados desde `order_items`
-El pipeline de carga (`loadDailyData`) consulta en tiempo real los registros de `order_items` vinculados a pedidos en estado operativo (`para_compra`, `approved`, `picking`, `shipped`, `delivered`):
-- Extrae `selected_options._physical_instruction` o deriva automáticamente la instrucción a partir de `_original_qty` + `Presentación` (ej. `"70 und de 160 gr"`).
-- Mapea de forma reactiva hacia `committedSalesMap` y genera el agregado `CommittedSaleData` con `totalKg`, `totalUnits` y `unitNotes: string[]`.
-- En el agrupamiento jerárquico de familias padre-hijo, las micro-notas de las presentaciones hijas se enrollan limpiamente al registro consolidado de la familia sin duplicados.
+1. **Venta Formulada por Kilos Puros (`Col H: VENTA (KG)`):**
+   - Corresponde a pedidos ordenados expresamente por peso estándar en kilogramos sin especificación de unidades (ej. 30 kg de Banano urabá, 20 kg de Cebolla, etc.).
+   - Se refleja exclusivamente en **`Col H`**.
+   - No suma unidades en `Col I` ni peso en `Col J`.
+   - Si no hubo pedidos por peso puro, `Col H` permanece limpiamente en guión neutro (`-`).
+
+2. **Venta Formulada por Unidades Físicas (`Col I: VENTA (UND)` y `Col J: PESO (UND)`):**
+   - Corresponde a pedidos formulados por unidades de calibre/gramaje (ej. 70 und de 160 gr, 10 und de 160 gr) o productos de unidad natural (ej. Cubetas de huevos).
+   - **`Col I: VENTA (UND)`**: Suma **todas las unidades físicas** de los pedidos lanzados a operación para esa jornada (ej. 70 + 10 = `80` unidades).
+   - **Micro-Badges Consolidados en Col I:** Bajo la cifra entera de unidades se renderiza el micro-badge consolidado agrupando por gramaje/presentación (ej. `80 und de 160 gr`, en lugar de badges repetitivos dispersos). Si hay múltiples gramajes (ej. 80 und de 160 gr y 20 und de 140 gr), se despliegan las etiquetas compactas correspondientes.
+   - **`Col J: PESO (UND)`**: Registra el peso total equivalente en kilogramos de esas unidades despachadas (ej. $80 \times 0.160\text{ kg} = 12,80\text{ kg}$).
+
+#### 2. Ecuación de Conservación de Masa e Integridad ACID de Inventario
+El inventario calculado de cierre ($S$) aplica la deducción canónica simultánea sin doble contabilidad:
+$$S = E + F + G - H - J - K + L - M - N + O - P - Q - R$$
+- $- H$ deduce los kilogramos vendidos expresamente por peso ($30\text{ kg}$).
+- $- J$ deduce los kilogramos equivalentes de las unidades vendidas ($12,80\text{ kg}$).
+- Salida total por venta = $H + J = 42,80\text{ kg}$.
+
+#### 3. Compatibilidad con Filtros Rápidos de Columna
+Al discriminar las unidades vendidas en `Col I (VENTA UND)`, cualquier filtro rápido como `con valores` sobre la columna `VENTA (UND)` mostrará inmediatamente tanto los productos de catálogo por unidad como las frutas/verduras pesables vendidas bajo especificación de unidades (ej. Banano urabá).
 
 ---
 

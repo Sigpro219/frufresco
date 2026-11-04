@@ -151,6 +151,7 @@ export interface InventoryDailyRow {
     colH_salesNotes?: string[];
     // I: Venta del día UN (Informativo)
     colI_salesUnits: number;
+    colI_salesNotes?: string[];
     // J: Peso Venta UN (-)
     colJ_weightSalesUnits: number;
     // K: Producto escaso (-)
@@ -573,9 +574,10 @@ export default function InventoryDailyBalanceTab({
     const [refreshing, setRefreshing] = useState<boolean>(false);
 
 interface CommittedSaleData {
-    totalKg: number;
+    pureKg: number;
     totalUnits: number;
-    unitNotes: string[];
+    totalUnitWeightKg: number;
+    unitGroups: Map<string, { units: number; weightKg: number }>;
 }
 
     const [products, setProducts] = useState<ProductItem[]>([]);
@@ -972,40 +974,79 @@ interface CommittedSaleData {
 
                         (items || []).forEach(it => {
                             if (!it.product_id) return;
-                            const qty = Number(it.quantity) || 0;
-                            const unit = (it.unit || '').toLowerCase();
-                            const isItemUnit = ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes(unit);
+                            const rawQty = Number(it.quantity) || 0;
+                            const unitStr = (it.unit || '').toLowerCase();
+                            const sel: any = it.selected_options;
+                            const vl = it.variant_label ? String(it.variant_label).trim() : '';
 
-                            let physicalNote: string | null = null;
-                            if (it.selected_options && typeof it.selected_options === 'object') {
-                                const sel: any = it.selected_options;
+                            let isUnit = false;
+                            let extractedUnits = 0;
+                            let grammageOrDesc = '';
+
+                            // 1. Extraer unidades desde selected_options
+                            if (sel && typeof sel === 'object') {
+                                if (sel._original_unit && ['un', 'und', 'unidad'].includes(String(sel._original_unit).toLowerCase())) {
+                                    isUnit = true;
+                                    extractedUnits = Number(sel._original_qty) || 0;
+                                } else if (sel._original_qty && (sel['Presentación'] || sel._conversion_factor)) {
+                                    isUnit = true;
+                                    extractedUnits = Number(sel._original_qty) || 0;
+                                }
                                 if (sel._physical_instruction) {
-                                    physicalNote = String(sel._physical_instruction).trim();
-                                } else if (sel._original_qty && sel['Presentación']) {
-                                    physicalNote = `${sel._original_qty} und de ${String(sel['Presentación']).replace(/unidad\s*/i, '')}`.trim();
+                                    const m = String(sel._physical_instruction).match(/(?:de\s*)?([0-9.,]+\s*(?:gr|g|kg|ml))/i);
+                                    if (m) grammageOrDesc = m[1];
+                                } else if (sel['Presentación']) {
+                                    grammageOrDesc = String(sel['Presentación']).replace(/unidad\s*/i, '').trim();
                                 }
                             }
-                            if (!physicalNote && it.variant_label) {
-                                const vl = it.variant_label.trim();
-                                const match = vl.match(/(\d+)\s*(?:unidades|unds?|und)\s*(?:de\s*)?([0-9.,]+\s*(?:gr|g|kg|ml))/i);
+
+                            // 2. Extraer unidades desde variant_label (ej: "70 Unidades 160 gr", "10 Unidades 160 gr")
+                            if (!isUnit && vl) {
+                                const match = vl.match(/(\d+)\s*(?:unidades|unds?|und)\b/i);
                                 if (match) {
-                                    physicalNote = `${match[1]} und de ${match[2]}`;
-                                } else if (/und|unidad|gr/i.test(vl) && !/^(kg|kilo|unidad)$/i.test(vl)) {
-                                    physicalNote = vl;
+                                    isUnit = true;
+                                    extractedUnits = parseInt(match[1], 10);
+                                    const mGram = vl.match(/(?:de\s*)?([0-9.,]+\s*(?:gr|g|kg|ml))/i);
+                                    if (mGram) grammageOrDesc = mGram[1];
                                 }
                             }
 
-                            const prev = salesMap.get(it.product_id) || { totalKg: 0, totalUnits: 0, unitNotes: [] };
-                            const notes = [...prev.unitNotes];
-                            if (physicalNote && !notes.includes(physicalNote)) {
-                                notes.push(physicalNote);
+                            // 3. Si la unidad del item es Unidad
+                            if (!isUnit && ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes(unitStr)) {
+                                isUnit = true;
+                                extractedUnits = rawQty;
                             }
 
-                            salesMap.set(it.product_id, {
-                                totalKg: prev.totalKg + (isItemUnit ? 0 : qty),
-                                totalUnits: prev.totalUnits + (isItemUnit ? qty : 0),
-                                unitNotes: notes
-                            });
+                            if (vl && !grammageOrDesc) {
+                                const mGram = vl.match(/([0-9.,]+\s*(?:gr|g|kg|ml))/i);
+                                if (mGram) grammageOrDesc = mGram[1];
+                            }
+
+                            const prev = salesMap.get(it.product_id) || {
+                                pureKg: 0,
+                                totalUnits: 0,
+                                totalUnitWeightKg: 0,
+                                unitGroups: new Map<string, { units: number; weightKg: number }>()
+                            };
+
+                            if (isUnit) {
+                                const u = extractedUnits > 0 ? extractedUnits : rawQty;
+                                const w = (unitStr === 'kg' && rawQty > 0) ? rawQty : 0;
+                                const keyDesc = grammageOrDesc || (vl ? vl : 'und');
+
+                                const gPrev = prev.unitGroups.get(keyDesc) || { units: 0, weightKg: 0 };
+                                prev.unitGroups.set(keyDesc, {
+                                    units: gPrev.units + u,
+                                    weightKg: gPrev.weightKg + w
+                                });
+
+                                prev.totalUnits += u;
+                                prev.totalUnitWeightKg += w;
+                            } else {
+                                prev.pureKg += rawQty;
+                            }
+
+                            salesMap.set(it.product_id, prev);
                         });
                     }
                 }
@@ -1078,6 +1119,7 @@ interface CommittedSaleData {
             let h_salesKg = 0;
             const h_salesNotes: string[] = [];
             let i_salesUnits = 0;
+            const i_salesNotes: string[] = [];
             let j_weightSalesUnits = 0;
             let k_shortage = 0;
             let l_unshipped = 0;
@@ -1096,30 +1138,42 @@ interface CommittedSaleData {
             const evidenceR: string[] = [];
             const evidenceX: string[] = [];
 
-            const isUnit = ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes((p.unit_of_measure || '').toLowerCase());
+            const isProductBaseUnit = ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes((p.unit_of_measure || '').toLowerCase());
 
             // Venta del día (Comprometida por lanzamiento de tanda de pedidos para_compra)
             const saleData = committedSalesMap.get(p.id);
             if (saleData) {
-                if (isUnit) {
-                    // Producto con unidad de compra UNIDAD:
-                    // Se restringe y desagrega en unidades (Col I) y su peso equivalente (Col J). Col H queda en 0 (-).
-                    const units = saleData.totalUnits > 0 ? saleData.totalUnits : (saleData.totalKg > 0 ? Math.round(saleData.totalKg) : 0);
-                    i_salesUnits += units;
+                if (isProductBaseUnit) {
+                    // Producto cuya unidad de catálogo es UNIDAD (ej. Cubeta de huevos):
+                    const totalUnits = saleData.totalUnits > 0 ? saleData.totalUnits : saleData.pureKg;
+                    i_salesUnits += totalUnits;
                     const unitWeight = Number(p.weight_kg) || 1;
-                    j_weightSalesUnits += (units * unitWeight);
-                } else {
-                    // Producto con unidad de compra KILOS:
-                    // Todo va a Col H en Kg. Si se vendió en unidades de X gramos, se añade la micro-nota debajo.
-                    h_salesKg += saleData.totalKg;
-                    if (saleData.totalUnits > 0 && saleData.totalKg === 0) {
-                        const convWeight = saleData.totalUnits * (Number(p.weight_kg) || 1);
-                        h_salesKg += convWeight;
-                    }
-                    if (saleData.unitNotes && saleData.unitNotes.length > 0) {
-                        saleData.unitNotes.forEach(n => {
-                            if (!h_salesNotes.includes(n)) h_salesNotes.push(n);
+                    j_weightSalesUnits += (saleData.totalUnitWeightKg > 0 ? saleData.totalUnitWeightKg : totalUnits * unitWeight);
+                    if (saleData.unitGroups && saleData.unitGroups.size > 0) {
+                        saleData.unitGroups.forEach((val, desc) => {
+                            const badge = (desc && desc !== 'und') ? `${val.units} und de ${desc}` : `${val.units} und`;
+                            if (!i_salesNotes.includes(badge)) i_salesNotes.push(badge);
                         });
+                    }
+                } else {
+                    // Producto cuya unidad de catálogo es KILOS (ej. Banano urabá, Mandarina arrayana):
+                    // 1. Kilos puros vendidos por peso -> Col H: VENTA (KG)
+                    h_salesKg += saleData.pureKg;
+
+                    // 2. Unidades físicas vendidas -> Col I: VENTA (UND) y Col J: PESO (UND)
+                    if (saleData.totalUnits > 0) {
+                        i_salesUnits += saleData.totalUnits;
+                        const defaultWeightKg = Number(p.weight_kg) || 0.16;
+                        const w = saleData.totalUnitWeightKg > 0 ? saleData.totalUnitWeightKg : (saleData.totalUnits * defaultWeightKg);
+                        j_weightSalesUnits += w;
+
+                        // Agrupar micro-badges de unidades por gramaje/presentación
+                        if (saleData.unitGroups && saleData.unitGroups.size > 0) {
+                            saleData.unitGroups.forEach((val, desc) => {
+                                const badge = (desc && desc !== 'und') ? `${val.units} und de ${desc}` : `${val.units} und`;
+                                if (!i_salesNotes.includes(badge)) i_salesNotes.push(badge);
+                            });
+                        }
                     }
                 }
             }
@@ -1139,22 +1193,23 @@ interface CommittedSaleData {
                 }
                 // H: Venta del día KG (-) & I/J: Venta UN
                 else if (m.type === 'exit' && (ref === 'order_item' || ref === 'sale' || ref === 'dispatch')) {
-                    if (isUnit) {
-                        i_salesUnits += rawQty;
-                        // Si hay nota con peso real o báscula
-                        const weightMatch = (m.notes || '').match(/peso:\s*([0-9.,]+)/i);
+                    const weightMatch = (m.notes || '').match(/peso:\s*([0-9.,]+)/i);
+                    const unitMatch = (m.notes || '').match(/(\d+)\s*(?:unds?|unidades?)(?:\s*de\s*([0-9.,]+\s*(?:gr|g|kg)))?/i);
+
+                    if (isProductBaseUnit || unitMatch) {
+                        const parsedUnits = unitMatch ? parseInt(unitMatch[1], 10) : rawQty;
+                        i_salesUnits += parsedUnits;
                         if (weightMatch) {
                             j_weightSalesUnits += parseFloat(weightMatch[1].replace(',', '.'));
                         } else {
-                            // Si no se reportó báscula separada, asumir peso proporcional
                             j_weightSalesUnits += (rawQty * (Number(p.weight_kg) || 1));
+                        }
+                        if (unitMatch) {
+                            const badge = unitMatch[2] ? `${parsedUnits} und de ${unitMatch[2]}` : `${parsedUnits} und`;
+                            if (!i_salesNotes.includes(badge)) i_salesNotes.push(badge);
                         }
                     } else {
                         h_salesKg += rawQty;
-                        const noteMatch = (m.notes || '').match(/(\d+\s*(?:unds?|unidades?)\s*(?:de\s*)?[0-9.,]+\s*(?:gr|g|kg))/i);
-                        if (noteMatch && !h_salesNotes.includes(noteMatch[1])) {
-                            h_salesNotes.push(noteMatch[1]);
-                        }
                     }
                 }
                 // K: Producto escaso (-)
@@ -1267,6 +1322,7 @@ interface CommittedSaleData {
                 colH_salesKg: h_salesKg,
                 colH_salesNotes: h_salesNotes,
                 colI_salesUnits: i_salesUnits,
+                colI_salesNotes: i_salesNotes,
                 colJ_weightSalesUnits: j_weightSalesUnits,
                 colK_shortage: k_shortage,
                 colL_unshipped: l_unshipped,
@@ -1336,6 +1392,10 @@ interface CommittedSaleData {
                     ...children.flatMap(c => c.colH_salesNotes || [])
                 ])),
                 colI_salesUnits: row.colI_salesUnits + children.reduce((s, c) => s + c.colI_salesUnits, 0),
+                colI_salesNotes: Array.from(new Set([
+                    ...(row.colI_salesNotes || []),
+                    ...children.flatMap(c => c.colI_salesNotes || [])
+                ])),
                 colJ_weightSalesUnits: row.colJ_weightSalesUnits + children.reduce((s, c) => s + c.colJ_weightSalesUnits, 0),
                 colK_shortage: row.colK_shortage + children.reduce((s, c) => s + c.colK_shortage, 0),
                 colL_unshipped: row.colL_unshipped + children.reduce((s, c) => s + c.colL_unshipped, 0),
@@ -3133,7 +3193,7 @@ interface CommittedSaleData {
                                                 border: '1px solid #FDE047',
                                                 whiteSpace: 'nowrap'
                                             }}
-                                            title={`Instrucción física: ${note}`}
+                                            title={`Nota de peso: ${note}`}
                                         >
                                             {note}
                                         </span>
@@ -3141,7 +3201,45 @@ interface CommittedSaleData {
                                 </div>
                             ) : null
                         ),
-                        I: (colIdx) => renderEditableCell(key, row.productId, 'I', row.colI_salesUnits, { ...getColStyle('I', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colI_salesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderBottom: cellBorderBottom }, 0, true),
+                        I: (colIdx) => renderEditableCell(
+                            key, 
+                            row.productId, 
+                            'I', 
+                            row.colI_salesUnits, 
+                            { 
+                                ...getColStyle('I', colIdx), 
+                                padding: '6px 8px', 
+                                textAlign: 'right', 
+                                color: row.colI_salesUnits > 0 ? '#1E40AF' : '#94A3B8', 
+                                fontWeight: isParent ? '800' : '700', 
+                                borderBottom: cellBorderBottom 
+                            }, 
+                            0, 
+                            true,
+                            row.colI_salesNotes && row.colI_salesNotes.length > 0 ? (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', justifyContent: 'flex-end', marginTop: '2px' }}>
+                                    {row.colI_salesNotes.map((note, idx) => (
+                                        <span 
+                                            key={idx} 
+                                            style={{ 
+                                                fontSize: '0.62rem', 
+                                                lineHeight: '1.1', 
+                                                padding: '1.5px 5px', 
+                                                borderRadius: '3px', 
+                                                backgroundColor: '#FEF08A', 
+                                                color: '#854D0E', 
+                                                fontWeight: '700',
+                                                border: '1px solid #FDE047',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            title={`Desglose de unidades: ${note}`}
+                                        >
+                                            {note}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : null
+                        ),
                         J: (colIdx) => renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { ...getColStyle('J', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, true),
                         K: (colIdx) => renderEditableCell(key, row.productId, 'K', row.colK_shortage, { ...getColStyle('K', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         L: (colIdx) => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { ...getColStyle('L', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2),
