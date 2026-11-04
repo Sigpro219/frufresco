@@ -13722,7 +13722,7 @@ stateDiagram-v2
     state PuntoDeNoRetornoModal {
         [*] --> AdvertenciaCierre: Aviso de congelamiento comercial irreversible
         AdvertenciaCierre --> RetornoEdicion: [Cancelar / Seguir Editando]
-        AdvertenciaCierre --> ConfirmacionDefinitiva: [Confirmar Cierre y Enviar]
+        AdvertenciaCierre --> ConfirmacionDefinitiva: [Confirmar y Pasar a Impresión (Remisiones + Rótulos)]
     }
     
     RetornoEdicion --> PA: Retorna a la tabla intacta
@@ -13762,15 +13762,17 @@ stateDiagram-v2
      - Explica que este flujo asigna las 150 bahías en piso y requiere imprimir el paquete completo de 6 planillas de piso.
      - Botón de acceso directo: `[ ABRIR ASISTENTE DE PISO PASO A PASO (4 PASOS) -> ]` que activa `showManualWizard` para renderizar `ManualDispatchWizardModal`.
 
-4. **Modal / Pantalla de Punto de No Retorno (Irreversible Lock Guardrail):**
-   - Antes de ejecutar la mutación a `para_compra`, se despliega un diálogo con diseño sobrio y enfoque preventivo humano:
-     - **Ícono:** `Lock` o `ShieldAlert` en ámbar/esmeralda.
+4. **Modal / Pantalla de Punto de No Retorno (Irreversible Lock Guardrail) (Opción 1 UX-First):**
+   - Antes de ejecutar la mutación a `para_compra`, se despliega un diálogo con diseño sobrio y enfoque preventivo humano que disipa cualquier incertidumbre sobre los documentos de ruta:
+     - **Ícono:** `AlertTriangle` en ámbar.
      - **Título:** *«Cierre Definitivo de Tanda y Paso a Operación»*
-     - **Mensaje Principal:**
+     - **Subtítulo:** *«PUNTO DE NO RETORNO OPERATIVO»*
+     - **Mensaje Principal (Claridad Total de Flujo):**
        > *"Estás a punto de enviar **{N} pedidos** a la operación de compras y bodega.*  
-       > *A partir de este instante, los pedidos cambiarán de estado a `para_compra` y **quedarán congelados para edición comercial** (ya no se podrán modificar cantidades, precios ni canastas desde esta vista)."*
-     - **Botón de Escape:** `[ Cancelar / Seguir Editando Pedidos ]` (cierra el diálogo de confirmación y regresa a la tabla en `pending_approval`).
-     - **Botón de Compromiso:** `[ Confirmar Cierre y Enviar a Operación ]` (ejecuta el guardado atómico en Supabase y transiciona a la entrega de documentos).
+       > *A partir de este instante, los pedidos cambiarán de estado a `para_compra` y **quedarán congelados para edición comercial** (ya no se podrán modificar cantidades, precios ni canastas desde esta vista).*  
+       > ***Al confirmar, se habilitará de inmediato la entrega e impresión de tus Remisiones de Entrega y Rótulos Térmicos de Canastilla.***"
+     - **Botón de Escape:** `[ Seguir Editando ]` (cierra el diálogo de confirmación y regresa a la tabla en `pending_approval`).
+     - **Botón de Compromiso Transparente:** `[ Confirmar y Pasar a Impresión (Remisiones + Rótulos) -> ]` (ejecuta el guardado atómico en Supabase y transiciona fluidamente a la entrega inmediata de los documentos de ruta).
 
 5. **Dock de Entrega de Documentos Post-Lanzamiento:**
    - Una vez confirmada la mutación, el sistema despliega una pantalla de éxito inmediata con:

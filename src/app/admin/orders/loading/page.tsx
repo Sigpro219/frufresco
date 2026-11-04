@@ -3642,8 +3642,8 @@ useEffect(() => {
                             filteredCount={filteredOrders.length}
                             totalCount={totalOrders}
                             style={{ flex: 1, minWidth: '240px', maxWidth: 'none' }}
-                        />
-
+                        />
+
                         {/* Info Button for Commands */}
                         <div 
                             onMouseEnter={() => setShowHelpTooltip(true)}
@@ -4961,9 +4961,23 @@ useEffect(() => {
                                 <p style={{ margin: '0 0 8px 0' }}>
                                     Estás a punto de enviar <strong>{selectedOrders.size} pedidos</strong> a la operación de compras y bodega.
                                 </p>
-                                <p style={{ margin: 0, fontWeight: '700' }}>
+                                <p style={{ margin: '0 0 8px 0', fontWeight: '700' }}>
                                     A partir de este instante, los pedidos cambiarán de estado a <span style={{ color: '#0D7A57', textDecoration: 'underline' }}>para_compra</span> y <strong>quedarán congelados para edición comercial</strong> (ya no se podrán modificar cantidades, precios ni canastas desde esta vista).
                                 </p>
+                                <div style={{
+                                    borderTop: '1px dashed #F59E0B',
+                                    paddingTop: '6px',
+                                    marginTop: '6px',
+                                    color: '#065F46',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}>
+                                    <Printer size={13} color="#0D7A57" />
+                                    <span>Al confirmar, se abrirá de inmediato la entrega e impresión de tus <strong>Remisiones de Entrega</strong> y <strong>Rótulos Térmicos</strong>.</span>
+                                </div>
                             </div>
 
                             <div style={{ display: 'flex', gap: '10px', marginTop: '0.25rem' }}>
@@ -4995,13 +5009,13 @@ useEffect(() => {
                                         setShowPostLaunchModal(true);
                                     }}
                                     style={{
-                                        flex: 1.5,
+                                        flex: 1.7,
                                         padding: '10px 14px',
                                         backgroundColor: '#0D7A57',
                                         color: '#FFFFFF',
                                         border: 'none',
                                         borderRadius: '10px',
-                                        fontSize: '0.82rem',
+                                        fontSize: '0.78rem',
                                         fontWeight: '900',
                                         cursor: updateLoading ? 'wait' : 'pointer',
                                         display: 'flex',
@@ -5018,8 +5032,8 @@ useEffect(() => {
                                         </>
                                     ) : (
                                         <>
-                                            <CheckCircle2 size={16} />
-                                            <span>Confirmar y Enviar a Operación</span>
+                                            <Printer size={15} />
+                                            <span>Confirmar y Pasar a Impresión (Remisiones + Rótulos) -&gt;</span>
                                         </>
                                     )}
                                 </button>
