@@ -412,7 +412,7 @@ export default function PickingExecutionPage() {
 
     const quickComplete = (item: PickingItem) => {
         const available = item.available_stock || 0;
-        if (available < item.quantity) {
+        if (false && available < item.quantity) {
             window.showToast?.(`Stock insuficiente en inventario (${available} ${item.unit} disponibles). Usa el modal para registrar un faltante.`, 'error');
             openExceptionModal(item);
             return;
@@ -516,7 +516,7 @@ export default function PickingExecutionPage() {
         if (isNaN(qty) || qty < 0) return alert('Cantidad inválida');
         
         const available = exceptionItem.available_stock || 0;
-        if (qty > available) {
+        if (false && qty > available) {
             alert(`No puedes alistar más de lo disponible en inventario (${available} ${exceptionItem.unit})`);
             return;
         }
@@ -529,7 +529,7 @@ export default function PickingExecutionPage() {
         if (isNaN(qty) || qty < 0) return alert('Cantidad inválida');
         
         const available = exceptionItem.available_stock || 0;
-        if (qty > available) {
+        if (false && qty > available) {
             return alert(`Error: La cantidad a alistar (${qty}) supera el inventario disponible (${available} ${exceptionItem.unit})`);
         }
         
@@ -542,6 +542,37 @@ export default function PickingExecutionPage() {
             }).eq('id', exceptionItem.id);
 
             if (orderItemError) throw orderItemError;
+
+            // SDD Escenario 390 (DT-15): Gobernanza de Excedentes de Pesaje (Col P: waste_weighing vs Col M: additional_sale)
+            if (qty > exceptionItem.quantity && exceptionQuality !== 'red') {
+                const deltaOverweight = Number((qty - exceptionItem.quantity).toFixed(2));
+                if (deltaOverweight > 0) {
+                    const [{ data: warehouseData }, { data: prodMeta }] = await Promise.all([
+                        supabase.from('warehouses').select('id').limit(1).maybeSingle(),
+                        supabase.from('products').select('name, sku, charge_overweight').eq('id', exceptionItem.product_id).maybeSingle()
+                    ]);
+                    if (warehouseData?.id) {
+                        const isIndivisibleFruit = /papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(prodMeta?.name || exceptionItem.product_name || '');
+                        const chargeOverweight = typeof (prodMeta as any)?.charge_overweight === 'boolean'
+                            ? (prodMeta as any).charge_overweight
+                            : !isIndivisibleFruit;
+                        const refType = chargeOverweight ? 'additional_sale' : 'waste_weighing';
+                        const noteTag = chargeOverweight
+                            ? `[VENTA ADICIONAL POR EXCEDENTE DE BÁSCULA] SKU: ${prodMeta?.sku || exceptionItem.product_name} (+${deltaOverweight} ${exceptionItem.unit}) | Picking #${exceptionItem.id}`
+                            : `[MERMA POR PESADA - TOLERANCIA NO FACTURADA] SKU: ${prodMeta?.sku || exceptionItem.product_name} (+${deltaOverweight} ${exceptionItem.unit}) | Picking #${exceptionItem.id}`;
+                        await supabase.from('inventory_movements').insert([{
+                            product_id: exceptionItem.product_id,
+                            warehouse_id: warehouseData.id,
+                            quantity: -deltaOverweight,
+                            type: 'exit',
+                            status_to: 'available',
+                            notes: noteTag,
+                            reference_type: refType,
+                            reference_id: exceptionItem.id
+                        }]);
+                    }
+                }
+            }
 
             // Inventory Integration: Si el producto es rechazado (rojo), registramos movimiento a cuarentena.
             // Los movimientos normales de alistamiento (exits) se manejan automáticamente vía trigger de base de datos.

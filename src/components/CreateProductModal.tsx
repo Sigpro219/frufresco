@@ -43,7 +43,8 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         parent_id: null as string | null,
         utility_deviation_pct: 0,
         inherit_price: false,
-        requires_label: false
+        requires_label: false,
+        charge_overweight: true
     });
     const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [parentSearch, setParentSearch] = useState('');
@@ -402,7 +403,8 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                     tags: formData.tags,
                     parent_id: formData.parent_id,
                     utility_deviation_pct: formData.utility_deviation_pct,
-                    inherit_price: formData.inherit_price
+                    inherit_price: formData.inherit_price,
+                    charge_overweight: formData.charge_overweight
                 }])
                 .select()
                 .single();
@@ -1046,6 +1048,25 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                     </label>
                                     <p style={{ fontSize: '0.65rem', color: '#6B7280', margin: 0 }}>
                                         Si está marcado, se imprimirán etiquetas de 100x50mm para este producto al procesar pedidos.
+                                    <span style={{ display: 'flex', marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px dashed #D1D5DB', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                                        <input
+                                            type="checkbox"
+                                            id="create_charge_overweight"
+                                            checked={formData.charge_overweight}
+                                            onChange={(e) => setFormData({ ...formData, charge_overweight: e.target.checked })}
+                                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                        />
+                                        <span style={{ flex: 1, cursor: 'pointer' }} onClick={() => setFormData({ ...formData, charge_overweight: !formData.charge_overweight })}>
+                                            <strong style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: formData.charge_overweight ? '#1E40AF' : '#92400E', cursor: 'pointer' }}>
+                                                ¿Cobrar excedente de pesaje al cliente? (Col M vs Col P)
+                                            </strong>
+                                            <span style={{ display: 'block', fontSize: '0.65rem', color: '#6B7280' }}>
+                                                {formData.charge_overweight
+                                                    ? 'Activado (Granel divisible): El sobrepeso de báscula se factura como Venta Adicional (Col M).'
+                                                    : 'Desactivado (Fruta indivisible: papaya, melón, patilla): El sobrepeso no se cobra y va a Merma por Pesada (Col P).'}
+                                            </span>
+                                        </span>
+                                    </span>
                                     </p>
                                 </div>
                             </div>

@@ -2320,6 +2320,23 @@ export default function AdminProductsPage() {
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>ID: {product.accounting_id || product.id?.slice(0, 8)}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => canEdit && updateProductField(product.id, 'charge_overweight', !(product.charge_overweight ?? !/papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(product.name || '')))}
+                                                        title="¿Cobrar excedente de pesaje al cliente? (Col M: Venta Adicional vs Col P: Tolerancia Merma Pesada)"
+                                                        style={{
+                                                            fontSize: '0.62rem',
+                                                            padding: '1px 6px',
+                                                            borderRadius: '4px',
+                                                            border: '1px solid #CBD5E1',
+                                                            backgroundColor: (product.charge_overweight ?? !/papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(product.name || '')) ? '#EFF6FF' : '#FFFBEB',
+                                                            color: (product.charge_overweight ?? !/papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(product.name || '')) ? '#1D4ED8' : '#B45309',
+                                                            fontWeight: '700',
+                                                            cursor: canEdit ? 'pointer' : 'default'
+                                                        }}
+                                                    >
+                                                        {(product.charge_overweight ?? !/papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(product.name || '')) ? 'Sobrepeso: Cobrar (Col M)' : 'Sobrepeso: Tolerancia (Col P)'}
+                                                    </button>
                                                     {product.iva_rate !== undefined && (
                                                         <span style={{ 
                                                             fontSize: '0.65rem', 

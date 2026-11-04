@@ -1187,6 +1187,56 @@ export default function ProcurementPage() {
         })
         .eq("id", selectedTask.id);
 
+      // 3. Ingesta Reactiva de Costo Promedio Ponderado Diario (PPP) en commercial_cost_matrix (SDD Escenario 386 / DT-11)
+      try {
+        const operationDate = selectedTask.delivery_date || selectedDate || new Date().toISOString().split('T')[0];
+        const { data: dayTaskRows } = await supabase
+          .from('procurement_tasks')
+          .select('id')
+          .eq('product_id', selectedTask.product_id)
+          .eq('delivery_date', operationDate);
+        const dayTaskIds = (dayTaskRows || []).map(r => r.id);
+        if (dayTaskIds.length > 0) {
+          const { data: dayPurchases } = await supabase
+            .from('purchases')
+            .select('quantity, unit_price, total_cost')
+            .eq('product_id', selectedTask.product_id)
+            .in('task_id', dayTaskIds);
+          let sumTotalCost = 0;
+          let sumQuantity = 0;
+          (dayPurchases || []).forEach(pur => {
+            const q = Number(pur.quantity) || 0;
+            const uPrice = Number(pur.unit_price) || 0;
+            const tCost = Number(pur.total_cost) || (q * uPrice);
+            if (q > 0 && tCost > 0) {
+              sumQuantity += q;
+              sumTotalCost += tCost;
+            }
+          });
+          if (sumQuantity > 0 && sumTotalCost > 0) {
+            const pppCost = Math.round((sumTotalCost / sumQuantity) * 100) / 100;
+            const { error: cmErr } = await supabase.from('commercial_cost_matrix').upsert({
+              product_id: selectedTask.product_id,
+              manual_cost: pppCost,
+              effective_date: operationDate,
+              notes: 'Calculado reactivamente vía PPP diario desde /ops/compras (DT-11)',
+              is_active: true,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'product_id' });
+            if (cmErr) {
+              await supabase.from('commercial_cost_matrix').upsert({
+                product_id: selectedTask.product_id,
+                manual_cost: pppCost,
+                is_active: true,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'product_id' });
+            }
+          }
+        }
+      } catch (pppErr) {
+        console.warn('Aviso al sincronizar PPP diario en commercial_cost_matrix (DT-11):', pppErr);
+      }
+
       setSelectedTask(prev => prev ? { ...prev, total_purchased: newPurchased, status: newStatus } : null);
       setPurchaseSuccess(true);
       setTimeout(() => {

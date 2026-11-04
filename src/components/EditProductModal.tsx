@@ -327,7 +327,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         iva_rate: product.iva_rate ?? 19,
         min_inventory_level: product.min_inventory_level ?? 0,
         utility_deviation_pct: product.utility_deviation_pct ?? 0,
-        inherit_price: (product as any).inherit_price ?? false
+        inherit_price: (product as any).inherit_price ?? false,
+        charge_overweight: product.charge_overweight ?? !/papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(product.name || '')
     });
 
     const [localChildren, setLocalChildren] = useState<Product[]>(() => {
@@ -1143,6 +1144,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 tags: formData.tags,
                 keywords: formData.keywords || null,
                 requires_label: (formData as any).requires_label ?? false,
+                charge_overweight: formData.charge_overweight ?? true,
                 show_on_web: (formData as any).show_on_web !== false
             };
 
@@ -1155,7 +1157,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 .update(updatePayload)
                 .eq('id', product.id);
 
-            if (error && error.message?.includes('column "inherit_price" does not exist')) {
+            if (error && (error.message?.includes('column "inherit_price" does not exist') || error.message?.includes('column "charge_overweight" does not exist'))) {
+                delete updatePayload.inherit_price;
+                delete updatePayload.charge_overweight;
                 delete updatePayload.inherit_price;
                 const retry = await supabase
                     .from('products')
@@ -1824,6 +1828,47 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                         <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                             Estados Operativos y Disponibilidad Multicanal
                                         </span>
+                                    </div>
+
+                                    {/* Gobernanza de Excedentes de Pesaje (SDD Escenario 390 / DT-15) */}
+                                    <div style={{
+                                        padding: '0.85rem 1rem',
+                                        backgroundColor: formData.charge_overweight !== false ? '#EFF6FF' : '#FFFBEB',
+                                        borderRadius: '12px',
+                                        border: `1.5px solid ${formData.charge_overweight !== false ? '#BFDBFE' : '#FDE68A'}`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '12px'
+                                    }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: '800', color: formData.charge_overweight !== false ? '#1E40AF' : '#92400E', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Scale size={14} />
+                                                <span>¿Cobrar excedente de pesaje al cliente? (Bifurcación Col M vs Col P)</span>
+                                            </div>
+                                            <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#64748B', lineHeight: 1.3 }}>
+                                                {formData.charge_overweight !== false
+                                                    ? 'Activado (Granel divisible): El sobrepeso de báscula en Picking se cobra en remisión e impacta Columna M (Venta Adicional).'
+                                                    : 'Desactivado (Fruta indivisible: papaya, melón, patilla): El sobrepeso es tolerancia no facturada e impacta Columna P (Pesada).'}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, charge_overweight: !(formData.charge_overweight !== false) })}
+                                            style={{
+                                                padding: '6px 14px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                backgroundColor: formData.charge_overweight !== false ? '#2563EB' : '#D97706',
+                                                color: 'white',
+                                                fontWeight: '900',
+                                                fontSize: '0.74rem',
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                        >
+                                            {formData.charge_overweight !== false ? 'COBRAR (COL M)' : 'TOLERANCIA (COL P)'}
+                                        </button>
                                     </div>
 
                                     {/* Tríada de Estados Operativos (ERP, Tienda Web y Despacho) */}

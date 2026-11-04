@@ -151,6 +151,37 @@ function PickingClientContent() {
 
             if (error) throw error;
 
+            // SDD Escenario 390 (DT-15): Gobernanza de Excedentes de Pesaje (Col P: waste_weighing vs Col M: additional_sale)
+            if (qty > selectedItem.quantity && quality !== 'red') {
+                const deltaOverweight = Number((qty - selectedItem.quantity).toFixed(2));
+                if (deltaOverweight > 0) {
+                    const [{ data: warehouseData }, { data: prodMeta }] = await Promise.all([
+                        supabase.from('warehouses').select('id').limit(1).maybeSingle(),
+                        supabase.from('products').select('name, sku, charge_overweight').eq('id', selectedItem.product_id).maybeSingle()
+                    ]);
+                    if (warehouseData?.id) {
+                        const isIndivisibleFruit = /papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(prodMeta?.name || selectedItem.product_name || '');
+                        const chargeOverweight = typeof (prodMeta as any)?.charge_overweight === 'boolean'
+                            ? (prodMeta as any).charge_overweight
+                            : !isIndivisibleFruit;
+                        const refType = chargeOverweight ? 'additional_sale' : 'waste_weighing';
+                        const noteTag = chargeOverweight
+                            ? `[VENTA ADICIONAL POR EXCEDENTE DE BÁSCULA] SKU: ${prodMeta?.sku || selectedItem.product_name} (+${deltaOverweight} ${selectedItem.unit_of_measure}) | Pedido #${orderId || selectedItem.id}`
+                            : `[MERMA POR PESADA - TOLERANCIA NO FACTURADA] SKU: ${prodMeta?.sku || selectedItem.product_name} (+${deltaOverweight} ${selectedItem.unit_of_measure}) | Pedido #${orderId || selectedItem.id}`;
+                        await supabase.from('inventory_movements').insert([{
+                            product_id: selectedItem.product_id,
+                            warehouse_id: warehouseData.id,
+                            quantity: -deltaOverweight,
+                            type: 'exit',
+                            status_to: 'available',
+                            notes: noteTag,
+                            reference_type: refType,
+                            reference_id: selectedItem.id
+                        }]);
+                    }
+                }
+            }
+
             // REGLA DE ORO SDD Escenario 383 (Single-Write Authority Anti-Duplicidad):
             // Si la cantidad picada es menor a la solicitada (escasez en bodega),
             // NUNCA se debe insertar un 'order_shortage' en inventory_movements desde Alistamiento.
@@ -365,7 +396,11 @@ function PickingClientContent() {
                                 />
                                 <button 
                                     onClick={() => setPickedQty(selectedItem.quantity.toString())}
-                                    style={{ padding: '0 1.5rem', borderRadius: '12px', backgroundColor: '#0A111C', color: 'white', border: '1px solid rgba(255, 255, 255, 0.08)', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }}>TODO</button>
+                                    style={{ padding: '0 1.2rem', borderRadius: '12px', backgroundColor: '#0A111C', color: 'white', border: '1px solid rgba(255, 255, 255, 0.08)', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }}>TODO</button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setPickedQty('0'); setQuality('yellow'); }}
+                                    style={{ padding: '0 1rem', borderRadius: '12px', backgroundColor: 'rgba(245, 158, 11, 0.16)', color: '#FCD34D', border: '1px solid #F59E0B', fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>ESCASO (0)</button>
                             </div>
                         </div>
 

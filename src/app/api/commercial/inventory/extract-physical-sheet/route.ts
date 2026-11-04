@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { verifySessionAndRole } from '@/lib/auth';
 import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
 import { getGeminiApiKey } from '@/lib/ai/aiModelConfig';
 import { PhysicalSheetType, RawExtractedSheetRow, parseHandwrittenQuantity } from '@/lib/inventory/physical-sheet-parser';
@@ -63,6 +64,14 @@ ESTRUCTURA JSON EXACTA REQUERIDA:
 
 export async function POST(req: Request) {
   try {
+    const auth = await verifySessionAndRole(req);
+    if (!auth.authorized) {
+      return NextResponse.json(
+        { error: auth.error || 'No autorizado para extraer planillas físicas con IA.' },
+        { status: 401 }
+      );
+    }
+
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || getGeminiApiKey();
     if (!apiKey) {
       return NextResponse.json(

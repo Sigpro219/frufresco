@@ -599,6 +599,7 @@ interface CommittedSaleData {
     const [movements, setMovements] = useState<RawMovement[]>([]);
     const [opsPurchasesMap, setOpsPurchasesMap] = useState<Map<string, number>>(new Map());
     const [committedSalesMap, setCommittedSalesMap] = useState<Map<string, CommittedSaleData>>(new Map());
+    const [postCutoffSalesMap, setPostCutoffSalesMap] = useState<Map<string, number>>(new Map());
     const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
 
     // Modales de apoyo
@@ -1004,18 +1005,34 @@ interface CommittedSaleData {
                 setOpsPurchasesMap(new Map());
             }
 
-            // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (para_compra, approved, picking, shipped, delivered)
+            // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (SDD Escenarios 375 & 389 / DT-14)
             try {
-                const { data: launchedOrders, error: ordersErr } = await supabase
-                    .from('orders')
-                    .select('id')
-                    .eq('delivery_date', balanceDate)
-                    .in('status', ['para_compra', 'approved', 'picking', 'shipped', 'delivered']);
+                const [{ data: cutoffSetting }, { data: launchedOrders, error: ordersErr }] = await Promise.all([
+                    supabase.from('app_settings').select('value').eq('key', 'cutoff_hour_admin').maybeSingle(),
+                    supabase
+                        .from('orders')
+                        .select('id, created_at')
+                        .eq('delivery_date', balanceDate)
+                        .in('status', ['para_compra', 'approved', 'picking', 'shipped', 'delivered'])
+                ]);
 
                 if (ordersErr) throw ordersErr;
 
+                const cutoffHour = Math.min(23, Math.max(0, parseInt(String(cutoffSetting?.value || '20'), 10) || 20));
+                const dMinus1 = new Date(`${balanceDate}T12:00:00-05:00`);
+                dMinus1.setDate(dMinus1.getDate() - 1);
+                const dMinus1Str = dMinus1.toISOString().split('T')[0];
+                const cutoffTimestampMs = new Date(`${dMinus1Str}T${String(cutoffHour).padStart(2, '0')}:00:00-05:00`).getTime();
+
                 const launchedOrderIds = (launchedOrders || []).map(o => o.id);
+                const postCutoffOrderIdsSet = new Set<string>(
+                    (launchedOrders || [])
+                        .filter(o => o.created_at && new Date(o.created_at).getTime() > cutoffTimestampMs)
+                        .map(o => o.id)
+                );
+
                 const salesMap = new Map<string, CommittedSaleData>();
+                const postCutoffMap = new Map<string, number>();
 
                 if (launchedOrderIds.length > 0) {
                     const batchSize = 100;
@@ -1023,7 +1040,7 @@ interface CommittedSaleData {
                         const batch = launchedOrderIds.slice(i, i + batchSize);
                         const { data: items, error: itemsErr } = await supabase
                             .from('order_items')
-                            .select('id, product_id, quantity, unit, variant_label, selected_options')
+                            .select('id, order_id, product_id, quantity, unit, variant_label, selected_options')
                             .in('order_id', batch);
 
                         if (itemsErr) {
@@ -1034,6 +1051,10 @@ interface CommittedSaleData {
                         (items || []).forEach(it => {
                             if (!it.product_id) return;
                             const rawQty = Number(it.quantity) || 0;
+                            if (it.order_id && postCutoffOrderIdsSet.has(it.order_id)) {
+                                postCutoffMap.set(it.product_id, (postCutoffMap.get(it.product_id) || 0) + rawQty);
+                                return;
+                            }
                             const unitStr = (it.unit || '').toLowerCase();
                             const sel: any = it.selected_options;
                             const vl = it.variant_label ? String(it.variant_label).trim() : '';
@@ -1110,9 +1131,11 @@ interface CommittedSaleData {
                     }
                 }
                 setCommittedSalesMap(salesMap);
+                setPostCutoffSalesMap(postCutoffMap);
             } catch (salesErr) {
                 console.warn('Error calculando ventas comprometidas de órdenes:', salesErr);
                 setCommittedSalesMap(new Map());
+                setPostCutoffSalesMap(new Map());
             }
         } catch (err: any) {
             console.error('Error cargando balance diario de inventario:', err);
@@ -1248,10 +1271,10 @@ interface CommittedSaleData {
                 if (ref === INVENTORY_MOVEMENT_SUBTYPES.CORRECTION || (m.type === 'adjustment' && ref !== INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT)) {
                     f_corrections += signedQty;
                 }
-                // G: Compra del día (+)
+                // G: Compra del día (+) — Coexistencia aditiva (DT-12 / Escenario 387) salvo reemplazo explícito de arbitraje o celda
                 else if (m.type === 'entry' && (ref === 'purchase_reception' || ref === 'purchase' || ref === 'entry')) {
                     g_purchases += rawQty;
-                    if ((m.notes || '').includes('AJUSTE AUTORIZADO') || (m.notes || '').includes('PHYSICAL_SHEET_OCR')) {
+                    if ((m.notes || '').includes('AJUSTE AUTORIZADO') || (m.notes || '').includes('CONCILIACION_REEMPLAZO_OPS')) {
                         hasManualOrSheetPurchaseOverride = true;
                     }
                 }
@@ -1323,10 +1346,13 @@ interface CommittedSaleData {
                 }
             });
 
-            // DT-12 (SDD Escenario 387): Si no hay override manual o de planilla física en Col G, sumar las compras transaccionales de /ops/compras
+            // DT-12 (SDD Escenario 387): Coexistencia aditiva con compras transaccionales de /ops/compras salvo reemplazo explícito
             if (!hasManualOrSheetPurchaseOverride) {
                 g_purchases += (opsPurchasesMap.get(p.id) || 0);
             }
+
+            // DT-14 (SDD Escenario 389): Sumar pedidos extemporáneos post-corte en Columna M (Venta Adicional)
+            m_additionalSales += (postCutoffSalesMap.get(p.id) || 0);
 
             // Inventario Inicial (Col E):
             // 1. Si existe Cierre Oficial previo (D-1), se hereda su saldo de Columna U (Inventario en bodega [devoluciones]) de forma inmutable
@@ -1413,7 +1439,7 @@ interface CommittedSaleData {
                 evidencePhotosX: evidenceX
             };
         });
-    }, [balanceDate, products, movements, opsPurchasesMap, previousClosingMap, costMatrixMap, committedSalesMap]);
+    }, [balanceDate, products, movements, opsPurchasesMap, previousClosingMap, costMatrixMap, committedSalesMap, postCutoffSalesMap]);
 
     // Mapa en vivo para arbitraje Anti-Colisión OPS en Lector Multimodal de Planillas Físicas (SDD Escenario 391)
     const opsCurrentByProductAndCol = useMemo(() => {
@@ -1791,8 +1817,8 @@ interface CommittedSaleData {
         });
     }, [allCollapsed, filteredFamilies]);
 
-    // Columnas editables en orden secuencial para navegación Excel (Enter / Tab)
-    const EDITABLE_COLUMNS = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'T', 'X'] as const;
+    // Columnas editables en orden secuencial para navegación Excel (Enter / Tab) — Col O excluida (Cable Pelado Calidad DT-13 / Escenario 388)
+    const EDITABLE_COLUMNS = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'T', 'X'] as const;
 
     const getRowColumnValue = (row: InventoryDailyRow, colKey: string): number | null => {
         switch (colKey) {
@@ -2088,7 +2114,7 @@ interface CommittedSaleData {
                     'Peso Venta UN': Number(rowObj.colJ_weightSalesUnits.toFixed(2)),
                     'Producto escaso': Number(rowObj.colK_shortage.toFixed(2)),
                     'Producto sin enviar': Number(rowObj.colL_unshipped.toFixed(2)),
-                    'Venta adicional cliente': Number(rowObj.colM_additionalSales.toFixed(2)),
+                    'Venta Adicional': Number(rowObj.colM_additionalSales.toFixed(2)),
                     'Venta adicional empleado': Number(rowObj.colN_employeeSales.toFixed(2)),
                     'Devoluciones': Number(rowObj.colO_returns.toFixed(2)),
                     'Pesada': Number(rowObj.colP_weighingWaste.toFixed(2)),
@@ -2119,7 +2145,7 @@ interface CommittedSaleData {
                             'Peso Venta UN': Number(ch.colJ_weightSalesUnits.toFixed(2)),
                             'Producto escaso': Number(ch.colK_shortage.toFixed(2)),
                             'Producto sin enviar': Number(ch.colL_unshipped.toFixed(2)),
-                            'Venta adicional cliente': Number(ch.colM_additionalSales.toFixed(2)),
+                            'Venta Adicional': Number(ch.colM_additionalSales.toFixed(2)),
                             'Venta adicional empleado': Number(ch.colN_employeeSales.toFixed(2)),
                             'Devoluciones': Number(ch.colO_returns.toFixed(2)),
                             'Pesada': Number(ch.colP_weighingWaste.toFixed(2)),
@@ -3342,7 +3368,22 @@ interface CommittedSaleData {
                         L: (colIdx) => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { ...getColStyle('L', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2),
                         M: (colIdx) => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { ...getColStyle('M', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         N: (colIdx) => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { ...getColStyle('N', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
-                        O: (colIdx) => renderEditableCell(key, row.productId, 'O', row.colO_returns, { ...getColStyle('O', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        O: (colIdx) => (
+                            <td
+                                key={`cell-${key}-O`}
+                                style={{
+                                    ...getColStyle('O', colIdx),
+                                    padding: '6px 8px',
+                                    textAlign: 'right',
+                                    color: row.colO_returns > 0 ? '#D97706' : '#94A3B8',
+                                    fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'),
+                                    borderBottom: cellBorderBottom
+                                }}
+                                title="Devoluciones (+): Cable Pelado exclusivo del Módulo de Gestión de Calidad (Angie Rivas - SDD Escenario 388 / DT-13). Solo lectura en sábana."
+                            >
+                                {renderNumericCell(row.colO_returns)}
+                            </td>
+                        ),
                         P: (colIdx) => renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { ...getColStyle('P', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         Q: (colIdx) => renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { ...getColStyle('Q', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosQ?.length > 0 ? (
