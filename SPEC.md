@@ -2,8 +2,8 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.351 (Escenarios 362 a 368: Tríada de Características del Cliente End-to-End, Excel Poka-Yoke Condicionado por SKU y Ergonomía Poka-Yoke en Reasignación de Pedidos — 76/76 Pantallas Certificadas)
-> **Fecha:** 3 de Noviembre, 2026  
+> **Versión:** 1.9.368 (Escenarios 383 a 391: Gobernanza Integral de Inventarios, Bifurcación Botánica de Báscula, Supresión Ergonómica de Col J, Desacople de Venta Adicional Post-Corte, Arnés de Calidad e Ingesta Multimodal Anti-Colisión de Planillas Físicas)
+> **Fecha:** 4 de Noviembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
@@ -14407,3 +14407,71 @@ Bajo los principios de ingeniería Lean y el algoritmo de simplificación de Spa
 2. **Toggle en Maestro de SKU:** Presente en la ficha técnica de producto con micro-glosa clara para supervisores.
 3. **Flujo de Picking Desbloqueado:** El alistador puede confirmar pesajes reales de báscula sin bloqueos artificiales por inventario digital desfasado.
 4. **Alimentación Determinista:** La Columna P consolida exclusivamente mermas de pesaje legítimas no cobradas, erradicando confusiones con ventas adicionales.
+
+
+---
+
+### Escenario 391: Ingesta Multimodal Inteligente (IA) de Planillas Físicas de Bodega (Entrada, Conteo Físico, Desperdicio y Descapote) con Gobernanza Anti-Colisión y Mesa de Conciliación Staging (SDD v1.9.368)
+
+#### 1. Contexto Operativo y Diagnóstico de Gemba (Carpeta `Doc inventario`)
+- **Given** la operación real en la bodega central de FruFresco durante la noche y madrugada (4:00 AM - 7:30 AM):
+  1. Conviven dos realidades operativas: el registro transaccional digital en tiempo real (módulos `/ops/*`) y la captura manual en **planillas físicas de papel** diligenciadas con lapicero en muelles y pasillos de almacenamiento:
+     - **Subcarpeta `Entrada/` (`CONTROL DE LLEGADA DE PRODUCTOS EN KG`):** Formatos de recepción en muelle (2 páginas oficiales + anotaciones anexas al reverso) con pesajes en báscula, presentaciones mayoristas de Corabastos (bultos, cajas, docenas, atados), precios pactados (`120.000 pago`, `40.000 pago`, `2.200 pago`, etc.) y nombres de proveedores/intermediarios (*Andrés, Evelia, Faco, Sofía, Jimmy, Milton, Diego, Ñaño, Jairo*).
+     - **Subcarpeta `Inv manual/` (`Inventario de bodega`):** Conteo físico de fin de turno desglosado en 6 planillas sectorizadas por categorías (*Papas/plátano/tomate/aguacate, Frutas y otros, Hortalizas, Verduras, Fresas y moras, Abarrotes/secos/lácteos*).
+     - **Subcarpeta `Desperdicio/` (`FORMATO DESPERDICIO`):** Planilla física con 26 registros manuscritos que segregan producto deteriorado (*Avería / Desperdicio*) de mermas por alistamiento y limpieza (*Basura / Descapote: cáscaras de cebolla roja/blanca, cáscaras de yuca, hojas, ramas*), distinguiendo además entre inventario previo e ingreso del día (*"Acelga Inventario 5.2 kg"* vs *"Acelga Ingreso hoy 21.8 kg"*).
+  2. La digitación manual de estas 10 hojas de papel en la Sábana Oficial representa un cuello de botella crítico, genera fatiga operativa y es susceptible a errores humanos de transcripción.
+
+#### 2. Arquitectura de Ingesta Multimodal en Inventarios (Misma UX de Pedidos)
+- **When** el supervisor o jefe de inventarios requiere procesar las planillas físicas de una fecha contable (`delivery_date = balanceDate`):
+- **Then** el sistema proporciona un canal de carga asistido por Inteligencia Artificial que replica la experiencia ergonómica del módulo de pedidos (`EmailDraftsModule`):
+  1. **Disparador en Pantalla (Barra Superior):**
+     - Al conmutar al **`Modo Edición`** (`sheetMode === 'manual_edit'`), en la barra de herramientas al lado de `Descargar Excel` y `Cargar Excel`, se despliega el botón destacado:
+       `[ 📷 Cargar Planillas Físicas (IA) ]` (con icono Lucide `ScanText` / `FileSpreadsheet`).
+  2. **Paso 1: Selector de Tipo de Documento / Destino:**
+     El modal solicita seleccionar la naturaleza del documento físico a procesar:
+     - **Opción A: 📥 Entradas / Compras en Muelle (`Entrada/`):** Alimenta la **Columna G (`COMPRAS (+)`)** y opcionalmente actualiza los costos unitarios PPP y proveedores en la **Matriz de Costos (DT-11)**.
+     - **Opción B: 📊 Conteo Físico de Bodega (`Inv manual/`):** Alimenta la **Columna T (`CONTEO FÍSICO FIN DE TURNO`)** para el cierre a ciegas de la jornada.
+     - **Opción C: 🗑️ Mermas y Arreglo (`Desperdicio/`):** El motor multimodal clasifica determinísticamente:
+       * Merma por daño / podredumbre / no apto $\to$ **Columna Q (`DESPERDICIO / AVERÍA (-)`)**.
+       * Merma por limpieza / pelado / descapote (*cáscara de cebolla, cáscara de yuca, ramas, hojas*) $\to$ **Columna R (`BASURA / DESCAPOTE (-)`)**.
+  3. **Paso 2: Carga Multimodal Multi-Página (Drag & Drop):**
+     - Permite subir de 1 a N imágenes (JPG, PNG, WebP) o un archivo PDF escaneado multi-página en lote.
+     - Soporta la carga completa de las 6 páginas de conteo físico o las 3 fotos de recepción en una sola sesión de trabajo.
+  4. **Paso 3: Motor IA de Extracción Agrícola:**
+     - Reutiliza el pipeline multimodal de Gemini (`CANONICAL_MODEL_CASCADE`) adaptado con heurística agro-logística de Corabastos:
+       * Interpreta caligrafía manuscrita de bodega, tachaduras y notas marginales.
+       * Convierte presentaciones mayoristas a kilogramos netos según factores estándar (bulto 50 kg, canastilla 20 kg, docenas, atados).
+       * Ejecuta algoritmo fuzzy / trigram para homologar el texto manuscrito contra el catálogo maestro de 663 SKUs.
+  5. **Paso 4: Mesa de Trabajo & Reconciliación Staging:**
+     - **Panel Dividido (Split View):** Visor interactivo del documento original a la izquierda (con zoom, rotación y desplazamiento) y tabla de auditoría editable a la derecha.
+     - **Semáforo de Certeza:**
+       * 🟢 **Verde (Confianza > 95%):** SKU identificado con precisión y cantidad normalizada.
+       * 🟡 **Amarillo (Confianza 70% - 94%):** Coincidencia parcial de variedad o presentación que requiere validación visual rápida.
+       * 🔴 **Rojo (Confianza < 70%):** Producto no encontrado en catálogo; permite asignación manual con autocompletado en 1 clic.
+     - El usuario puede ajustar cualquier cantidad o SKU directamente en la grilla antes de la persistencia final.
+
+#### 3. Protocolo Canónico de Coexistencia y No Colisión con OPS (Las 4 Reglas Innegociables)
+Para garantizar que la carga asistida por IA de documentos físicos y las operaciones digitales en tiempo real (`/ops/*`) jamás entren en colisión o generen duplicidades contables, se establecen las siguientes reglas:
+1. **Regla 1: Trazabilidad Inmutable por `origin_source` en Base de Datos:**
+   Cada registro en `inventory_movements` preserva su linaje de origen:
+   - `origin_source = 'ops_system'`: Originado por flujos automáticos de la app (`/ops/compras`, `/ops/picking`, `/admin/customer-service`).
+   - `origin_source = 'physical_sheet_ocr'`: Originado por la ingesta multimodal de planillas físicas, indexando el identificador del lote de escaneo y el archivo fuente.
+   - `origin_source = 'manual_override'`: Modificación directa celda a celda en Modo Edición.
+2. **Regla 2: Mesa de Arbitraje con Semáforo de Contraste en Staging:**
+   Antes de confirmar la escritura en base de datos, el staging compara los datos extraídos contra el estado actual de OPS para la fecha:
+   - **Caso 2.1 (Sin registro previo en OPS - Valor 0):** La planilla física puebla limpiamente la celda de la sábana.
+   - **Caso 2.2 (Coincidencia idéntica con OPS):** Marcado en verde como *«Conciliado con OPS»*; no genera doble asiento.
+   - **Caso 2.3 (Discrepancia detectada):** El sistema resalta la fila en ámbar mostrando la comparativa (*«OPS registra: X kg | Planilla física registra: Y kg»*). El supervisor dispone de botones de decisión explícita:
+     * `[ Usar Planilla Física ]`: Actualiza la celda y genera nota de auditoría (`[CONCILIACIÓN FÍSICA] Ajustado por planilla muelle {archivo}`).
+     * `[ Mantener Dato OPS ]`: Descarta la lectura del papel para ese SKU.
+3. **Regla 3: Idempotencia Operativa Estricta (Anti-Duplicados):**
+   Si un usuario sube o reprueba la misma planilla física para una fecha y SKU, el sistema ejecuta un `upsert` determinista por `(product_id, reference_type, balance_date)`, impidiendo que las cantidades se sumen sobre sí mismas por reprocesamientos sucesivos.
+4. **Regla 4: Segregación Estricta de Funciones (SoD):**
+   El botón de carga de planillas físicas reside **exclusivamente** dentro del `Modo Edición` y su aprobación final requiere perfil de Jefatura de Inventarios o Administrador, manteniendo la Sábana Oficial (`Modo Vista`) 100% protegida contra manipulaciones inadvertidas.
+
+#### 4. Criterios de Aceptación Contractual (Definition of Done)
+1. **Contrato y UI:** Botón `[ 📷 Cargar Planillas Físicas (IA) ]` disponible en `src/components/InventoryDailyBalanceTab.tsx` en Modo Edición.
+2. **Modal Modular Especializado:** Implementado en `src/components/PhysicalSheetIngestModal.tsx` (<= 600 líneas) con selector de tipo de documento, visor de imágenes/PDF y tabla de reconciliación staging.
+3. **Endpoint de Extracción:** `POST /api/commercial/inventory/extract-physical-sheet` consumiendo Gemini con heurística de Corabastos y homologación de 663 SKUs.
+4. **Cero Colisión Verificada:** Las escrituras en `inventory_movements` registran `origin_source: 'physical_sheet_ocr'` y respetan el arbitraje de discrepancias sin duplicar compras ni conteos.
+5. **Refresco Reactivo:** Al pulsar `[ Aprobar y Aplicar a la Sábana ]`, las columnas G, T, Q y R se actualizan instantáneamente en la interfaz sin necesidad de recargar la página.

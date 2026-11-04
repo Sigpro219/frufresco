@@ -446,14 +446,15 @@ export default function InventoryDailyBalanceTab({
         e.preventDefault();
         e.stopPropagation();
         const startWidth = columnWidths[colKey] || 95;
-        resizingRef.current = { colKey, startX: e.clientX, startWidth };
+        const startX = e.clientX;
+        resizingRef.current = { colKey, startX, startWidth };
 
         const handleMouseMove = (moveEvent: MouseEvent) => {
             if (!resizingRef.current) return;
-            const deltaX = moveEvent.clientX - resizingRef.current.startX;
-            const newWidth = Math.max(50, Math.min(350, Math.round(resizingRef.current.startWidth + deltaX)));
+            const deltaX = moveEvent.clientX - startX;
+            const newWidth = Math.max(50, Math.min(350, Math.round(startWidth + deltaX)));
             setColumnWidths(prev => {
-                const next = { ...prev, [resizingRef.current!.colKey]: newWidth };
+                const next = { ...prev, [colKey]: newWidth };
                 try {
                     localStorage.setItem('frufresco_inventory_col_widths', JSON.stringify(next));
                 } catch (err) {}
