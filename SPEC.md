@@ -14285,33 +14285,42 @@ Bajo los principios de ingeniería Lean y el algoritmo de simplificación de Spa
   3. **Riesgo Sanitario y Operativo:** Reingresar producto devuelto sin inspección de inocuidad corre el riesgo de mezclar producto contaminado o dañado con fruta fresca de primera calidad, generando quejas en cascada en las rutas de la tarde o del día siguiente.
   4. Por control interno y aseguramiento de calidad, la **Columna O (`DEVOLUCIONES (+)`)** debe nutrirse de forma **exclusiva y vinculante** desde el **Módulo de Gestión de Calidad** (liderado por **Angied Rivas / Angie**).
 
-#### 2. Arquitectura de "Cable Pelado" (Clean Boundary Harness)
-- **When** se formalice y diseñe el flujo de inspección de patio con Angie en Gestión de Calidad:
-- **Then** el sistema deja preparado y congelado el arnés de integración (**Clean Boundary Harness**) bajo las siguientes invariantes contractuales:
-  1. **Bifurcación Determinista de Calidad en Cuarentena:**
-     Toda devolución que arriba del furgón entra a estado transitorio de *Cuarentena*. El inspector de calidad (Angie / equipo de calidad) ejecuta la inspección física y emite uno de dos dictámenes:
-     - **Dictamen Apto (Reingreso a Stock Vendible):** El producto está fresco, íntegro y apto $\to$ Se emite registro en el arnés de **Columna O (`DEVOLUCIONES (+)`)**, sumando al balance de masa ($S$).
-     - **Dictamen No Conforme (Baja / Merma):** El producto está averiado, golpeado o inservible $\to$ Se desvía hacia **Columna Q (`DESPERDICIO / AVERÍA (-)`)**, soportado con evidencia fotográfica obligatoria.
-  2. **Contrato de Integración del Arnés (Payload Inmutable):**
-     El módulo de Gestión de Calidad disparará la inserción en `inventory_movements` con la siguiente firma canónica:
+#### 2. Arquitectura de "Cable Pelado" (Clean Boundary Harness) & Gatillo de Custodia Física
+- **When** el auditor de calidad procesa una novedad en el modal de Auditoría Técnica SAC (`/admin/customer-service` / `PqrAuditModal.tsx`):
+- **Then** el sistema formaliza el origen de la **Columna O (`DEVOLUCIONES (+)`)** bajo las siguientes invariantes innegociables:
+  1. **El Gatillo Operativo en Pantalla (Selector de Custodia Física):**
+     En el Paso 1 (*Hecho & Evidencias*), el auditor clasifica la ubicación material del producto afectado:
+     - **Opción A (`Se queda en Cliente (Sin Retorno)`):** El cliente retiene o destruye el producto en sus instalaciones. **No hay retorno material a bodega**. Por tanto, la Columna O permanece en 0 / guión (`-`) para este evento.
+     - **Opción B (`Devuelto en Camión (A Bodega)` — `[RETORNO_FISICO: SI]`):** **Gatillo Canónico Oficial de la Columna O.** Indica que el transportador reembarcó físicamente la mercancía en el furgón y esta ingresó al muelle de FruFresco.
+  2. **Enrutamiento Reactivo hacia la Sábana (`InventoryDailyBalanceTab.tsx`):**
+     Para toda novedad donde se haya marcado `Devuelto en Camión (A Bodega)`:
+     - El sistema asocia el `product_id` (SKU específico) y la `quantity_returned` a la fecha de entrega del pedido (`orders.delivery_date = balanceDate`).
+     - En la Sábana de Balance Diario, la **Columna O (`DEVOLUCIONES (+)`)** consolida la sumatoria de todos los retornos físicos en camión para ese SKU:
+       $$O_{p, d} = \sum_{\substack{\text{PQRS con Retorno Físico en Camión} \\ \text{delivery\_date} = d}} \text{quantity\_returned}_{p}$$
+     - **Jerarquía Padre-Hijo:** Cada calibre/variación hija desagrega sus kilos devueltos exactos, y la familia padre consolida el acumulado de sus hijos.
+  3. **Bifurcación Posterior en Cuarentena (Protocolo Invima Res. 2674/2013):**
+     Al arribar la mercancía devuelta a bodega, entra a *Cuarentena*:
+     - **Si Calidad dictamina Apto (Producto Conforme):** Se ratifica su reingreso al disponible de bodega mediante Columna O (+) para venta o rotación inmediata.
+     - **Si Calidad dictamina No Conforme (Sobremaduro / Deteriorado):** Se da de baja y se desvía con soporte fotográfico obligatorio hacia **Columna Q (`DESPERDICIO / AVERÍA (-)`)**.
+  4. **Contrato de Integración del Arnés (Payload Inmutable):**
+     El módulo de Gestión de Calidad alimenta `inventory_movements` con la firma:
      ```typescript
      interface QualityReturnHarnessPayload {
        product_id: string;              // SKU específico inspeccionado
        warehouse_id: string;            // Bodega principal de recepción
-       quantity: number;                // Kilos o unidades netas aprobadas
+       quantity: number;                // Kilos o unidades netas devueltas en camión
        type: 'entry';                   // Entrada al Kardex
        reference_type: 'route_return';  // Subtipo canónico de devolución de ruta
-       reference_id: string;            // ID de la PQR, RNC o Acta de Calidad
+       reference_id: string;            // ID de la PQR / RNC asociada
        evidence_url?: string;           // Registro fotográfico del estado del producto
-       notes: string;                   // '[DICTAMEN CALIDAD - Angie Rivas] Reingreso Conforme PQR #{pqr_number}: {motivo}'
-       created_at: string;              // Timestamp de la jornada de auditoría
+       notes: string;                   // '[RETORNO_FISICO: SI] [DICTAMEN CALIDAD - Angie Rivas] PQR #{id}'
+       created_at: string;              // Timestamp de la jornada de entrega
      }
      ```
-  3. **Blindaje en la Sábana de Inventario (`InventoryDailyBalanceTab.tsx`):**
-     - La celda de la Columna O en la sábana queda configurada como un receptor del arnés de Calidad.
-     - Su lectura ya está implementada y lista:
-       $$\text{Col O} = \sum \text{inventory\_movements}(\text{ref} \in ('route\_return', 'return', 'devolucion'))$$
-     - Cuando el módulo de Angie emita los dictámenes, la Columna O se poblará automáticamente sin requerir cirugías adicionales en la sábana.
+  5. **Equilibrio de la Ecuación de Masa:**
+     Dado que la venta ordinaria (Col H/I) o venta adicional (Col M) descontó originalmente la mercancía despachada, la Columna O restituye con precisión de báscula los kilos devueltos:
+     $$S = E + F + G - \text{Ventas} + \mathbf{O (\text{Devoluciones en Camión})} - \dots$$
+     erradicando la aparición de «sobrantes» misteriosos en el conteo físico nocturno ($T$).
 
 #### 3. Criterios de Aceptación Contractual (Definition of Done)
 1. **Cable Pelado Documentado:** Contrato de payload y reglas de bifurcación (Apto $\to$ Col O vs Avería $\to$ Col Q) congelados en SPEC.md y manual_inventory_pipeline_guide.md.
