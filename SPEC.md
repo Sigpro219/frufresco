@@ -13921,3 +13921,122 @@ Para garantizar que el balance de masa sea ininterrumpido y resiliente ante omis
 4. **Prioridad 4 — Reconstrucción Retroactiva para Fechas Pasadas:**  
    Para fechas históricas sin cierre ni conteo registrado, el inventario inicial se reconstruye matemáticamente:  
    $$\text{Inventario Inicial} = \max(0, \text{Stock Actual} - \sum \Delta_{\text{posteriores}})$$
+
+---
+
+### Escenario 377: Purga y Reseteo Canónico de Históricos Contaminados de Inventario (Protocolo Cero-Pérdida) (SDD v1.9.361)
+
+#### 1. Contexto Operativo y Causa Raíz
+Durante las fases de pruebas y parametrización previas, se acumularon en base de datos asientos residuales ficticios y asimétricos (incluyendo entradas de prueba de hasta $+7.999.800\text{ kg}$ en junio y cierres diarios descalibrados entre $-6.018\text{ kg}$ y $+24.133\text{ kg}$). Al arrastrar estos registros pasados, la Sábana Oficial de Balance Diario de 24 Columnas heredaba saldos iniciales contaminados que distorsionaban el Inventario Calculado ($S$) y los descuadres de bodega ($V$ y $W$). Para operar el gemba real de FruFresco de forma fidedigna, se requirió una puesta a cero absoluto de todas las tablas kardex y de balance.
+
+#### 2. Protocolo de Ejecución Cero-Pérdida
+1. **Resguardo Preventivo en Disco:**  
+   Previa a cualquier mutación destructiva, se exportó un snapshot integral a `scratch/backup_inventory_1793802827309.json`, conteniendo los 9 cierres diarios, 4.168 movimientos históricos, 2 tareas aleatorias, 151 conteos físicos y 125 existencias positivas.
+2. **Purga Transaccional de Tablas Históricas:**
+   - `daily_inventory_closings`: 9 registros eliminados (erradicando la herencia de saldos cerrados anómalos).
+   - `inventory_movements`: 4.168 movimientos transaccionales eliminados.
+   - `inventory_random_tasks` e `inventory_task_items`: 2 tareas y 151 ítems de conteo ciego reseteados.
+3. **Reseteo de Existencias Vivas (`inventory_stocks`):**  
+   Todas las cantidades activas en bodega se actualizaron a `quantity = 0` y `updated_at = now()`.
+4. **Verificación Post-Purga:**  
+   Confirmación determinista en base de datos con conteos en cero absoluto en todas las tablas afectadas, habilitando la ingesta limpia y reactiva de pedidos reales desde el día de hoy.
+
+
+---
+
+### Escenario 378: Selector Desplegable Universal de Operadores de Filtro en Cabecera de Inventarios (`InventoryColumnFilterPopover`) (SDD v1.9.362)
+
+#### 1. Contexto Operativo y Dolor del Gemba
+En la Sábana Oficial de Balance Diario de 24 Columnas (`src/components/InventoryDailyBalanceTab.tsx`), los operarios y auditores requerían filtrar con frecuencia filas numéricas (columnas E a X, incluyendo *CÁLCULO FINAL*, *CONTEO FÍSICO*, *INV. BODEGA*, *FALTANTES*, *PESADA*, *DESPERDICIO*, etc.). Sin embargo, el filtro exigía digitar sintaxis como `>0`, `<0`, `!=0` en cajas de texto angostas (95px), lo cual resultaba poco ágil e intuitivo en pantallas táctiles o jornadas de alta presión en bodega.
+
+#### 2. Contrato de Interfaz y Opciones Desplegables
+Se implementó el componente modular `InventoryColumnFilterPopover` (`src/components/InventoryColumnFilterPopover.tsx`) y se acopló a cada cabecera numérica con las 9 opciones solicitadas por el Gemba:
+
+| Opción | Símbolo / Código | Comportamiento en Filtro | Aplicación UX |
+| :--- | :---: | :--- | :--- |
+| **Igual que** | `=` | Valor idéntico a $X$ ($|\text{val} - X| \le 0.001$) | Muestra input numérico + botón Aplicar |
+| **Diferente de** | `≠` / `!=` | Valor distinto de $X$ ($|\text{val} - X| > 0.001$) | Muestra input numérico + botón Aplicar |
+| **Mayor que** | `>` | Estrictamente mayor que $X$ ($\text{val} > X$) | Muestra input numérico + botón Aplicar |
+| **Mayor o igual que** | `≥` / `>=` | Mayor o igual que $X$ ($\text{val} \ge X$) | Muestra input numérico + botón Aplicar |
+| **Menor que** | `<` | Estrictamente menor que $X$ ($\text{val} < X$) | Muestra input numérico + botón Aplicar |
+| **Menor o igual que** | `≤` / `<=` | Menor o igual que $X$ ($\text{val} \le X$) | Muestra input numérico + botón Aplicar |
+| **En rango de** | `↔` | Entre Mínimo y Máximo ($X_{\min} \le \text{val} \le X_{\max}$) | Dos casillas (`Desde` y `Hasta`) + Aplicar (`min..max`) |
+| **En blanco** | `∅` | Registro en cero o sin datos ($|\text{val}| \le 0.0001$) | **1 Clic Inmediato** (aplica `en blanco` y cierra) |
+| **Con valores** | `✦` | Registro con saldo o movimiento ($|\text{val}| > 0.0001$) | **1 Clic Inmediato** (aplica `con valores` y cierra) |
+
+#### 3. Arquitectura Frontend y Resiliencia de Renderizado
+1. **Posicionamiento Flotante sin Recorte (`position: fixed`):**  
+   Dado que el contenedor maestro de la tabla utiliza scroll horizontal y vertical (`overflowX: auto`, `overflowY: auto`), el popover se posiciona mediante `getBoundingClientRect()` con coordenadas `fixed` y `zIndex: 99999`. Esto garantiza que jamás quede truncado por los bordes de la tabla.
+2. **Sincronización Híbrida Bidireccional:**  
+   El operario puede optar libremente por digitar atajos rápidos en el input del encabezado (`>0`, `!=0`, `10..50`) o utilizar el selector visual interactivo. Ambos mecanismos comparten y actualizan el mismo estado reactivo (`columnFilters`).
+3. **Limpieza en 1 Clic:**  
+   Cuando una columna tiene un filtro activo, el input muestra una `✕` de borrado rápido para restaurar la vista completa sin tener que abrir el menú.
+4. **Accesibilidad y Atajos de Teclado:**  
+   El selector se cierra automáticamente con `Escape` o al pulsar fuera del menú, y ejecuta la condición al presionar `Enter` en los campos de entrada.
+
+---
+
+### Escenario 379: Homogeneización Visual de la Columna S (Cálculo Final) y Erradicación de Resaltados Asimétricos (SDD v1.9.363)
+
+#### 1. Contexto y Decisión de Diseño
+Anteriormente, la **Columna S (Cálculo Final)** contaba con un marco perimetral verde azulado (`#0D9488`), fondo verde oscuro en cabecera/totales (`#042F2E`) y sombreado amarillo (`#FEF08A`) en filas padre consolidadas. A solicitud directa del Gemba operativo para evitar distracciones visuales y mantener una apariencia limpia y homogénea en toda la tabla, se eliminaron todos los resaltados y bordes especiales.
+
+#### 2. Reglas de Estandarización Visual
+1. **Cabecera y Filtro:** Fondo unificado (`#0F172A`) y bordes estándar idénticos al resto de columnas kardex (`borderRight: 1px solid #1E293B`).
+2. **Cuerpo de Datos:** Colores de fondo de fila regulares (`rowBg` para padres, blanco/gris tenue para hijos) sin tintes ni marcos verdes.
+3. **Fila de Totales:** La sumatoria de la Columna S comparte la tipografía y bordes uniformes del pie de tabla (`borderTop: 2px solid #334155`).
+
+---
+
+### Escenario 380: Patrón Visual Intercalado Tipo Piano (Piano Key Alternating Columns) en Sábana Oficial de 24 Columnas (SDD v1.9.364)
+
+#### 1. Contexto y Ergonomía Visual en el Gemba
+En una sábana contable de alta densidad con 24 columnas métricas contiguas (`columnOrder` E a X), el ojo del operario y auditor en bodega puede perder fácilmente la referencia vertical al desplazarse horizontalmente entre cifras numéricas adyacentes.
+
+#### 2. Regla Canónica de Alternancia Tipo Piano (`colIdx % 2 === 1`)
+Se implementó un patrón visual intercalado de columnas claras y sombreadas (Column Zebra Striping / Piano Pattern) que abarca de forma sincronizada la cabecera, la fila de filtros, el cuerpo de datos y la fila de totales:
+
+| Nivel de la Tabla | Columna Par (`colIdx % 2 === 0`) — Tecla Clara | Columna Impar (`colIdx % 2 === 1`) — Tecla Oscura (Piano) |
+| :--- | :--- | :--- |
+| **Cabecera (`th`)** | `#0F172A` (Slate 900) | `#1E293B` (Slate 800) |
+| **Filtro (`th`)** | `#0B132B` (Navy 950) | `#1E293B` (Slate 800) |
+| **Fila Normal / Hijo (`td`)** | `#FFFFFF` (Blanco puro) | `#F1F5F9` (Slate 100 tenue) |
+| **Fila Padre Familia (`td`)** | `#FEF9C3` (Amarillo 100) | `#FEF08A` (Amarillo 200 cálido) |
+| **Totales Pie (`td`)** | `#0F172A` (Slate 900) | `#1E293B` (Slate 800) |
+
+#### 3. Resiliencia ante Reordenamiento (Drag & Drop)
+Dado que la alternancia se calcula dinámicamente sobre la posición relativa en el arreglo ordenado (`columnOrder.map((colKey, colIdx) => ...)`), el ritmo de teclas de piano se preserva siempre en orden perfecto $0, 1, 0, 1...$, incluso cuando el usuario arrastra y reordena columnas o conmuta entre vistas compactas.
+
+
+
+---
+
+### Escenario 377: Rediseño Ergonómico y Swiss Dark UI del Popover de Filtros de Columna (`InventoryColumnFilterPopover.tsx`) en la Sábana Oficial (SDD v1.9.361)
+
+#### 1. Diagnóstico Forense de Usabilidad y Defectos Visuales
+En la versión previa del modal/popover de filtrado por columna (`src/components/InventoryColumnFilterPopover.tsx`), reportado en captura de pantalla operativa (`media_1793805209045_fa55cc1a.png`), se identificaron las siguientes fricciones visuales y de interacción:
+1. **Barra de Desplazamiento Vertical Anti-Estética:** La lista de operadores numéricos estaba contenida en un contenedor de 1 columna con altura fija forzada (`maxHeight: 165px`), desplegando una barra de scroll gris nativa de Windows con flechas que obstruía el escaneo visual rápido.
+2. **Defecto de Doble Paréntesis en Título (`((-))`):** Al concatenar `{colTitle} {colSign ? `(${colSign})` : ''}`, si el signo ya contenía paréntesis (ej. `(-)`), el encabezado renderizaba `Basura ((-))`.
+3. **Carencia de Micro-Interacciones y Chips Rápidos:** La selección numérica exigía tecleo manual para valores estándar (`0`, `10`, `50`).
+
+#### 2. Especificación del Rediseño Canónico
+1. **Rejilla 2D Libre de Scrollbars (Zero-Scroll UX):**
+   - Los 6 operadores numéricos canónicos se distribuyen en una **rejilla de 2 columnas simétricas**:
+     - Fila 1: `[ > ] Mayor que` y `[ ≥ ] Mayor o igual`
+     - Fila 2: `[ = ] Igual a` y `[ ≠ ] Diferente de`
+     - Fila 3: `[ < ] Menor que` y `[ ≤ ] Menor o igual`
+   - La opción `[ ⇄ ] En rango de valores (Mín..Máx)` ocupa el ancho completo inferior.
+   - **Resultado:** El 100% de los operadores queda visible de un vistazo en 0ms, eliminando totalmente la barra de desplazamiento.
+2. **Sanitización Tipográfica del Encabezado:**
+   - Se procesa `cleanSign = (colSign || '').replace(/^\(+|\)+$/g, '').trim()`.
+   - Renderiza `Col. {key}` en pastilla azul celeste (`#38BDF8`), título limpio `Basura` y pastilla de naturaleza contable `(-)` con color semántico según entrada (`#34D399`) o salida (`#F87171`).
+3. **Botones de Pre-Filtro Rápido con Iconografía Oficial Lucide:**
+   - `[ ⊘ En blanco ]` (`Ban` icon): Filtra registros en cero o vacíos.
+   - `[ ✦ Con valores ]` (`Sparkles` icon): Filtra registros con movimiento real ($
+e 0$).
+4. **Input Numérico de Alta Densidad con Chips Rápidos:**
+   - Input estilizado en `#1E293B` con borde reactivo y tipografía tabular destacada.
+   - Chips rápidos de un clic: `[ 0 ] [ 1 ] [ 10 ] [ 50 ]` que asignan el valor y re-enfocan el campo de inmediato.
+5. **Botón de Acción Primaria y Footer con Limpieza Rápida:**
+   - Botón `[ Aplicar Filtro → ]` en degradado esmeralda FruFresco (`#10B981` a `#059669`) con sombra de elevación.
+   - Si existe un filtro activo, el footer despliega un indicador con punto de telemetría `Activo: {valor}` y botón de un clic `[ Quitar filtro ]` (`RotateCcw`) para resetear la columna instantáneamente.

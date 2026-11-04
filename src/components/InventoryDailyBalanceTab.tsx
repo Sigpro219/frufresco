@@ -88,6 +88,7 @@ import InventoryPayrollModal from '@/components/InventoryPayrollModal';
 import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSalesModal';
 import DailyBalanceExcelImportModal from '@/components/DailyBalanceExcelImportModal';
 import FastPlazaPurchasesModal from '@/components/FastPlazaPurchasesModal';
+import { InventoryColumnFilterPopover } from './InventoryColumnFilterPopover';
 
 interface ProductItem {
     id: string;
@@ -235,44 +236,77 @@ export const COLUMN_METADATA: Record<string, {
     P: { letter: 'P', title: 'Merma Pesada', shortName: 'Pesada', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Merma por merma de peso, calibración o humedad (-)', color: '#FBBF24' },
     Q: { letter: 'Q', title: 'Desperdicio', shortName: 'Desperdicio', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Daño, maduración o pérdida en selección (-)', color: '#F87171' },
     R: { letter: 'R', title: 'Basura', shortName: 'Basura', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Descarte total no aprovechable (-)', color: '#FBBF24', borderRight: '2px solid #334155' },
-    S: { letter: 'S', title: 'Cálculo Final', shortName: 'Cálculo Final', sign: '(=)', block: 'CIERRE & BODEGA', formula: 'S = E + F + G - H - J - K + L - M - N + O - P - Q - R', effect: 'Balance teórico calculado de masa al cierre de turno', color: '#5EEAD4', bgColor: '#042F2E', borderLeft: '2px solid #0D9488', borderRight: '2px solid #0D9488' },
-    T: { letter: 'T', title: 'Conteo Físico', shortName: 'Conteo Físico', sign: '(Físico)', block: 'CIERRE & BODEGA', effect: 'Inventario físico real contado en bodega al cierre de jornada', color: '#34D399', bgColor: '#1E293B' },
-    U: { letter: 'U', title: 'Inventario Bodega', shortName: 'Inv. Bodega', sign: '(T + O)', block: 'CIERRE & BODEGA', formula: 'U = (T != null ? T + O : S)', effect: 'Stock físico total en bodega para salida a siguiente jornada (T + O o fallback teórico S en transición)', color: '#F8FAFC', bgColor: '#1E293B', borderRight: '2px solid #334155' },
+    S: { letter: 'S', title: 'Cálculo Final', shortName: 'Cálculo Final', sign: '(=)', block: 'CIERRE & BODEGA', formula: 'S = E + F + G - H - J - K + L - M - N + O - P - Q - R', effect: 'Balance teórico calculado de masa al cierre de turno', color: '#5EEAD4' },
+    T: { letter: 'T', title: 'Conteo Físico', shortName: 'Conteo Físico', sign: '(Físico)', block: 'CIERRE & BODEGA', effect: 'Inventario físico real contado en bodega al cierre de jornada', color: '#34D399' },
+    U: { letter: 'U', title: 'Inventario Bodega', shortName: 'Inv. Bodega', sign: '(T + O)', block: 'CIERRE & BODEGA', formula: 'U = (T != null ? T + O : S)', effect: 'Stock físico total en bodega para salida a siguiente jornada (T + O o fallback teórico S en transición)', color: '#F8FAFC', borderRight: '2px solid #334155' },
     V: { letter: 'V', title: 'Faltantes', shortName: 'Faltantes', sign: '(-)', block: 'CONCILIACIÓN (-)', formula: 'V = Max(0, S - T)', effect: 'Descuadre en contra: Falta producto físico respecto al calculado (-)', color: '#F87171' },
     W: { letter: 'W', title: 'Sobrantes', shortName: 'Sobrantes', sign: '(+)', block: 'CONCILIACIÓN (+)', formula: 'W = Max(0, T - S)', effect: 'Descuadre a favor: Sobra producto físico respecto al calculado (+)', color: '#34D399' },
     X: { letter: 'X', title: 'Donaciones', shortName: 'Donaciones', sign: '(-)', block: 'CONCILIACIÓN', effect: 'Baja autorizada para donación o Banco de Alimentos', color: '#F472B6' }
 };
 
-export const matchNumericFilter = (val: number, filterStr: string): boolean => {
+export const matchNumericFilter = (val: number | null | undefined, filterStr: string): boolean => {
     if (!filterStr || !filterStr.trim()) return true;
-    const raw = filterStr.trim();
-    if (raw.startsWith('!=')) {
-        const target = parseFloat(raw.substring(2).trim());
-        return !isNaN(target) ? Math.abs(val - target) > 0.001 : true;
+    const num = (typeof val === 'number' && !isNaN(val)) ? val : 0;
+    const raw = filterStr.trim().toLowerCase();
+
+    // 1. En blanco / sin datos / cero
+    if (raw === 'en blanco' || raw === 'blanco' || raw === 'vacío' || raw === 'vacio' || raw === 'empty' || raw === 'null') {
+        return Math.abs(num) <= 0.0001;
+    }
+
+    // 2. Con valores / con datos / no cero
+    if (raw === 'con valores' || raw === 'con datos' || raw === 'not empty' || raw === 'lleno') {
+        return Math.abs(num) > 0.0001;
+    }
+
+    // 3. En rango de (ej: "10..50", "10 a 50", "10 - 50", "rango 10..50")
+    if (raw.includes('..') || raw.includes(' a ') || (raw.includes(' - ') && !raw.startsWith('-'))) {
+        let parts: string[] = [];
+        if (raw.includes('..')) parts = raw.split('..');
+        else if (raw.includes(' a ')) parts = raw.split(' a ');
+        else parts = raw.split(' - ');
+
+        if (parts.length === 2) {
+            const min = parseFloat(parts[0].replace(/[^0-9.-]/g, ''));
+            const max = parseFloat(parts[1].replace(/[^0-9.-]/g, ''));
+            if (!isNaN(min) && !isNaN(max)) {
+                const low = Math.min(min, max);
+                const high = Math.max(min, max);
+                return num >= low && num <= high;
+            }
+        }
+    }
+
+    // 4. Operadores convencionales (!=, <>, >=, <=, >, <, =)
+    if (raw.startsWith('!=') || raw.startsWith('<>')) {
+        const target = parseFloat(raw.replace(/^(!=|<>)/, '').trim());
+        return !isNaN(target) ? Math.abs(num - target) > 0.001 : true;
     }
     if (raw.startsWith('>=')) {
         const target = parseFloat(raw.substring(2).trim());
-        return !isNaN(target) ? val >= target : true;
+        return !isNaN(target) ? num >= target : true;
     }
     if (raw.startsWith('<=')) {
         const target = parseFloat(raw.substring(2).trim());
-        return !isNaN(target) ? val <= target : true;
+        return !isNaN(target) ? num <= target : true;
     }
     if (raw.startsWith('>')) {
         const target = parseFloat(raw.substring(1).trim());
-        return !isNaN(target) ? val > target : true;
+        return !isNaN(target) ? num > target : true;
     }
     if (raw.startsWith('<')) {
         const target = parseFloat(raw.substring(1).trim());
-        return !isNaN(target) ? val < target : true;
+        return !isNaN(target) ? num < target : true;
     }
     if (raw.startsWith('=')) {
         const target = parseFloat(raw.substring(1).trim());
-        return !isNaN(target) ? Math.abs(val - target) <= 0.001 : true;
+        return !isNaN(target) ? Math.abs(num - target) <= 0.001 : true;
     }
+
+    // Número directo (ej: "5" o "-19" => igualdad)
     const parsed = parseFloat(raw);
     if (!isNaN(parsed)) {
-        return Math.abs(val - parsed) <= 0.001;
+        return Math.abs(num - parsed) <= 0.001;
     }
     return true;
 };
@@ -372,6 +406,7 @@ export default function InventoryDailyBalanceTab({
     // Fila de Filtros Conmutables por Columna (SPEC.md §8.8.9)
     const [isColumnFilterOpen, setIsColumnFilterOpen] = useState<boolean>(false);
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+    const [activeFilterPopover, setActiveFilterPopover] = useState<{ colKey: string; anchorRect: DOMRect } | null>(null);
 
     // Atajo de teclado estándar Excel Ctrl+Shift+L para alternar filtros
     useEffect(() => {
@@ -2902,40 +2937,47 @@ export default function InventoryDailyBalanceTab({
 
                 {/* Columnas Numéricas Dinámicas según columnOrder (SPEC.md §8.8.10) */}
                 {(() => {
-                    const numericalCellRenderers: Record<string, () => React.ReactNode> = {
-                        E: () => (
+                    const getPianoCellBg = (colIdx: number) => {
+                        const isPianoDark = colIdx % 2 === 1;
+                        if (isParent) return isPianoDark ? '#FEF08A' : '#FEF9C3';
+                        return isPianoDark ? '#F1F5F9' : '#FFFFFF';
+                    };
+
+                    const numericalCellRenderers: Record<string, (colIdx: number) => React.ReactNode> = {
+                        E: (colIdx) => (
                             <td key={`cell-${key}-E`} style={{
                                 width: '95px', minWidth: '95px', maxWidth: '95px',
                                 padding: '4px 6px', textAlign: 'right',
                                 fontWeight: isParent ? '800' : '700',
                                 color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8',
                                 borderBottom: cellBorderBottom,
-                                backgroundColor: 'transparent'
+                                backgroundColor: getPianoCellBg(colIdx)
                             }} title="Inventario Inicial oficial heredado (Solo Lectura. Para ajustes use Col F Corrección)">
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                     {renderNumericCell(row.colE_initialStock, 2)}
                                 </div>
                             </td>
                         ),
-                        F: () => renderEditableCell(key, row.productId, 'F', row.colF_corrections, {
+                        F: (colIdx) => renderEditableCell(key, row.productId, 'F', row.colF_corrections, {
                             width: '95px', minWidth: '95px', maxWidth: '95px',
                             padding: '4px 6px',
                             textAlign: 'right',
                             fontWeight: isParent ? '800' : (row.colF_corrections !== 0 ? '700' : '400'),
                             color: row.colF_corrections > 0 ? '#059669' : row.colF_corrections < 0 ? '#DC2626' : '#94A3B8',
+                            backgroundColor: getPianoCellBg(colIdx),
                             borderBottom: cellBorderBottom
                         }, 2),
-                        G: () => renderEditableCell(key, row.productId, 'G', row.colG_purchases, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
-                        H: () => renderEditableCell(key, row.productId, 'H', row.colH_salesKg, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderBottom: cellBorderBottom }, 2),
-                        I: () => renderEditableCell(key, row.productId, 'I', row.colI_salesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: '#64748B', fontWeight: isParent ? '700' : '400', borderBottom: cellBorderBottom }, 0),
-                        J: () => renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
-                        K: () => renderEditableCell(key, row.productId, 'K', row.colK_shortage, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
-                        L: () => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2),
-                        M: () => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
-                        N: () => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
-                        O: () => renderEditableCell(key, row.productId, 'O', row.colO_returns, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
-                        P: () => renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
-                        Q: () => renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
+                        G: (colIdx) => renderEditableCell(key, row.productId, 'G', row.colG_purchases, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
+                        H: (colIdx) => renderEditableCell(key, row.productId, 'H', row.colH_salesKg, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
+                        I: (colIdx) => renderEditableCell(key, row.productId, 'I', row.colI_salesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: '#64748B', fontWeight: isParent ? '700' : '400', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 0),
+                        J: (colIdx) => renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '400', backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
+                        K: (colIdx) => renderEditableCell(key, row.productId, 'K', row.colK_shortage, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
+                        L: (colIdx) => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
+                        M: (colIdx) => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
+                        N: (colIdx) => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
+                        O: (colIdx) => renderEditableCell(key, row.productId, 'O', row.colO_returns, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
+                        P: (colIdx) => renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
+                        Q: (colIdx) => renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosQ?.length > 0 ? (
                                 <button
                                     type="button"
@@ -2947,7 +2989,7 @@ export default function InventoryDailyBalanceTab({
                                 </button>
                             ) : null
                         ),
-                        R: () => renderEditableCell(key, row.productId, 'R', row.colR_cleaningWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
+                        R: (colIdx) => renderEditableCell(key, row.productId, 'R', row.colR_cleaningWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosR?.length > 0 ? (
                                 <button
                                     type="button"
@@ -2959,42 +3001,40 @@ export default function InventoryDailyBalanceTab({
                                 </button>
                             ) : null
                         ),
-                        S: () => (
+                        S: (colIdx) => (
                             <td key={`cell-${key}-S`} style={{ 
                                 padding: '6px 8px', 
                                 textAlign: 'right', 
-                                fontWeight: '900', 
+                                fontWeight: isParent ? '800' : '700', 
                                 width: '95px',
                                 minWidth: '95px',
                                 maxWidth: '95px',
                                 color: isParent ? '#064E3B' : '#0F172A', 
-                                backgroundColor: isParent ? '#FEF08A' : (isChild ? 'rgba(13, 148, 136, 0.05)' : 'rgba(13, 148, 136, 0.08)'),
-                                borderLeft: '2px solid #0D9488',
-                                borderRight: '2px solid #0D9488',
+                                backgroundColor: getPianoCellBg(colIdx),
+                                borderRight: '1px solid #E2E8F0',
                                 borderBottom: cellBorderBottom,
-                                boxShadow: isParent ? 'inset 0 0 0 1px rgba(13, 148, 136, 0.3)' : undefined,
                                 fontFamily: 'monospace, sans-serif'
                             }}>
                                 {renderNumericCell(row.colS_calculated)}
                             </td>
                         ),
-                        T: () => renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2),
-                        U: () => (
-                            <td key={`cell-${key}-U`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
+                        T: (colIdx) => renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2),
+                        U: (colIdx) => (
+                            <td key={`cell-${key}-U`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
                                 {row.colU_bodegaPost10am !== null ? renderNumericCell(row.colU_bodegaPost10am) : <span style={{ color: '#CBD5E1' }}>-</span>}
                             </td>
                         ),
-                        V: () => (
-                            <td key={`cell-${key}-V`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }}>
+                        V: (colIdx) => (
+                            <td key={`cell-${key}-V`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }}>
                                 {row.colV_missing > 0 ? renderNumericCell(row.colV_missing) : <span style={{ color: '#CBD5E1' }}>-</span>}
                             </td>
                         ),
-                        W: () => (
-                            <td key={`cell-${key}-W`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
+                        W: (colIdx) => (
+                            <td key={`cell-${key}-W`} style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', backgroundColor: getPianoCellBg(colIdx), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
                                 {row.colW_surplus > 0 ? renderNumericCell(row.colW_surplus) : <span style={{ color: '#CBD5E1' }}>-</span>}
                             </td>
                         ),
-                        X: () => renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
+                        X: (colIdx) => renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), backgroundColor: getPianoCellBg(colIdx), borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosX?.length > 0 ? (
                                 <button
                                     type="button"
@@ -3007,7 +3047,7 @@ export default function InventoryDailyBalanceTab({
                             ) : null
                         )
                     };
-                    return columnOrder.map(colKey => numericalCellRenderers[colKey]?.() ?? null);
+                    return columnOrder.map((colKey, colIdx) => numericalCellRenderers[colKey]?.(colIdx) ?? null);
                 })()}
             </tr>
         );
@@ -4216,12 +4256,11 @@ export default function InventoryDailyBalanceTab({
                                 )}
 
                                 {/* Columnas E - X Reordenables por Drag & Drop con Tooltips Enriquecidos */}
-                                {columnOrder.map((colKey) => {
+                                {columnOrder.map((colKey, colIdx) => {
                                     const meta = COLUMN_METADATA[colKey];
                                     const isDragging = draggedCol === colKey;
                                     const isDragOver = dragOverCol === colKey;
-                                    const isSpecialColS = colKey === 'S';
-                                    const isSpecialColTU = colKey === 'T' || colKey === 'U';
+                                    const isPianoDark = colIdx % 2 === 1;
                                     const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
 
                                     // Tooltip con Bloque, Fórmula y Signo Contable (SPEC.md §8.8.8)
@@ -4244,17 +4283,16 @@ export default function InventoryDailyBalanceTab({
                                                 position: 'sticky',
                                                 top: 0,
                                                 zIndex: 40,
-                                                backgroundColor: isSpecialColS ? '#042F2E' : (isSpecialColTU ? '#1E293B' : '#0F172A'),
+                                                backgroundColor: isPianoDark ? '#1E293B' : '#0F172A',
                                                 padding: colKey === 'U' ? '4px 4px' : '4px 8px',
                                                 textAlign: 'right',
-                                                color: isSpecialColS ? '#5EEAD4' : (meta?.color || '#F8FAFC'),
+                                                color: meta?.color || '#F8FAFC',
                                                 width: '95px',
                                                 minWidth: '95px',
                                                 maxWidth: '95px',
                                                 cursor: 'grab',
                                                 userSelect: 'none',
-                                                borderRight: isSpecialColS ? '2px solid #0D9488' : (hasRightBorder ? '2px solid #334155' : '1px solid #1E293B'),
-                                                borderLeft: isSpecialColS ? '2px solid #0D9488' : undefined,
+                                                borderRight: hasRightBorder ? '2px solid #334155' : '1px solid #1E293B',
                                                 outline: isDragOver ? '2px dashed #10B981' : undefined,
                                                 opacity: isDragging ? 0.35 : 1,
                                                 transition: 'background-color 0.15s ease, outline 0.15s ease, opacity 0.15s ease'
@@ -4349,12 +4387,13 @@ export default function InventoryDailyBalanceTab({
                                         </React.Fragment>
                                     )}
 
-                                    {/* Filtros numéricos con operadores (>0, <0, =0, !=0) para columnas E - X */}
-                                    {columnOrder.map((colKey) => {
+                                    {/* Filtros numéricos con opciones avanzadas desplegables (igual, diferente, mayor, menor, rango, blanco, valores) */}
+                                    {columnOrder.map((colKey, colIdx) => {
                                         const filterVal = columnFilters[colKey] || '';
                                         const isActive = filterVal.trim().length > 0;
+                                        const isPianoDark = colIdx % 2 === 1;
                                         const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
-                                        const isColS = colKey === 'S';
+                                        const isMenuOpen = activeFilterPopover?.colKey === colKey;
 
                                         return (
                                             <th
@@ -4365,32 +4404,93 @@ export default function InventoryDailyBalanceTab({
                                                     position: 'sticky',
                                                     top: '32px',
                                                     zIndex: 40,
-                                                    backgroundColor: '#0B132B',
-                                                    borderRight: isColS ? '2px solid #0D9488' : (hasRightBorder ? '2px solid #334155' : '1px solid #1E293B'),
-                                                    borderLeft: isColS ? '2px solid #0D9488' : undefined
+                                                    backgroundColor: isPianoDark ? '#1E293B' : '#0B132B',
+                                                    borderRight: hasRightBorder ? '2px solid #334155' : '1px solid #1E293B'
                                                 }}
                                             >
-                                                <input
-                                                    type="text"
-                                                    placeholder=">0, =0..."
-                                                    value={filterVal}
-                                                    onChange={e => setColumnFilters(prev => ({ ...prev, [colKey]: e.target.value }))}
-                                                    title={`Filtro ${colKey}: Escribe un número o expresión como '>0', '<0', '=0', '!=0'`}
-                                                    style={{
-                                                        width: '100%',
-                                                        height: '22px',
-                                                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.15)' : '#1E293B',
-                                                        border: isActive ? '1px solid #10B981' : '1px solid #334155',
-                                                        borderRadius: '4px',
-                                                        padding: '1px 4px',
-                                                        fontSize: '0.65rem',
-                                                        color: isActive ? '#34D399' : '#CBD5E1',
-                                                        outline: 'none',
-                                                        textAlign: 'right',
-                                                        fontVariantNumeric: 'tabular-nums',
-                                                        boxSizing: 'border-box'
-                                                    }}
-                                                />
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', height: '22px' }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder=">0, =0..."
+                                                        value={filterVal}
+                                                        onChange={e => setColumnFilters(prev => ({ ...prev, [colKey]: e.target.value }))}
+                                                        title={`Filtro ${colKey}: Escribe o pulsa el selector para elegir: igual, diferente, mayor, menor, en rango, en blanco o con valores`}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '22px',
+                                                            backgroundColor: isActive ? 'rgba(16, 185, 129, 0.15)' : (isMenuOpen ? '#1E293B' : '#1E293B'),
+                                                            border: isActive ? '1px solid #10B981' : (isMenuOpen ? '1px solid #38BDF8' : '1px solid #334155'),
+                                                            borderRadius: '4px',
+                                                            padding: isActive ? '1px 28px 1px 4px' : '1px 18px 1px 4px',
+                                                            fontSize: '0.64rem',
+                                                            color: isActive ? '#34D399' : '#CBD5E1',
+                                                            outline: 'none',
+                                                            textAlign: 'right',
+                                                            fontVariantNumeric: 'tabular-nums',
+                                                            boxSizing: 'border-box'
+                                                        }}
+                                                    />
+
+                                                    {/* Botón rápido para limpiar filtro activo */}
+                                                    {isActive && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setColumnFilters(prev => {
+                                                                    const next = { ...prev };
+                                                                    delete next[colKey];
+                                                                    return next;
+                                                                });
+                                                            }}
+                                                            title="Limpiar filtro"
+                                                            style={{
+                                                                position: 'absolute',
+                                                                right: '15px',
+                                                                width: '12px',
+                                                                height: '12px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                background: 'transparent',
+                                                                border: 'none',
+                                                                color: '#94A3B8',
+                                                                cursor: 'pointer',
+                                                                padding: 0
+                                                            }}
+                                                        >
+                                                            <X size={10} />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Botón desplegable para abrir popover con las 9 opciones */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const rect = (e.currentTarget.parentElement as HTMLElement)?.getBoundingClientRect() || e.currentTarget.getBoundingClientRect();
+                                                            setActiveFilterPopover(prev => (prev?.colKey === colKey ? null : { colKey, anchorRect: rect }));
+                                                        }}
+                                                        title={`Desplegar opciones de filtro para Columna ${colKey}`}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            right: '2px',
+                                                            width: '14px',
+                                                            height: '18px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            background: isMenuOpen ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                                                            border: 'none',
+                                                            color: isActive ? '#10B981' : (isMenuOpen ? '#38BDF8' : '#64748B'),
+                                                            cursor: 'pointer',
+                                                            padding: 0,
+                                                            borderRadius: '2px'
+                                                        }}
+                                                    >
+                                                        <ChevronDown size={11} />
+                                                    </button>
+                                                </div>
                                             </th>
                                         );
                                     })}
@@ -4511,40 +4611,13 @@ export default function InventoryDailyBalanceTab({
                                 </td>
 
                                 {/* Totales Numéricos Dinámicos Mapeados según columnOrder (SPEC.md §8.8.10) */}
-                                {columnOrder.map((colKey) => {
+                                {columnOrder.map((colKey, colIdx) => {
                                     const meta = COLUMN_METADATA[colKey];
-                                    const isColS = colKey === 'S';
-                                    const isSpecialBg = colKey === 'T' || colKey === 'U';
+                                    const isPianoDark = colIdx % 2 === 1;
                                     const hasRightBorder = colKey === 'G' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
                                     const decimals = colKey === 'I' ? 0 : 2;
 
-                                    if (isColS) {
-                                        return (
-                                            <td
-                                                key={`total-${colKey}`}
-                                                style={{
-                                                    position: 'sticky',
-                                                    bottom: 0,
-                                                    zIndex: 31,
-                                                    padding: '6px 8px',
-                                                    textAlign: 'right',
-                                                    color: '#5EEAD4',
-                                                    backgroundColor: '#042F2E',
-                                                    borderLeft: '2px solid #0D9488',
-                                                    borderRight: '2px solid #0D9488',
-                                                    borderTop: '2px solid #0D9488',
-                                                    width: '95px',
-                                                    minWidth: '95px',
-                                                    maxWidth: '95px',
-                                                    fontWeight: '900',
-                                                    fontSize: '0.84rem',
-                                                    boxShadow: isPanesFrozen ? '0 0 10px rgba(13, 148, 136, 0.4)' : undefined
-                                                }}
-                                            >
-                                                {renderNumericCell(columnTotals.totalS)}
-                                            </td>
-                                        );
-                                    }
+                                    // Totales S unificados con el resto de columnas
 
                                     const totalVal = (columnTotals as any)[`total${colKey}`] ?? 0;
 
@@ -4555,7 +4628,7 @@ export default function InventoryDailyBalanceTab({
                                                 position: 'sticky',
                                                 bottom: 0,
                                                 zIndex: 30,
-                                                backgroundColor: isSpecialBg ? '#1E293B' : '#0F172A',
+                                                backgroundColor: isPianoDark ? '#1E293B' : '#0F172A',
                                                 padding: colKey === 'U' ? '6px 4px' : '6px 8px',
                                                 textAlign: 'right',
                                                 color: meta?.color || '#F8FAFC',
@@ -4867,6 +4940,29 @@ export default function InventoryDailyBalanceTab({
                         </div>
                     </div>
                 </div>
+            )}
+        
+            {/* Popover Desplegable Universal de Filtro por Columna (Igual, Diferente, Mayor, Menor, Rango, Blanco, Valores) */}
+            {activeFilterPopover && (
+                <InventoryColumnFilterPopover
+                    colKey={activeFilterPopover.colKey}
+                    colTitle={COLUMN_METADATA[activeFilterPopover.colKey]?.title || `Columna ${activeFilterPopover.colKey}`}
+                    colSign={COLUMN_METADATA[activeFilterPopover.colKey]?.sign}
+                    currentValue={columnFilters[activeFilterPopover.colKey] || ''}
+                    anchorRect={activeFilterPopover.anchorRect}
+                    isOpen={Boolean(activeFilterPopover)}
+                    onClose={() => setActiveFilterPopover(null)}
+                    onApplyFilter={(val) => {
+                        setColumnFilters(prev => ({ ...prev, [activeFilterPopover.colKey]: val }));
+                    }}
+                    onClearFilter={() => {
+                        setColumnFilters(prev => {
+                            const next = { ...prev };
+                            delete next[activeFilterPopover.colKey];
+                            return next;
+                        });
+                    }}
+                />
             )}
         </div>
     );
