@@ -2,7 +2,7 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.368 (Escenarios 383 a 391: Gobernanza Integral de Inventarios, Bifurcación Botánica de Báscula, Supresión Ergonómica de Col J, Desacople de Venta Adicional Post-Corte, Arnés de Calidad e Ingesta Multimodal Anti-Colisión de Planillas Físicas)
+> **Versión:** 1.9.369 (Escenarios 383 a 392: Diccionario Canónico de las 24 Columnas de la Sábana Oficial de Inventarios, Origen Transaccional OPS vs Planillas Físicas IA, Gobernanza de Mermas y Arnés de Calidad)
 > **Fecha:** 4 de Noviembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
@@ -14475,3 +14475,295 @@ Para garantizar que la carga asistida por IA de documentos físicos y las operac
 3. **Endpoint de Extracción:** `POST /api/commercial/inventory/extract-physical-sheet` consumiendo Gemini con heurística de Corabastos y homologación de 663 SKUs.
 4. **Cero Colisión Verificada:** Las escrituras en `inventory_movements` registran `origin_source: 'physical_sheet_ocr'` y respetan el arbitraje de discrepancias sin duplicar compras ni conteos.
 5. **Refresco Reactivo:** Al pulsar `[ Aprobar y Aplicar a la Sábana ]`, las columnas G, T, Q y R se actualizan instantáneamente en la interfaz sin necesidad de recargar la página.
+
+
+---
+
+### Escenario 392: Matriz Maestra de Cruce y Diccionario Canónico de las 24 Columnas de la Sábana Oficial de Balance Diario: Origen Transaccional desde OPS vs Carga Manual / IA (SDD v1.9.369)
+
+#### 1. Propósito Contractual
+Se incorpora de manera íntegra e inmutable al contrato maestro `SPEC.md` el levantamiento forense columna por columna (Columnas A hasta X) de la **Sábana Oficial de Balance Diario de Inventarios** (`/admin/commercial/inventory` — `src/components/InventoryDailyBalanceTab.tsx`), certificando para cada columna su origen exacto cuando la operación proviene de los submódulos digitales de **OPS** (`origin_source = 'ops_system'`), su contraparte en **Carga Manual / Planillas Físicas IA** (`origin_source = 'physical_sheet_ocr'` / `'manual_override'`), las tablas de base de datos involucradas y las ecuaciones de conservación de masa.
+
+---
+
+#### 2. Matriz General de Certificación y Origen de Datos (Columnas A - X)
+
+| Col | Nombre Oficial | Signo | Origen Primaria en OPS (Automático) | Origen en Carga Manual / Planilla Física IA | Tabla / Subtipo en BD (`reference_type`) | Estado SDD |
+| :---: | :--- | :---: | :--- | :--- | :--- | :---: |
+| **A** | **FECHA** | Neutro | Selector global de jornada contable (`balanceDate`). | Fijada por el calendario superior (`YYYY-MM-DD`). | Parámetro de consulta | `[ OK ]` |
+| **B** | **ID PROD** | Neutro | Catálogo Maestro (`products.accounting_id` / `sku`). | Homologación automática IA contra 663 SKUs. | `products.accounting_id` | `[ OK ]` |
+| **C** | **CÉLULA** | Neutro | Célula operativa asignada (`products.inventory_group`). | Heredada del SKU homologado. | `products.inventory_group` | `[ OK ]` |
+| **D** | **PRODUCTO** | Neutro | Nombre canónico y jerarquía Padre `[P]` / Hijo `[H]`. | Texto manuscrito homologado vía fuzzy/trigram. | `products.name`, `parent_id` | `[ OK ]` |
+| **E** | **INV. INICIAL** | $+$ | **Cascada Resiliente ($E_D = T_{D-1}$):** Hereda automáticamente el Conteo Físico ($T$) de la noche anterior o `inventory_stocks` para $D+1$. | **Solo Lectura (Poka-Yoke).** No editable a mano; cualquier ajuste inicial se hace en Col F. | `daily_inventory_closings` / `blind_count` | `[ OK / SDD 376 ]` |
+| **F** | **CORRECCIÓN** | $\pm$ | Ajustes de auditoría de inventario autorizados. | Digitación directa en celda con soporte de fórmulas (`=15+2.5`) y firma de supervisor. | `inventory_movements` (`'correction'`) | `[ OK ]` |
+| **G** | **COMPRAS** | $+$ | **Módulo de Compras (`/ops/compras`):** Sumatoria de todos los lotes comprados en el día por SKU desde la tabla `purchases`. | **Planilla Física `Entrada/` (IA):** Control de llegada de productos en muelle o edición en celda. | `purchases` + `inventory_movements` (`'purchase_reception'`) | `[ DT-12 / SDD 387 ]` |
+| **H** | **VENTA (KG)** | $-$ | **Módulo de Pedidos (`/admin/orders/loading`):** Trigger automático al pasar pedidos a `para_compra` (antes de hora de corte) formulados en Kg puros. | Ajuste manual en Modo Edición si aplica. | `orders` + `order_items` (`unit = 'Kg'`) | `[ OK / SDD 375 ]` |
+| **I** | **VENTA (UND)** | $-$ | **Módulo de Pedidos (`/admin/orders/loading`):** Pedidos en `para_compra` formulados en unidades; muestra el peso equivalente en Kg y micro-badge de unidades/gramaje. | Ajuste manual en Modo Edición si aplica. | `orders` + `order_items` (unidades convertidas a Kg) | `[ OK / SDD 385 ]` |
+| **J** | **PESO VENTA UND** | $-$ | **Suprimida en UI (Integrada en Col I):** Mantiene su cálculo interno para la ecuación de masa ($S$) y exportación Excel World Office. | Transparente (calculada automáticamente desde Col I). | Motor interno / Exportador XLSX | `[ SUPRIMIDA UI / SDD 385 ]` |
+| **K** | **PRODUCTO ESCASO** | $-$ | **Submódulo de Compras (`/ops/compras`):** Única autoridad de escritura (*Single-Write Authority*) cuando hay desabastecimiento en plaza. Picking no duplica este registro. | Edición directa en celda en Modo Edición. | `inventory_movements` (`'order_shortage'`) | `[ OK / SDD 383 ]` |
+| **L** | **PROD. SIN ENVIAR** | $+$ | **Muelle / Despacho (`/ops/rectificacion`):** Pedido alistado que no subió al camión por cancelación o cupo y retorna al stock de bodega. | Edición directa en celda en Modo Edición. | `inventory_movements` (`'order_unshipped'`) | `[ OK ]` |
+| **M** | **VENTA ADICIONAL** | $-$ | **1. Pedidos Post-Corte:** Órdenes para ese día radicadas después de `cutoff_hour_admin`.<br>**2. Picking (`/ops/picking`):** Sobrepeso facturado en productos divisibles (`charge_overweight = true`). | Modal de Venta Adicional o edición en celda en Modo Edición. | `orders` (post-corte) + `inventory_movements` (`'additional_sale'`) | `[ OK / SDD 389 & 390 ]` |
+| **N** | **VENTA NÓMINA** | $-$ | **Venta a Empleados / RRHH:** Consumo o compra interna de colaboradores que viaja automáticamente a deducción de nómina en `/admin/hr`. | Modal de Venta Empleado (con selector de colaborador) o celda N. | `inventory_movements` (`'employee_sale'`) + `hr_payroll` | `[ OK ]` |
+| **O** | **DEVOLUCIONES** | $+$ | **Gestión de Calidad (`/admin/customer-service` - Angie Rivas):** PQR marcada como `Devuelto en Camión (A Bodega)` que tras inspección en Cuarentena se dictamina **Apta**. | **Cable Pelado Exclusivo de Calidad.** No admite digitación libre arbitraria sin trazabilidad PQR. | `customer_service_pqrs` + `inventory_movements` (`'route_return'`) | `[ DT-13 / SDD 388 ]` |
+| **P** | **PESADA** | $-$ | **Alistamiento / Báscula (`/ops/picking`):** Excedente físico de báscula no cobrado al cliente en frutas indivisibles (`charge_overweight = false`, ej. Papaya, Melón). | Edición directa en celda en Modo Edición. | `inventory_movements` (`'waste_weighing'`) | `[ OK / SDD 390 ]` |
+| **Q** | **DESPERDICIO / AVERÍA**| $-$ | **1. Calidad (Angie):** Devolución o lote en Cuarentena dictaminado **No Conforme**.<br>**2. Bodega (`/ops`):** Reporte de avería con foto obligatoria. | **Planilla Física `Desperdicio/` (IA):** Renglones de producto dañado/picado/podrido. | `inventory_movements` (`'waste_damage'`) | `[ OK / SDD 388 & 391 ]` |
+| **R** | **BASURA / DESCAPOTE** | $-$ | **Bodega / Alistamiento (`/ops`):** Merma natural de limpieza, pelado y arreglo con soporte fotográfico. | **Planilla Física `Desperdicio/` (IA):** Renglones de cáscaras (cebolla, yuca), hojas y ramas. | `inventory_movements` (`'waste_cleaning'`) | `[ OK / SDD 391 ]` |
+| **S** | **INV. CALCULADO** | $=$ | **Fórmula Canónica en Tiempo Real:** $S = E + F + G - H - J - K + L - M - N + O - P - Q - R$. | **Solo Lectura (Cálculo Matemático Puro).** | Calculado en memoria / cierre | `[ OK ]` |
+| **T** | **CONTEO FÍSICO** | Físico | **App Bodega (`/ops/inventory`):** Conteo físico a ciegas de fin de turno en estibas (`blind_count`). | **Planilla Física `Inv manual/` (IA):** 6 hojas de conteo físico por categorías o celda T. | `inventory_movements` (`'blind_count'`) | `[ OK / SDD 376 & 391 ]` |
+| **U** | **INV. EN BODEGA** | $=$ | **Saldo Final Disponible:** $U = T + O$ (o fallback a $S$ si aún no hay conteo). Congelado al ejecutar Cierre Diario Oficial. | **Solo Lectura (Cálculo Automático).** | `daily_inventory_closings` | `[ OK ]` |
+| **V** | **FALTANTE** | $-$ | **Descuadre Negativo:** Si $T < S \implies |T - S|$, de lo contrario $0$. | **Solo Lectura (Cálculo Automático).** | Auditoría de cierre | `[ OK ]` |
+| **W** | **SOBRANTE** | $+$ | **Descuadre Positivo:** Si $T > S \implies T - S$, de lo contrario $0$. | **Solo Lectura (Cálculo Automático).** | Auditoría de cierre | `[ OK ]` |
+| **X** | **BANCO ALIMENTOS** | $-$ | **Donaciones / Fundaciones:** Salida social autorizada con acta y evidencia fotográfica. | Edición en celda X o modal de baja social. | `inventory_movements` (`'food_bank'`) | `[ OK ]` |
+
+---
+
+#### 3. Detalle Arquitectónico por Bloques Operativos (Documento de Cruce Incorporado)
+
+# Pipeline de Carga de Inventarios: Sábana Oficial de Balance Diario
+
+**Módulo:** `/admin/commercial/inventory`  
+**Componente Central:** `src/components/InventoryDailyBalanceTab.tsx`  
+**Referencia SDD:** `SPEC.md` — Sección 8, Escenarios 374, 375, 376, 383, 384 y 385 (SDD v1.9.368)  
+**Fecha de Emisión / Actualización:** 2026-11-04  
+
+---
+
+## Estado Oficial de Certificación de Columnas (Semáforo Gemba)
+
+| Columna | Nombre Oficial | Estado | Mecánica y Veredicto Técnico |
+| :---: | :--- | :---: | :--- |
+| **Col E** | **INV. INICIAL (+)** | **`[ OK ]`** | **Certificada.** Hereda canónicamente $E_D = T_{D-1}$ (conteo físico de anoche) y fallback a `inventory_stocks` para fechas futuras ($D+1$). Solo lectura blindada. |
+| **Col F** | **CORRECCIÓN (±)** | **`[ OK ]`** | **Certificada.** Perfectamente formulada para ajustes manuales $+/-$ de descuadre o ingreso extemporáneo. Soporta evaluación de expresiones estilo Excel y firma de auditor. |
+| **Col G** | **COMPRAS (+)** | **`[ DEUDA TÉCNICA DT-12 ]`** | **Canónicamente definida en SDD.** Debe consolidar la sumatoria exacta de todos los lotes de compra del día para cada SKU específico desde la tabla `purchases` (`/ops/compras`), agregando compras fraccionadas (ej. 30 kg + 20 kg = 50 kg), más recepciones manuales en celda. |
+| **Col H** | **VENTA (KG) (-)** | **`[ OK ]`** | **Certificada.** Consolida en tiempo real pedidos en `para_compra` formulados expresamente por kilos puros de peso. |
+| **Col I** | **VENTA (UND) (-)** | **`[ OK ]`** | **Certificada (Optimizada Opción 1).** Consolida el peso total en kilogramos deducido en la cifra superior (`12,80`), y renderiza el micro-badge consolidado por gramaje (`80 und de 160 gr`). |
+| **Col J** | **PESO VENTA UND** | **`[ SUPRIMIDA EN UI ]`** | **Optimizada Lean / SpaceX.** Retirada de la pantalla por redundancia para liberar 95px de ancho útil. Su valor se visualiza en Col I. Preservada en exportador Excel para World Office. |
+| **Col M** | **VENTA ADICIONAL (-)** | **`[ OK / SDD Escenario 389 ]`** | **Renombrada y Canónica.** Su origen son los pedidos para esa fecha que ingresaron con posterioridad al cierre / hora de corte (`cutoff_hour_admin`), más despachos de última hora o mostrador. Descuenta en balance de masa sin contaminar la venta ordinaria en tanda (Cols H e I). |
+| **Col O** | **DEVOLUCIONES (+)** | **`[ CABLE PELADO - CALIDAD (ANGIE) ]`** | **Diseño SDD Escenario 388.** No admite digitación libre en sábana. Su única fuente autorizada será el dictamen de Gestión de Calidad (Angie Rivas): producto conforme reingresa en Col O (+); producto averiado se desvía a Col Q (-). Arnés de integración listo en `inventory_movements` (`route_return`). |
+| **Col P** | **MERMA PESADA (-)** | **`[ OK / SDD Escenario 390 ]`** | **Certificada y Parametrizada.** Absorbe la tolerancia permisible de pesaje no cobrada al cliente para frutas indivisibles de gran calibre (ej. Papaya, Melón) parametrizadas con `charge_overweight = false`. Si el producto sí cobra el excedente (ej. Plátano), el sobrepeso viaja a Col M. |
+| **Cols K, L, N, Q, R, S-X**| **Contingencias, Mermas y Cierre** | *En curso* | En proceso de certificación paso a paso. |
+
+---
+
+## 1. Visión General del Flujo
+
+La **Sábana Oficial de Balance Diario de Inventarios** (23 columnas activas en pantalla, 24 en exportación formal ERP) es la estación de auditoría, control y cuadre financiero-operativo de FruFresco. Opera bajo el **Principio de Conservación de Masa Cerrada**: ningún gramo de alimento desaparece del sistema sin un asiento justificado en el Kardex.
+
+```
++---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+| A | B | C | D | E | F | G | H | I | K | L | M | N | O | P | Q | R | S | T | U | V | W | X |
++---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+|  IDENTIFICADORES  |   BASE   | ENTRADAS|  SALIDAS Y CONTINGENCIAS  | MERMAS| B.MASA| CONCILIACIÓN FÍSICA |
+```
+*(Nota: Col J se ha integrado en Col I en la interfaz para máxima ergonomía visual).*
+
+La información ingresa a través de **tres mecanismos complementarios**:
+1. **Sincronización Automática en Tiempo Real por Triggers de Negocio:**
+   * **Ventas (Cols H, I, J):** Se disparan automáticamente en el momento exacto en que los pedidos pasan a `para_compra` en `/admin/orders/loading`.
+   * **Inventario Inicial (Col E):** Hereda en cascada el **Conteo Físico ($T$) de ayer** sin depender de que alguien recuerde oprimir un botón de cierre.
+2. **Edición Directa en Celda (Estilo Excel Nativo):** Al activar `[ Modo Edición ]`, el supervisor escribe valores numéricos o fórmulas (`=15+2.5*3`), navega con `Enter` / `Tab`, y el sistema inyecta transacciones optimistas firmadas en el Kardex (`[AJUSTE AUTORIZADO - {nombre}]`).
+3. **Carga Masiva por Archivo Excel / ERP (`DailyBalanceExcelImportModal.tsx`):** Ingesta por lote (`.xlsx`) con digestor Poka-Yoke que descarta subtotales amarillos (`FFFF00`) y mapea por `#ID` contable (`accounting_id`).
+
+---
+
+## 2. Diccionario Canónico Columna por Columna (A hasta X)
+
+---
+
+### Bloque I: Identificación y Clasificación (Columnas A - D)
+
+| Col | Nombre en Pantalla | Campo en Código | Origen de Datos (Lectura) | ¿Editable en Celda? | Comportamiento y Reglas |
+| :---: | :--- | :--- | :--- | :---: | :--- |
+| **A** | **FECHA** | `colA_date` | Selector de fecha global (`balanceDate`). Formato `YYYY-MM-DD`. | No | Fijada por el calendario superior. Determina la jornada contable que se audita. |
+| **B** | **ID PROD** | `colB_idProducto` | `products.accounting_id` (fallback a `products.sku`). | No | Identificador contable oficial. Permite el cruce $O(1)$ con el ERP World Office. |
+| **C** | **CÉLULA** | `colC_inventoryGroup` | `products.inventory_group` mapeado a `workCells`. | No | Célula responsable (`Abarrotes`, `Fresas/Moras`, `Frutas`, `Verduras`, `Hortalizas`, `Papas`). Colapsable a icono. |
+| **D** | **PRODUCTO** | `colD_productName` | `products.name` + badges `[P]` (Padre) y `[H]` (Hijo). | No | Nombre canónico. Agrupa las familias en acordeón expandible de calibres y presentaciones. |
+
+---
+
+### Bloque II: Base de Arranque y Ajustes Iniciales (Columnas E - F)
+
+#### Columna E: `INV. INICIAL (+)` — *Estado: `[ OK ]`* — *Regla de Oro: $E_D = T_{D-1}$*
+* **Naturaleza:** Existencia física con la que abre la bodega al inicio de la jornada.
+* **Mecanismo de Carga (Cascada Resiliente SDD Escenario 376):**
+  1. **Prioridad 1 (Cierre Oficial Congelado):** Si en la fecha previa ($D-1$) se ejecutó el Cierre Oficial en `daily_inventory_closings`, lee directamente su snapshot de Col U ($T + O$) o $T$.
+  2. **Prioridad 2 (Conteo Físico Directo en Kardex $T_{D-1}$):** Si no hubo cierre oficial formal, busca en `inventory_movements` el **Conteo Físico ($T$) registrado en la jornada anterior** (`reference_type IN ('blind_count', 'blind_count_shift_close')`). Lo que se contó anoche con las manos y la báscula en estiba es la apertura de hoy.
+  3. **Prioridad 3 (Apertura de Jornada Futura / Mañana):** Si la fecha es de mañana ($D+1$, ej: `05/11/2026`) y aún no se ha contado el fin de turno de hoy, hereda el **stock vivo disponible en bodega (`inventory_stocks`)** para que Compras y Bodega operen sobre existencias reales en lugar de ver guiones vacíos.
+  4. **Prioridad 4 (Reconstrucción Retroactiva):** Para fechas pasadas sin registro de conteo, calcula: $\text{Stock Actual} - \sum \Delta_{\text{posteriores}}$.
+* **¿Editable en Celda?:** **No (Solo Lectura con candado).**
+  > *Regla Poka-Yoke:* El inventario inicial no se altera a mano para no falsear el saldo de apertura. Cualquier descuadre físico se asienta en la **Columna F (Corrección)**.
+
+#### Columna F: `CORRECCIÓN (±)` — *Estado: `[ OK ]`*
+* **Naturaleza:** Ajuste administrativo directo al inventario inicial (admite $+/-$).
+* **Fuente en BD:** `inventory_movements` con `type = 'adjustment'`, `ref = 'correction'`.
+* **Carga en Modo Manual:** Se digita en la celda (ej: `+12.5` o `-4`). Genera asiento en Kardex con firma del auditor: `[AJUSTE AUTORIZADO - {nombre}] Columna F: +12.50`.
+
+---
+
+### Bloque III: Entradas Operativas (Columna G)
+
+#### Columna G: `COMPRAS (+)` — *Estado: `[ DEUDA TÉCNICA DT-12 - SDD Escenario 387 ]`*
+* **Naturaleza:** Mercancía descargada, pesada en muelle o adquirida en Corabastos por el equipo de compras para abastecer la jornada.
+* **Regla Canónica de Negocio:** Es la **sumatoria exacta de lo que se compró ese día para cada SKU específico**.
+  - Si se compran varios lotes intradiarios para el mismo SKU en `/ops/compras` (ej. 30 kg temprano + 20 kg de refuerzo), la celda consolida automáticamente $30 + 20 = 50\text{ kg}$.
+  - Los productos padre totalizan sus compras directas más las compras de todos sus calibres hijos.
+* **Fuentes en BD:**
+  1. Tabla transaccional `purchases` (`quantity`) vinculada a `procurement_tasks` (`delivery_date = balanceDate`).
+  2. Ajustes/recepciones manuales en `inventory_movements` con `type = 'entry'` y `ref = 'purchase_reception'`.
+* **Carga:** Automática cuando el comprador registra la transacción en `/ops/compras`, sumando además cualquier ajuste manual autorizado en celda G.
+
+---
+
+### Bloque IV: Salidas Comerciales (Columnas H, I) — *Trigger: Paso a `para_compra`*
+
+#### Columna H: `VENTA (KG) (-)` — *Estado: `[ OK ]`*
+* **Naturaleza:** Demanda comercial consolidada para productos vendidos expresamente por **Kilogramos puros** (peso estándar).
+* **Mecanismo de Carga (Sincronización en Tiempo Real SDD Escenario 375 y 383):**
+  * **El Trigger:** En `/admin/orders/loading`, al confirmar el envío a operación y transicionar los pedidos a **`para_compra`** (Punto de No Retorno).
+  * **La Sumatoria:** Suma automáticamente todos los `order_items` de los pedidos formulados en kilos estándar. Si no hay pedidos en kilos puros, muestra guión neutro (`-`).
+  * **Modo Manual:** El supervisor puede ingresar o ajustar cantidades directamente en celda si hay salidas adicionales no contempladas en pedidos.
+
+#### Columna I: `VENTA (UND) (-)` — *Estado: `[ OK ]` (Consolidada Opción 1)*
+* **Naturaleza:** Salidas facturadas bajo especificación de unidades (bandejas, atados, paquetes, cubetas, o frutas formuladas por unidades de gramaje específico, ej. 80 bananos de 160 gr).
+* **Mecánica de Consolidación (SDD Escenario 385):**
+  * **Cifra Numérica Principal:** Muestra directamente el **peso equivalente en kilogramos** (ej. `12,80` Kg) que efectivamente descuenta del balance contable de masa ($S$).
+  * **Micro-Badges de Presentación:** Muestra de forma compacta el número de piezas físicas y el calibre/gramaje consolidado (ej. `80 und de 160 gr`).
+  * **Borde Reforzado:** Cuenta con borde separador derecho (`2px solid #334155`) al concluir el bloque comercial.
+
+#### Columna J: `PESO VENTA UND` — *Estado: `[ SUPRIMIDA DE PANTALLA / PRESERVADA EN EXCEL ERP ]`*
+* **Razón de la Optimización:** En pantallas operativas generaba redundancia visual respecto a Columna I. Se eliminó de la interfaz para ganar 95px de amplitud útil.
+* **Resguardo ERP:** Se mantiene en la exportación a Excel para cuadre con sistemas legacy (World Office).
+
+---
+
+### Bloque V: Contingencias Operativas de Pedidos (Columnas K - O)
+
+| Col | Título | Signo | Causa Operativa | Fuente en BD (`reference_type`) |
+| :---: | :--- | :---: | :--- | :--- |
+| **K** | **PRODUCTO ESCASO** | $-$ | Pedidos aprobados que no se despacharon por quiebre de stock en bodega. | `'order_shortage'` |
+| **L** | **PROD. SIN ENVIAR** | $+$ | Pedido que fue empacado pero no salió a ruta (cancelación o cupo) y reingresa a stock. | `'order_unshipped'` |
+| **M** | **VENTA ADICIONAL** | $-$ | Pedidos para la fecha que ingresan con posterioridad a la hora de corte o ventas de emergencia. | `'additional_sale'` *(o pedidos post-corte SDD 389)* |
+| **N** | **VENTA ADICIONAL EMPLEADO** | $-$ | Venta interna al personal liquidada con deducción automática de nómina. | `'employee_sale'` (viaja a `/admin/hr`) |
+| **O** | **DEVOLUCIONES** | $+$ | Mercancía devuelta por rutas que ingresa a Cuarentena y recibe dictamen favorable de Calidad. | `'route_return'` *(Arnés exclusivo Gestión de Calidad - Angie)* |
+
+#### Gobernanza de la Columna M (Venta Adicional - SDD Escenario 389):
+* **Naturaleza:** Salida comercial por pedidos extemporáneos o ampliaciones de emergencia que ingresan para esa fecha de entrega **después de la hora de corte** (`cutoff_hour_admin`, 20:00 / 8:00 PM de la víspera).
+* **Conexión con el Módulo de Pedidos:**
+  - Los pedidos radicados antes o a la hora de corte son la **Venta Ordinaria en Tanda** y alimentan **Col H (`VENTA (KG)`)** y **Col I (`VENTA (UND)`)**.
+  - Los pedidos radicados con posterioridad al corte para esa misma fecha de entrega se enrutan determinísticamente a la **Columna M (`VENTA ADICIONAL`)**.
+* **Impacto en Balance de Masa:** Descuenta de forma segregada en la ecuación canónica:
+  $$S = E + F + G - \underbrace{(H + I)}_{\text{Venta Ordinaria}} - K + L - \underbrace{M}_{\text{Venta Adicional}} - N + O - P - Q - R$$
+  evitando alterar o romper los consolidados de compra y picking de la tanda principal.
+
+#### Gobernanza de la Columna O (Cable Pelado - Gestión de Calidad - SDD Escenario 388):
+* **Principio de Inocuidad:** Ningún producto devuelto reingresa directamente al stock vendible sin inspección física de Calidad liderada por **Angie Rivas**.
+* **Bifurcación Determinista en Cuarentena:**
+  - **Apto / Fresco:** Calidad emite dictamen favorable $\to$ Asiento en arnés de **Columna O (`DEVOLUCIONES (+)`)** para sumar al balance disponible ($S$).
+  - **No Conforme / Dañado:** Calidad emite dictamen de baja $\to$ Se desvía automáticamente a la **Columna Q (`DESPERDICIO / AVERÍA (-)`)**.
+* **Arnés de Integración (`inventory_movements`):**
+  - `type: 'entry'`, `reference_type: 'route_return'`, `reference_id: pqr_id / inspection_id`, `notes: '[DICTAMEN CALIDAD - Angie Rivas] Reingreso conforme...'`.
+* **Estado:** Cable pelado listo en base de datos y sábana para conectarse apenas se diseñe la pantalla de Gestión de Calidad con Angie.
+
+---
+
+### Bloque VI: Mermas y Pérdidas de Bodega (Columnas P, Q, R)
+
+#### Columna P: `MERMA POR PESADA (-)` — *Estado: `[ OK / SDD Escenario 390 ]`*
+* **Naturaleza:** Salida por tolerancia de empaque y desbalance técnico de báscula no facturado al cliente.
+* **Bifurcación Botánica por SKU (`products.charge_overweight`):**
+  - **Productos Indivisibles (Papaya, Melón, Sandía, Ahuyama entera — `charge_overweight = false`):**
+    Por imposibilidad de cortar la fruta en alistamiento, si se piden 50 kg y se pesan 51 kg, los 50 kg se cobran al cliente y el kilogramo excedente (+1 kg) se asienta automáticamente en la **Columna P (`PESADA (-)`)** como merma de pesaje asumida por FruFresco.
+  - **Productos a Granel Divisibles (Plátano, Papa, Tomate — `charge_overweight = true`):**
+    Cada gramo adicional se factura en la remisión del cliente y su excedente viaja a la **Columna M (`VENTA ADICIONAL (-)`)**, dejando la Columna P intacta.
+* **Fuente en BD:** `inventory_movements` con `type = 'exit'` y `reference_type = 'waste_weighing'`.
+* **Impacto en Balance de Masa:** Garantiza que los kilogramos físicos totales salidos de bodega (ej. $50 + 1 = 51\text{ kg}$) queden perfectamente justificados en el Kardex ($S = E + F + G - \text{Venta} - \mathbf{P} \dots$).
+
+#### Columna Q: `DESPERDICIO / AVERÍA (-)`
+* **Naturaleza:** Producto descompuesto, sobremaduro o dañado.
+* **Gobernanza:** Exige soporte fotográfico obligatorio cuando se registra vía `InventoryWasteModal.tsx`.
+
+#### Columna R: `BASURA / DESCAPOTE (-)`
+* **Naturaleza:** Masa retirada en limpieza, pelado o embellecimiento (hojas exteriores, coronas, tallos). Exige foto obligatoria.
+
+---
+
+### Bloque VII: Ecuación de Masa y Balance Teórico (Columna S)
+
+#### Columna S: `INVENTARIO CALCULADO`
+* **Naturaleza:** **Ecuación Canónica de Conservación de Masa.**
+* **¿Editable en Celda?:** **No (Cálculo Matemático Puro).**
+* **Fórmula en Tiempo Real:**
+  $$\mathbf{S} = \mathbf{E} + \mathbf{F} + \mathbf{G} - \mathbf{H} - \mathbf{J} - \mathbf{K} + \mathbf{L} - \mathbf{M} - \mathbf{N} + \mathbf{O} - \mathbf{P} - \mathbf{Q} - \mathbf{R}$$
+* Representa matemáticamente los kilogramos exactos que **deberían existir físicamente en las estibas de bodega** al procesar todas las entradas, ventas y mermas.
+
+---
+
+### Bloque VIII: Conciliación Física, Descuadres y Cierre (Columnas T - X)
+
+#### Columna T: `CONTEO AGREGADO (FÍSICO)`
+* **Naturaleza:** Lo que realmente se contó con las manos y la báscula en el piso de la bodega al final del turno.
+* **Origen:** Conteo ciego desde la tablet de bodega (`/ops/inventory` con `[BLIND_COUNT_META]`) o digitado en la celda T por el supervisor.
+* **Impacto Vital:** Este valor se convierte al día siguiente en el **Inventario Inicial (Columna E de $D+1$)**.
+
+#### Columna U: `INVENTARIO EN BODEGA (DEVOLUCIONES)`
+* **Naturaleza:** Saldo final disponible en bodega tras sumar las devoluciones recibidas de los camiones:
+  $$\mathbf{U} = \mathbf{T} + \mathbf{O} \quad (\text{o fallback a } S \text{ si no hubo conteo físico})$$
+* Este es el valor que congela el botón de **Cierre Diario Oficial** en `daily_inventory_closings`.
+
+#### Columna V: `FALTANTE`
+* **Naturaleza:** Pérdida no registrada o descuadre negativo de bodega:
+  $$\text{Si } T < S \implies |T - S|, \quad \text{de lo contrario } 0$$
+
+#### Columna W: `SOBRANTE`
+* **Naturaleza:** Mercancía física sobrante sin soporte contable o remisión no cargada:
+  $$\text{Si } T > S \implies T - S, \quad \text{de lo contrario } 0$$
+
+#### Columna X: `BANCO DE ALIMENTOS`
+* **Naturaleza:** Salida por donación a fundaciones o banco de alimentos con acta o soporte fotográfico.
+
+---
+
+## 3. Resumen de Flujos Consolidados
+
+```mermaid
+flowchart LR
+    subgraph AYER["Jornada Ayer (D-1)"]
+        T_AYER["Columna T: Conteo Fisico<br/>(Contado en estiba)"]
+    end
+
+    subgraph HOY["Jornada Hoy (D)"]
+        E_HOY["Columna E: Inv. Inicial<br/>(Hereda exactamente T de ayer)"]
+        G_HOY["Columna G: Compras<br/>(Recepcion muelle)"]
+        
+        PEDIDOS["Pedidos en para_compra<br/>(Lanzamiento operativo)"] -->|Trigger en tiempo real| H_HOY["Columna H/J: Ventas<br/>(Suma total de order_items)"]
+        
+        S_HOY["Columna S: Inv. Calculado<br/>(S = E + G - H ...)"]
+        T_HOY["Columna T: Conteo Fisico Fin de Turno"]
+        DESCUADRE["Cols V y W: Faltante / Sobrante<br/>(Diferencia T vs S)"]
+    end
+
+    subgraph MANANA["Jornada Mañana (D+1)"]
+        E_MANANA["Columna E: Inv. Inicial<br/>(Hereda T de hoy)"]
+    end
+
+    T_AYER ==>|Regla E_D = T_{D-1}| E_HOY
+    E_HOY --> S_HOY
+    G_HOY --> S_HOY
+    H_HOY --> S_HOY
+    S_HOY --> DESCUADRE
+    T_HOY --> DESCUADRE
+    T_HOY ==>|Regla E_{D+1} = T_D| E_MANANA
+```
+
+---
+
+## 4. Registro de Pendientes, Deudas Técnicas y Cables Pelados de la Sábana
+
+| Referencia | Tipo | Módulo / Columna | Resumen del Requerimiento de Gemba | Estado / Acuerdo |
+| :---: | :---: | :--- | :--- | :---: |
+| **RFC-INV-01**<br>*(Escenario 384)* | 📋 **RFC / Feature** | **Modo Edición / Precios del Día** | Traer el módulo de extracción OCR/multimodal de PDF y WhatsApp (usado en carga de pedidos) hacia el Modo Edición de Inventarios para cargar ágilmente la lista de *"Precios del Día"* sin digitación manual. | ⏳ Pendiente priorización |
+| **Escenario 391**<br>*(SDD v1.9.368)* | 📷 **Feature Clave Gemba** | **Modo Edición / Planillas Físicas** | Ingesta Multimodal (Fotos/PDF) de las 3 planillas físicas de bodega (`Doc inventario`: Entrada $\to$ Col G, Inv manual $\to$ Col T, Desperdicio $\to$ Col Q/R). Incluye visor lado a lado, staging de reconciliación y protocolo de 4 reglas de no colisión con OPS (`origin_source = 'physical_sheet_ocr'`). | 🟢 Especificado en SDD |
+| **DT-12**<br>*(Escenario 387)* | 🔴 **Deuda Técnica P1** | **Columna G: `COMPRAS (+)`** | Consolidar la sumatoria exacta de compras de plaza desde la tabla `purchases` (`/ops/compras`) por SKU específico ($\sum Q_i$), agregando compras fraccionadas intradiarias (ej. 30 kg + 20 kg = 50 kg) más entradas manuales en celda. | ⏳ Pendiente implementación |
+| **DT-13**<br>*(Escenario 388)* | 🔴 **Cable Pelado P1** | **Columna O: `DEVOLUCIONES (+)`**<br>*(y Columna Q)* | Ingesta exclusiva desde el Módulo de Gestión de Calidad (**Angie Rivas**). Toda devolución entra a Cuarentena de patio: si Angie dictamina producto conforme reingresa en Col O (+); si dictamina avería se desvía a Col Q (-). Arnés de integración `QualityReturnHarnessPayload` congelado en base de datos listo para codiseñar pantalla con Angie. | 🔌 Cable Pelado Congelado |
+
+
