@@ -100,6 +100,8 @@ interface ProductItem {
     base_price?: number;
     parent_id?: string | null;
     is_active?: boolean;
+    weight_kg?: number | null;
+    web_conversion_factor?: number | null;
     inventory_stocks?: {
         id?: string;
         warehouse_id?: string;
@@ -475,6 +477,7 @@ export default function InventoryDailyBalanceTab({
 
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [movements, setMovements] = useState<RawMovement[]>([]);
+    const [committedSalesMap, setCommittedSalesMap] = useState<Map<string, number>>(new Map());
     const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
 
     // Modales de apoyo
@@ -763,6 +766,7 @@ export default function InventoryDailyBalanceTab({
                     .from('products')
                     .select(`
                         id, name, sku, accounting_id, unit_of_measure, category, inventory_group, parent_id, is_active,
+                        weight_kg, web_conversion_factor,
                         inventory_stocks (id, warehouse_id, quantity)
                     `)
                     .eq('is_active', true)
@@ -812,6 +816,46 @@ export default function InventoryDailyBalanceTab({
 
             if (movErr) throw movErr;
             setMovements((movData as any) || []);
+
+            // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (para_compra, approved, picking, shipped, delivered)
+            try {
+                const { data: launchedOrders, error: ordersErr } = await supabase
+                    .from('orders')
+                    .select('id')
+                    .eq('delivery_date', balanceDate)
+                    .in('status', ['para_compra', 'approved', 'picking', 'shipped', 'delivered']);
+
+                if (ordersErr) throw ordersErr;
+
+                const launchedOrderIds = (launchedOrders || []).map(o => o.id);
+                const salesMap = new Map<string, number>();
+
+                if (launchedOrderIds.length > 0) {
+                    const batchSize = 100;
+                    for (let i = 0; i < launchedOrderIds.length; i += batchSize) {
+                        const batch = launchedOrderIds.slice(i, i + batchSize);
+                        const { data: items, error: itemsErr } = await supabase
+                            .from('order_items')
+                            .select('product_id, quantity')
+                            .in('order_id', batch);
+
+                        if (itemsErr) {
+                            console.warn('Error cargando order_items de tanda lanzada:', itemsErr);
+                            break;
+                        }
+
+                        (items || []).forEach(it => {
+                            if (!it.product_id) return;
+                            const prevQty = salesMap.get(it.product_id) || 0;
+                            salesMap.set(it.product_id, prevQty + (Number(it.quantity) || 0));
+                        });
+                    }
+                }
+                setCommittedSalesMap(salesMap);
+            } catch (salesErr) {
+                console.warn('Error calculando ventas comprometidas de órdenes:', salesErr);
+                setCommittedSalesMap(new Map());
+            }
         } catch (err: any) {
             console.error('Error cargando balance diario de inventario:', err);
         } finally {
@@ -894,6 +938,18 @@ export default function InventoryDailyBalanceTab({
             const evidenceX: string[] = [];
 
             const isUnit = ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes((p.unit_of_measure || '').toLowerCase());
+
+            // Venta del día (Comprometida por lanzamiento de tanda de pedidos para_compra)
+            const launchedQty = committedSalesMap.get(p.id) || 0;
+            if (launchedQty > 0) {
+                if (isUnit) {
+                    i_salesUnits += launchedQty;
+                    const unitWeight = Number(p.weight_kg) || 1;
+                    j_weightSalesUnits += (launchedQty * unitWeight);
+                } else {
+                    h_salesKg += launchedQty;
+                }
+            }
 
             dayMovs.forEach(m => {
                 const rawQty = Math.abs(Number(m.quantity) || 0);
@@ -1053,7 +1109,7 @@ export default function InventoryDailyBalanceTab({
                 evidencePhotosX: evidenceX
             };
         });
-    }, [balanceDate, products, movements, previousClosingMap, costMatrixMap]);
+    }, [balanceDate, products, movements, previousClosingMap, costMatrixMap, committedSalesMap]);
 
     // Agrupamiento Jerárquico Padre - Hijo (Familias de Inventario tipo Kardex)
     const dailyFamilies: DailyFamily[] = useMemo(() => {
