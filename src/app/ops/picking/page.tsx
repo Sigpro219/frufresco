@@ -1356,7 +1356,7 @@ export default function PickingExecutionPage() {
 
                         {!isQuantityValidated ? (() => {
                             const qtyNum = parseFloat(exceptionQty);
-                            const isQtyInvalid = isNaN(qtyNum) || qtyNum < 0 || qtyNum > (exceptionItem.available_stock || 0);
+                            const isQtyInvalid = isNaN(qtyNum) || qtyNum < 0;
                             return (
                                 /* PHASE 1: QUANTITY VALIDATION - Mobile stacked layout */
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>

@@ -88,6 +88,7 @@ import InventoryPayrollModal from '@/components/InventoryPayrollModal';
 import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSalesModal';
 import DailyBalanceExcelImportModal from '@/components/DailyBalanceExcelImportModal';
 import FastPlazaPurchasesModal from '@/components/FastPlazaPurchasesModal';
+import PhysicalSheetIngestModal from '@/components/PhysicalSheetIngestModal';
 import { InventoryColumnFilterPopover } from './InventoryColumnFilterPopover';
 
 interface ProductItem {
@@ -596,6 +597,7 @@ interface CommittedSaleData {
 
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [movements, setMovements] = useState<RawMovement[]>([]);
+    const [opsPurchasesMap, setOpsPurchasesMap] = useState<Map<string, number>>(new Map());
     const [committedSalesMap, setCommittedSalesMap] = useState<Map<string, CommittedSaleData>>(new Map());
     const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
 
@@ -604,6 +606,7 @@ interface CommittedSaleData {
     const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
     const [isAdditionalSalesModalOpen, setIsAdditionalSalesModalOpen] = useState(false);
     const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState(false);
+    const [isPhysicalSheetModalOpen, setIsPhysicalSheetModalOpen] = useState(false);
     const [isFastPlazaModalOpen, setIsFastPlazaModalOpen] = useState(false);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
@@ -959,6 +962,48 @@ interface CommittedSaleData {
             if (movErr) throw movErr;
             setMovements((movData as any) || []);
 
+            // 2.1 Cargar compras transaccionales del día desde /ops/compras (DT-12 — Escenario 387)
+            try {
+                const { data: dayTasks } = await supabase
+                    .from('procurement_tasks')
+                    .select('id, product_id, total_purchased')
+                    .eq('delivery_date', balanceDate);
+
+                const taskIds = (dayTasks || []).map(t => t.id).filter(Boolean);
+                const purMap = new Map<string, number>();
+
+                if (taskIds.length > 0) {
+                    const { data: dayPurchases } = await supabase
+                        .from('purchases')
+                        .select('product_id, quantity')
+                        .in('task_id', taskIds);
+
+                    if (dayPurchases && dayPurchases.length > 0) {
+                        dayPurchases.forEach(pur => {
+                            if (!pur.product_id) return;
+                            const q = Number(pur.quantity) || 0;
+                            if (q > 0) {
+                                purMap.set(pur.product_id, (purMap.get(pur.product_id) || 0) + q);
+                            }
+                        });
+                    }
+                }
+
+                // Fallback complementario: si una tarea tiene total_purchased > 0 pero sin desglose en purchases
+                (dayTasks || []).forEach(t => {
+                    if (!t.product_id) return;
+                    const taskPurchased = Number(t.total_purchased) || 0;
+                    if (taskPurchased > 0 && !purMap.has(t.product_id)) {
+                        purMap.set(t.product_id, taskPurchased);
+                    }
+                });
+
+                setOpsPurchasesMap(purMap);
+            } catch (purErr) {
+                console.warn('Error cargando compras de /ops/compras en balance diario:', purErr);
+                setOpsPurchasesMap(new Map());
+            }
+
             // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (para_compra, approved, picking, shipped, delivered)
             try {
                 const { data: launchedOrders, error: ordersErr } = await supabase
@@ -1192,6 +1237,8 @@ interface CommittedSaleData {
                 }
             }
 
+            let hasManualOrSheetPurchaseOverride = false;
+
             dayMovs.forEach(m => {
                 const rawQty = Math.abs(Number(m.quantity) || 0);
                 const signedQty = Number(m.quantity) || 0;
@@ -1204,6 +1251,9 @@ interface CommittedSaleData {
                 // G: Compra del día (+)
                 else if (m.type === 'entry' && (ref === 'purchase_reception' || ref === 'purchase' || ref === 'entry')) {
                     g_purchases += rawQty;
+                    if ((m.notes || '').includes('AJUSTE AUTORIZADO') || (m.notes || '').includes('PHYSICAL_SHEET_OCR')) {
+                        hasManualOrSheetPurchaseOverride = true;
+                    }
                 }
                 // H: Venta del día KG (-) & I/J: Venta UN
                 else if (m.type === 'exit' && (ref === 'order_item' || ref === 'sale' || ref === 'dispatch')) {
@@ -1272,6 +1322,11 @@ interface CommittedSaleData {
                     physicalCount = resolvedCount !== null ? resolvedCount : currentStock;
                 }
             });
+
+            // DT-12 (SDD Escenario 387): Si no hay override manual o de planilla física en Col G, sumar las compras transaccionales de /ops/compras
+            if (!hasManualOrSheetPurchaseOverride) {
+                g_purchases += (opsPurchasesMap.get(p.id) || 0);
+            }
 
             // Inventario Inicial (Col E):
             // 1. Si existe Cierre Oficial previo (D-1), se hereda su saldo de Columna U (Inventario en bodega [devoluciones]) de forma inmutable
@@ -1358,7 +1413,34 @@ interface CommittedSaleData {
                 evidencePhotosX: evidenceX
             };
         });
-    }, [balanceDate, products, movements, previousClosingMap, costMatrixMap, committedSalesMap]);
+    }, [balanceDate, products, movements, opsPurchasesMap, previousClosingMap, costMatrixMap, committedSalesMap]);
+
+    // Mapa en vivo para arbitraje Anti-Colisión OPS en Lector Multimodal de Planillas Físicas (SDD Escenario 391)
+    const opsCurrentByProductAndCol = useMemo(() => {
+        const map = new Map<string, { G: number; T: number; Q: number; R: number }>();
+        dailyRows.forEach(r => {
+            map.set(r.productId, {
+                G: r.colG_purchases || 0,
+                T: r.colT_physicalCount ?? 0,
+                Q: r.colQ_damageWaste || 0,
+                R: r.colR_cleaningWaste || 0
+            });
+        });
+        return map;
+    }, [dailyRows]);
+
+    const catalogForPhysicalModal = useMemo(() => {
+        return products.map(p => ({
+            id: p.id,
+            name: p.name,
+            sku: p.sku || '',
+            accounting_id: p.accounting_id !== null && p.accounting_id !== undefined ? String(p.accounting_id) : null,
+            unit_of_measure: p.unit_of_measure || 'Kg',
+            category: p.category,
+            inventory_group: p.inventory_group || undefined,
+            parent_id: p.parent_id
+        }));
+    }, [products]);
 
     // Agrupamiento Jerárquico Padre - Hijo (Familias de Inventario tipo Kardex)
     const dailyFamilies: DailyFamily[] = useMemo(() => {
@@ -4309,6 +4391,30 @@ interface CommittedSaleData {
                                         <Upload size={12} color="#1D4ED8" strokeWidth={2.2} />
                                         <span>Cargar Excel</span>
                                     </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPhysicalSheetModalOpen(true)}
+                                        style={{
+                                            padding: '0 0.65rem',
+                                            height: '100%',
+                                            borderRadius: '4px',
+                                            border: 'none',
+                                            background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
+                                            color: '#92400E',
+                                            fontSize: '0.70rem',
+                                            fontWeight: '800',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title="Cargar Planillas Físicas de Bodega (Entrada, Conteo Físico, Desperdicio) con IA y Arbitraje OPS"
+                                    >
+                                        <Sparkles size={12} color="#B45309" strokeWidth={2.4} />
+                                        <span>Cargar Planillas Físicas (IA)</span>
+                                    </button>
                                 </div>
 
                                 <div style={{ width: '1px', height: '16px', backgroundColor: '#CBD5E1', margin: '0 1px' }} />
@@ -5263,6 +5369,20 @@ interface CommittedSaleData {
                 </div>
             )}
         
+            {/* Modal de Ingesta Multimodal de Planillas Físicas de Bodega con Arbitraje OPS (SDD Escenario 391) */}
+            <PhysicalSheetIngestModal
+                isOpen={isPhysicalSheetModalOpen}
+                onClose={() => setIsPhysicalSheetModalOpen(false)}
+                balanceDate={balanceDate}
+                catalog={catalogForPhysicalModal}
+                opsCurrentByProductAndCol={opsCurrentByProductAndCol}
+                supervisorName={profile?.contact_name || user?.email || 'Supervisor Inventarios'}
+                onSuccess={() => {
+                    loadDailyData(true);
+                    notify('Planilla física procesada y aplicada a la sábana con éxito.', 'success');
+                }}
+            />
+
             {/* Popover Desplegable Universal de Filtro por Columna (Igual, Diferente, Mayor, Menor, Rango, Blanco, Valores) */}
             {activeFilterPopover && (
                 <InventoryColumnFilterPopover
