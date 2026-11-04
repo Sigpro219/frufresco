@@ -14,7 +14,7 @@ Con la certificación de las **76 pantallas físicas** del ecosistema FruFresco 
 
 ---
 
-## 2. Tablero Maestro Unificado de Deuda Técnica Activa (`DT-01` a `DT-10`)
+## 2. Tablero Maestro Unificado de Deuda Técnica Activa (`DT-01` a `DT-11`)
 
 | ID | Prioridad | Módulo / Dominio | Hallazgo Técnico y Operativo | Archivos / Tablas Clave | Esfuerzo Estimado | Estado |
 | :---: | :---: | :--- | :--- | :--- | :---: | :---: |
@@ -25,6 +25,7 @@ Con la certificación de las **76 pantallas físicas** del ecosistema FruFresco 
 | **DT-08** *(Ex DT-17)* | 🟢 **P3** (Consola / Maps) | **Georreferenciación Google Maps** | **Migración de `google.maps.Marker` a `AdvancedMarkerElement`:**<br>Reemplazar el marcador clásico (que emite *Deprecation Warning* en consola) por `AdvancedMarkerElement` / `<AdvancedMarker>` con `mapId` en los 7 archivos que renderizan mapas. | `ClientsModule.tsx`, `EmailDraftsModule.tsx`, `CommercialUnifiedDashboard.tsx`, `LeadGenBot.tsx`, `GeofencingManager.tsx`, `orders/create`, `orders/loading` | **~25 min** | ⏳ Pendiente |
 | **DT-09** *(Ex DEBT-005)* | 🟢 **P3** (Ergonomía Piso) | **Pantallas Operativas Muelle/Picking** | **Selector "Modo Gemba Limpio" vs. "Modo Analítico":**<br>Interruptor en cabecera de `/ops/picking/dashboard` y `/admin/orders/loading` para simplificar la vista del operario de piso a fuentes grandes y 3 datos clave. | `src/app/ops/picking/dashboard/page.tsx`, `src/app/admin/orders/loading/page.tsx` | **~30 min** | ⏳ Pendiente |
 | **DT-10** *(Ex DT-18)* | 🟢 **P3** (Ingeniería Lean) | **Cubicaje de Canastillas y Muelle** | **Densidad Volumétrica Botánica por SKU y Alerta de Apilamiento:**<br>Pasar del divisor fijo `12.5 kg/canastilla` al factor botánico (`density_factor_kg_per_crate`: 6-8 kg hojas vs. 18-22 kg tubérculos) y alerta cuando una bahía supere 24 canastillas (4 niveles). | `products`, `src/lib/orderUtils.ts`, `src/app/admin/orders/loading/page.tsx` | **~35 min** | ⏳ Estratégica |
+| **DT-11** | 🔴 **P1** (Costos & NIC 2) | **Compras a Matriz de Costos & Kardex** (`/ops/compras` $\to$ `commercial_cost_matrix` & `InventoryUnifiedDashboard`) | **Cálculo Reactivo de Costo Promedio Ponderado Diario (PPP) en Compras Multi-Lote:**<br>Al comprar en Corabastos a través de `/ops/compras`, el `unit_price` se guarda en `purchases`, pero no alimenta reactivamente `commercial_cost_matrix.manual_cost`. Al existir múltiples compras del mismo SKU en el mismo día a diferentes precios, se requiere consolidar el Promedio Ponderado Diario ($\text{PPP} = \frac{\sum Q_i \cdot P_i}{\sum Q_i}$) como costo canónico del día para la matriz de costos, valorización de inventario físico (NIC 2 / IAS 2) y margen bruto real en Torre de Control. | `src/app/ops/compras/page.tsx`, `commercial_cost_matrix`, `purchases`, `src/lib/pricingUtils.ts`, `src/components/InventoryUnifiedDashboard.tsx` | **~35 min** | ⏳ Pendiente |
 
 ---
 

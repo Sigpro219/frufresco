@@ -14201,3 +14201,41 @@ Bajo los principios de ingeniería Lean y el algoritmo de simplificación de Spa
    - En el pie de totales de la sábana, la columna `I` totaliza la masa total en kilogramos correspondiente a las unidades vendidas (ej. `27,05 Kg`).
 4. **Resguardo de Compatibilidad Contable (World Office / Excel Export):**
    - En el exportador formal a Excel, se mantienen las 24 columnas separadas para preservar 100% de compatibilidad con auditorías externas y sistemas ERP legacy.
+
+
+---
+
+### Escenario 386: Deuda Técnica DT-11: Ingesta Reactiva de Costos por Promedio Ponderado Diario (PPP) desde `/ops/compras` hacia `commercial_cost_matrix` y Valorización de Inventario (NIC 2 / IAS 2) (SDD v1.9.362)
+
+#### 1. Diagnóstico de Gemba y Brecha Contable
+- **Given** la operación real en plaza mayorista (Corabastos / bodegas satélite) capturada en `/ops/compras` donde un comprador registra adquisiciones fraccionadas de un mismo SKU a lo largo del turno (ej. Compra 1: $30\text{ kg}$ de Plátano a $\$3.200/\text{kg}$; Compra 2: $20\text{ kg}$ a $\$3.500/\text{kg}$ por encarecimiento intradiario):
+  1. Actualmente, `/ops/compras` persiste cada transacción en la tabla `purchases` (`quantity`, `unit_price`, `total_cost`), pero **no sincroniza automáticamente** el costo unitario hacia `commercial_cost_matrix.manual_cost`.
+  2. Si el sistema tomara una compra aislada o sobreescribiera ciegamente con la última compra registrada (LIFO tácito en UI), distorsionaría el margen comercial y violaría el principio de prudencia contable.
+  3. Si la matriz depende exclusivamente de una carga manual en Excel, el inventario físico y la sábana de balance (`InventoryDailyBalanceTab.tsx` / `InventoryUnifiedDashboard.tsx`) operan desfasados de la realidad económica del día.
+
+#### 2. Regla Canónica de Promedio Ponderado Diario (PPP)
+- **When** se confirma o actualiza una compra en `/ops/compras` (`handleSavePurchase`):
+- **Then** el sistema define como deuda técnica contractual (**DT-11**) la implementación del pipeline de agregación intradiaria bajo las siguientes invariantes:
+  1. **Fórmula Matemática Canónica (NIC 2 / IAS 2 - Inventarios):**
+     Para un producto $p$ y fecha de operación $d$, el costo base oficial es el Costo Promedio Ponderado (PPP):
+     $$\text{PPP}_{p, d} = \frac{\sum_{i=1}^{n} (\text{quantity}_{i} \times \text{unit\_price}_{i})}{\sum_{i=1}^{n} \text{quantity}_{i}} = \frac{\sum \text{total\_cost}_{i}}{\sum \text{quantity}_{i}}$$
+  2. **Pipeline de Ingesta Reactiva:**
+     - Al guardar la compra $i$, una función de cálculo (Trigger / RPC de Supabase o mutación en `/ops/compras`) consulta todas las compras activas de ese SKU para la fecha $d$.
+     - Computa $\text{PPP}_{p, d}$ redondeado a 2 decimales.
+     - Realiza un `upsert` atómico en `commercial_cost_matrix` para el `product_id` correspondiente con:
+       - `manual_cost = PPP_{p, d}`
+       - `effective_date = d`
+       - `updated_at = now()`
+       - `notes = 'Calculado reactivamente vía PPP diario desde /ops/compras (DT-11)'`
+  3. **Propagación en Cascada (Downstream Consumers):**
+     - **Valorización de Stock (`InventoryUnifiedDashboard.tsx`):**
+       $$\text{Valor del Inventario Físico} = \text{Stock Final (Col S / T)} \times \text{PPP}_{p, d}$$
+     - **Modelo de Precios Dinámicos (`pricing_model_prices`):**
+       Los márgenes fijados por lista de precios (Institucional, Clientes VIP, etc.) recalculan sus precios de venta sugeridos tomando el nuevo costo base $\text{PPP}_{p, d}$, absorbiendo las fluctuaciones reales de Corabastos.
+     - **Margen Real en Torre de Control:**
+       La rentabilidad bruta intradiaria se liquida contra el $\text{PPP}_{p, d}$ consolidado y no contra supuestos teóricos.
+
+#### 3. Criterios de Aceptación Contractual (Definition of Done)
+1. **Consistencia Cero-División:** Si $\sum \text{quantity}_i = 0$, el costo no se altera ni genera `NaN`.
+2. **Resguardo de Historial:** Las compras de días anteriores no deben ser sobreescritas retrospectivamente; el cálculo es diario (`date = operation_date`).
+3. **Auditabilidad:** Toda actualización en `commercial_cost_matrix` originada por este motor registra trazabilidad para auditoría ante revisoría fiscal.

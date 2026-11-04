@@ -36,6 +36,7 @@ function PickingClientContent() {
     const [loading, setLoading] = useState(true);
     const [items, setItems] = useState<ProductItem[]>([]);
     const [clientName, setClientName] = useState('');
+    const [orderClientId, setOrderClientId] = useState<string | null>(null);
     const [specialAttention, setSpecialAttention] = useState<SpecialAttentionState | null>(null);
     const [selectedItem, setSelectedItem] = useState<ProductItem | null>(null);
     
@@ -78,6 +79,7 @@ function PickingClientContent() {
                     : (p.contact_name || p.company_name || 'Cliente B2C');
             }
             setClientName(name);
+            setOrderClientId((order as any)?.profile_id || null);
 
             // Evaluate autonomous special attention state for this client
             const clientId = (order as any).profile_id || p?.id;
@@ -148,6 +150,41 @@ function PickingClientContent() {
                 .eq('id', selectedItem.id);
 
             if (error) throw error;
+
+            // REGLA DE ORO SDD Escenario 383 (Single-Write Authority Anti-Duplicidad):
+            // Si la cantidad picada es menor a la solicitada (escasez en bodega),
+            // NUNCA se debe insertar un 'order_shortage' en inventory_movements desde Alistamiento.
+            // La escasez física ya fue imputada por Compras en plaza en la Columna K.
+            // Escribir aquí causaría DOBLE IMPUTACIÓN destructiva en el Balance Diario.
+            // En su lugar, se sincroniza la PQRS preventiva para SAC si no existe.
+            if (qty < selectedItem.quantity && orderId) {
+                const missingQty = Number((selectedItem.quantity - qty).toFixed(2));
+                try {
+                    const { data: existingPqr } = await supabase
+                        .from('customer_service_pqrs')
+                        .select('id')
+                        .eq('order_id', orderId)
+                        .ilike('subject', `%${selectedItem.product_name}%`)
+                        .maybeSingle();
+
+                    if (!existingPqr) {
+                        await supabase.from('customer_service_pqrs').insert([{
+                            order_id: orderId,
+                            client_id: orderClientId || null,
+                            type: 'queja',
+                            priority: 'urgent',
+                            status: 'pending',
+                            subject: `[Faltante Alistamiento - Escasez]: ${selectedItem.product_name} (${missingQty} ${selectedItem.unit_of_measure})`,
+                            description: `Durante el alistamiento del pedido se alistaron ${qty} ${selectedItem.unit_of_measure} de ${selectedItem.quantity} ${selectedItem.unit_of_measure} solicitados. Faltante no despachado: ${missingQty} ${selectedItem.unit_of_measure} por desabastecimiento.`,
+                            defect_category_l1: 'comercial_cliente',
+                            defect_subtype_l2: 'producto_agotado_plaza',
+                            imputed_responsible: 'proveedor'
+                        }]);
+                    }
+                } catch (pqrErr) {
+                    console.warn('Aviso registrando PQR de escasez desde alistamiento:', pqrErr);
+                }
+            }
 
             // Integración de Inventario: Si el producto es rechazado (rojo), registramos movimiento a cuarentena.
             // Los movimientos normales de alistamiento (exits) se manejan automáticamente vía trigger de base de datos.
