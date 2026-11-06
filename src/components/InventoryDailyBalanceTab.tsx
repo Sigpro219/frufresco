@@ -216,6 +216,9 @@ export const DEFAULT_COLUMN_ORDER = [
     'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'O2', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'X'
 ];
 
+export const OVERSCROLL_BUFFER_COLS = ['_B1', '_B2', '_B3', '_B4', '_B5', '_B6', '_B7', '_B8'] as const;
+export const OVERSCROLL_COL_WIDTH = 105;
+
 export const COLUMN_METADATA: Record<string, {
     letter: string;
     title: string;
@@ -2799,11 +2802,13 @@ interface CommittedSaleData {
         }
     };
 
-    // Navegación fluida y guardado de edición estilo Excel (Enter: abajo, Shift+Enter: arriba, Tab/Flechas: columnas)
+    // Navegación fluida y guardado de edición estilo Excel (Enter: abajo, Shift+Enter: arriba, Tab/Flechas: columnas + margen derecho)
     const handleCommitCellEditAndNavigate = (direction: 'down' | 'up' | 'next_col' | 'prev_col' | 'none' = 'none') => {
         if (!editingCell) return;
         const isViewOnlyNav = sheetMode === 'view' || !canEditSheet || Boolean(closingRecord?.is_locked);
-        const navCols = isViewOnlyNav ? columnOrder : EDITABLE_COLUMNS;
+        const navCols = isViewOnlyNav
+            ? [...columnOrder, ...OVERSCROLL_BUFFER_COLS]
+            : [...EDITABLE_COLUMNS, ...OVERSCROLL_BUFFER_COLS];
 
         const currentCell = { ...editingCell };
 
@@ -2862,8 +2867,8 @@ interface CommittedSaleData {
             setEditingCell(null);
         }
 
-        // En Sábana Oficial (Solo Vista) solo se navega, jamás se modifica ni persiste nada
-        if (isViewOnlyNav) return;
+        // En Sábana Oficial (Solo Vista) o en columnas de margen (_B1.._B8) solo se navega, jamás se modifica ni persiste nada
+        if (isViewOnlyNav || currentCell.colKey.startsWith('_B')) return;
 
         // 3. Evaluar si el valor numérico cambió para guardar en base de datos
         const newVal = evaluateExcelExpression(currentCell.currentValue);
@@ -2873,6 +2878,40 @@ interface CommittedSaleData {
 
         // 4. Persistir asíncronamente en segundo plano
         persistCellChange(currentCell.productId, currentCell.colKey, newVal, currentCell.currentValue);
+    };
+
+    // Auto-scroll consciente de paneles congelados (Cols A-D a la izquierda, thead arriba, tfoot abajo)
+    const scrollCellIntoVisiblePane = (el: HTMLElement | null) => {
+        if (!el) return;
+        const container = tableScrollRef.current;
+        const tdEl = (el.closest('td') as HTMLElement) || el;
+        if (!container) {
+            tdEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+            return;
+        }
+        const contRect = container.getBoundingClientRect();
+        const cellRect = tdEl.getBoundingClientRect();
+        const stickyLeftWidth = isPanesFrozen
+            ? (isCompactIdentification ? 240 : (isCellCollapsed ? 389 : 475))
+            : 0;
+        const stickyTopHeight = isPanesFrozen ? (isColumnFilterOpen ? 66 : 32) : 0;
+        const stickyBottomHeight = isPanesFrozen ? 36 : 0;
+
+        const leftBound = contRect.left + stickyLeftWidth + 6;
+        const rightBound = contRect.right - 16;
+        if (cellRect.left < leftBound) {
+            container.scrollLeft -= (leftBound - cellRect.left);
+        } else if (cellRect.right > rightBound) {
+            container.scrollLeft += (cellRect.right - rightBound);
+        }
+
+        const topBound = contRect.top + stickyTopHeight + 4;
+        const bottomBound = contRect.bottom - stickyBottomHeight - 4;
+        if (cellRect.top < topBound) {
+            container.scrollTop -= (topBound - cellRect.top);
+        } else if (cellRect.bottom > bottomBound) {
+            container.scrollTop += (cellRect.bottom - bottomBound);
+        }
     };
 
     // Renderizado de celda editable o navegable estilo Excel con soporte de navegación fluida
@@ -2927,7 +2966,7 @@ interface CommittedSaleData {
                     <input
                         ref={el => {
                             if (el) {
-                                el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                                scrollCellIntoVisiblePane(el);
                             }
                         }}
                         type="text"
@@ -2975,7 +3014,7 @@ interface CommittedSaleData {
                 ref={isViewCursor ? (el => {
                     if (el) {
                         el.focus({ preventScroll: true });
-                        el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                        scrollCellIntoVisiblePane(el);
                     }
                 }) : undefined}
                 onKeyDown={isViewCursor ? handleCellKeyDown : undefined}
@@ -3687,7 +3726,35 @@ interface CommittedSaleData {
                         )
                     };
 
-                    return columnOrder.map((colKey, colIdx) => numericalCellRenderers[colKey]?.(colIdx) ?? null);
+                    return (
+                        <>
+                            {columnOrder.map((colKey, colIdx) => numericalCellRenderers[colKey]?.(colIdx) ?? null)}
+                            {OVERSCROLL_BUFFER_COLS.map((bCol, bIdx) =>
+                                renderEditableCell(
+                                    key,
+                                    row.productId,
+                                    bCol,
+                                    null,
+                                    {
+                                        width: `${OVERSCROLL_COL_WIDTH}px`,
+                                        minWidth: `${OVERSCROLL_COL_WIDTH}px`,
+                                        maxWidth: `${OVERSCROLL_COL_WIDTH}px`,
+                                        padding: '4px 6px',
+                                        textAlign: 'center',
+                                        backgroundColor: isParent
+                                            ? (bIdx % 2 === 1 ? '#FEF9C3' : '#FEFCE8')
+                                            : (bIdx % 2 === 1 ? '#F8FAFC' : '#FFFFFF'),
+                                        borderBottom: cellBorderBottom,
+                                        borderRight: '1px dashed #E2E8F0',
+                                        color: '#CBD5E1',
+                                        opacity: 0.75
+                                    },
+                                    2,
+                                    true
+                                )
+                            )}
+                        </>
+                    );
                 })()}
             </tr>
         );
@@ -5052,6 +5119,35 @@ interface CommittedSaleData {
                                         </th>
                                     );
                                 })}
+
+                                {/* Columnas de Margen de Desplazamiento Derecho (Overscroll Buffer Columns _B1.._B8) */}
+                                {OVERSCROLL_BUFFER_COLS.map((bCol, bIdx) => (
+                                    <th
+                                        key={`header-buffer-${bCol}`}
+                                        title="Columna de margen de desplazamiento: Sigue desplazándote a la derecha (→ o barra horizontal) para acercar las últimas columnas junto al nombre del SKU"
+                                        style={{
+                                            height: '32px',
+                                            boxSizing: 'border-box',
+                                            position: 'sticky',
+                                            top: 0,
+                                            zIndex: 40,
+                                            backgroundColor: bIdx % 2 === 1 ? '#1E293B' : '#0F172A',
+                                            padding: '4px 8px',
+                                            textAlign: 'center',
+                                            color: '#475569',
+                                            width: `${OVERSCROLL_COL_WIDTH}px`,
+                                            minWidth: `${OVERSCROLL_COL_WIDTH}px`,
+                                            maxWidth: `${OVERSCROLL_COL_WIDTH}px`,
+                                            borderRight: '1px dashed #334155',
+                                            borderBottom: '1px solid #334155',
+                                            fontSize: '0.65rem',
+                                            fontWeight: '700',
+                                            userSelect: 'none'
+                                        }}
+                                    >
+                                        ·
+                                    </th>
+                                ))}
                             </tr>
 
                             {/* FILA DE FILTROS Y ORDENAMIENTO DE ALTO CONTRASTE WCAG AAA (34px) (SPEC.md §8.8.9) */}
@@ -5539,6 +5635,25 @@ interface CommittedSaleData {
                                             </th>
                                         );
                                     })}
+
+                                    {/* Columnas de Margen de Desplazamiento Derecho en Fila de Filtros */}
+                                    {OVERSCROLL_BUFFER_COLS.map((bCol, bIdx) => (
+                                        <th
+                                            key={`filter-buffer-${bCol}`}
+                                            style={{
+                                                height: '34px',
+                                                width: `${OVERSCROLL_COL_WIDTH}px`,
+                                                minWidth: `${OVERSCROLL_COL_WIDTH}px`,
+                                                maxWidth: `${OVERSCROLL_COL_WIDTH}px`,
+                                                padding: '3px 4px',
+                                                position: 'sticky',
+                                                top: '32px',
+                                                zIndex: 40,
+                                                backgroundColor: bIdx % 2 === 1 ? '#CBD5E1' : '#E2E8F0',
+                                                borderRight: '1px dashed #94A3B8'
+                                            }}
+                                        />
+                                    ))}
                                 </tr>
                             )}
                         </thead>
@@ -5547,7 +5662,7 @@ interface CommittedSaleData {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={isCompactIdentification ? 21 : 24} style={{ textAlign: 'center', padding: '3.5rem', color: '#64748B' }}>
+                                    <td colSpan={(isCompactIdentification ? 21 : 24) + OVERSCROLL_BUFFER_COLS.length} style={{ textAlign: 'center', padding: '3.5rem', color: '#64748B' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
                                             <RefreshCw size={24} className="animate-spin text-emerald-600" />
                                             <span style={{ fontWeight: '700', fontSize: '0.88rem' }}>Consolidando sábanas operativas de turno...</span>
@@ -5556,7 +5671,7 @@ interface CommittedSaleData {
                                 </tr>
                             ) : displayedFamilies.length === 0 ? (
                                 <tr>
-                                    <td colSpan={isCompactIdentification ? 21 : 24} style={{ textAlign: 'center', padding: '3.5rem', color: '#94A3B8' }}>
+                                    <td colSpan={(isCompactIdentification ? 21 : 24) + OVERSCROLL_BUFFER_COLS.length} style={{ textAlign: 'center', padding: '3.5rem', color: '#94A3B8' }}>
                                         <Package size={32} strokeWidth={1.5} style={{ margin: '0 auto 0.5rem', opacity: 0.6 }} />
                                         <div style={{ fontWeight: '700', color: '#475569', fontSize: '0.9rem' }}>No se encontraron productos activos con los filtros seleccionados</div>
                                         <p style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>Verifica el término de búsqueda o selecciona otra célula de trabajo.</p>
@@ -5688,6 +5803,29 @@ interface CommittedSaleData {
                                         </td>
                                     );
                                 })}
+
+                                {/* Columnas de Margen de Desplazamiento Derecho en Pie de Totales */}
+                                {OVERSCROLL_BUFFER_COLS.map((bCol, bIdx) => (
+                                    <td
+                                        key={`total-buffer-${bCol}`}
+                                        style={{
+                                            position: 'sticky',
+                                            bottom: 0,
+                                            zIndex: 30,
+                                            backgroundColor: bIdx % 2 === 1 ? '#1E293B' : '#0F172A',
+                                            padding: '6px 8px',
+                                            textAlign: 'center',
+                                            color: '#475569',
+                                            width: `${OVERSCROLL_COL_WIDTH}px`,
+                                            minWidth: `${OVERSCROLL_COL_WIDTH}px`,
+                                            maxWidth: `${OVERSCROLL_COL_WIDTH}px`,
+                                            borderTop: '2px solid #334155',
+                                            borderRight: '1px dashed #334155'
+                                        }}
+                                    >
+                                        <span style={{ color: '#475569', fontSize: '0.68rem' }}>·</span>
+                                    </td>
+                                ))}
                             </tr>
                         </tfoot>
                     </table>

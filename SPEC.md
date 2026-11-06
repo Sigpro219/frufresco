@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.372 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..393 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje & Planta de Producción de Procesados MES IV Gama)
+> **Versión:** 1.9.372 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..393 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje, Planta de Procesados MES & Alianza Exclusiva `FruFresco × Friogan`)
 > **Fecha:** 6 de Noviembre, 2026  
 > **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..393) | Fase II (`onFRU v2.0`): Capítulos 45 y 46 (Escenarios 400..405)
+> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..393) | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..408)
 
 ---
 
@@ -29,7 +29,7 @@
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
 | **TOTAL FASE I** | **onFRU SCOS v1.9.x (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **393 Escenarios Canónicos (1..393)** | **🟢 100%** |
-| **FASE II (`v2.0`)** | **onFRU 2.0: Telemetría WFM, Radar RTLS Indoor & Planta de Producción de Procesados (MES)** | **+4 (Nuevas)** | **Capítulos 45 y 46 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 405)** | **🚀 Fase II (Cotización Independiente)** |
+| **FASE II (`v2.0`)** | **onFRU 2.0: WFM/RTLS Indoor, Planta Procesados (MES) & Alianza Carnes `FruFresco × Friogan`** | **+6 (Nuevas)** | **Capítulos 45, 46 y 47 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 408)** | **🚀 Fase II (Cotización Independiente)** |
 
 ---
 
@@ -1694,7 +1694,7 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
 #### 2. Protocolo de Cierre Diario y Congelación Contable
 - **Botón Manual de "Cierre Diario Oficial":** La jornada contable no se congela por cron ciego; requiere la ejecución explícita del botón de Cierre Diario por parte del Administrador o Supervisor de Operaciones.
 - **Congelación Estricta:** Al ejecutar el cierre, los registros de la fecha se persisten atómicamente en la tabla `daily_inventory_closings` en estado `is_locked = true`, capturando el snapshot completo de ítems auditados y bloqueando modificaciones retroactivas no auditadas salvo autorización de superadmin.
-- **Herencia Estricta de Saldos (Col U $\rightarrow$ Col E del día siguiente):** El Inventario Inicial (Col E) de una jornada $D$ hereda obligatoriamente el saldo de la **Columna U** (*Inventario en bodega [devoluciones]*, $U = T + O$) del último cierre oficial registrado anterior a dicha fecha ($D-1$). Si no existe cierre previo en una fecha no operada o futura, el sistema no clona el stock vivo actual; presenta saldo inicial cero ($0$).
+- **Herencia Estricta de Saldos (Col T Conteo Físico $\rightarrow$ Col E del día siguiente):** El Inventario Inicial (Col E) de una jornada $D$ hereda obligatoriamente el saldo de la **Columna T (`Conteo Físico` / `physicalCount`)** de la última jornada operada anterior a dicha fecha ($D-1$), comparando cronológicamente la fecha del último cierre oficial (`daily_inventory_closings.closing_date`) frente a la fecha de los últimos conteos físicos registrados en movimientos (`inventory_movements` con `blind_count` / `blind_count_shift_close`). Jamás cae en fallback a la columna `Cálculo (Col S)`, y los SKUs no contados en $D-1$ inician en cero ($0$).
 - **Trazabilidad:** Se registra en auditoría: `closed_at`, `closed_by_name`, `total_calculated`, `total_physical`, `total_missing`, `total_surplus` y snapshot JSON inmutable.
 
 #### 3. Política de Desvío en Auditoría Cíclica: Tolerancia Cero (0%)
@@ -1833,7 +1833,9 @@ A partir del hallazgo operativo en planta y el perfil de la Jefatura de Inventar
    - **Flechas `↓` (`ArrowDown`) y `↑` (`ArrowUp`):** Permiten desplazamiento vertical directo entre celdas sin necesidad de recurrir al mouse.
    - **Réplica de Cursor de Lectura en Sábana Oficial (`sheetMode === 'view'`):** En el modo de consulta (`Sábana Oficial`), hacer clic en cualquier celda numérica (`E` a `X`) activa un cursor de navegación visual tipo Excel (`boxShadow: inset 0 0 0 2px #0D7A57`) que permite desplazarse con las 4 flechas (`↑ ↓ ← →`), `Enter` y `Tab` con auto-scroll horizontal y vertical (`scrollIntoView`), manteniendo **100% bloqueada la edición**.
    - **Tecla `Escape` (Cancelar Edición / Soltar Cursor):** Restaura el valor previo y cierra el foco de la celda sin efectuar mutaciones.
-   - **Auto-Scroll Suave y Preciso (`scrollIntoView`):** Al desplazarse vertical u horizontalmente hacia celdas fuera del área visible, el contenedor se desplaza automáticamente (`block: 'nearest'`, `inline: 'nearest'`, `behavior: 'smooth'`).
+   - **Auto-Scroll Consciente de Paneles Sticky (`scrollCellIntoVisiblePane`) y Columnas de Margen Derecho (`Overscroll Buffer Columns _B1.._B8`):**
+     - Al desplazarse hacia la izquierda (`←`), el motor calcula el ancho real del panel congelado (`Cols A-D`) para que la celda activa nunca quede oculta detrás de la columna `PRODUCTO`.
+     - A la derecha de la última columna (`Col X: BANCO ALIM.`), la tabla incorpora **8 columnas de margen de desplazamiento (`_B1` a `_B8`, `105px` c/u = `840px` de pista adicional)** navegables con flecha derecha (`→`) o barra horizontal, permitiendo seguir desplazando la sábana hacia la derecha hasta posicionar las últimas columnas (`CÁLCULO`, `CONTEO`, `FALTANTE`, `SOBRANTE`, `BANCO ALIM.`) inmediatamente al lado del nombre del SKU (`Col D: PRODUCTO`).
    - **Persistencia Reactiva a 0ms (Zero-Latency Optimistic Update):** La transición de foco se ejecuta en 0 milisegundos en memoria mediante `flatVisibleRows`, recalculando al instante las fórmulas de balance.
    - **Motor de Fórmulas Matemáticas Inline Preservado:** Admite operaciones de suma y resta directa en la celda (ej. `=15+20`, `+50-10`, `30+5`) evaluándose antes del salto de cursor.
 
@@ -1919,8 +1921,8 @@ Para brindar la máxima legibilidad industrial en bodega y eliminar la digitaci�
        - **Ordenar por Célula (`A → Z` / `Z → A`):** Agrupa la sábana por célula de trabajo sin ocultar registros.
        - **Lista Interactiva de Células con Icono Lucide y Conteo en Vivo:** Permite filtrar en 1 clic (selección simple o múltiple) entre `Hortalizas`, `Verduras`, `Papas`, `Frutas`, `Abarrotes`, `Fresas` sin digitar una sola letra.
    - **Columna D (`PRODUCTO` — Orden Alfabético, Jerarquía P/H y Unidad):**
-     - Dispone de buscador de alto contraste con botón `✕` y un **Botón de Opciones Avanzadas (`▾` / Orden `A-Z`)** que despliega:
-       - **Ordenar Padres Alfabéticamente (`A → Z` y `Z → A`):** Ordena todas las familias/padres alfabéticamente manteniendo sus presentaciones hijas agrupadas debajo.
+     - Dispone de buscador de alto contraste con botón `✕`, botón rápido de ciclo de 3 clics (`1º clic: A→Z`, `2º clic: Z→A`, `3º clic: P↑ A→Z Padres arriba colapsados + SKUs sueltos abajo A→Z`) y un **Botón de Opciones Avanzadas (`▾`)** que despliega:
+       - **Ordenar Padres Alfabéticamente (`A → Z`, `Z → A` y `Padres (P) arriba A→Z + Sueltos abajo`):** Permite tanto ordenar todas las familias alfabéticamente como agrupar primero todas las cabezas de familia (`P`) ordenadas `A→Z` (colapsadas sin expandir) seguidas debajo por los SKUs independientes (`A→Z`).
        - **Filtro de Jerarquía en 1 Clic:**
          - `Todos los registros`
          - `Solo Padres / Familias (P)` (Aísla únicamente las cabezas de familia / filas amarillas consolidadas)
@@ -15165,9 +15167,88 @@ CREATE TABLE IF NOT EXISTS public.production_orders (
 
 ---
 
-### 46.5 Resumen Consolidado del Portafolio Comercial `onFRU v2.0` (Fase II)
+## 47. Capítulo 47 (`onFRU v2.0` — Módulo 3): Alianza Estratégica `FruFresco × Friogan` — Comercialización de Proteínas Pesadas y Estandarizadas al Vacío, Proveedor Exclusivo y Sección Especial de Bodega de Carnes (`cell_proteinas_friogan`)
+
+### 47.1 Modelo de Negocio Inicial (Enfoque Lean / Peso Fijo Estandarizado al Vacío) y Evolución Posterior
+
+1. **Premisa Rectora del Lanzamiento Inicial (Cero Fricción de Pesaje Variable):**
+   - La alianza estratégica con **Friogan** (proveedor exclusivo de carnes y proteínas dentro del ecosistema FruFresco) arranca bajo un modelo **100% estandarizado y simplificado**:
+     - Se comercializa un portafolio focalizado de referencias de carne y proteína **pre-pesadas y estandarizadas al vacío desde el frigorífico** (ej. paquetes cerrados al vacío de peso fijo estandarizado: $500\text{ g}$, $1.000\text{ g}$, $2.500\text{ g}$).
+     - Al ser unidades de peso fijo selladas de origen, se eliminan en la etapa inicial las complejidades de recálculo de peso variable (*catch-weight*) o desposte en planta: **1 paquete = 1 peso y precio exacto de catálogo**, operando sobre la misma cadena logística de alistamiento y transporte de FruFresco.
+   - **Escalabilidad Futura (Etapa Avanzada Opcional):** Una vez consolidada la tracción comercial de las referencias estandarizadas, la arquitectura permite activar en fases posteriores el manejo de postas de peso variable (lectura GS1-128), porcionado a medida y liquidación VMI en consignación.
+
+---
+
+### 47.2 Los 3 Pilares Arquitectónicos del Módulo `FruFresco × Friogan` en `onFRU v2.0` (Escenarios 406 a 408)
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│           ALIANZA ESTRATÉGICA FRUFRESCO × FRIOGAN — PROTEÍNAS (onFRU v2.0)             │
+├───────────────────────────┬────────────────────────────┬───────────────────────────────┤
+│ 🥩 1. VITRINA LANDING/B2B │ ❄️ 2. BODEGA DE CARNES     │ 🚚 3. ABASTECIMIENTO & RUTA   │
+│ • Sección Co-Branded en   │ • Nueva Célula #7 Aislada: │ • Proveedor Exclusivo FRIOGAN │
+│   Landing Page (/) y B2B  │   cell_proteinas_friogan   │   (Bypass de Corabastos)      │
+│ • Referencias de Carne    │ • Control de Unidades al   │ • Orden Consolidada Directa a │
+│   Pesada y Estandarizada  │   Vacío (0% Merma Cáscara) │   Friogan al Cierre de Corte  │
+│   al Vacío (Peso Fijo)    │ • Lote, Vencimiento FEFO y │ • Despacho Unificado en la    │
+│ • Mismo Carrito y Checkout│   Temperatura de Cuarto    │   Misma Flota y Ruta Actual   │
+└───────────────────────────┴────────────────────────────┴───────────────────────────────┘
+```
+
+---
+
+#### Escenario 406: Vitrina Especial Co-Branded `FruFresco × Friogan` en Landing Page (`/`) y Catálogo B2B/B2C para Referencias de Carne Pesada y Estandarizada al Vacío (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** un cliente institucional (HORECA) o de hogar navegando en la Landing Page pública (`/`) o en el portal de pedidos de FruFresco:
+- **When** explora la nueva línea de **Carnes y Proteínas**:
+- **Then** el sistema despliega una experiencia comercial diferenciada pero unificada en el checkout:
+  1. **Sección Especial Co-Branded en Landing Page y Catálogo:**
+     - Banner e insignia oficial **«Alianza Estratégica FruFresco × Friogan — Proteína Certificada al Vacío»**.
+     - Filtro rápido de categoría `Carnes & Proteínas (Friogan)` en la tienda web y en la mesa de montaje de pedidos (`/admin/orders/create` y `EmailDraftsModule`).
+  2. **Parametrización de Referencias Estandarizadas al Vacío:**
+     - Cada referencia inicial se modela con peso neto fijo garantizado y empaque termoencogible/vacío de origen (ej. *Lomo de Res Estandarizado al Vacío 1.000g*, *Sobrebarriga / Punta de Anca Estandarizada al Vacío 1.000g*, *Carne Molida Premium al Vacío 500g*).
+     - El cliente compra por paquete/kilo estandarizado y el ítem se integra de forma transparente al **mismo carrito de compras, misma orden (`orders`) y misma remisión/factura** junto con las frutas y verduras.
+
+---
+
+#### Escenario 407: Sección Especial de Control de la Bodega de Carnes y Proteínas (`cell_proteinas_friogan`) en Inventarios y `/ops` (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** que la carne empacada al vacío de alto valor unitario no puede mezclarse operativamente ni contablemente con los abarrotes secos ni con los bultos de tierra de Corabastos:
+- **When** se habilita la **Sección Especial de Bodega de Carnes y Proteínas**:
+- **Then** el sistema segrega su control físico, sanitario y de inventario mediante las siguientes reglas Poka-Yoke:
+  1. **Creación de la Célula #7 Independiente (`cell_proteinas_friogan`):**
+     - En la Sábana Oficial de Balance Diario (`/admin/commercial/inventory`), en Recepción (`/ops/recepcion`), en Alistamiento (`/ops/picking`) y en Cierre de Inventario (`/ops/inventory`), se independiza la célula **`CARNES Y PROTEÍNAS (FRIOGAN)`** con su propio líder de cava responsable.
+  2. **Tablero Dedicado de Control de Cava Friogan (`/admin/commercial/inventory?tab=friogan` y `/ops/proteinas`):**
+     - Vista especializada que consolida exclusivamente las referencias de Friogan:
+       * **Control de Lote y Fecha de Vencimiento (Regla FEFO):** Al recibir un lote de Friogan en `/ops/recepcion`, se registra el número de lote y fecha de vencimiento del empaque al vacío, priorizando la salida de los paquetes con vencimiento más próximo.
+       * **Registro de Temperatura de Cava y Recepción:** Campo de control de cadena de frío ($^{\circ}\text{C}$) al ingreso a bodega.
+       * **Bloqueo Poka-Yoke de Merma por Descapote (`Col R = 0`):** Al tratarse de paquetes cerrados y estandarizados al vacío desde Friogan, el sistema bloquea para estos SKUs cualquier registro de *«Basura / Cáscara»* (`Col R`), exigiendo autorización de Supervisor y foto del empaque original si se reporta avería (`Col Q`) o faltante (`Col V`), blindando la bodega contra pérdidas de alto valor.
+
+---
+
+#### Escenario 408: Gobernanza de Proveedor Exclusivo (`FRIOGAN`), Bypass del Flujo de Plaza Corabastos y Despacho en la Misma Cadena Logística (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** que **Friogan** actúa como **proveedor exclusivo** de la línea de carnes y proteínas (no se adquiere en puestos informales de Corabastos):
+- **When** los pedidos del día pasan a estado `para_compra` en `/admin/orders/loading`:
+- **Then** el motor de abastecimiento y logística opera bajo el siguiente flujo unificado:
+  1. **Asignación de Proveedor Exclusivo y Bypass de Compradores de Plaza:**
+     - Los SKUs de la célula `cell_proteinas_friogan` están vinculados por contrato al proveedor exclusivo **`FRIOGAN`** (`exclusive_provider_id`).
+     - En lugar de enviarse a las cuadrillas de efectivo de Corabastos en `/ops/compras`, el sistema genera automáticamente un **Consolidado de Pedido Exclusivo Friogan** (neteo de demanda del día menos stock disponible en la cava de carnes).
+  2. **Unificación en Bahía de Alistamiento y Misma Cadena Logística de Reparto:**
+     - Durante el alistamiento (`/ops/picking`), el encargado del cuarto frío de carnes alista los paquetes al vacío de Friogan y los deposita (en canastilla térmica/isotérmica o contenedor refrigerado) en la **misma bahía física del cliente (`warehouse_spaces`)** donde convergen sus frutas y verduras.
+     - El furgón de reparto de FruFresco carga en `/ops/rectificacion` tanto el pedido agrícola como la proteína de Friogan y los entrega en una sola parada unificada (`/ops/driver`), maximizando la rentabilidad del flete sin duplicar vehículos.
+  3. **Reporte de Liquidación y Conciliación con Friogan:**
+     - Módulo de reporte directo para conciliar con Friogan las unidades recibidas en cava, las unidades despachadas a clientes y el inventario final en cuarto frío al cierre de las 7:00 PM.
+
+---
+
+### 47.3 Resumen Consolidado del Portafolio Comercial `onFRU v2.0` (Fase II)
 
 | Capítulo `onFRU v2.0` | Módulo / Solución Industrial | Escenarios SDD | Problema de Negocio que Erradica | Estado |
 | :---: | :--- | :---: | :--- | :---: |
 | **Capítulo 45** | **WFM, Pulso Operativo (`Takt-Time Watchdog`), Esclusa Facial & Radar RTLS BLE Anti-Sabotaje** | **Escenarios 400 a 402** | Fuga de horas-hombre post-fichaje (salidas a tomar café en turno activo) y sabotaje de tags/carnets tradicionales. | 🚀 **Listo para Cotizar (Fase II)** |
 | **Capítulo 46** | **Planta de Producción de Procesados (MES Agroindustrial IV Gama, Recetas Yield % y Costeo NIC 2)** | **Escenarios 403 a 405** | Pérdida oculta de margen en productos pelados/picados por no absorber la merma en el costo, falta de explosión de compras brutas y descontrol de cuchillo en mesa. | 🚀 **Listo para Cotizar (Fase II)** |
+| **Capítulo 47** | **Alianza Estratégica `FruFresco × Friogan` (Proteínas Estandarizadas al Vacío & Bodega Especial de Carnes)** | **Escenarios 406 a 408** | Apertura de nueva línea de ingresos de alto ticket (proteína cárnica al vacío) con proveedor exclusivo, bodega/cava controlada y despacho sobre la misma flota logística. | 🚀 **Listo para Cotizar (Fase II)** |
