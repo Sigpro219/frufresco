@@ -1,62 +1,14 @@
 'use client';
-
 import React, { useState, useMemo, useRef } from 'react';
-import {
-  X,
-  UploadCloud,
-  Sparkles,
-  Truck,
-  ClipboardCheck,
-  Trash2,
-  AlertTriangle,
-  ZoomIn,
-  ZoomOut,
-  RotateCw,
-  FileText,
-  RefreshCw,
-  ArrowRight,
-  ShieldCheck,
-  CheckCircle2,
-  MessageSquare,
-  Zap,
-  Maximize2,
-  Loader2,
-  Plus
-} from 'lucide-react';
+import { X, UploadCloud, Sparkles, Truck, ClipboardCheck, Trash2, AlertTriangle, ZoomIn, ZoomOut, RotateCw, FileText, RefreshCw, ArrowRight, ShieldCheck, CheckCircle2, MessageSquare, Zap, Maximize2, Loader2, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
 import PhysicalSheetStagingTable from '@/components/PhysicalSheetStagingTable';
-import {
-  PhysicalSheetType,
-  TargetBalanceColumn,
-  CatalogProductOption,
-  ReconciledSheetRow,
-  RawExtractedSheetRow,
-  ArbitrationResolution,
-  buildReconciledSheetRows
-} from '@/lib/inventory/physical-sheet-parser';
-
-interface PhysicalSheetIngestModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  balanceDate: string;
-  catalog: CatalogProductOption[];
-  opsCurrentByProductAndCol: Map<string, { G: number; T: number; Q: number; R: number; X?: number }>;
-  supervisorName: string;
-  onSuccess: () => void;
-}
-
-export default function PhysicalSheetIngestModal({
-  isOpen,
-  onClose,
-  balanceDate,
-  catalog,
-  opsCurrentByProductAndCol,
-  supervisorName,
-  onSuccess
-}: PhysicalSheetIngestModalProps) {
+import { PhysicalSheetType, TargetBalanceColumn, CatalogProductOption, ReconciledSheetRow, RawExtractedSheetRow, ArbitrationResolution, buildReconciledSheetRows } from '@/lib/inventory/physical-sheet-parser';
+interface PhysicalSheetIngestModalProps { isOpen: boolean; onClose: () => void; balanceDate: string; catalog: CatalogProductOption[]; opsCurrentByProductAndCol: Map<string, { G: number; T: number; Q: number; R: number; X?: number }>; supervisorName: string; onSuccess: () => void; }
+export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate, catalog, opsCurrentByProductAndCol, supervisorName, onSuccess }: PhysicalSheetIngestModalProps) {
   const [sheetType, setSheetType] = useState<PhysicalSheetType>('entrada');
   const [aiInputTab, setAiInputTab] = useState<'file' | 'text'>('file');
   const [files, setFiles] = useState<File[]>([]);
@@ -74,46 +26,25 @@ export default function PhysicalSheetIngestModal({
   const [reconciledRows, setReconciledRows] = useState<ReconciledSheetRow[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendFileInputRef = useRef<HTMLInputElement>(null);
-
   const isStaging = reconciledRows.length > 0;
-
-  const executeAiExtraction = async (
-    targetFiles: File[],
-    targetText: string,
-    targetSheetType: PhysicalSheetType,
-    appendMode = false
-  ) => {
-    if (targetFiles.length === 0 && !targetText.trim()) {
-      setErrorMsg('Selecciona al menos un archivo (Foto, PDF o Excel) o pega el texto de la planilla.');
-      return;
-    }
-    setIsExtracting(true);
-    setErrorMsg(null);
+  const executeAiExtraction = async (targetFiles: File[], targetText: string, targetSheetType: PhysicalSheetType, appendMode = false) => {
+    if (targetFiles.length === 0 && !targetText.trim()) { setErrorMsg('Selecciona al menos un archivo (Foto, PDF o Excel) o pega el texto de la planilla.'); return; }
+    setIsExtracting(true); setErrorMsg(null);
     const startMs = performance.now();
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token || '';
       const formData = new FormData();
-      formData.append('sheetType', targetSheetType);
-      formData.append('balanceDate', balanceDate);
+      formData.append('sheetType', targetSheetType); formData.append('balanceDate', balanceDate);
       if (targetText.trim()) formData.append('text', targetText.trim());
       targetFiles.forEach(f => formData.append('files', f));
-
-      const res = await fetch('/api/commercial/inventory/extract-physical-sheet', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData
-      });
+      const res = await fetch('/api/commercial/inventory/extract-physical-sheet', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : undefined, body: formData });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'No fue posible extraer la planilla física.');
-
       const extractedRows: ReconciledSheetRow[] = [];
       (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
-        extractedRows.push(
-          ...buildReconciledSheetRows(fileRes.items || [], targetSheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol)
-        );
+        extractedRows.push(...buildReconciledSheetRows(fileRes.items || [], targetSheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol));
       });
-
       setDigestionDuration(((performance.now() - startMs) / 1000).toFixed(1));
       setReconciledRows(prev => (appendMode ? [...prev, ...extractedRows] : extractedRows));
       if (extractedRows.length === 0 && !appendMode) {
@@ -125,7 +56,6 @@ export default function PhysicalSheetIngestModal({
       setIsExtracting(false);
     }
   };
-
   const handleInitialFilesSelected = (selectedList: FileList | null) => {
     if (!selectedList || selectedList.length === 0) return;
     const newFiles = Array.from(selectedList);
@@ -137,7 +67,6 @@ export default function PhysicalSheetIngestModal({
     setShowSideDocPreview(true);
     void executeAiExtraction(newFiles, '', sheetType, false);
   };
-
   const handleAppendFilesSelected = (selectedList: FileList | null) => {
     if (!selectedList || selectedList.length === 0) return;
     const newFiles = Array.from(selectedList);
@@ -147,7 +76,6 @@ export default function PhysicalSheetIngestModal({
     setActiveFileIdx(nextIdx);
     void executeAiExtraction(newFiles, '', sheetType, true);
   };
-
   const handleResetWorkspace = () => {
     previewUrls.forEach(u => URL.revokeObjectURL(u));
     setFiles([]);
@@ -158,7 +86,6 @@ export default function PhysicalSheetIngestModal({
     setDigestionDuration(null);
     setActiveFileIdx(0);
   };
-
   const handleRowProductChange = (rowId: string, newProductId: string) => {
     const prod = catalog.find(c => c.id === newProductId) || null;
     setReconciledRows(prev =>
@@ -180,7 +107,6 @@ export default function PhysicalSheetIngestModal({
       })
     );
   };
-
   const handleRowQtyChange = (rowId: string, newQty: number) => {
     const safeQty = Number.isFinite(newQty) ? Math.max(0, newQty) : 0;
     setReconciledRows(prev =>
@@ -192,7 +118,6 @@ export default function PhysicalSheetIngestModal({
       })
     );
   };
-
   const handleRowColChange = (rowId: string, newCol: TargetBalanceColumn) => {
     setReconciledRows(prev =>
       prev.map(r => {
@@ -203,7 +128,6 @@ export default function PhysicalSheetIngestModal({
       })
     );
   };
-
   const handleAddManualRow = () => {
     const defaultCol: TargetBalanceColumn =
       sheetType === 'entrada' ? 'G' : sheetType === 'inv_manual' ? 'T' : sheetType === 'donaciones' ? 'X' : 'Q';
@@ -232,7 +156,6 @@ export default function PhysicalSheetIngestModal({
       }
     ]);
   };
-
   const stats = useMemo(() => {
     const active = reconciledRows.filter(r => r.selected && r.matchedProductId);
     return {
@@ -243,7 +166,6 @@ export default function PhysicalSheetIngestModal({
       discrepancies: active.filter(r => r.conciliationStatus === 'discrepancy').length
     };
   }, [reconciledRows]);
-
   const handleApproveAndCommit = async () => {
     const rowsToApply = reconciledRows.filter(
       r => r.selected && r.matchedProductId && r.quantity > 0 && r.resolution === 'use_sheet'
@@ -257,7 +179,6 @@ export default function PhysicalSheetIngestModal({
     try {
       const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
       const warehouseId = whData?.id || null;
-
       const grouped = new Map<
         string,
         {
@@ -272,7 +193,6 @@ export default function PhysicalSheetIngestModal({
           files: string[];
         }
       >();
-
       rowsToApply.forEach(r => {
         if (!r.matchedProductId) return;
         const key = `${r.matchedProductId}__${r.targetColumn}`;
@@ -298,11 +218,9 @@ export default function PhysicalSheetIngestModal({
         if (!existing.files.includes(r.sourceFileName)) existing.files.push(r.sourceFileName);
         grouped.set(key, existing);
       });
-
       const startIso = `${balanceDate}T00:00:00.000Z`;
       const endIso = `${balanceDate}T23:59:59.999Z`;
       const timestampIso = `${balanceDate}T12:00:00.000Z`;
-
       for (const item of grouped.values()) {
         const movType: 'entry' | 'exit' | 'adjustment' =
           item.targetColumn === 'G' ? 'entry' : item.targetColumn === 'T' ? 'adjustment' : 'exit';
@@ -318,7 +236,6 @@ export default function PhysicalSheetIngestModal({
             : INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT;
         const signedQty =
           item.targetColumn === 'G' ? item.totalQuantity : item.targetColumn === 'T' ? 0 : -item.totalQuantity;
-
         const pppCost =
           item.weightedCostDenominator > 0
             ? Math.round((item.weightedCostNumerator / item.weightedCostDenominator) * 100) / 100
@@ -332,9 +249,7 @@ export default function PhysicalSheetIngestModal({
                 origin_source: 'physical_sheet_ocr'
               })}]`
             : '';
-
         const noteDesc = `[ORIGEN: PHYSICAL_SHEET_OCR - ${supervisorName}]${replaceTag} Col ${item.targetColumn}: ${item.totalQuantity.toFixed(2)} (${item.rawDetails.join(' + ')}) [Archivo: ${item.files.join(', ')}]${blindMeta}`;
-
         const { data: existingMovs } = await supabase
           .from('inventory_movements')
           .select('id')
@@ -342,7 +257,6 @@ export default function PhysicalSheetIngestModal({
           .eq('reference_type', refType)
           .gte('created_at', startIso)
           .lte('created_at', endIso);
-
         if (existingMovs && existingMovs.length > 0) {
           await supabase
             .from('inventory_movements')
@@ -362,7 +276,6 @@ export default function PhysicalSheetIngestModal({
             created_at: timestampIso
           });
         }
-
         if (item.targetColumn === 'G' && pppCost && pppCost > 0) {
           let sumTotalCost = item.weightedCostNumerator;
           let sumQuantity = item.weightedCostDenominator;
@@ -401,7 +314,6 @@ export default function PhysicalSheetIngestModal({
           );
         }
       }
-
       onSuccess();
       onClose();
     } catch (err: unknown) {
@@ -410,9 +322,7 @@ export default function PhysicalSheetIngestModal({
       setIsSaving(false);
     }
   };
-
   if (!isOpen) return null;
-
   const activeFile = files[activeFileIdx] || null;
   const activePreviewUrl = previewUrls[activeFileIdx] || null;
   const activeFileName = activeFile?.name?.toLowerCase() || '';
@@ -420,7 +330,6 @@ export default function PhysicalSheetIngestModal({
     activeFileName.endsWith('.xlsx') || activeFileName.endsWith('.xls') || activeFileName.endsWith('.csv');
   const isActivePdf = activeFile?.type === 'application/pdf' || activeFileName.endsWith('.pdf');
   const docTypeLabel = isActiveExcel ? 'Excel' : isActivePdf ? 'PDF' : 'Imagen';
-
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
       <div style={{ width: '100%', maxWidth: '1600px', height: '93vh', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
@@ -448,7 +357,6 @@ export default function PhysicalSheetIngestModal({
             <X size={18} />
           </button>
         </div>
-
         {/* SELECTOR DE LAS 5 MODALIDADES DE PLANILLA */}
         <div style={{ padding: '0.65rem 1.75rem', backgroundColor: '#FFFFFF', borderBottom: '1px solid #E2E8F0', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.6rem' }}>
           {[
@@ -483,10 +391,8 @@ export default function PhysicalSheetIngestModal({
             );
           })}
         </div>
-
         <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleInitialFilesSelected(e.target.files); e.target.value = ''; }} />
         <input ref={appendFileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleAppendFilesSelected(e.target.files); e.target.value = ''; }} />
-
         {/* FASE 1 (!isStaging): DROPZONE Y SELECTOR DE CANAL IDÉNTICO A /admin/orders/create */}
         {!isStaging ? (
           <div style={{ flex: 1, padding: '1.75rem 2.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', backgroundColor: '#FFFFFF' }}>
@@ -502,14 +408,12 @@ export default function PhysicalSheetIngestModal({
                 </button>
               </div>
             </div>
-
             {errorMsg && (
               <div style={{ padding: '0.85rem 1.25rem', borderRadius: '12px', backgroundColor: '#FEF2F2', border: '1.5px solid #FCA5A5', color: '#991B1B', fontSize: '0.84rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <AlertTriangle size={18} color="#DC2626" />
                 <span>{errorMsg}</span>
               </div>
             )}
-
             {aiInputTab === 'file' ? (
               <div style={{ flex: 1, minHeight: '360px', padding: '3rem', border: isExtracting ? '3px solid #3B82F6' : '2px dashed #CBD5E1', borderRadius: '24px', backgroundColor: isExtracting ? '#EFF6FF' : '#F8FAFC', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} onClick={() => fileInputRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.backgroundColor = '#EFF6FF'; }}
@@ -566,7 +470,6 @@ export default function PhysicalSheetIngestModal({
                   </div>
                 </div>
               </div>
-
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                 {digestionDuration && (
                   <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1.5px solid #6EE7B7', padding: '5px 12px', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
@@ -587,13 +490,11 @@ export default function PhysicalSheetIngestModal({
                 </button>
               </div>
             </div>
-
             {errorMsg && (
               <div style={{ margin: '0.5rem 1.5rem 0', padding: '0.6rem 1rem', borderRadius: '10px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <AlertTriangle size={15} /><span>{errorMsg}</span>
               </div>
             )}
-
             {/* CUERPO SPLIT-SCREEN: DOCUMENTO ORIGINAL A LA IZQUIERDA + TABLA IA A LA DERECHA */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', overflow: 'hidden' }}>
               {showSideDocPreview && (
@@ -614,7 +515,6 @@ export default function PhysicalSheetIngestModal({
                         </button>
                       )}
                     </div>
-
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                       {!isActivePdf && !isActiveExcel && activePreviewUrl && (
                         <>
@@ -633,7 +533,6 @@ export default function PhysicalSheetIngestModal({
                       )}
                     </div>
                   </div>
-
                   <div style={{ flex: 1, borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
                     {rawText && files.length === 0 ? (
                       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', backgroundColor: '#F0FDF4', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '0.84rem', whiteSpace: 'pre-wrap', color: '#0F172A' }}>{rawText}</div>
@@ -658,7 +557,6 @@ export default function PhysicalSheetIngestModal({
                   </div>
                 </div>
               )}
-
               <PhysicalSheetStagingTable
                 sheetType={sheetType}
                 reconciledRows={reconciledRows}
@@ -673,7 +571,6 @@ export default function PhysicalSheetIngestModal({
                 onDeleteRow={rowId => setReconciledRows(prev => prev.filter(r => r.rowId !== rowId))}
               />
             </div>
-
             <div style={{ padding: '1rem 1.75rem', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <button type="button" onClick={handleResetWorkspace} style={{ padding: '9px 18px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontWeight: 700, fontSize: '0.84rem', cursor: 'pointer' }}>
                 Cancelar y Limpiar
