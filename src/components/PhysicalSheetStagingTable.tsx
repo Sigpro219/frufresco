@@ -1,7 +1,14 @@
 'use client';
 
-import React from 'react';
-import { Check, CheckCircle2, Layers } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  CheckCircle2,
+  AlertCircle,
+  Info,
+  Calculator,
+  Plus,
+  Trash2
+} from 'lucide-react';
 import {
   PhysicalSheetType,
   TargetBalanceColumn,
@@ -15,10 +22,31 @@ interface PhysicalSheetStagingTableProps {
   reconciledRows: ReconciledSheetRow[];
   filteredCatalog: CatalogProductOption[];
   onToggleSelect: (rowId: string, selected: boolean) => void;
+  onToggleSelectAll: (selected: boolean) => void;
   onProductChange: (rowId: string, newProductId: string) => void;
   onColChange: (rowId: string, newCol: TargetBalanceColumn) => void;
   onQtyChange: (rowId: string, newQty: number) => void;
   onResolutionChange: (rowId: string, resolution: ArbitrationResolution) => void;
+  onAddManualRow: () => void;
+  onDeleteRow: (rowId: string) => void;
+}
+
+function evaluateMathExpression(raw: string): number {
+  const cleaned = String(raw || '').trim().replace(/,/g, '.').replace(/^[+=]/, '');
+  if (!cleaned) return 0;
+  if (/^[\d.+\-*/()\s]+$/.test(cleaned)) {
+    try {
+      const tokens = cleaned.match(/(\d+(?:\.\d+)?|[+\-*/()])/g);
+      if (!tokens) return parseFloat(cleaned) || 0;
+      const evaluated = Function(`"use strict"; return (${tokens.join('')});`)();
+      if (typeof evaluated === 'number' && Number.isFinite(evaluated)) {
+        return Math.max(0, Math.round(evaluated * 100) / 100);
+      }
+    } catch {
+      return Math.max(0, parseFloat(cleaned) || 0);
+    }
+  }
+  return Math.max(0, parseFloat(cleaned) || 0);
 }
 
 export default function PhysicalSheetStagingTable({
@@ -26,227 +54,437 @@ export default function PhysicalSheetStagingTable({
   reconciledRows,
   filteredCatalog,
   onToggleSelect,
+  onToggleSelectAll,
   onProductChange,
   onColChange,
   onQtyChange,
-  onResolutionChange
+  onResolutionChange,
+  onAddManualRow,
+  onDeleteRow
 }: PhysicalSheetStagingTableProps) {
-  if (reconciledRows.length === 0) {
-    return (
-      <div
-        style={{
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#64748B',
-          textAlign: 'center'
-        }}
-      >
-        <Layers size={38} style={{ marginBottom: '0.6rem', opacity: 0.45 }} />
-        <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#94A3B8' }}>
-          Mesa de Trabajo y Conciliación Lista
-        </div>
-        <p style={{ fontSize: '0.75rem', maxWidth: '420px', marginTop: '0.3rem' }}>
-          Selecciona el tipo de planilla arriba, carga las fotos o PDF del turno a la izquierda y pulsa &laquo;Procesar Planilla Física con IA&raquo;.
-        </p>
-      </div>
-    );
-  }
+  const [sortAlpha, setSortAlpha] = useState<boolean>(false);
+  const [showFormulaTooltip, setShowFormulaTooltip] = useState<boolean>(false);
+  const [activeDropdownRowIndex, setActiveDropdownRowIndex] = useState<number | null>(null);
+  const [activeRowSearchQuery, setActiveRowSearchQuery] = useState<string | null>(null);
+  const [focusedDropdownItemIndex, setFocusedDropdownItemIndex] = useState<number>(0);
+  const [rawQtyDrafts, setRawQtyDrafts] = useState<Record<string, string>>({});
+
+  const displayRows = sortAlpha
+    ? [...reconciledRows].sort((a, b) =>
+        (a.rawProductName || a.matchedProductName || '').localeCompare(
+          b.rawProductName || b.matchedProductName || '',
+          'es',
+          { sensitivity: 'base' }
+        )
+      )
+    : reconciledRows;
+
+  const allSelected =
+    reconciledRows.length > 0 && reconciledRows.every(r => r.selected);
+
+  const getScoredProductsForQuery = (query: string): CatalogProductOption[] => {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return filteredCatalog.slice(0, 25);
+    const scored = filteredCatalog
+      .map(p => {
+        const nameLow = p.name.toLowerCase();
+        const accLow = (p.accounting_id || p.sku || '').toLowerCase();
+        let score = 0;
+        if (accLow === q) score += 120;
+        else if (accLow.startsWith(q)) score += 90;
+        if (nameLow === q) score += 100;
+        else if (nameLow.startsWith(q)) score += 80;
+        else if (nameLow.includes(q)) score += 50;
+        else if (accLow.includes(q)) score += 45;
+        return { p, score };
+      })
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20)
+      .map(x => x.p);
+    return scored;
+  };
+
+  const scrollToRow = (idx: number) => {
+    const rowEl = document.getElementById(`physical-staged-row-${idx}`);
+    const container = document.getElementById('physical-staged-scroll-container');
+    if (rowEl && container) {
+      const rowTop = rowEl.offsetTop;
+      container.scrollTo({ top: Math.max(0, rowTop - 75), behavior: 'smooth' });
+    }
+  };
 
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem' }}>
-      <thead>
-        <tr
-          style={{
-            backgroundColor: '#020617',
-            color: '#94A3B8',
-            textAlign: 'left',
-            borderBottom: '1px solid #334155'
-          }}
+    <div
+      id="physical-staged-scroll-container"
+      style={{ flex: 1, minWidth: '460px', padding: 0, overflowY: 'auto', height: '100%', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
+    >
+      <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
+        <thead
+          style={{ position: 'sticky', top: 0, backgroundColor: '#FFFFFF', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
         >
-          <th style={{ padding: '0.55rem', width: '32px' }}>
-            <Check size={13} />
-          </th>
-          <th style={{ padding: '0.55rem' }}>Leído en Papel (Manuscrito)</th>
-          <th style={{ padding: '0.55rem' }}>SKU Homologado (Catálogo FruFresco)</th>
-          <th style={{ padding: '0.55rem', width: '110px' }}>Columna Destino</th>
-          <th style={{ padding: '0.55rem', width: '105px', textAlign: 'right' }}>Cant. Papel</th>
-          <th style={{ padding: '0.55rem', width: '230px' }}>Contraste OPS &amp; Arbitraje</th>
-        </tr>
-      </thead>
-      <tbody>
-        {reconciledRows.map(row => {
-          const confColor = row.confidence >= 90 ? '#10B981' : row.confidence >= 70 ? '#F59E0B' : '#EF4444';
-          return (
-            <tr
-              key={row.rowId}
-              style={{
-                borderBottom: '1px solid #1E293B',
-                backgroundColor: row.conciliationStatus === 'discrepancy' ? 'rgba(245, 158, 11, 0.06)' : 'transparent',
-                opacity: row.selected ? 1 : 0.55
-              }}
+          <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
+            <th style={{ padding: '0.85rem 0.5rem', textAlign: 'center', width: '36px' }}>
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={e => onToggleSelectAll(e.target.checked)}
+                style={{ transform: 'scale(1.15)', cursor: 'pointer' }}
+              />
+            </th>
+            <th
+              style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em', padding: '0.85rem 1rem', textAlign: 'left', width: '32%' }}
             >
-              <td style={{ padding: '0.5rem' }}>
-                <input
-                  type="checkbox"
-                  checked={row.selected}
-                  onChange={e => onToggleSelect(row.rowId, e.target.checked)}
-                />
-              </td>
-
-              <td style={{ padding: '0.5rem' }}>
-                <div style={{ fontWeight: 700, color: '#F1F5F9' }}>{row.rawProductName}</div>
-                <div style={{ fontSize: '0.68rem', color: '#94A3B8', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                  <span>Leído: <strong>{row.rawQuantityText}</strong></span>
-                  {row.rawPresentation && <span>· Pres: {row.rawPresentation}</span>}
-                  {row.supplierName && <span style={{ color: '#38BDF8' }}>· Prov: {row.supplierName}</span>}
-                  {row.unitCostPaid && <span style={{ color: '#34D399' }}>· ${row.unitCostPaid.toLocaleString('es-CO')}</span>}
-                  {row.sourceNote && <span style={{ color: '#FBBF24' }}>· ({row.sourceNote})</span>}
-                </div>
-              </td>
-
-              <td style={{ padding: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span
-                    style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: confColor, flexShrink: 0 }}
-                    title={`Confianza IA: ${row.confidence}%`}
-                  />
-                  <select
-                    value={row.matchedProductId || ''}
-                    onChange={e => onProductChange(row.rowId, e.target.value)}
-                    style={{
-                      width: '100%',
-                      backgroundColor: '#1E293B',
-                      border: `1px solid ${row.matchedProductId ? '#334155' : '#EF4444'}`,
-                      borderRadius: '6px',
-                      padding: '0.3rem 0.45rem',
-                      color: '#F8FAFC',
-                      fontSize: '0.74rem'
-                    }}
-                  >
-                    <option value="">-- Seleccionar SKU manualmente --</option>
-                    {filteredCatalog.map(c => (
-                      <option key={c.id} value={c.id}>
-                        #{c.accounting_id || c.sku} — {c.name} ({c.unit_of_measure})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </td>
-
-              <td style={{ padding: '0.5rem' }}>
-                {sheetType === 'desperdicio' || sheetType === 'pedidos_desperdicio' ? (
-                  <select
-                    value={row.targetColumn}
-                    onChange={e => onColChange(row.rowId, e.target.value as TargetBalanceColumn)}
-                    style={{
-                      backgroundColor: '#1E293B',
-                      border: '1px solid #334155',
-                      borderRadius: '6px',
-                      padding: '0.28rem 0.4rem',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      color: row.targetColumn === 'Q' ? '#F87171' : '#FB923C'
-                    }}
-                  >
-                    <option value="Q">Col Q · Desperdicio</option>
-                    <option value="R">Col R · Basura</option>
-                  </select>
-                ) : (
-                  <span
-                    style={{
-                      fontSize: '0.71rem',
-                      fontWeight: 800,
-                      padding: '0.2rem 0.5rem',
-                      borderRadius: '6px',
-                      backgroundColor: '#1E293B',
-                      color: row.targetColumn === 'G' ? '#34D399' : row.targetColumn === 'X' ? '#C084FC' : '#38BDF8'
-                    }}
-                  >
-                    Col {row.targetColumn} ({row.matchedUnit})
-                  </span>
-                )}
-              </td>
-
-              <td style={{ padding: '0.5rem', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={row.quantity}
-                  onChange={e => onQtyChange(row.rowId, parseFloat(e.target.value))}
-                  style={{
-                    width: '88px',
-                    textAlign: 'right',
-                    backgroundColor: '#020617',
-                    border: '1px solid #475569',
-                    borderRadius: '6px',
-                    padding: '0.3rem 0.45rem',
-                    color: '#F8FAFC',
-                    fontWeight: 800,
-                    fontSize: '0.78rem'
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>NOMBRE EN DOCUMENTO</span>
+                <button
+                  type="button"
+                  onClick={() => setSortAlpha(prev => !prev)}
+                  title={sortAlpha ? 'Restaurar orden del documento original' : 'Ordenar alfabéticamente A→Z'}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '0.62rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', border: sortAlpha ? '1px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: sortAlpha ? '#ECFDF5' : '#F8FAFC', color: sortAlpha ? '#065F46' : '#64748B' }}
+                >
+                  A→Z
+                </button>
+              </div>
+            </th>
+            <th
+              style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em', padding: '0.85rem 0.75rem', textAlign: 'left', width: '38%' }}
+            >
+              TU PRODUCTO (ID CONTABLE)
+            </th>
+            <th
+              style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em', padding: '0.85rem 0.75rem', textAlign: 'center', width: '30%' }}
+            >
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
+                <span>CANT. / COLUMNA</span>
+                <div
+                  style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
+                  onMouseEnter={() => setShowFormulaTooltip(true)}
+                  onMouseLeave={() => setShowFormulaTooltip(false)}
+                  onClick={e => {
+                    e.stopPropagation();
+                    setShowFormulaTooltip(prev => !prev);
                   }}
-                />
-              </td>
+                >
+                  <div
+                    style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: '#EFF6FF', border: '1px solid #93C5FD', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Info size={11} color="#2563EB" />
+                  </div>
+                  {showFormulaTooltip && (
+                    <div
+                      style={{ position: 'absolute', top: '100%', right: '-12px', marginTop: '8px', width: '250px', backgroundColor: '#1E293B', color: '#FFFFFF', padding: '10px 12px', borderRadius: '10px', fontSize: '0.72rem', lineHeight: 1.45, textAlign: 'left', zIndex: 9999, boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.4)', border: '1px solid #334155', fontWeight: 'normal' }}
+                    >
+                      <div style={{ fontWeight: 800, color: '#60A5FA', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Calculator size={13} color="#60A5FA" />
+                        <span>Fórmulas rápidas tipo Excel</span>
+                      </div>
+                      <div style={{ backgroundColor: '#0F172A', padding: '5px 8px', borderRadius: '6px', fontFamily: 'monospace', color: '#38BDF8', fontSize: '0.7rem' }}>
+                        <div><strong style={{ color: '#FCD34D' }}>408+70</strong> → <strong>478</strong></div>
+                        <div><strong style={{ color: '#FCD34D' }}>+900/24</strong> → <strong>37.5</strong></div>
+                        <div><strong style={{ color: '#FCD34D' }}>10+5+2,5</strong> → <strong>17.5</strong></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </th>
+          </tr>
+        </thead>
 
-              <td style={{ padding: '0.5rem' }}>
-                {row.conciliationStatus === 'new_entry' && (
-                  <span style={{ color: '#34D399', fontSize: '0.71rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <CheckCircle2 size={13} /> Nuevo ingreso (OPS: 0)
-                  </span>
-                )}
-                {row.conciliationStatus === 'matched_ops' && (
-                  <span style={{ color: '#38BDF8', fontSize: '0.71rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <CheckCircle2 size={13} /> Conciliado con OPS ({row.opsCurrentValue})
-                  </span>
-                )}
-                {row.conciliationStatus === 'discrepancy' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <span style={{ fontSize: '0.68rem', color: '#FBBF24', fontWeight: 700 }}>
-                      OPS tiene: {row.opsCurrentValue} vs Papel: {row.quantity}
+        <tbody>
+          {displayRows.map((row, idx) => {
+            const isConfidenceHigh = row.confidence >= 90;
+            const isActiveRow = activeDropdownRowIndex === idx;
+            const currentInputVal =
+              isActiveRow && activeRowSearchQuery !== null
+                ? activeRowSearchQuery
+                : row.matchedProductId
+                ? `${row.matchedProductName} (${row.matchedAccountingId})`
+                : '';
+
+            const draftQty =
+              rawQtyDrafts[row.rowId] !== undefined ? rawQtyDrafts[row.rowId] : String(row.quantity);
+
+            return (
+              <tr
+                key={row.rowId}
+                id={`physical-staged-row-${idx}`}
+                style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: isActiveRow ? '#FFFFFF' : row.conciliationStatus === 'discrepancy' ? '#FFFBEB' : row.matchedProductId ? isConfidenceHigh ? '#FFFFFF' : '#FEFCE8' : '#FFF7ED', boxShadow: isActiveRow ? '0 10px 25px -4px rgba(37, 99, 235, 0.16)' : 'none', borderLeft: isActiveRow ? '4px solid #2563EB' : '4px solid transparent', zIndex: isActiveRow ? 20 : 1, position: 'relative', transition: 'all 0.15s ease' }}
+              >
+                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', width: '36px' }}>
+                  <input
+                    type="checkbox"
+                    checked={row.selected}
+                    onChange={e => onToggleSelect(row.rowId, e.target.checked)}
+                    style={{ transform: 'scale(1.15)', cursor: 'pointer' }}
+                  />
+                </td>
+
+                {/* COLUMNA 1: NOMBRE EN DOCUMENTO + PÍLDORAS IGUAL A PEDIDOS */}
+                <td style={{ padding: '0.75rem 1rem', width: '32%' }}>
+                  <div style={{ fontSize: isActiveRow ? '0.9rem' : '0.86rem', fontWeight: 800, color: '#0F172A' }}>
+                    {row.rawProductName || 'Ítem manual'}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                    <span
+                      style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', padding: '1px 7px', borderRadius: '6px', fontWeight: 900 }}
+                    >
+                      {row.rawQuantityText || `${row.quantity} ${row.matchedUnit}`}
                     </span>
-                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+
+                    {row.matchedProductId ? (
+                      <span
+                        style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.67rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                      >
+                        <CheckCircle2 size={11} color="#15803D" /> {row.confidence}%
+                      </span>
+                    ) : (
+                      <span
+                        style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '6px', fontSize: '0.67rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                      >
+                        <AlertCircle size={11} color="#B91C1C" /> Sin Match
+                      </span>
+                    )}
+
+                    {row.conciliationStatus === 'matched_ops' && (
+                      <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD', padding: '1px 6px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: 800 }}>
+                        OPS: {row.opsCurrentValue}
+                      </span>
+                    )}
+                    {row.supplierName && (
+                      <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '1px 6px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: 700 }}>
+                        Prov: {row.supplierName}
+                      </span>
+                    )}
+                    {row.unitCostPaid && (
+                      <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '1px 6px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: 800 }}>
+                        ${row.unitCostPaid.toLocaleString('es-CO')}
+                      </span>
+                    )}
+                  </div>
+
+                  {row.conciliationStatus === 'discrepancy' && (
+                    <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.66rem', fontWeight: 800, color: '#B45309' }}>
+                        OPS ({row.opsCurrentValue}) vs Papel ({row.quantity}):
+                      </span>
                       <button
                         type="button"
                         onClick={() => onResolutionChange(row.rowId, 'use_sheet')}
-                        style={{
-                          padding: '0.18rem 0.45rem',
-                          fontSize: '0.66rem',
-                          fontWeight: 700,
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          border: '1px solid #F59E0B',
-                          backgroundColor: row.resolution === 'use_sheet' ? '#F59E0B' : 'transparent',
-                          color: row.resolution === 'use_sheet' ? '#020617' : '#FBBF24'
-                        }}
+                        style={{ padding: '1px 6px', fontSize: '0.64rem', fontWeight: 800, borderRadius: '4px', cursor: 'pointer', border: '1px solid #D97706', backgroundColor: row.resolution === 'use_sheet' ? '#D97706' : '#FFFFFF', color: row.resolution === 'use_sheet' ? '#FFFFFF' : '#B45309' }}
                       >
                         Usar Papel
                       </button>
                       <button
                         type="button"
                         onClick={() => onResolutionChange(row.rowId, 'keep_ops')}
-                        style={{
-                          padding: '0.18rem 0.45rem',
-                          fontSize: '0.66rem',
-                          fontWeight: 700,
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          border: '1px solid #475569',
-                          backgroundColor: row.resolution === 'keep_ops' ? '#334155' : 'transparent',
-                          color: '#CBD5E1'
-                        }}
+                        style={{ padding: '1px 6px', fontSize: '0.64rem', fontWeight: 800, borderRadius: '4px', cursor: 'pointer', border: '1px solid #CBD5E1', backgroundColor: row.resolution === 'keep_ops' ? '#334155' : '#FFFFFF', color: row.resolution === 'keep_ops' ? '#FFFFFF' : '#475569' }}
                       >
                         Mantener OPS
                       </button>
                     </div>
+                  )}
+                </td>
+
+                {/* COLUMNA 2: BUSCADOR INTERACTIVO DE PRODUCTO (IDÉNTICO A PEDIDOS) */}
+                <td style={{ padding: '0.45rem 0.75rem', position: 'relative', width: '38%' }}>
+                  <input
+                    id={`physical-sku-input-${idx}`}
+                    type="text"
+                    placeholder="Buscar ID contable o producto..."
+                    autoComplete="off"
+                    value={currentInputVal}
+                    onFocus={e => {
+                      e.target.select();
+                      setActiveDropdownRowIndex(idx);
+                      setFocusedDropdownItemIndex(0);
+                      setActiveRowSearchQuery(null);
+                      scrollToRow(idx);
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        setActiveDropdownRowIndex(prev => (prev === idx ? null : prev));
+                        setActiveRowSearchQuery(null);
+                      }, 200);
+                    }}
+                    onChange={e => {
+                      setActiveDropdownRowIndex(idx);
+                      setFocusedDropdownItemIndex(0);
+                      setActiveRowSearchQuery(e.target.value);
+                    }}
+                    onKeyDown={e => {
+                      const query = activeRowSearchQuery !== null ? activeRowSearchQuery : row.matchedProductName || '';
+                      const scoredList = getScoredProductsForQuery(query);
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (scoredList.length > 0) {
+                          setFocusedDropdownItemIndex(prev => Math.min(prev + 1, scoredList.length - 1));
+                        }
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setFocusedDropdownItemIndex(prev => Math.max(prev - 1, 0));
+                      } else if (e.key === 'Enter' || e.key === 'Tab') {
+                        const chosen = scoredList[focusedDropdownItemIndex];
+                        if (chosen) {
+                          e.preventDefault();
+                          onProductChange(row.rowId, chosen.id);
+                          setActiveDropdownRowIndex(null);
+                          setActiveRowSearchQuery(null);
+                          const qtyInput = document.getElementById(`physical-qty-input-${idx}`) as HTMLInputElement | null;
+                          if (qtyInput) {
+                            qtyInput.focus();
+                            qtyInput.select();
+                          }
+                        }
+                      } else if (e.key === 'Escape') {
+                        setActiveDropdownRowIndex(null);
+                        setActiveRowSearchQuery(null);
+                      }
+                    }}
+                    style={{ width: '100%', padding: isActiveRow ? '8px 11px' : '7px 10px', borderRadius: '9px', border: isActiveRow ? '2px solid #2563EB' : row.matchedProductId ? isConfidenceHigh ? '1.5px solid #E2E8F0' : '1.5px solid #FCD34D' : '1.5px solid #F97316', fontSize: '0.84rem', fontWeight: 800, color: '#0F172A', backgroundColor: row.matchedProductId ? '#FFFFFF' : '#FFFBEB', outline: 'none', boxShadow: isActiveRow ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)' }}
+                  />
+
+                  {isActiveRow && (() => {
+                    const query = activeRowSearchQuery !== null ? activeRowSearchQuery : '';
+                    const scoredList = getScoredProductsForQuery(query);
+                    if (scoredList.length === 0) return null;
+                    return (
+                      <div
+                        style={{ position: 'absolute', top: '100%', marginTop: '4px', left: 0, right: 0, minWidth: '380px', zIndex: 9999, backgroundColor: '#FFFFFF', borderRadius: '12px', boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.25)', border: '1px solid #CBD5E1', maxHeight: '260px', overflowY: 'auto' }}
+                      >
+                        {scoredList.map((p, pIdx) => {
+                          const isFocused = pIdx === focusedDropdownItemIndex;
+                          return (
+                            <div
+                              key={p.id}
+                              onMouseDown={e => {
+                                e.preventDefault();
+                                onProductChange(row.rowId, p.id);
+                                setActiveDropdownRowIndex(null);
+                                setActiveRowSearchQuery(null);
+                                const qtyInput = document.getElementById(`physical-qty-input-${idx}`) as HTMLInputElement | null;
+                                if (qtyInput) {
+                                  qtyInput.focus();
+                                  qtyInput.select();
+                                }
+                              }}
+                              onMouseEnter={() => setFocusedDropdownItemIndex(pIdx)}
+                              style={{ padding: '0.65rem 0.9rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9', borderLeft: isFocused ? '4px solid #2563EB' : '4px solid transparent', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isFocused ? '#DBEAFE' : '#FFFFFF' }}
+                            >
+                              <span style={{ fontWeight: isFocused ? 900 : 700, color: isFocused ? '#1E3A8A' : '#0F172A', fontSize: '0.84rem' }}>
+                                {p.name}{' '}
+                                <span style={{ fontSize: '0.78rem', color: isFocused ? '#2563EB' : '#64748B', fontWeight: 600 }}>
+                                  (ID: {p.accounting_id || p.sku})
+                                </span>
+                              </span>
+                              <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#047857', backgroundColor: '#ECFDF5', padding: '2px 7px', borderRadius: '6px' }}>
+                                {p.unit_of_measure}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </td>
+
+                {/* COLUMNA 3: CANTIDAD CON FÓRMULAS EXCEL + DESTINO SÁBANA */}
+                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', width: '30%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <input
+                      id={`physical-qty-input-${idx}`}
+                      type="text"
+                      value={draftQty}
+                      onFocus={e => {
+                        e.target.select();
+                        scrollToRow(idx);
+                      }}
+                      onChange={e => {
+                        const rawVal = e.target.value;
+                        setRawQtyDrafts(prev => ({ ...prev, [row.rowId]: rawVal }));
+                      }}
+                      onBlur={e => {
+                        const val = evaluateMathExpression(e.currentTarget.value);
+                        onQtyChange(row.rowId, val);
+                        setRawQtyDrafts(prev => {
+                          const next = { ...prev };
+                          delete next[row.rowId];
+                          return next;
+                        });
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = evaluateMathExpression(e.currentTarget.value);
+                          onQtyChange(row.rowId, val);
+                          setRawQtyDrafts(prev => {
+                            const next = { ...prev };
+                            delete next[row.rowId];
+                            return next;
+                          });
+                          const nextSku = document.getElementById(`physical-sku-input-${idx + 1}`) as HTMLInputElement | null;
+                          if (nextSku) {
+                            nextSku.focus();
+                            nextSku.select();
+                            scrollToRow(idx + 1);
+                          }
+                        }
+                      }}
+                      style={{ width: '78px', padding: '7px 8px', borderRadius: '8px', border: '2px solid #E2E8F0', textAlign: 'center', fontWeight: 800, fontSize: '0.92rem', color: '#0F172A', backgroundColor: '#FFFFFF' }}
+                    />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                      <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#334155' }}>
+                        {row.matchedUnit}
+                      </span>
+                      {sheetType === 'desperdicio' || sheetType === 'pedidos_desperdicio' ? (
+                        <select
+                          value={row.targetColumn}
+                          onChange={e => onColChange(row.rowId, e.target.value as TargetBalanceColumn)}
+                          style={{ padding: '1px 5px', borderRadius: '5px', border: '1px solid #CBD5E1', fontSize: '0.66rem', fontWeight: 800, backgroundColor: row.targetColumn === 'Q' ? '#FEF2F2' : '#FFF7ED', color: row.targetColumn === 'Q' ? '#B91C1C' : '#C2410C', cursor: 'pointer' }}
+                        >
+                          <option value="Q">Col Q (Desp)</option>
+                          <option value="R">Col R (Bas)</option>
+                        </select>
+                      ) : (
+                        <span
+                          style={{ fontSize: '0.65rem', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', backgroundColor: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}
+                        >
+                          Col {row.targetColumn}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onDeleteRow(row.rowId)}
+                      title="Eliminar fila"
+                      style={{ border: 'none', background: 'transparent', color: '#94A3B8', cursor: 'pointer', padding: '4px' }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* Botón para Agregar Ítem Manual en la Mesa de Trabajo (Idéntico a Pedidos) */}
+      <div style={{ padding: '0.85rem 1rem', display: 'flex', justifyContent: 'center', backgroundColor: '#F8FAFC', borderTop: '1.5px dashed #CBD5E1' }}>
+        <button
+          type="button"
+          onClick={onAddManualRow}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '10px', border: '1.5px dashed #0D9488', backgroundColor: '#F0FDFA', color: '#0F766E', fontSize: '0.84rem', fontWeight: 800, cursor: 'pointer' }}
+        >
+          <Plus size={15} strokeWidth={2.5} />
+          <span>+ Agregar Ítem Manual a la Mesa de Trabajo</span>
+        </button>
+      </div>
+
+      <div style={{ height: '240px', pointerEvents: 'none' }} />
+    </div>
   );
 }

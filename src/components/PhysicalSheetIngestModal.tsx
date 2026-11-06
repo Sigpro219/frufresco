@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   X,
-  Upload,
+  UploadCloud,
   Sparkles,
   Truck,
   ClipboardCheck,
@@ -16,10 +16,17 @@ import {
   RefreshCw,
   ArrowRight,
   ShieldCheck,
-  Search
+  CheckCircle2,
+  MessageSquare,
+  Zap,
+  Maximize2,
+  Loader2,
+  Plus
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
+import ExcelTableViewer from '@/components/ExcelTableViewer';
 import PhysicalSheetStagingTable from '@/components/PhysicalSheetStagingTable';
 import {
   PhysicalSheetType,
@@ -51,49 +58,46 @@ export default function PhysicalSheetIngestModal({
   onSuccess
 }: PhysicalSheetIngestModalProps) {
   const [sheetType, setSheetType] = useState<PhysicalSheetType>('entrada');
+  const [aiInputTab, setAiInputTab] = useState<'file' | 'text'>('file');
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [activeFileIdx, setActiveFileIdx] = useState<number>(0);
   const [rawText, setRawText] = useState<string>('');
-  const [showTextTab, setShowTextTab] = useState<boolean>(false);
   const [zoom, setZoom] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
+  const [stackedView, setStackedView] = useState<boolean>(false);
+  const [showSideDocPreview, setShowSideDocPreview] = useState<boolean>(true);
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [digestionDuration, setDigestionDuration] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reconciledRows, setReconciledRows] = useState<ReconciledSheetRow[]>([]);
-  const [skuSearchFilter, setSkuSearchFilter] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const appendFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFilesSelected = (selectedList: FileList | null) => {
-    if (!selectedList || selectedList.length === 0) return;
-    const newFiles = Array.from(selectedList);
-    setFiles(prev => [...prev, ...newFiles]);
-    setPreviewUrls(prev => [...prev, ...newFiles.map(f => URL.createObjectURL(f))]);
-    setErrorMsg(null);
-  };
+  const isStaging = reconciledRows.length > 0;
 
-  const handleRemoveFile = (idx: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== idx));
-    setPreviewUrls(prev => prev.filter((_, i) => i !== idx));
-    if (activeFileIdx >= idx && activeFileIdx > 0) setActiveFileIdx(prev => prev - 1);
-  };
-
-  const handleRunExtraction = async () => {
-    if (files.length === 0 && !rawText.trim()) {
-      setErrorMsg('Selecciona al menos una imagen/PDF de la planilla física o pega texto para analizar.');
+  const executeAiExtraction = async (
+    targetFiles: File[],
+    targetText: string,
+    targetSheetType: PhysicalSheetType,
+    appendMode = false
+  ) => {
+    if (targetFiles.length === 0 && !targetText.trim()) {
+      setErrorMsg('Selecciona al menos un archivo (Foto, PDF o Excel) o pega el texto de la planilla.');
       return;
     }
     setIsExtracting(true);
     setErrorMsg(null);
+    const startMs = performance.now();
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token || '';
       const formData = new FormData();
-      formData.append('sheetType', sheetType);
+      formData.append('sheetType', targetSheetType);
       formData.append('balanceDate', balanceDate);
-      if (rawText.trim()) formData.append('text', rawText.trim());
-      files.forEach(f => formData.append('files', f));
+      if (targetText.trim()) formData.append('text', targetText.trim());
+      targetFiles.forEach(f => formData.append('files', f));
 
       const res = await fetch('/api/commercial/inventory/extract-physical-sheet', {
         method: 'POST',
@@ -103,19 +107,56 @@ export default function PhysicalSheetIngestModal({
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'No fue posible extraer la planilla física.');
 
-      const allReconciled: ReconciledSheetRow[] = [];
+      const extractedRows: ReconciledSheetRow[] = [];
       (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
-        allReconciled.push(
-          ...buildReconciledSheetRows(fileRes.items || [], sheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol)
+        extractedRows.push(
+          ...buildReconciledSheetRows(fileRes.items || [], targetSheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol)
         );
       });
-      setReconciledRows(allReconciled);
-      if (allReconciled.length === 0) setErrorMsg('No se detectaron renglones con cantidades manuscritas.');
+
+      setDigestionDuration(((performance.now() - startMs) / 1000).toFixed(1));
+      setReconciledRows(prev => (appendMode ? [...prev, ...extractedRows] : extractedRows));
+      if (extractedRows.length === 0 && !appendMode) {
+        setErrorMsg('No se detectaron renglones con cantidades diligenciadas en el documento.');
+      }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Error durante la lectura IA');
     } finally {
       setIsExtracting(false);
     }
+  };
+
+  const handleInitialFilesSelected = (selectedList: FileList | null) => {
+    if (!selectedList || selectedList.length === 0) return;
+    const newFiles = Array.from(selectedList);
+    setFiles(newFiles);
+    setPreviewUrls(newFiles.map(f => URL.createObjectURL(f)));
+    setActiveFileIdx(0);
+    setZoom(1);
+    setRotation(0);
+    setShowSideDocPreview(true);
+    void executeAiExtraction(newFiles, '', sheetType, false);
+  };
+
+  const handleAppendFilesSelected = (selectedList: FileList | null) => {
+    if (!selectedList || selectedList.length === 0) return;
+    const newFiles = Array.from(selectedList);
+    const nextIdx = files.length;
+    setFiles(prev => [...prev, ...newFiles]);
+    setPreviewUrls(prev => [...prev, ...newFiles.map(f => URL.createObjectURL(f))]);
+    setActiveFileIdx(nextIdx);
+    void executeAiExtraction(newFiles, '', sheetType, true);
+  };
+
+  const handleResetWorkspace = () => {
+    previewUrls.forEach(u => URL.revokeObjectURL(u));
+    setFiles([]);
+    setPreviewUrls([]);
+    setRawText('');
+    setReconciledRows([]);
+    setErrorMsg(null);
+    setDigestionDuration(null);
+    setActiveFileIdx(0);
   };
 
   const handleRowProductChange = (rowId: string, newProductId: string) => {
@@ -163,6 +204,35 @@ export default function PhysicalSheetIngestModal({
     );
   };
 
+  const handleAddManualRow = () => {
+    const defaultCol: TargetBalanceColumn =
+      sheetType === 'entrada' ? 'G' : sheetType === 'inv_manual' ? 'T' : sheetType === 'donaciones' ? 'X' : 'Q';
+    setReconciledRows(prev => [
+      ...prev,
+      {
+        rowId: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        sourceFileName: files[activeFileIdx]?.name || 'Manual',
+        rawProductName: 'Ítem agregado manualmente',
+        rawQuantityText: '1',
+        rawPresentation: null,
+        quantity: 1,
+        unitCostPaid: null,
+        supplierName: null,
+        sourceNote: null,
+        targetColumn: defaultCol,
+        matchedProductId: null,
+        matchedProductName: 'Sin homologar',
+        matchedAccountingId: 'S/N',
+        matchedUnit: 'Kg',
+        confidence: 0,
+        opsCurrentValue: 0,
+        conciliationStatus: 'new_entry',
+        resolution: 'use_sheet',
+        selected: true
+      }
+    ]);
+  };
+
   const stats = useMemo(() => {
     const active = reconciledRows.filter(r => r.selected && r.matchedProductId);
     return {
@@ -179,7 +249,7 @@ export default function PhysicalSheetIngestModal({
       r => r.selected && r.matchedProductId && r.quantity > 0 && r.resolution === 'use_sheet'
     );
     if (rowsToApply.length === 0) {
-      setErrorMsg('No hay filas activas con [Usar Papel] para aplicar a la sábana.');
+      setErrorMsg('No hay filas activas homologadas con cantidad > 0 para inyectar a la Sábana.');
       return;
     }
     setIsSaving(true);
@@ -218,9 +288,7 @@ export default function PhysicalSheetIngestModal({
           files: []
         };
         existing.totalQuantity = Math.round((existing.totalQuantity + r.quantity) * 100) / 100;
-        if (r.conciliationStatus === 'discrepancy' && r.resolution === 'use_sheet') {
-          existing.replacesOpsDiscrepancy = true;
-        }
+        if (r.conciliationStatus === 'discrepancy' && r.resolution === 'use_sheet') existing.replacesOpsDiscrepancy = true;
         if (r.unitCostPaid && r.unitCostPaid > 0) {
           existing.weightedCostNumerator += r.quantity * r.unitCostPaid;
           existing.weightedCostDenominator += r.quantity;
@@ -345,189 +413,284 @@ export default function PhysicalSheetIngestModal({
 
   if (!isOpen) return null;
 
-  const filteredCatalog = skuSearchFilter.trim()
-    ? catalog.filter(
-        c =>
-          c.name.toLowerCase().includes(skuSearchFilter.toLowerCase()) ||
-          (c.accounting_id && c.accounting_id.toLowerCase().includes(skuSearchFilter.toLowerCase()))
-      )
-    : catalog;
-
-  const activeFile = files[activeFileIdx];
-  const isActivePdf = Boolean(
-    activeFile && (activeFile.type === 'application/pdf' || activeFile.name.toLowerCase().endsWith('.pdf'))
-  );
+  const activeFile = files[activeFileIdx] || null;
+  const activePreviewUrl = previewUrls[activeFileIdx] || null;
+  const activeFileName = activeFile?.name?.toLowerCase() || '';
+  const isActiveExcel =
+    activeFileName.endsWith('.xlsx') || activeFileName.endsWith('.xls') || activeFileName.endsWith('.csv');
+  const isActivePdf = activeFile?.type === 'application/pdf' || activeFileName.endsWith('.pdf');
+  const docTypeLabel = isActiveExcel ? 'Excel' : isActivePdf ? 'PDF' : 'Imagen';
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(2, 6, 23, 0.82)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div style={{ width: '100%', maxWidth: '1540px', height: '92vh', backgroundColor: '#0F172A', border: '1px solid #334155', borderRadius: '14px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)' }}>
-        {/* CABECERA */}
-        <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #1E293B', backgroundColor: '#020617', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#020617' }}>
-              <Sparkles size={19} strokeWidth={2.4} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div style={{ width: '100%', maxWidth: '1600px', height: '93vh', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+        {/* CABECERA PRINCIPAL (ESTILO PEDIDOS) */}
+        <div style={{ padding: '1rem 1.75rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#ECFDF5', border: '1.5px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+              <Sparkles size={20} strokeWidth={2.2} />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#F8FAFC' }}>
-                  Lector Multimodal de Planillas Físicas de Bodega (IA)
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F172A' }}>
+                  Mesa de Trabajo Inteligente — Planillas Físicas de Bodega (IA)
                 </h2>
-                <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.12rem 0.5rem', borderRadius: '999px', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#34D399', border: '1px solid rgba(16, 185, 129, 0.3)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <ShieldCheck size={12} /> Arbitraje Anti-Colisión OPS Activo
+                <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '3px 10px', borderRadius: '999px', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <ShieldCheck size={13} /> Arbitraje Anti-Colisión OPS Activo
                 </span>
               </div>
-              <p style={{ margin: '0.12rem 0 0', fontSize: '0.74rem', color: '#94A3B8' }}>
-                Jornada contable destino: <strong style={{ color: '#FBBF24' }}>{balanceDate}</strong>
+              <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748B' }}>
+                Jornada contable destino: <strong style={{ color: '#0F172A' }}>{balanceDate}</strong> · Vista dividida Lado a Lado idéntica al Módulo de Pedidos
               </p>
             </div>
           </div>
-          <button type="button" onClick={onClose} style={{ background: 'transparent', border: '1px solid #334155', color: '#94A3B8', borderRadius: '8px', padding: '0.35rem', cursor: 'pointer' }}>
+          <button type="button" onClick={onClose} style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <X size={18} />
           </button>
         </div>
 
-        {/* PASO 1: SELECTOR DE LAS 5 ENTRADAS DE PLANILLAS FÍSICAS */}
-        <div style={{ padding: '0.6rem 1.25rem', backgroundColor: '#0B1120', borderBottom: '1px solid #1E293B', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.55rem' }}>
+        {/* SELECTOR DE LAS 5 MODALIDADES DE PLANILLA */}
+        <div style={{ padding: '0.65rem 1.75rem', backgroundColor: '#FFFFFF', borderBottom: '1px solid #E2E8F0', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.6rem' }}>
           {[
-            { id: 'entrada' as PhysicalSheetType, title: '1. Entradas Muelle', subtitle: 'Unidad compra directa (Kg/Und, cero recálculos)', colBadge: 'Col G (+)', color: '#10B981', Icon: Truck },
-            { id: 'inv_manual' as PhysicalSheetType, title: '2. Conteo Fin Turno', subtitle: 'Planillas cierre de bodega 7:00 PM', colBadge: 'Col T (Físico)', color: '#38BDF8', Icon: ClipboardCheck },
-            { id: 'pedidos_desperdicio' as PhysicalSheetType, title: '3. Formato Pedidos (2 Cols)', subtitle: 'Susceptibles del pedido: Desperdicio y Basura', colBadge: 'Cols Q y R (-)', color: '#F59E0B', Icon: FileText },
-            { id: 'desperdicio' as PhysicalSheetType, title: '4. Desperdicio General', subtitle: 'Planilla libre de avería y descapote', colBadge: 'Cols Q y R (-)', color: '#F43F5E', Icon: Trash2 },
-            { id: 'donaciones' as PhysicalSheetType, title: '5. Plantilla Donaciones', subtitle: 'Autorizadas por Supervisor de Planta', colBadge: 'Col X (-)', color: '#C084FC', Icon: ShieldCheck }
+            { id: 'entrada' as PhysicalSheetType, title: '1. Entradas Muelle', subtitle: 'Unidad compra directa (cero recálculos)', colBadge: 'Col G (+)', color: '#059669', bg: '#ECFDF5', Icon: Truck },
+            { id: 'inv_manual' as PhysicalSheetType, title: '2. Conteo Fin Turno', subtitle: 'Planillas cierre de bodega 7:00 PM', colBadge: 'Col T (Físico)', color: '#0284C7', bg: '#E0F2FE', Icon: ClipboardCheck },
+            { id: 'pedidos_desperdicio' as PhysicalSheetType, title: '3. Formato Pedidos (2 Cols)', subtitle: 'Susceptibles: Desperdicio y Basura', colBadge: 'Cols Q y R (-)', color: '#D97706', bg: '#FEF3C7', Icon: FileText },
+            { id: 'desperdicio' as PhysicalSheetType, title: '4. Desperdicio General', subtitle: 'Planilla libre de avería y descapote', colBadge: 'Cols Q y R (-)', color: '#E11D48', bg: '#FFE4E6', Icon: Trash2 },
+            { id: 'donaciones' as PhysicalSheetType, title: '5. Plantilla Donaciones', subtitle: 'Autorizadas por Supervisor de Planta', colBadge: 'Col X (-)', color: '#7C3AED', bg: '#F3E8FF', Icon: ShieldCheck }
           ].map(card => {
             const active = sheetType === card.id;
             const IconComp = card.Icon;
             return (
-              <button key={card.id} type="button" onClick={() => { setSheetType(card.id); setReconciledRows([]); }} style={{ textAlign: 'left', padding: '0.6rem 0.85rem', borderRadius: '10px', border: active ? `2px solid ${card.color}` : '1px solid #1E293B', backgroundColor: active ? 'rgba(15, 23, 42, 0.95)' : 'rgba(15, 23, 42, 0.4)', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
-                <div style={{ padding: '0.4rem', borderRadius: '8px', backgroundColor: active ? `${card.color}22` : '#1E293B', color: active ? card.color : '#64748B' }}>
-                  <IconComp size={17} />
+              <button key={card.id} type="button" onClick={() => {
+                  setSheetType(card.id);
+                  if (files.length > 0 || rawText.trim()) void executeAiExtraction(files, rawText, card.id, false);
+                }}
+                style={{ textAlign: 'left', padding: '0.55rem 0.75rem', borderRadius: '12px', border: active ? `2px solid ${card.color}` : '1px solid #E2E8F0', backgroundColor: active ? card.bg : '#F8FAFC', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '0.55rem' }}
+              >
+                <div style={{ padding: '0.35rem', borderRadius: '8px', backgroundColor: active ? '#FFFFFF' : '#E2E8F0', color: active ? card.color : '#64748B' }}>
+                  <IconComp size={16} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: active ? '#F8FAFC' : '#CBD5E1' }}>{card.title}</span>
-                    <span style={{ fontSize: '0.64rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px', backgroundColor: `${card.color}22`, color: card.color }}>{card.colBadge}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0F172A' }}>{card.title}</span>
+                    <span style={{ fontSize: '0.62rem', fontWeight: 900, padding: '1px 6px', borderRadius: '6px', backgroundColor: '#FFFFFF', color: card.color, border: `1px solid ${card.color}44` }}>
+                      {card.colBadge}
+                    </span>
                   </div>
-                  <p style={{ margin: '0.15rem 0 0', fontSize: '0.7rem', color: '#94A3B8' }}>{card.subtitle}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#475569' }}>{card.subtitle}</p>
                 </div>
               </button>
             );
           })}
         </div>
 
-        {/* CUERPO DIVIDIDO: VISOR + TABLA STAGING */}
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '440px 1fr', overflow: 'hidden' }}>
-          <div style={{ borderRight: '1px solid #1E293B', backgroundColor: '#020617', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '0.6rem 0.85rem', borderBottom: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', gap: '0.35rem' }}>
-                <button type="button" onClick={() => setShowTextTab(false)} style={{ padding: '0.28rem 0.6rem', fontSize: '0.72rem', fontWeight: 700, borderRadius: '6px', border: 'none', cursor: 'pointer', backgroundColor: !showTextTab ? '#1E293B' : 'transparent', color: !showTextTab ? '#F8FAFC' : '#64748B' }}>
-                  Fotos / PDF ({files.length})
+        <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleInitialFilesSelected(e.target.files); e.target.value = ''; }} />
+        <input ref={appendFileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleAppendFilesSelected(e.target.files); e.target.value = ''; }} />
+
+        {/* FASE 1 (!isStaging): DROPZONE Y SELECTOR DE CANAL IDÉNTICO A /admin/orders/create */}
+        {!isStaging ? (
+          <div style={{ flex: 1, padding: '1.75rem 2.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', backgroundColor: '#FFFFFF' }}>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ display: 'inline-flex', padding: '4px', backgroundColor: '#E2E8F0', borderRadius: '12px', gap: '4px' }}>
+                <button type="button" onClick={() => setAiInputTab('file')} style={{ padding: '0.45rem 1.1rem', borderRadius: '8px', border: 'none', backgroundColor: aiInputTab === 'file' ? '#FFFFFF' : 'transparent', color: aiInputTab === 'file' ? '#1E293B' : '#64748B', fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: aiInputTab === 'file' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+                  <UploadCloud size={15} strokeWidth={2} />
+                  <span>Subir Archivo (PDF / Excel / Foto)</span>
                 </button>
-                <button type="button" onClick={() => setShowTextTab(true)} style={{ padding: '0.28rem 0.6rem', fontSize: '0.72rem', fontWeight: 700, borderRadius: '6px', border: 'none', cursor: 'pointer', backgroundColor: showTextTab ? '#1E293B' : 'transparent', color: showTextTab ? '#F8FAFC' : '#64748B' }}>
-                  Texto / WhatsApp
+                <button type="button" onClick={() => setAiInputTab('text')} style={{ padding: '0.45rem 1.1rem', borderRadius: '8px', border: 'none', backgroundColor: aiInputTab === 'text' ? '#16A34A' : 'transparent', color: aiInputTab === 'text' ? '#FFFFFF' : '#64748B', fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: aiInputTab === 'text' ? '0 2px 4px rgba(22,163,74,0.25)' : 'none' }}>
+                  <MessageSquare size={15} strokeWidth={2} />
+                  <span>Pegar Texto / WhatsApp</span>
                 </button>
-              </div>
-              <input ref={fileInputRef} type="file" multiple accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => handleFilesSelected(e.target.files)} />
-              <button type="button" onClick={() => fileInputRef.current?.click()} style={{ padding: '0.3rem 0.6rem', fontSize: '0.72rem', fontWeight: 700, borderRadius: '6px', border: '1px solid #334155', backgroundColor: '#1E293B', color: '#E2E8F0', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                <Upload size={13} /> Añadir Hojas
-              </button>
-            </div>
-
-            {showTextTab ? (
-              <div style={{ flex: 1, padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                <textarea value={rawText} onChange={e => setRawText(e.target.value)} placeholder="Pega aquí listas de precios, entradas o conteos..." style={{ flex: 1, width: '100%', borderRadius: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#F8FAFC', padding: '0.75rem', fontSize: '0.8rem', resize: 'none' }} />
-              </div>
-            ) : files.length === 0 ? (
-              <div onClick={() => fileInputRef.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleFilesSelected(e.dataTransfer.files); }} style={{ flex: 1, margin: '0.85rem', border: '2px dashed #334155', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', textAlign: 'center', cursor: 'pointer', backgroundColor: 'rgba(15, 23, 42, 0.5)' }}>
-                <Upload size={32} color="#F59E0B" style={{ marginBottom: '0.5rem' }} />
-                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#F1F5F9' }}>Arrastra las fotos o PDF de la planilla física aquí</div>
-                <p style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '0.3rem' }}>Soporta múltiples páginas JPG, PNG, WebP o PDF escaneado.</p>
-              </div>
-            ) : (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', gap: '0.35rem', padding: '0.4rem 0.7rem', overflowX: 'auto', borderBottom: '1px solid #1E293B', backgroundColor: '#0F172A' }}>
-                  {files.map((f, i) => (
-                    <div key={`${f.name}-${i}`} onClick={() => { setActiveFileIdx(i); setZoom(1); setRotation(0); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.5rem', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', border: activeFileIdx === i ? '1px solid #F59E0B' : '1px solid #334155', backgroundColor: activeFileIdx === i ? 'rgba(245, 158, 11, 0.15)' : '#020617', color: activeFileIdx === i ? '#FBBF24' : '#94A3B8' }}>
-                      <FileText size={11} />
-                      <span>Pág {i + 1}</span>
-                      <X size={11} onClick={e => { e.stopPropagation(); handleRemoveFile(i); }} style={{ color: '#EF4444' }} />
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.3rem 0.7rem', backgroundColor: '#090D16', borderBottom: '1px solid #1E293B' }}>
-                  <span style={{ fontSize: '0.68rem', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeFile?.name}</span>
-                  <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} style={{ background: '#1E293B', border: 'none', color: '#CBD5E1', borderRadius: '4px', padding: '0.2rem', cursor: 'pointer' }}><ZoomOut size={13} /></button>
-                    <button type="button" onClick={() => setZoom(z => Math.min(3, +(z + 0.25).toFixed(2)))} style={{ background: '#1E293B', border: 'none', color: '#CBD5E1', borderRadius: '4px', padding: '0.2rem', cursor: 'pointer' }}><ZoomIn size={13} /></button>
-                    <button type="button" onClick={() => setRotation(r => (r + 90) % 360)} style={{ background: '#1E293B', border: 'none', color: '#CBD5E1', borderRadius: '4px', padding: '0.2rem', cursor: 'pointer' }}><RotateCw size={13} /></button>
-                  </div>
-                </div>
-                <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.4rem' }}>
-                  {previewUrls[activeFileIdx] && (
-                    isActivePdf ? (
-                      <iframe src={previewUrls[activeFileIdx]} title="PDF Preview" style={{ width: '100%', height: '100%', border: 'none', borderRadius: '6px' }} />
-                    ) : (
-                      <img src={previewUrls[activeFileIdx]} alt="Planilla física" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transform: `scale(${zoom}) rotate(${rotation}deg)`, transition: 'transform 0.15s ease' }} />
-                    )
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div style={{ padding: '0.75rem', borderTop: '1px solid #1E293B', backgroundColor: '#0B1120' }}>
-              <button type="button" disabled={isExtracting || (files.length === 0 && !rawText.trim())} onClick={handleRunExtraction} style={{ width: '100%', padding: '0.62rem 1rem', borderRadius: '8px', border: 'none', background: isExtracting ? '#334155' : 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: '#020617', fontWeight: 800, fontSize: '0.8rem', cursor: isExtracting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem' }}>
-                {isExtracting ? <><RefreshCw size={14} className="animate-spin" /><span>Analizando caligrafía y homologando SKUs...</span></> : <><Sparkles size={14} /><span>Procesar Planilla Física con IA ({files.length || 1} doc)</span></>}
-              </button>
-            </div>
-          </div>
-
-          {/* PANEL DERECHO: STAGING */}
-          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#0F172A' }}>
-            <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #1E293B', backgroundColor: '#090D16', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#E2E8F0' }}>Renglones: <strong>{stats.total}</strong></span>
-                <span style={{ fontSize: '0.68rem', padding: '0.12rem 0.45rem', borderRadius: '6px', backgroundColor: 'rgba(16, 185, 129, 0.14)', color: '#34D399', fontWeight: 700 }}>Nuevos: {stats.newEntries}</span>
-                <span style={{ fontSize: '0.68rem', padding: '0.12rem 0.45rem', borderRadius: '6px', backgroundColor: 'rgba(56, 189, 248, 0.14)', color: '#38BDF8', fontWeight: 700 }}>Conciliados OPS: {stats.matched}</span>
-                {stats.discrepancies > 0 && <span style={{ fontSize: '0.68rem', padding: '0.12rem 0.45rem', borderRadius: '6px', backgroundColor: 'rgba(245, 158, 11, 0.18)', color: '#FBBF24', fontWeight: 700 }}>Discrepancias OPS: {stats.discrepancies}</span>}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <Search size={13} color="#64748B" />
-                <input type="text" value={skuSearchFilter} onChange={e => setSkuSearchFilter(e.target.value)} placeholder="Filtrar catálogo SKU..." style={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '6px', padding: '0.22rem 0.5rem', fontSize: '0.72rem', color: '#F8FAFC', width: '165px' }} />
               </div>
             </div>
 
             {errorMsg && (
-              <div style={{ margin: '0.65rem 1rem 0', padding: '0.55rem 0.85rem', borderRadius: '8px', backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.35)', color: '#FCA5A5', fontSize: '0.76rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                <AlertTriangle size={14} /><span>{errorMsg}</span>
+              <div style={{ padding: '0.85rem 1.25rem', borderRadius: '12px', backgroundColor: '#FEF2F2', border: '1.5px solid #FCA5A5', color: '#991B1B', fontSize: '0.84rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={18} color="#DC2626" />
+                <span>{errorMsg}</span>
               </div>
             )}
 
-            <div style={{ flex: 1, overflow: 'auto', padding: '0.65rem 1rem' }}>
+            {aiInputTab === 'file' ? (
+              <div style={{ flex: 1, minHeight: '360px', padding: '3rem', border: isExtracting ? '3px solid #3B82F6' : '2px dashed #CBD5E1', borderRadius: '24px', backgroundColor: isExtracting ? '#EFF6FF' : '#F8FAFC', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} onClick={() => fileInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.backgroundColor = '#EFF6FF'; }}
+                onDragLeave={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                onDrop={e => { e.preventDefault(); handleInitialFilesSelected(e.dataTransfer.files); }}
+              >
+                {isExtracting ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <Loader2 size={56} color="#3B82F6" className="animate-spin" style={{ marginBottom: '1.25rem' }} />
+                    <h3 style={{ fontSize: '1.35rem', fontWeight: 900, color: '#1E40AF', marginBottom: '0.4rem' }}>Procesando Documento...</h3>
+                    <p style={{ color: '#64748B', fontSize: '0.95rem' }}>La IA está leyendo la caligrafía de la planilla física y homologando SKUs del catálogo.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ color: '#64748B', marginBottom: '1rem' }}><UploadCloud size={52} strokeWidth={1.5} /></div>
+                    <h3 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#1E293B', marginBottom: '0.5rem' }}>
+                      Mesa de Trabajo Inteligente (Planillas Físicas de Bodega)
+                    </h3>
+                    <p style={{ color: '#64748B', fontSize: '0.95rem', maxWidth: '540px', margin: '0 auto' }}>
+                      Arrastra la Foto de la Planilla, PDF o Excel aquí (soporta múltiples páginas). El sistema la tabulará automáticamente y abrirá el visor original Lado a Lado con la entrada de IA.
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '1.75rem', border: isExtracting ? '3px solid #16A34A' : '2px solid #BBF7D0', borderRadius: '24px', backgroundColor: isExtracting ? '#F0FDF4' : '#F8FAFC', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <textarea value={rawText} onChange={e => setRawText(e.target.value)} placeholder="Pega aquí el texto de WhatsApp o listado de entradas/conteos/mermas..." rows={9} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', color: '#0F172A', backgroundColor: '#FFFFFF', outline: 'none' }} />
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" disabled={!rawText.trim() || isExtracting} onClick={() => void executeAiExtraction([], rawText, sheetType, false)} style={{ padding: '0.75rem 1.75rem', borderRadius: '12px', border: 'none', backgroundColor: !rawText.trim() || isExtracting ? '#94A3B8' : '#16A34A', color: '#FFFFFF', fontSize: '0.9rem', fontWeight: 800, cursor: !rawText.trim() || isExtracting ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={17} />
+                    <span>{isExtracting ? 'Interpretando con IA...' : 'Interpretar Planilla con IA'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* FASE 2 (isStaging): MESA DE TRABAJO SPLIT-SCREEN LADO A LADO IDÉNTICA A /admin/orders/create */
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '0.85rem 1.75rem', backgroundColor: '#F0FDF4', borderBottom: '1px solid #BBF7D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <CheckCircle2 size={24} color="#16A34A" />
+                <div>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 900, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Validación de Planilla Física (Auditoría Lado a Lado en Vivo)
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0F172A' }}>{stats.total} renglones extraídos</span>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC' }}>Nuevos: {stats.newEntries}</span>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD' }}>Conciliados OPS: {stats.matched}</span>
+                    {stats.discrepancies > 0 && (
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }}>Discrepancias OPS: {stats.discrepancies}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                {digestionDuration && (
+                  <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1.5px solid #6EE7B7', padding: '5px 12px', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <Zap size={13} fill="#059669" color="#059669" />
+                    <span>Digestión: <strong>{digestionDuration}s</strong></span>
+                  </span>
+                )}
+                <button type="button" onClick={() => appendFileInputRef.current?.click()} style={{ padding: '6px 12px', backgroundColor: '#FFFFFF', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, color: '#0F766E', border: '1.5px solid #99F6E4', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <Plus size={13} /><span>Añadir Otra Hoja / Foto</span>
+                </button>
+                <button type="button" disabled={isExtracting} onClick={() => void executeAiExtraction(files, rawText, sheetType, false)} style={{ padding: '6px 14px', backgroundColor: '#F8FAFC', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, color: '#334155', border: '1.5px solid #CBD5E1', cursor: isExtracting ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <RefreshCw size={13} className={isExtracting ? 'animate-spin' : ''} />
+                  <span>{isExtracting ? 'Re-analizando...' : 'Re-analizar con IA'}</span>
+                </button>
+                <button type="button" onClick={() => setShowSideDocPreview(prev => !prev)} style={{ padding: '6px 14px', backgroundColor: showSideDocPreview ? '#DBEAFE' : '#EFF6FF', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, color: '#1D4ED8', border: '1.5px solid #93C5FD', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <FileText size={14} />
+                  <span>{showSideDocPreview ? `Ocultar Visor ${docTypeLabel}` : `Ver ${docTypeLabel} Lado a Lado`}</span>
+                </button>
+              </div>
+            </div>
+
+            {errorMsg && (
+              <div style={{ margin: '0.5rem 1.5rem 0', padding: '0.6rem 1rem', borderRadius: '10px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <AlertTriangle size={15} /><span>{errorMsg}</span>
+              </div>
+            )}
+
+            {/* CUERPO SPLIT-SCREEN: DOCUMENTO ORIGINAL A LA IZQUIERDA + TABLA IA A LA DERECHA */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', overflow: 'hidden' }}>
+              {showSideDocPreview && (
+                <div style={{ width: '48%', minWidth: '420px', borderRight: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <FileText size={14} />{rawText && files.length === 0 ? 'Texto Original' : `${docTypeLabel} Original`}
+                      </span>
+                      {files.length > 1 && files.map((f, idx) => (
+                        <button key={`${f.name}-${idx}`} type="button" onClick={() => { setActiveFileIdx(idx); setStackedView(false); }} style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', border: activeFileIdx === idx && !stackedView ? '1.5px solid #2563EB' : '1px solid #CBD5E1', backgroundColor: activeFileIdx === idx && !stackedView ? '#DBEAFE' : '#FFFFFF', color: activeFileIdx === idx && !stackedView ? '#1E40AF' : '#475569' }}>
+                          Pág {idx + 1}
+                        </button>
+                      ))}
+                      {files.length > 1 && !isActivePdf && !isActiveExcel && (
+                        <button type="button" onClick={() => setStackedView(prev => !prev)} style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', border: stackedView ? '1.5px solid #059669' : '1px solid #CBD5E1', backgroundColor: stackedView ? '#ECFDF5' : '#FFFFFF', color: stackedView ? '#065F46' : '#475569' }}>
+                          {stackedView ? 'Vista Individual' : `Apilar (${files.length})`}
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      {!isActivePdf && !isActiveExcel && activePreviewUrl && (
+                        <>
+                          <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Alejar"><ZoomOut size={13} /></button>
+                          <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#475569' }}>{Math.round(zoom * 100)}%</span>
+                          <button type="button" onClick={() => setZoom(z => Math.min(3, +(z + 0.25).toFixed(2)))} style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Acercar"><ZoomIn size={13} /></button>
+                          <button type="button" onClick={() => setRotation(r => (r + 90) % 360)} style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Rotar"><RotateCw size={13} /></button>
+                        </>
+                      )}
+                      {activePreviewUrl && (
+                        <a href={activePreviewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                          <button type="button" style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Maximize2 size={11} /> Abrir Pestaña
+                          </button>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
+                    {rawText && files.length === 0 ? (
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', backgroundColor: '#F0FDF4', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '0.84rem', whiteSpace: 'pre-wrap', color: '#0F172A' }}>{rawText}</div>
+                    ) : isActiveExcel ? (
+                      <ExcelTableViewer file={activeFile} fileUrl={activePreviewUrl} />
+                    ) : isActivePdf ? (
+                      <PdfCanvasViewer file={activeFile} fileUrl={activePreviewUrl} />
+                    ) : stackedView && previewUrls.length > 1 ? (
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '12px', backgroundColor: '#F1F5F9', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {previewUrls.map((url, idx) => (
+                          <div key={url} style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                            <div style={{ padding: '4px 10px', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.68rem', fontWeight: 700, color: '#64748B' }}>Página {idx + 1} — {files[idx]?.name}</div>
+                            <img src={url} alt={`Página ${idx + 1}`} style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain' }} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : activePreviewUrl ? (
+                      <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', backgroundColor: '#F8FAFC' }}>
+                        <img src={activePreviewUrl} alt="Planilla Original" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px', transform: `scale(${zoom}) rotate(${rotation}deg)`, transition: 'transform 0.15s ease' }} />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+
               <PhysicalSheetStagingTable
                 sheetType={sheetType}
                 reconciledRows={reconciledRows}
-                filteredCatalog={filteredCatalog}
-                onToggleSelect={(rowId, selected) => setReconciledRows(prev => prev.map(r => r.rowId === rowId ? { ...r, selected } : r))}
+                filteredCatalog={catalog}
+                onToggleSelect={(rowId, selected) => setReconciledRows(prev => prev.map(r => (r.rowId === rowId ? { ...r, selected } : r)))}
+                onToggleSelectAll={selected => setReconciledRows(prev => prev.map(r => ({ ...r, selected })))}
                 onProductChange={handleRowProductChange}
                 onColChange={handleRowColChange}
                 onQtyChange={handleRowQtyChange}
-                onResolutionChange={(rowId: string, resolution: ArbitrationResolution) => setReconciledRows(prev => prev.map(r => r.rowId === rowId ? { ...r, resolution } : r))}
+                onResolutionChange={(rowId: string, resolution: ArbitrationResolution) => setReconciledRows(prev => prev.map(r => (r.rowId === rowId ? { ...r, resolution } : r)))}
+                onAddManualRow={handleAddManualRow}
+                onDeleteRow={rowId => setReconciledRows(prev => prev.filter(r => r.rowId !== rowId))}
               />
             </div>
 
-            <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #1E293B', backgroundColor: '#020617', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
-                Se aplicarán <strong style={{ color: '#F8FAFC' }}>{stats.active}</strong> registros homologados a <strong style={{ color: '#FBBF24' }}>{balanceDate}</strong> (<code>physical_sheet_ocr</code>).
-              </div>
-              <div style={{ display: 'flex', gap: '0.55rem' }}>
-                <button type="button" onClick={onClose} style={{ padding: '0.5rem 0.95rem', borderRadius: '8px', border: '1px solid #334155', backgroundColor: 'transparent', color: '#CBD5E1', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
-                <button type="button" disabled={isSaving || stats.active === 0} onClick={handleApproveAndCommit} style={{ padding: '0.5rem 1.15rem', borderRadius: '8px', border: 'none', background: stats.active === 0 ? '#1E293B' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: stats.active === 0 ? '#64748B' : '#022C22', fontSize: '0.78rem', fontWeight: 800, cursor: stats.active === 0 || isSaving ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span>{isSaving ? 'Guardando...' : 'Aprobar y Aplicar a la Sábana'}</span>
-                  <ArrowRight size={14} />
+            <div style={{ padding: '1rem 1.75rem', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button type="button" onClick={handleResetWorkspace} style={{ padding: '9px 18px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontWeight: 700, fontSize: '0.84rem', cursor: 'pointer' }}>
+                Cancelar y Limpiar
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>Renglones Homologados a Inyectar</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 900, color: '#0F172A' }}>{stats.active} de {stats.total} productos listos ({balanceDate})</div>
+                </div>
+                <button type="button" disabled={isSaving || stats.active === 0} onClick={handleApproveAndCommit} style={{ padding: '11px 24px', borderRadius: '14px', border: 'none', backgroundColor: stats.active === 0 || isSaving ? '#94A3B8' : '#16A34A', color: '#FFFFFF', fontSize: '0.9rem', fontWeight: 900, cursor: stats.active === 0 || isSaving ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', boxShadow: stats.active === 0 || isSaving ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.3)' }}>
+                  <span>{isSaving ? 'Inyectando a la Sábana...' : 'Confirmar e Inyectar a la Sábana'}</span>
+                  <ArrowRight size={16} />
                 </button>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -53,3 +53,11 @@ gcp-service-account.json
 endpoint_results.json
 backups/
 
+
+.env
+.env.*
+*.env
+gcp-service-account.json
+node_modules/
+.next/
+

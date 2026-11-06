@@ -168,10 +168,25 @@ export async function POST(req: Request) {
     for (const file of uploadedFiles) {
       if (!file || file.size === 0) continue;
       const arrayBuffer = await file.arrayBuffer();
-      const base64Data = Buffer.from(arrayBuffer).toString('base64');
-      const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      const lowerName = file.name.toLowerCase();
+      const isSpreadsheet = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
-      const rawResponse = await fetchGeminiExtraction(apiKey, basePrompt, base64Data, mimeType);
+      let rawResponse: unknown;
+      if (isSpreadsheet) {
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetTexts: string[] = [];
+        workbook.SheetNames.forEach(sheetName => {
+          const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName], { blankrows: false });
+          if (csv.trim()) sheetTexts.push(`--- HOJA: ${sheetName} ---\n${csv}`);
+        });
+        const excelPrompt = `${basePrompt}\n\nCONTENIDO DEL ARCHIVO EXCEL (${file.name}):\n"""\n${sheetTexts.join('\n\n')}\n"""`;
+        rawResponse = await fetchGeminiExtraction(apiKey, excelPrompt);
+      } else {
+        const base64Data = Buffer.from(arrayBuffer).toString('base64');
+        const mimeType = file.type || (lowerName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+        rawResponse = await fetchGeminiExtraction(apiKey, basePrompt, base64Data, mimeType);
+      }
       const normalized = normalizeGeminiItems(rawResponse);
 
       resultsByFile.push({
