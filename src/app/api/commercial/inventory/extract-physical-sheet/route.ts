@@ -32,14 +32,19 @@ function normalizeGeminiItems(rawResponse: unknown): {
   const parsed = GeminiResponseSchema.safeParse(rawResponse);
   const safeData = parsed.success ? parsed.data : { items: [] };
   const items: RawExtractedSheetRow[] = safeData.items.map(it => {
-    const parsedFromText = parseHandwrittenQuantity(it.rawQuantityText ?? it.quantityKg, it.rawPresentation ?? null);
-    const parsedQty = parsedFromText > 0 ? parsedFromText : (typeof it.quantityKg === 'number' && it.quantityKg > 0 ? it.quantityKg : 0);
+    const rawQtyStr = String(it.rawQuantityText ?? '').trim();
+    const isDashOrEmpty = !rawQtyStr || /^[-—–_/\s]+$/.test(rawQtyStr);
+    const parsedFromText = isDashOrEmpty ? 0 : parseHandwrittenQuantity(it.rawQuantityText ?? it.quantityKg, it.rawPresentation ?? null);
+    const parsedQty = isDashOrEmpty
+      ? 0
+      : (parsedFromText > 0 ? parsedFromText : (typeof it.quantityKg === 'number' && it.quantityKg > 0 ? it.quantityKg : 0));
     const wasteQty = parseHandwrittenQuantity(it.wasteQtyKg);
     const garbageQty = parseHandwrittenQuantity(it.garbageQtyKg);
+    const finalQty = parsedQty > 0 ? parsedQty : (wasteQty + garbageQty);
     return {
-      rawProductName: String(it.rawProductName || '').trim(),
-      rawQuantityText: String(it.rawQuantityText ?? (wasteQty > 0 || garbageQty > 0 ? `Desp:${wasteQty} / Bas:${garbageQty}` : parsedQty)),
-      quantityKg: parsedQty > 0 ? parsedQty : (wasteQty + garbageQty),
+      rawProductName: String(it.rawProductName || '').trim().replace(/^\d+\s*[-.]\s*/, '').trim(),
+      rawQuantityText: isDashOrEmpty ? '0' : String(it.rawQuantityText ?? (wasteQty > 0 || garbageQty > 0 ? `Desp:${wasteQty} / Bas:${garbageQty}` : finalQty)),
+      quantityKg: finalQty,
       wasteQtyKg: wasteQty > 0 ? wasteQty : null,
       garbageQtyKg: garbageQty > 0 ? garbageQty : null,
       rawPresentation: it.rawPresentation ?? null,
@@ -52,7 +57,7 @@ function normalizeGeminiItems(rawResponse: unknown): {
   return {
     sheetTitleDetected: safeData.sheetTitleDetected,
     dateDetected: safeData.dateDetected,
-    items: items.filter(r => r.rawProductName.length > 0 && (r.quantityKg > 0 || (r.wasteQtyKg && r.wasteQtyKg > 0) || (r.garbageQtyKg && r.garbageQtyKg > 0)))
+    items: items.filter(r => r.rawProductName.length > 0 && r.quantityKg >= 0)
   };
 }
 
@@ -65,24 +70,25 @@ function buildPromptForSheetType(sheetType: PhysicalSheetType, balanceDate: stri
            * PROHIBIDO hacer recálculos o multiplicaciones por bultos, canastillas, arrobas o docenas. Lee el número exacto escrito en la cantidad recibida.
            * Únicamente si hay una suma explícita escrita con signo "+" (ej. "408 + 70"), suma los números (478).
          - Captura también el Precio pagado si aparece ("unitCostPaid") y el Nombre del Proveedor ("supplierName").
-         - EXTRAE ÚNICAMENTE las filas donde exista una anotación manuscrita de cantidad. Ignora todas las filas impresas en blanco.`
+         - Si un producto tiene una línea horizontal atravesada ("—", "-", raya) o no tiene valor en la casilla de cantidad, asígnale quantityKg: 0 y rawQuantityText: "0".`
       : sheetType === 'inv_manual'
       ? `PLANILLA DE CONTEO FÍSICO DE BODEGA ("Inventario de bodega - fin de turno" -> Columna T):
-         - Es un formato impreso con lista de productos numerados y columna diligenciada a mano al cierre del turno.
-         - EXTRAE ÚNICAMENTE los productos que tengan un número escrito a mano. Ignora filas en blanco o con raya ("—", "-").
+         - Es un formato impreso con lista de productos numerados (ej. "1 - Ahuyama") y columna "KG" diligenciada a mano al cierre del turno.
+         - Extrae todos los productos de la planilla limpia el prefijo numérico (ej. de "1 - Ahuyama" extrae "Ahuyama").
+         - Si la casilla "KG" tiene una línea horizontal atravesada ("—", "-", raya) o está en blanco / sin valor escrito, asigna obligatoriamente quantityKg: 0 y rawQuantityText: "0".
          - Si una celda tiene una suma escrita a mano (ej. "408 + 70"), suma los valores (478) en "quantityKg" y guarda la expresión original en "rawQuantityText".`
       : sheetType === 'pedidos_desperdicio'
       ? `FORMATO BICOLUMNA DE PRODUCTOS SUSCEPTIBLES A DESPERDICIO DEL PEDIDO ("FORMATO DE DESPERDICIO Y MERMA" -> Columnas Q y R):
          - Es el formato impreso desde el Módulo de Pedidos con los productos susceptibles a desperdicio y DOS columnas manuscritas:
            1. Columna "DESPERDICIO" -> devuélvela en el campo "wasteQtyKg" (alimenta Columna Q).
            2. Columna "BASURA" / "BASURA-MERMA" -> devuélvela en el campo "garbageQtyKg" (alimenta Columna R).
-         - EXTRAE ÚNICAMENTE las filas que tengan número escrito a mano en la columna de Desperdicio, en la de Basura, o en ambas. Ignora todas las filas vacías.`
+         - Si tiene raya atravesada ("—") o no hay valor, toma la cantidad como 0.`
       : sheetType === 'donaciones'
       ? `PLANTILLA FÍSICA DE DONACIONES / BANCO DE ALIMENTOS (Autorizada por Supervisor de Planta -> Columna X):
          - Es un acta o plantilla de donación de alimentos autorizada por el Supervisor de Planta.
-         - Extrae cada producto donado ("rawProductName") y su cantidad exacta en Kg o Unidades ("quantityKg").`
+         - Extrae cada producto donado ("rawProductName") y su cantidad exacta en Kg o Unidades ("quantityKg"). Si tiene raya atravesada o sin valor, tómalo como 0.`
       : `FORMATO FÍSICO DE DESPERDICIO Y DESCAPOTE ("FORMATO DESPERDICIO" -> Columnas Q y R):
-         - Extrae cada fila escrita a mano.
+         - Extrae cada fila. Si tiene raya atravesada ("—") o sin valor, toma quantityKg: 0.
          - Si el documento tiene 2 columnas separadas para "DESPERDICIO" y "BASURA / MERMA", llena "wasteQtyKg" y "garbageQtyKg".
          - Si es una sola columna de cantidad, llena "quantityKg" y clasifica en "wasteTypeHint": "cleaning" si es cáscara/descapote/rama/hoja/tallo, o "damage" si es avería/desperdicio.`;
 
@@ -95,10 +101,11 @@ ${typeDescription}
 
 REGLAS ESTRICTAS DE EXTRACCIÓN:
 1. Devuelve ÚNICAMENTE un objeto JSON válido, sin bloques markdown adicionales ni comentarios.
-2. Extrae EXCLUSIVAMENTE los renglones que tengan cantidades reales diligenciadas. Cero filas vacías.
-3. En números con coma o punto decimal (ej. "9,9" o "184,7"), conviértelos siempre a número flotante estándar con punto (9.9, 184.7).
+2. REGLA DE LÍNEA ATRAVESADA O SIN VALOR = CERO (0): Cuando un renglón tenga una línea horizontal atravesada ("—", "-", raya) o su casilla de cantidad esté vacía / sin valor, regístralo SIEMPRE como cero: "quantityKg": 0 y "rawQuantityText": "0". JAMÁS interpretes una raya horizontal como el número 1 o 11.
+3. En números con coma o punto decimal (ej. "9,9", "8,50" o "184,7"), conviértelos siempre a número flotante estándar con punto (9.9, 8.5, 184.7).
 4. En cantidades de peso, la letra "K" significa Kilogramos (NO significa mil): "170K" = 170, "55K" = 55.
-5. PROHIBIDO hacer recálculos mayoristas: respeta el valor numérico directo escrito en unidad de compra (Kg o Unidad).
+5. PROHIBIDO hacer recálculos mayoristas: respeta el valor numérico directo escrito en la columna KG (no dupliques un mismo renglón si tiene una nota lateral; toma el valor de la columna KG).
+6. Remueve el número de orden inicial del nombre del producto (ej. "1 - Ahuyama" -> "Ahuyama", "10 - Arracacha" -> "Arracacha").
 
 ESTRUCTURA JSON EXACTA REQUERIDA (Omite campos que sean null para máxima velocidad):
 {

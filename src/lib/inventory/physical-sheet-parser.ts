@@ -201,11 +201,15 @@ export function buildReconciledSheetRows(
       const opsVal = opsMetrics ? Number(opsMetrics[targetCol] || 0) : 0;
       const conciliationStatus: ConciliationStatus =
         opsVal <= 0.001 ? 'new_entry' : Math.abs(opsVal - qty) <= 0.05 ? 'matched_ops' : 'discrepancy';
+      const cleanedRawQtyText =
+        raw.rawQuantityText && !/^[-—–_/\s]+$/.test(raw.rawQuantityText.trim())
+          ? raw.rawQuantityText.trim()
+          : String(qty);
       result.push({
         rowId: `${sourceFileName}-${idx}-${subIdx}-${Date.now()}`,
         sourceFileName,
         rawProductName: raw.rawProductName || 'Producto sin nombre',
-        rawQuantityText: raw.rawQuantityText || String(qty),
+        rawQuantityText: cleanedRawQtyText,
         quantity: qty,
         rawPresentation: raw.rawPresentation || '',
         unitCostPaid: raw.unitCostPaid && raw.unitCostPaid > 0 ? raw.unitCostPaid : null,
@@ -220,7 +224,7 @@ export function buildReconciledSheetRows(
         opsCurrentValue: Math.round(opsVal * 100) / 100,
         conciliationStatus,
         resolution: 'use_sheet',
-        selected: qty > 0 && Boolean(product?.id)
+        selected: Boolean(product?.id)
       });
     };
 

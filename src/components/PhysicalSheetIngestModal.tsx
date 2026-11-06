@@ -298,7 +298,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           confidence: prod ? 100 : 0,
           opsCurrentValue: Math.round(opsVal * 100) / 100,
           conciliationStatus: status,
-          selected: Boolean(prod?.id) && r.quantity > 0
+          selected: Boolean(prod?.id) && r.quantity >= 0
         };
       })
     );
@@ -364,10 +364,10 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   }, [reconciledRows]);
   const handleApproveAndCommit = async () => {
     const rowsToApply = reconciledRows.filter(
-      r => r.selected && r.matchedProductId && r.quantity > 0 && r.resolution === 'use_sheet'
+      r => r.selected && r.matchedProductId && r.quantity >= 0 && r.resolution === 'use_sheet'
     );
     if (rowsToApply.length === 0) {
-      setErrorMsg('No hay filas activas homologadas con cantidad > 0 para inyectar a la Sábana.');
+      setErrorMsg('No hay filas activas homologadas para inyectar a la Sábana.');
       return;
     }
     setIsSaving(true);
@@ -418,6 +418,10 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
       const endIso = `${balanceDate}T23:59:59.999Z`;
       const timestampIso = `${balanceDate}T12:00:00.000Z`;
       for (const item of grouped.values()) {
+        // Si la cantidad consolidada es 0 en columnas de entrada/merma/donación (G, Q, R, X), omitir inserción en BD
+        if (item.targetColumn !== 'T' && item.totalQuantity <= 0) {
+          continue;
+        }
         const movType: 'entry' | 'exit' | 'adjustment' =
           item.targetColumn === 'G' ? 'entry' : item.targetColumn === 'T' ? 'adjustment' : 'exit';
         const refType =
