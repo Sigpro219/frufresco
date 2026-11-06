@@ -29,177 +29,212 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const appendFileInputRef = useRef<HTMLInputElement>(null);
   const isStaging = reconciledRows.length > 0;
 
-  // Optimización cliente de imágenes y división de PDFs escaneados multipágina en JPEGs ligeros (~200KB/pág) para evitar timeouts de 45s
-  const prepareOptimizedFilesForOcr = async (rawFiles: File[]): Promise<File[]> => {
-    const optimized: File[] = [];
-
-    const compressImageFile = async (imgFile: File): Promise<File> => {
-      if (imgFile.size < 350 * 1024) return imgFile;
-      return new Promise<File>((resolve) => {
-        const img = new Image();
-        const objUrl = URL.createObjectURL(imgFile);
-        img.onload = () => {
-          URL.revokeObjectURL(objUrl);
-          const maxDim = 1650;
-          let { width, height } = img;
-          if (width > maxDim || height > maxDim) {
-            const scale = maxDim / Math.max(width, height);
-            width = Math.round(width * scale);
-            height = Math.round(height * scale);
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(imgFile);
-            return;
-          }
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) {
-                resolve(imgFile);
-                return;
-              }
-              const baseName = imgFile.name.replace(/\.[^.]+$/, '');
-              resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
-            },
-            'image/jpeg',
-            0.82
-          );
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(objUrl);
-          resolve(imgFile);
-        };
-        img.src = objUrl;
-      });
-    };
-
-    const splitPdfIntoPageImages = async (pdfFile: File): Promise<File[]> => {
-      try {
-        if (!(window as any).pdfjsLib) {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-          script.async = true;
-          await new Promise((res, rej) => {
-            script.onload = res;
-            script.onerror = rej;
-            document.head.appendChild(script);
-          });
-          (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        }
-        const arrayBuffer = await pdfFile.arrayBuffer();
-        const pdf = await (window as any).pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-        const pageFiles: File[] = [];
-        const baseName = pdfFile.name.replace(/\.pdf$/i, '');
-
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          const unscaledViewport = page.getViewport({ scale: 1 });
-          const maxDim = 1650;
-          const scale = Math.min(2.0, maxDim / Math.max(unscaledViewport.width, unscaledViewport.height, 1));
-          const viewport = page.getViewport({ scale });
-
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.round(viewport.width);
-          canvas.height = Math.round(viewport.height);
-          const ctx = canvas.getContext('2d');
-          if (!ctx) continue;
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          await page.render({ canvasContext: ctx, viewport }).promise;
-
-          const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.82));
-          if (blob) {
-            const pageLabel = pdf.numPages > 1 ? `${baseName} (Pág ${pageNum}).jpg` : `${baseName}.jpg`;
-            pageFiles.push(new File([blob], pageLabel, { type: 'image/jpeg' }));
-          }
-        }
-        return pageFiles.length > 0 ? pageFiles : [pdfFile];
-      } catch (err) {
-        console.warn('Fallback a PDF original:', err);
-        return [pdfFile];
-      }
-    };
-
-    for (const f of rawFiles) {
-      const lower = f.name.toLowerCase();
-      if (f.type === 'application/pdf' || lower.endsWith('.pdf')) {
-        setExtractionProgress(`Optimizando páginas escaneadas de ${f.name}...`);
-        const pages = await splitPdfIntoPageImages(f);
-        optimized.push(...pages);
-      } else if (f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|bmp)$/i.test(lower)) {
-        setExtractionProgress(`Optimizando resolución de imagen ${f.name}...`);
-        const compressed = await compressImageFile(f);
-        optimized.push(compressed);
-      } else {
-        optimized.push(f);
-      }
+  // Si una foto individual supera 3.2 MB (límite de Vercel = 4.5 MB), comprimirla ligeramente para evitar HTTP 413; de lo contrario enviarla intacta igual que en /admin/orders/create
+  const ensureFileUnderVercelLimit = async (file: File): Promise<File> => {
+    const MAX_VERCEL_SAFE_BYTES = 3.2 * 1024 * 1024;
+    if (file.size <= MAX_VERCEL_SAFE_BYTES || !file.type.startsWith('image/')) {
+      return file;
     }
-
-    return optimized;
+    return new Promise<File>((resolve) => {
+      const img = new Image();
+      const objUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl);
+        const maxDim = 1600;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob || blob.size >= file.size) {
+              resolve(file);
+              return;
+            }
+            const baseName = file.name.replace(/\.[^.]+$/, '');
+            resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
+          },
+          'image/jpeg',
+          0.78
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+        resolve(file);
+      };
+      img.src = objUrl;
+    });
   };
 
+  // Arquitectura 1:1 copiada de parseOrderWithAI (/admin/orders/create/page.tsx)
   const executeAiExtraction = async (targetFiles: File[], targetText: string, targetSheetType: PhysicalSheetType, appendMode = false) => {
-    if (targetFiles.length === 0 && !targetText.trim()) { setErrorMsg('Selecciona al menos un archivo (Foto, PDF o Excel) o pega el texto de la planilla.'); return; }
-    setIsExtracting(true); setErrorMsg(null); setExtractionProgress('Preparando documentos...');
+    if (targetFiles.length === 0 && !targetText.trim()) {
+      setErrorMsg('Selecciona al menos un archivo (Foto, PDF o Excel) o pega el texto de la planilla.');
+      return;
+    }
+    setIsExtracting(true);
+    setErrorMsg(null);
+    setExtractionProgress('Analizando documento con IA...');
     const startMs = performance.now();
+
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || '';
-      const optimizedFiles = targetFiles.length > 0 ? await prepareOptimizedFilesForOcr(targetFiles) : [];
+      // 1. Obtener token de sesión idéntico a /admin/orders/create/page.tsx (líneas 3172-3200)
+      let token: string | null = null;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.access_token) {
+          token = sessionData.session.access_token;
+        } else {
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          token = refreshData?.session?.access_token || null;
+        }
+      } catch (authErr) {
+        console.warn('Error al verificar sesión con Supabase Auth:', authErr);
+      }
+
+      if (!token && typeof window !== 'undefined') {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && (k.includes('sb-') || k.includes('supabase.auth.token'))) {
+              const parsed = JSON.parse(localStorage.getItem(k) || '{}');
+              const found = parsed?.access_token || parsed?.currentSession?.access_token || null;
+              if (found) {
+                token = found;
+                break;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const extractedRows: ReconciledSheetRow[] = [];
 
-      // Procesar en bloques de máximo 2 páginas por petición para evitar timeouts en documentos multipágina densos
-      const batchSize = 2;
-      const totalBatches = Math.max(1, Math.ceil(optimizedFiles.length / batchSize));
-
-      if (optimizedFiles.length > 0) {
-        for (let i = 0; i < optimizedFiles.length; i += batchSize) {
-          const batch = optimizedFiles.slice(i, i + batchSize);
-          const batchNum = Math.floor(i / batchSize) + 1;
+      // 2. Enviar 1 archivo por petición igual que parseOrderWithAI(file) en /admin/orders/create
+      if (targetFiles.length > 0) {
+        for (let i = 0; i < targetFiles.length; i++) {
+          const rawFile = targetFiles[i];
           setExtractionProgress(
-            optimizedFiles.length > 1
-              ? `Digitalizando con IA página ${Math.min(i + 1, optimizedFiles.length)}–${Math.min(i + batch.length, optimizedFiles.length)} de ${optimizedFiles.length} (Lote ${batchNum}/${totalBatches})...`
-              : `Analizando caligrafía y homologando SKUs de ${batch[0].name}...`
+            targetFiles.length > 1
+              ? `Procesando archivo ${i + 1} de ${targetFiles.length} (${rawFile.name})...`
+              : `Procesando ${rawFile.name} con IA...`
           );
 
+          const safeFile = await ensureFileUnderVercelLimit(rawFile);
           const formData = new FormData();
           formData.append('sheetType', targetSheetType);
           formData.append('balanceDate', balanceDate);
-          if (i === 0 && targetText.trim()) formData.append('text', targetText.trim());
-          batch.forEach(f => formData.append('files', f));
+          if (i === 0 && targetText.trim()) {
+            formData.append('text', targetText.trim());
+          }
 
-          const res = await fetch('/api/commercial/inventory/extract-physical-sheet', {
+          // Si es un PDF pesado (> 3.2 MB), subirlo a Supabase Storage para evitar el límite duro de 4.5 MB (HTTP 413) de Vercel
+          let uploadedTempStoragePath: string | null = null;
+          if (safeFile.size > 3.2 * 1024 * 1024) {
+            setExtractionProgress(`Subiendo documento pesado (${(safeFile.size / (1024 * 1024)).toFixed(1)} MB) al canal seguro...`);
+            const cleanName = safeFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const storagePath = `temp-ocr/${Date.now()}_${cleanName}`;
+            const { error: upErr } = await supabase.storage
+              .from('inventory-evidence')
+              .upload(storagePath, safeFile, { upsert: true, contentType: safeFile.type || 'application/pdf' });
+            if (!upErr) {
+              uploadedTempStoragePath = storagePath;
+              const { data: pubUrl } = supabase.storage.from('inventory-evidence').getPublicUrl(storagePath);
+              formData.append('fileUrl', pubUrl.publicUrl);
+              formData.append('fileName', rawFile.name);
+              formData.append('fileMimeType', safeFile.type || 'application/pdf');
+            } else {
+              formData.append('file', safeFile);
+            }
+          } else {
+            formData.append('file', safeFile);
+          }
+
+          setExtractionProgress(
+            targetFiles.length > 1
+              ? `Interpretando con IA archivo ${i + 1} de ${targetFiles.length} (${rawFile.name})...`
+              : `Interpretando ${rawFile.name} con IA...`
+          );
+
+          const response = await fetch('/api/commercial/inventory/extract-physical-sheet', {
             method: 'POST',
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            headers,
+            credentials: 'include',
             body: formData
           });
-          const data = await res.json();
-          if (!res.ok || !data.success) throw new Error(data.error || 'No fue posible extraer la planilla física.');
+
+          if (uploadedTempStoragePath) {
+            void supabase.storage.from('inventory-evidence').remove([uploadedTempStoragePath]);
+          }
+
+          const responseText = await response.text();
+          let data: any = null;
+          try {
+            data = JSON.parse(responseText);
+          } catch {
+            if (response.status === 413) {
+              throw new Error(`El archivo "${rawFile.name}" supera el límite de tamaño permitido por el servidor (4.5 MB). Intenta subir una foto o PDF más ligero.`);
+            }
+            if (!response.ok) {
+              throw new Error(responseText || `Error de servidor (${response.status})`);
+            }
+            throw new Error('Respuesta no válida de la API de extracción');
+          }
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || 'No fue posible extraer la planilla física.');
+          }
 
           (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
             extractedRows.push(...buildReconciledSheetRows(fileRes.items || [], targetSheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol));
           });
         }
       } else if (targetText.trim()) {
-        setExtractionProgress('Analizando texto con IA...');
         const formData = new FormData();
         formData.append('sheetType', targetSheetType);
         formData.append('balanceDate', balanceDate);
         formData.append('text', targetText.trim());
-        const res = await fetch('/api/commercial/inventory/extract-physical-sheet', {
+
+        const response = await fetch('/api/commercial/inventory/extract-physical-sheet', {
           method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          headers,
+          credentials: 'include',
           body: formData
         });
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || 'No fue posible extraer la planilla física.');
+
+        const responseText = await response.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          if (!response.ok) {
+            throw new Error(responseText || `Error de servidor (${response.status})`);
+          }
+          throw new Error('Respuesta no válida de la API de extracción');
+        }
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'No fue posible extraer la planilla física.');
+        }
+
         (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
           extractedRows.push(...buildReconciledSheetRows(fileRes.items || [], targetSheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol));
         });

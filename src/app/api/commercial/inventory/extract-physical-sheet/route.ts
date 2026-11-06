@@ -100,25 +100,19 @@ REGLAS ESTRICTAS DE EXTRACCIÓN:
 4. En cantidades de peso, la letra "K" significa Kilogramos (NO significa mil): "170K" = 170, "55K" = 55.
 5. PROHIBIDO hacer recálculos mayoristas: respeta el valor numérico directo escrito en unidad de compra (Kg o Unidad).
 
-ESTRUCTURA JSON EXACTA REQUERIDA:
+ESTRUCTURA JSON EXACTA REQUERIDA (Omite campos que sean null para máxima velocidad):
 {
-  "sheetTitleDetected": "Título leído en el encabezado del documento",
-  "dateDetected": "YYYY-MM-DD o texto de fecha leído",
+  "sheetTitleDetected": "Título leído",
+  "dateDetected": "YYYY-MM-DD",
   "items": [
     {
-      "rawProductName": "Nombre del producto tal como aparece impreso o manuscrito",
-      "rawQuantityText": "Texto exacto de la cantidad escrita",
-      "quantityKg": 478,
-      "wasteQtyKg": null,
-      "garbageQtyKg": null,
-      "rawPresentation": null,
-      "unitCostPaid": null,
-      "supplierName": null,
-      "wasteTypeHint": "damage o cleaning o null",
-      "sourceNote": null
+      "rawProductName": "Nombre del producto",
+      "rawQuantityText": "Texto de la cantidad escrita",
+      "quantityKg": 478
     }
   ]
 }
+(Nota: Solo incluye "wasteQtyKg", "garbageQtyKg", "unitCostPaid", "supplierName" o "wasteTypeHint" cuando tengan valor real en la fila).
 `;
 }
 
@@ -150,9 +144,19 @@ export async function POST(req: Request) {
     const sheetType: PhysicalSheetType = sheetTypeParse.data;
     const balanceDate = (formData.get('balanceDate') as string) || new Date().toISOString().split('T')[0];
     const textInput = (formData.get('text') as string) || '';
-    const uploadedFiles = formData.getAll('files') as File[];
+    const fileUrl = (formData.get('fileUrl') as string) || '';
+    const remoteFileName = (formData.get('fileName') as string) || 'Planilla_Escaneada.pdf';
+    const remoteMimeType = (formData.get('fileMimeType') as string) || 'application/pdf';
 
-    if (uploadedFiles.length === 0 && !textInput.trim()) {
+    // Soportar tanto 'file' (1:1 con /api/ai/extract-order) como 'files'
+    const singleFile = formData.get('file') as File | null;
+    const multiFiles = formData.getAll('files') as File[];
+    const uploadedFiles: File[] = [
+      ...(singleFile ? [singleFile] : []),
+      ...multiFiles
+    ];
+
+    if (uploadedFiles.length === 0 && !fileUrl.trim() && !textInput.trim()) {
       return NextResponse.json(
         { error: 'Debes adjuntar al menos una foto/PDF de la planilla física o pegar el texto a procesar.' },
         { status: 400 }
@@ -167,17 +171,41 @@ export async function POST(req: Request) {
       items: RawExtractedSheetRow[];
     }> = [];
 
+    // Si el archivo pesado (> 3.2 MB) vino vía Supabase Storage URL para evitar el límite 413 de Vercel
+    if (fileUrl.trim()) {
+      const remoteRes = await fetch(fileUrl.trim());
+      if (!remoteRes.ok) {
+        throw new Error(`No se pudo descargar el documento desde el canal seguro (${remoteRes.status}).`);
+      }
+      const arrayBuffer = await remoteRes.arrayBuffer();
+      const base64Data = Buffer.from(arrayBuffer).toString('base64');
+      const rawResponse = await fetchGeminiExtraction(apiKey, basePrompt, base64Data, remoteMimeType, 90000);
+      const normalized = normalizeGeminiItems(rawResponse);
+      resultsByFile.push({
+        fileName: remoteFileName,
+        sheetTitleDetected: normalized.sheetTitleDetected || remoteFileName,
+        dateDetected: normalized.dateDetected || balanceDate,
+        items: normalized.items
+      });
+    }
+
     const validFiles = uploadedFiles.filter(file => file && file.size > 0);
     const fileResults = await Promise.all(
       validFiles.map(async file => {
-        const arrayBuffer = await file.arrayBuffer();
+        let fileBytes: Uint8Array;
+        try {
+          fileBytes = await (file as any).bytes();
+        } catch {
+          const ab = await file.arrayBuffer();
+          fileBytes = new Uint8Array(ab);
+        }
         const lowerName = file.name.toLowerCase();
         const isSpreadsheet = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
         let rawResponse: unknown;
         if (isSpreadsheet) {
           const XLSX = await import('xlsx');
-          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const workbook = XLSX.read(fileBytes, { type: 'array' });
           const sheetTexts: string[] = [];
           workbook.SheetNames.forEach(sheetName => {
             const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName], { blankrows: false });
@@ -186,7 +214,7 @@ export async function POST(req: Request) {
           const excelPrompt = `${basePrompt}\n\nCONTENIDO DEL ARCHIVO EXCEL (${file.name}):\n"""\n${sheetTexts.join('\n\n')}\n"""`;
           rawResponse = await fetchGeminiExtraction(apiKey, excelPrompt, undefined, 'application/pdf', 90000);
         } else {
-          const base64Data = Buffer.from(arrayBuffer).toString('base64');
+          const base64Data = Buffer.from(fileBytes).toString('base64');
           const mimeType = file.type || (lowerName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
           rawResponse = await fetchGeminiExtraction(apiKey, basePrompt, base64Data, mimeType, 90000);
         }
