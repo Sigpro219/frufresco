@@ -138,3 +138,43 @@ test('cleanPhysicalSheetProductName and parseHandwrittenQuantity handle dirty Ge
   assert.equal(parseHandwrittenQuantity('8,50'), 8.5);
   assert.equal(parseHandwrittenQuantity('10 + 5.5'), 15.5);
 });
+
+test('buildReconciledSheetRows maps all 5 physical sheet types to their exact target columns (G, T, Q, R, X)', () => {
+  const opsMap = new Map<string, { G: number; T: number; Q: number; R: number; X?: number }>();
+  const sampleItem: RawExtractedSheetRow[] = [
+    { rawProductName: 'Ahuyama', rawQuantityText: '25', quantityKg: 25 }
+  ];
+  const cleaningItem: RawExtractedSheetRow[] = [
+    { rawProductName: 'Ahuyama descapote cáscara', rawQuantityText: '4', quantityKg: 4, wasteTypeHint: 'cleaning' }
+  ];
+
+  // 1. Entradas Muelle -> Col G
+  const rowsG = buildReconciledSheetRows(sampleItem, 'entrada', 'Muelle.pdf', MOCK_CATALOG, opsMap);
+  assert.equal(rowsG[0].targetColumn, 'G');
+
+  // 2. Conteo Fin Turno -> Col T
+  const rowsT = buildReconciledSheetRows(sampleItem, 'inv_manual', 'Conteo.pdf', MOCK_CATALOG, opsMap);
+  assert.equal(rowsT[0].targetColumn, 'T');
+
+  // 3. Formato Pedidos (2 Cols) -> Col Q (Desperdicio) & Col R (Basura)
+  const rowsQR = buildReconciledSheetRows(
+    [{ rawProductName: 'Ahuyama', quantityKg: 6, wasteQtyKg: 4, garbageQtyKg: 2 }],
+    'pedidos_desperdicio',
+    'Pedidos.pdf',
+    MOCK_CATALOG,
+    opsMap
+  );
+  assert.equal(rowsQR[0].targetColumn, 'Q');
+  assert.equal(rowsQR[1].targetColumn, 'R');
+
+  // 4. Desperdicio General -> Col Q (avería) & Col R (descapote/cáscara)
+  const rowsDespQ = buildReconciledSheetRows(sampleItem, 'desperdicio', 'Desp.pdf', MOCK_CATALOG, opsMap);
+  assert.equal(rowsDespQ[0].targetColumn, 'Q');
+  const rowsDespR = buildReconciledSheetRows(cleaningItem, 'desperdicio', 'Desp.pdf', MOCK_CATALOG, opsMap);
+  assert.equal(rowsDespR[0].targetColumn, 'R');
+
+  // 5. Plantilla Donaciones -> Col X
+  const rowsX = buildReconciledSheetRows(sampleItem, 'donaciones', 'Donaciones.pdf', MOCK_CATALOG, opsMap);
+  assert.equal(rowsX[0].targetColumn, 'X');
+});
+

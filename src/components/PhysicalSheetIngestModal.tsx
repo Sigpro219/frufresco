@@ -6,7 +6,7 @@ import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
 import PhysicalSheetStagingTable from '@/components/PhysicalSheetStagingTable';
-import { PhysicalSheetType, TargetBalanceColumn, CatalogProductOption, ReconciledSheetRow, RawExtractedSheetRow, ArbitrationResolution, buildReconciledSheetRows } from '@/lib/inventory/physical-sheet-parser';
+import { PhysicalSheetType, TargetBalanceColumn, CatalogProductOption, ReconciledSheetRow, RawExtractedSheetRow, ArbitrationResolution, buildReconciledSheetRows, classifyWasteTargetColumn } from '@/lib/inventory/physical-sheet-parser';
 
 interface PdfJsViewport {
   width: number;
@@ -868,8 +868,40 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
               const IconComp = card.Icon;
               return (
                 <button key={card.id} type="button" onClick={() => {
+                    const prevType = sheetType;
                     setSheetType(card.id);
-                    if (files.length > 0 || rawText.trim()) void executeAiExtraction(files, rawText, card.id, false);
+                    setCommitSummary(null);
+                    if (reconciledRows.length > 0 && prevType !== 'pedidos_desperdicio' && card.id !== 'pedidos_desperdicio') {
+                      setReconciledRows(prev =>
+                        prev.map(r => {
+                          const newCol: TargetBalanceColumn =
+                            card.id === 'entrada'
+                              ? 'G'
+                              : card.id === 'inv_manual'
+                              ? 'T'
+                              : card.id === 'donaciones'
+                              ? 'X'
+                              : classifyWasteTargetColumn(r.rawProductName, null);
+                          const opsVal = r.matchedProductId
+                            ? Number(opsCurrentByProductAndCol.get(r.matchedProductId)?.[newCol] || 0)
+                            : 0;
+                          const status =
+                            opsVal <= 0.001
+                              ? 'new_entry'
+                              : Math.abs(opsVal - r.quantity) <= 0.05
+                              ? 'matched_ops'
+                              : 'discrepancy';
+                          return {
+                            ...r,
+                            targetColumn: newCol,
+                            opsCurrentValue: Math.round(opsVal * 100) / 100,
+                            conciliationStatus: status
+                          };
+                        })
+                      );
+                    } else if (files.length > 0 || rawText.trim()) {
+                      void executeAiExtraction(files, rawText, card.id, false);
+                    }
                   }}
                   style={{ textAlign: 'left', padding: isStaging ? '0.35rem 0.55rem' : '0.45rem 0.65rem', borderRadius: '10px', border: active ? `2px solid ${card.color}` : '1px solid #E2E8F0', backgroundColor: active ? card.bg : '#F8FAFC', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
                 >
