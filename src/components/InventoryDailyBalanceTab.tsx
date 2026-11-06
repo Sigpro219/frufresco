@@ -2581,14 +2581,11 @@ interface CommittedSaleData {
         }
     };
 
-    // Navegación fluida y guardado de edición estilo Excel (Enter: abajo, Shift+Enter: arriba, Tab: columna siguiente)
+    // Navegación fluida y guardado de edición estilo Excel (Enter: abajo, Shift+Enter: arriba, Tab/Flechas: columnas)
     const handleCommitCellEditAndNavigate = (direction: 'down' | 'up' | 'next_col' | 'prev_col' | 'none' = 'none') => {
         if (!editingCell) return;
-        if (!canEditSheet) {
-            notify('Solo la jefatura de inventarios o administradores tienen autorización para modificar directamente los valores de esta sábana.', 'warning');
-            setEditingCell(null);
-            return;
-        }
+        const isViewOnlyNav = sheetMode === 'view' || !canEditSheet || Boolean(closingRecord?.is_locked);
+        const navCols = isViewOnlyNav ? columnOrder : EDITABLE_COLUMNS;
 
         const currentCell = { ...editingCell };
 
@@ -2608,24 +2605,24 @@ interface CommittedSaleData {
                         nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: currentCell.colKey };
                     }
                 } else if (direction === 'next_col') {
-                    const colIdx = EDITABLE_COLUMNS.indexOf(currentCell.colKey as any);
-                    if (colIdx !== -1 && colIdx + 1 < EDITABLE_COLUMNS.length) {
+                    const colIdx = navCols.indexOf(currentCell.colKey as any);
+                    if (colIdx !== -1 && colIdx + 1 < navCols.length) {
                         const targetRow = flatVisibleRows[currRowIdx];
-                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: EDITABLE_COLUMNS[colIdx + 1] };
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: navCols[colIdx + 1] };
                     } else if (currRowIdx + 1 < flatVisibleRows.length) {
-                        // Envolvente tipo Excel a la siguiente fila, primera columna editable
+                        // Envolvente tipo Excel a la siguiente fila, primera columna
                         const targetRow = flatVisibleRows[currRowIdx + 1];
-                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: EDITABLE_COLUMNS[0] };
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: navCols[0] };
                     }
                 } else if (direction === 'prev_col') {
-                    const colIdx = EDITABLE_COLUMNS.indexOf(currentCell.colKey as any);
+                    const colIdx = navCols.indexOf(currentCell.colKey as any);
                     if (colIdx > 0) {
                         const targetRow = flatVisibleRows[currRowIdx];
-                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: EDITABLE_COLUMNS[colIdx - 1] };
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: navCols[colIdx - 1] };
                     } else if (currRowIdx - 1 >= 0) {
-                        // Envolvente hacia fila anterior, última columna editable
+                        // Envolvente hacia fila anterior, última columna
                         const targetRow = flatVisibleRows[currRowIdx - 1];
-                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: EDITABLE_COLUMNS[EDITABLE_COLUMNS.length - 1] };
+                        nextTarget = { rowKey: targetRow.rowKey, productId: targetRow.productId, colKey: navCols[navCols.length - 1] };
                     }
                 }
             }
@@ -2647,6 +2644,9 @@ interface CommittedSaleData {
             setEditingCell(null);
         }
 
+        // En Sábana Oficial (Solo Vista) solo se navega, jamás se modifica ni persiste nada
+        if (isViewOnlyNav) return;
+
         // 3. Evaluar si el valor numérico cambió para guardar en base de datos
         const newVal = evaluateExcelExpression(currentCell.currentValue);
         if (isNaN(newVal) || Math.abs(newVal - currentCell.initialValue) < 0.0001) {
@@ -2657,7 +2657,7 @@ interface CommittedSaleData {
         persistCellChange(currentCell.productId, currentCell.colKey, newVal, currentCell.currentValue);
     };
 
-    // Renderizado de celda editable estilo Excel con soporte de navegación fluida
+    // Renderizado de celda editable o navegable estilo Excel con soporte de navegación fluida
     const renderEditableCell = (
         rowKey: string,
         productId: string,
@@ -2668,7 +2668,40 @@ interface CommittedSaleData {
         isReadonly: boolean = false,
         extraChildren?: React.ReactNode
     ) => {
-        const isEditing = !isReadonly && canEditSheet && sheetMode === 'manual_edit' && editingCell?.rowKey === rowKey && editingCell?.colKey === colKey;
+        const isActiveCell = editingCell?.rowKey === rowKey && editingCell?.colKey === colKey;
+        const isEditing = !isReadonly && canEditSheet && sheetMode === 'manual_edit' && !closingRecord?.is_locked && isActiveCell;
+        const isViewCursor = isActiveCell && !isEditing;
+
+        const handleCellKeyDown = (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                isNavigatingRef.current = true;
+                handleCommitCellEditAndNavigate(e.shiftKey ? 'up' : 'down');
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                isNavigatingRef.current = true;
+                handleCommitCellEditAndNavigate(e.shiftKey ? 'prev_col' : 'next_col');
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                isNavigatingRef.current = true;
+                handleCommitCellEditAndNavigate('next_col');
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                isNavigatingRef.current = true;
+                handleCommitCellEditAndNavigate('prev_col');
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                isNavigatingRef.current = true;
+                handleCommitCellEditAndNavigate('down');
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                isNavigatingRef.current = true;
+                handleCommitCellEditAndNavigate('up');
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setEditingCell(null);
+            }
+        };
 
         if (isEditing) {
             return (
@@ -2685,36 +2718,7 @@ interface CommittedSaleData {
                         title="Navegación tipo Excel: Flechas (↑ ↓ ← →), Enter/Shift+Enter y Tab/Shift+Tab para desplazarse, Esc para cancelar. Soporta fórmulas (ej. =10+20)."
                         onFocus={e => e.target.select()}
                         onChange={e => setEditingCell(prev => prev ? { ...prev, currentValue: e.target.value } : null)}
-                        onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                isNavigatingRef.current = true;
-                                handleCommitCellEditAndNavigate(e.shiftKey ? 'up' : 'down');
-                            } else if (e.key === 'Tab') {
-                                e.preventDefault();
-                                isNavigatingRef.current = true;
-                                handleCommitCellEditAndNavigate(e.shiftKey ? 'prev_col' : 'next_col');
-                            } else if (e.key === 'ArrowRight') {
-                                e.preventDefault();
-                                isNavigatingRef.current = true;
-                                handleCommitCellEditAndNavigate('next_col');
-                            } else if (e.key === 'ArrowLeft') {
-                                e.preventDefault();
-                                isNavigatingRef.current = true;
-                                handleCommitCellEditAndNavigate('prev_col');
-                            } else if (e.key === 'ArrowDown') {
-                                e.preventDefault();
-                                isNavigatingRef.current = true;
-                                handleCommitCellEditAndNavigate('down');
-                            } else if (e.key === 'ArrowUp') {
-                                e.preventDefault();
-                                isNavigatingRef.current = true;
-                                handleCommitCellEditAndNavigate('up');
-                            } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                setEditingCell(null);
-                            }
-                        }}
+                        onKeyDown={handleCellKeyDown}
                         onBlur={() => {
                             if (isNavigatingRef.current) {
                                 isNavigatingRef.current = false;
@@ -2749,37 +2753,41 @@ interface CommittedSaleData {
         return (
             <td
                 key={`cell-${rowKey}-${colKey}`}
+                tabIndex={isViewCursor ? 0 : -1}
+                ref={isViewCursor ? (el => {
+                    if (el) {
+                        el.focus({ preventScroll: true });
+                        el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                    }
+                }) : undefined}
+                onKeyDown={isViewCursor ? handleCellKeyDown : undefined}
+                onBlur={isViewCursor ? () => {
+                    if (isNavigatingRef.current) {
+                        isNavigatingRef.current = false;
+                        return;
+                    }
+                    setEditingCell(null);
+                } : undefined}
                 onClick={() => {
-                    if (closingRecord?.is_locked) {
-                        notify(`La jornada del ${balanceDate} está cerrada y congelada oficialmente. Para modificar registros debes reabrir la jornada contable.`, 'warning');
-                        return;
-                    }
-                    if (sheetMode === 'view') {
-                        if (canEditSheet) {
-                            notify('Estás en la Sábana Oficial (Solo Vista). Para editar celdas o realizar ajustes, activa el "Modo Edición" en la barra superior.', 'info');
-                        }
-                        return;
-                    }
-                    if (!canEditSheet) {
-                        notify('Acceso restringido: Esta sábana maestra es de solo lectura. Únicamente la jefatura de inventarios o administradores tienen potestad de edición.', 'warning');
-                        return;
-                    }
-                    if (!effectiveReadonly) {
-                        setEditingCell({
-                            rowKey,
-                            productId,
-                            colKey,
-                            initialValue: val || 0,
-                            currentValue: (val === null || val === 0) ? '' : formatNumber(val, decimals)
-                        });
-                    }
+                    setEditingCell({
+                        rowKey,
+                        productId,
+                        colKey,
+                        initialValue: val || 0,
+                        currentValue: (val === null || val === 0) ? '' : formatNumber(val, decimals)
+                    });
                 }}
                 style={{
                     ...style,
-                    cursor: effectiveReadonly ? 'default' : 'pointer',
-                    userSelect: 'none'
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    outline: 'none',
+                    ...(isViewCursor ? {
+                        boxShadow: 'inset 0 0 0 2px #0D7A57',
+                        backgroundColor: 'rgba(13, 122, 87, 0.10)'
+                    } : {})
                 }}
-                title={sheetMode === 'view' ? 'Sábana Oficial (Solo Vista) • Conmuta a Modo Edición para editar' : (effectiveReadonly ? 'Celda calculada de solo lectura' : 'Clic para editar este valor')}
+                title={sheetMode === 'view' ? 'Navegación tipo Excel: Usa las flechas (↑ ↓ ← →), Enter o Tab para desplazarte (Solo Lectura)' : (effectiveReadonly ? 'Celda calculada de solo lectura • Usa las flechas para desplazarte' : 'Clic para editar este valor')}
             >
                 <div style={{ display: 'flex', flexDirection: extraChildren ? 'column' : 'row', alignItems: 'flex-end', justifyContent: 'flex-end', gap: '2px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
@@ -3299,19 +3307,13 @@ interface CommittedSaleData {
                     };
 
                     const numericalCellRenderers: Record<string, (colIdx: number) => React.ReactNode> = {
-                        E: (colIdx) => (
-                            <td key={`cell-${key}-E`} style={{
-                                ...getColStyle('E', colIdx),
-                                padding: '4px 6px', textAlign: 'right',
-                                fontWeight: isParent ? '800' : '700',
-                                color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8',
-                                borderBottom: cellBorderBottom
-                            }} title="Inventario Inicial oficial heredado (Solo Lectura. Para ajustes use Col F Corrección)">
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                    {renderNumericCell(row.colE_initialStock, 2)}
-                                </div>
-                            </td>
-                        ),
+                        E: (colIdx) => renderEditableCell(key, row.productId, 'E', row.colE_initialStock, {
+                            ...getColStyle('E', colIdx),
+                            padding: '4px 6px', textAlign: 'right',
+                            fontWeight: isParent ? '800' : '700',
+                            color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8',
+                            borderBottom: cellBorderBottom
+                        }, 2, true),
                         F: (colIdx) => renderEditableCell(key, row.productId, 'F', row.colF_corrections, {
                             ...getColStyle('F', colIdx),
                             padding: '4px 6px',
@@ -3405,22 +3407,14 @@ interface CommittedSaleData {
                         L: (colIdx) => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { ...getColStyle('L', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2),
                         M: (colIdx) => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { ...getColStyle('M', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         N: (colIdx) => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { ...getColStyle('N', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
-                        O: (colIdx) => (
-                            <td
-                                key={`cell-${key}-O`}
-                                style={{
-                                    ...getColStyle('O', colIdx),
-                                    padding: '6px 8px',
-                                    textAlign: 'right',
-                                    color: row.colO_returns > 0 ? '#D97706' : '#94A3B8',
-                                    fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'),
-                                    borderBottom: cellBorderBottom
-                                }}
-                                title="Devoluciones (+): Cable Pelado exclusivo del Módulo de Gestión de Calidad (Angie Rivas - SDD Escenario 388 / DT-13). Solo lectura en sábana."
-                            >
-                                {renderNumericCell(row.colO_returns)}
-                            </td>
-                        ),
+                        O: (colIdx) => renderEditableCell(key, row.productId, 'O', row.colO_returns, {
+                            ...getColStyle('O', colIdx),
+                            padding: '6px 8px',
+                            textAlign: 'right',
+                            color: row.colO_returns > 0 ? '#D97706' : '#94A3B8',
+                            fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'),
+                            borderBottom: cellBorderBottom
+                        }, 2, true),
                         O2: (colIdx) => renderEditableCell(key, row.productId, 'O2', row.colO2_returnShortage, { ...getColStyle('O2', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colO2_returnShortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO2_returnShortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         P: (colIdx) => renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { ...getColStyle('P', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         Q: (colIdx) => renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { ...getColStyle('Q', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
@@ -3447,36 +3441,20 @@ interface CommittedSaleData {
                                 </button>
                             ) : null
                         ),
-                        S: (colIdx) => (
-                            <td key={`cell-${key}-S`} style={{ 
-                                ...getColStyle('S', colIdx),
-                                padding: '6px 8px', 
-                                textAlign: 'right', 
-                                fontWeight: isParent ? '800' : '700', 
-                                color: isParent ? '#064E3B' : '#0F172A', 
-                                borderRight: '1px solid #E2E8F0',
-                                borderBottom: cellBorderBottom,
-                                fontFamily: 'monospace, sans-serif'
-                            }}>
-                                {renderNumericCell(row.colS_calculated)}
-                            </td>
-                        ),
+                        S: (colIdx) => renderEditableCell(key, row.productId, 'S', row.colS_calculated, {
+                            ...getColStyle('S', colIdx),
+                            padding: '6px 8px', 
+                            textAlign: 'right', 
+                            fontWeight: isParent ? '800' : '700', 
+                            color: isParent ? '#064E3B' : '#0F172A', 
+                            borderRight: '1px solid #E2E8F0',
+                            borderBottom: cellBorderBottom,
+                            fontFamily: 'monospace, sans-serif'
+                        }, 2, true),
                         T: (colIdx) => renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { ...getColStyle('T', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', borderBottom: cellBorderBottom }, 2),
-                        U: (colIdx) => (
-                            <td key={`cell-${key}-U`} style={{ ...getColStyle('U', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
-                                {row.colU_bodegaPost10am !== null ? renderNumericCell(row.colU_bodegaPost10am) : <span style={{ color: '#CBD5E1' }}>-</span>}
-                            </td>
-                        ),
-                        V: (colIdx) => (
-                            <td key={`cell-${key}-V`} style={{ ...getColStyle('V', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }}>
-                                {row.colV_missing > 0 ? renderNumericCell(row.colV_missing) : <span style={{ color: '#CBD5E1' }}>-</span>}
-                            </td>
-                        ),
-                        W: (colIdx) => (
-                            <td key={`cell-${key}-W`} style={{ ...getColStyle('W', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
-                                {row.colW_surplus > 0 ? renderNumericCell(row.colW_surplus) : <span style={{ color: '#CBD5E1' }}>-</span>}
-                            </td>
-                        ),
+                        U: (colIdx) => renderEditableCell(key, row.productId, 'U', row.colU_bodegaPost10am, { ...getColStyle('U', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }, 2, true),
+                        V: (colIdx) => renderEditableCell(key, row.productId, 'V', row.colV_missing > 0 ? row.colV_missing : null, { ...getColStyle('V', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }, 2, true),
+                        W: (colIdx) => renderEditableCell(key, row.productId, 'W', row.colW_surplus > 0 ? row.colW_surplus : null, { ...getColStyle('W', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }, 2, true),
                         X: (colIdx) => renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { ...getColStyle('X', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosX?.length > 0 ? (
                                 <button
