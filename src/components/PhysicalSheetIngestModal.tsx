@@ -33,6 +33,31 @@ interface ExtractPhysicalSheetApiResponse {
   results?: Array<{ fileName: string; items: RawExtractedSheetRow[] }>;
 }
 
+interface CommittedItemSummary {
+  productId: string;
+  accountingId: string;
+  productName: string;
+  unit: string;
+  targetColumn: TargetBalanceColumn;
+  totalQuantity: number;
+  rawDetails: string;
+  status: 'inserted' | 'updated';
+}
+
+interface CommitSummaryData {
+  balanceDate: string;
+  sheetType: PhysicalSheetType;
+  totalExtractedRows: number;
+  omittedZeroOrUnmatchedRows: number;
+  injectedProductsCount: number;
+  insertedCount: number;
+  updatedCount: number;
+  durationSec: string;
+  filesProcessed: string[];
+  totalsByCol: Record<TargetBalanceColumn, { count: number; totalQty: number }>;
+  items: CommittedItemSummary[];
+}
+
 interface PhysicalSheetIngestModalProps { isOpen: boolean; onClose: () => void; balanceDate: string; catalog: CatalogProductOption[]; opsCurrentByProductAndCol: Map<string, { G: number; T: number; Q: number; R: number; X?: number }>; supervisorName: string; onSuccess: () => void; }
 export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate, catalog, opsCurrentByProductAndCol, supervisorName, onSuccess }: PhysicalSheetIngestModalProps) {
   const [sheetType, setSheetType] = useState<PhysicalSheetType>('entrada');
@@ -53,11 +78,12 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const [reconciledRows, setReconciledRows] = useState<ReconciledSheetRow[]>([]);
   const [collapseTitleBar, setCollapseTitleBar] = useState<boolean>(false);
   const [collapseStatsBar, setCollapseStatsBar] = useState<boolean>(false);
+  const [commitSummary, setCommitSummary] = useState<CommitSummaryData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendFileInputRef = useRef<HTMLInputElement>(null);
   const previewUrlsRef = useRef<string[]>([]);
   previewUrlsRef.current = previewUrls;
-  const isStaging = reconciledRows.length > 0;
+  const isStaging = reconciledRows.length > 0 && !commitSummary;
 
   useEffect(() => {
     return () => {
@@ -424,6 +450,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
     setPreviewUrls([]);
     setRawText('');
     setReconciledRows([]);
+    setCommitSummary(null);
     setErrorMsg(null);
     setDigestionDuration(null);
     setActiveFileIdx(0);
@@ -432,6 +459,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   };
   const handleCloseModal = () => {
     previewUrls.forEach(u => URL.revokeObjectURL(u));
+    setCommitSummary(null);
     onClose();
   };
   const handleRowProductChange = (rowId: string, newProductId: string) => {
@@ -529,6 +557,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
     }
     setIsSaving(true);
     setErrorMsg(null);
+    const commitStartMs = performance.now();
     try {
       const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
       const warehouseId = whData?.id || null;
@@ -536,6 +565,9 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         string,
         {
           productId: string;
+          accountingId: string;
+          productName: string;
+          unit: string;
           targetColumn: TargetBalanceColumn;
           totalQuantity: number;
           weightedCostNumerator: number;
@@ -551,6 +583,9 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         const key = `${r.matchedProductId}__${r.targetColumn}`;
         const existing = grouped.get(key) || {
           productId: r.matchedProductId,
+          accountingId: r.matchedAccountingId || 'S/N',
+          productName: r.matchedProductName || r.rawProductName,
+          unit: r.matchedUnit || 'Kg',
           targetColumn: r.targetColumn,
           totalQuantity: 0,
           weightedCostNumerator: 0,
@@ -571,32 +606,68 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         if (!existing.files.includes(r.sourceFileName)) existing.files.push(r.sourceFileName);
         grouped.set(key, existing);
       });
+
+      const validItems = Array.from(grouped.values()).filter(item => item.totalQuantity > 0);
       const startIso = `${balanceDate}T00:00:00.000Z`;
       const endIso = `${balanceDate}T23:59:59.999Z`;
       const timestampIso = `${balanceDate}T12:00:00.000Z`;
-      for (const item of grouped.values()) {
-        // Exportar e inyectar al Balance Diario únicamente aquellos productos con cantidad > 0 en todas las columnas (G, T, Q, R, X)
-        if (item.totalQuantity <= 0) {
-          continue;
-        }
+
+      const getRefType = (col: TargetBalanceColumn): string =>
+        col === 'G'
+          ? 'purchase_reception'
+          : col === 'Q'
+          ? INVENTORY_MOVEMENT_SUBTYPES.WASTE_DAMAGE
+          : col === 'R'
+          ? INVENTORY_MOVEMENT_SUBTYPES.WASTE_CLEANING
+          : col === 'X'
+          ? INVENTORY_MOVEMENT_SUBTYPES.FOOD_BANK
+          : INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT;
+
+      // 1. Consultar en 1 sola petición todos los movimientos existentes de la jornada para los productos afectados
+      const uniqueProductIds = Array.from(new Set(validItems.map(i => i.productId)));
+      const { data: allExistingDayMovs } = await supabase
+        .from('inventory_movements')
+        .select('id, product_id, reference_type')
+        .in('product_id', uniqueProductIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso);
+
+      const existingByProdAndRef = new Map<string, string[]>();
+      (allExistingDayMovs || []).forEach((m: { id: string; product_id: string | null; reference_type: string | null }) => {
+        if (!m.product_id || !m.reference_type) return;
+        const k = `${m.product_id}__${m.reference_type}`;
+        const arr = existingByProdAndRef.get(k) || [];
+        arr.push(m.id);
+        existingByProdAndRef.set(k, arr);
+      });
+
+      const toInsert: Array<{
+        product_id: string;
+        warehouse_id: string | null;
+        quantity: number;
+        type: 'entry' | 'exit' | 'adjustment';
+        reference_type: string;
+        notes: string;
+        created_at: string;
+      }> = [];
+      const toUpdate: Array<{ id: string; quantity: number; type: 'entry' | 'exit' | 'adjustment'; notes: string }> = [];
+      const duplicateIdsToDelete: string[] = [];
+      const committedItems: CommittedItemSummary[] = [];
+      const totalsByCol: Record<TargetBalanceColumn, { count: number; totalQty: number }> = {
+        G: { count: 0, totalQty: 0 },
+        T: { count: 0, totalQty: 0 },
+        Q: { count: 0, totalQty: 0 },
+        R: { count: 0, totalQty: 0 },
+        X: { count: 0, totalQty: 0 }
+      };
+      const allFilesSet = new Set<string>();
+
+      for (const item of validItems) {
         const movType: 'entry' | 'exit' | 'adjustment' =
           item.targetColumn === 'G' ? 'entry' : item.targetColumn === 'T' ? 'adjustment' : 'exit';
-        const refType =
-          item.targetColumn === 'G'
-            ? 'purchase_reception'
-            : item.targetColumn === 'Q'
-            ? INVENTORY_MOVEMENT_SUBTYPES.WASTE_DAMAGE
-            : item.targetColumn === 'R'
-            ? INVENTORY_MOVEMENT_SUBTYPES.WASTE_CLEANING
-            : item.targetColumn === 'X'
-            ? INVENTORY_MOVEMENT_SUBTYPES.FOOD_BANK
-            : INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT;
+        const refType = getRefType(item.targetColumn);
         const signedQty =
           item.targetColumn === 'G' ? item.totalQuantity : item.targetColumn === 'T' ? 0 : -item.totalQuantity;
-        const pppCost =
-          item.weightedCostDenominator > 0
-            ? Math.round((item.weightedCostNumerator / item.weightedCostDenominator) * 100) / 100
-            : null;
         const replaceTag = item.replacesOpsDiscrepancy ? ' [CONCILIACION_REEMPLAZO_OPS]' : '';
         const blindMeta =
           item.targetColumn === 'T'
@@ -607,23 +678,16 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
               })}]`
             : '';
         const noteDesc = `[ORIGEN: PHYSICAL_SHEET_OCR - ${supervisorName}]${replaceTag} Col ${item.targetColumn}: ${item.totalQuantity.toFixed(2)} (${item.rawDetails.join(' + ')}) [Archivo: ${item.files.join(', ')}]${blindMeta}`;
-        const { data: existingMovs } = await supabase
-          .from('inventory_movements')
-          .select('id')
-          .eq('product_id', item.productId)
-          .eq('reference_type', refType)
-          .gte('created_at', startIso)
-          .lte('created_at', endIso);
-        if (existingMovs && existingMovs.length > 0) {
-          await supabase
-            .from('inventory_movements')
-            .update({ quantity: signedQty, type: movType, notes: noteDesc })
-            .eq('id', existingMovs[0].id);
-          if (existingMovs.length > 1) {
-            await supabase.from('inventory_movements').delete().in('id', existingMovs.slice(1).map(x => x.id));
+        const existingIds = existingByProdAndRef.get(`${item.productId}__${refType}`) || [];
+        const isUpdate = existingIds.length > 0;
+
+        if (isUpdate) {
+          toUpdate.push({ id: existingIds[0], quantity: signedQty, type: movType, notes: noteDesc });
+          if (existingIds.length > 1) {
+            duplicateIdsToDelete.push(...existingIds.slice(1));
           }
         } else {
-          await supabase.from('inventory_movements').insert({
+          toInsert.push({
             product_id: item.productId,
             warehouse_id: warehouseId,
             quantity: signedQty,
@@ -633,6 +697,53 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
             created_at: timestampIso
           });
         }
+
+        item.files.forEach(f => allFilesSet.add(f));
+        totalsByCol[item.targetColumn].count += 1;
+        totalsByCol[item.targetColumn].totalQty =
+          Math.round((totalsByCol[item.targetColumn].totalQty + item.totalQuantity) * 100) / 100;
+
+        committedItems.push({
+          productId: item.productId,
+          accountingId: item.accountingId,
+          productName: item.productName,
+          unit: item.unit,
+          targetColumn: item.targetColumn,
+          totalQuantity: item.totalQuantity,
+          rawDetails: item.rawDetails.join(' + '),
+          status: isUpdate ? 'updated' : 'inserted'
+        });
+      }
+
+      // 2. Ejecutar inserciones en bloque y actualizaciones en paralelo
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from('inventory_movements').insert(toInsert);
+        if (insErr) throw insErr;
+      }
+      if (duplicateIdsToDelete.length > 0) {
+        await supabase.from('inventory_movements').delete().in('id', duplicateIdsToDelete);
+      }
+      if (toUpdate.length > 0) {
+        const CHUNK_SIZE = 20;
+        for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
+          const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
+          await Promise.all(
+            chunk.map(u =>
+              supabase
+                .from('inventory_movements')
+                .update({ quantity: u.quantity, type: u.type, notes: u.notes })
+                .eq('id', u.id)
+            )
+          );
+        }
+      }
+
+      // 3. Actualizar matriz de costos PPP si hubo entradas en Col G con costo
+      for (const item of validItems) {
+        const pppCost =
+          item.weightedCostDenominator > 0
+            ? Math.round((item.weightedCostNumerator / item.weightedCostDenominator) * 100) / 100
+            : null;
         if (item.targetColumn === 'G' && pppCost && pppCost > 0) {
           let sumTotalCost = item.weightedCostNumerator;
           let sumQuantity = item.weightedCostDenominator;
@@ -671,8 +782,23 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           );
         }
       }
+
+      const durationSec = ((performance.now() - commitStartMs) / 1000).toFixed(1);
+      setCollapseTitleBar(false);
+      setCommitSummary({
+        balanceDate,
+        sheetType,
+        totalExtractedRows: reconciledRows.length,
+        omittedZeroOrUnmatchedRows: Math.max(0, reconciledRows.length - rowsToApply.length),
+        injectedProductsCount: committedItems.length,
+        insertedCount: toInsert.length,
+        updatedCount: toUpdate.length,
+        durationSec,
+        filesProcessed: Array.from(allFilesSet),
+        totalsByCol,
+        items: committedItems.sort((a, b) => a.productName.localeCompare(b.productName, 'es', { sensitivity: 'base' }))
+      });
       onSuccess();
-      handleCloseModal();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Error guardando en la base de datos.');
     } finally {
@@ -820,8 +946,144 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         </div>
         <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleInitialFilesSelected(e.target.files); e.target.value = ''; }} />
         <input ref={appendFileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleAppendFilesSelected(e.target.files); e.target.value = ''; }} />
-        {/* FASE 1 (!isStaging): DROPZONE Y SELECTOR DE CANAL IDÉNTICO A /admin/orders/create */}
-        {!isStaging ? (
+        {/* FASE 3 (commitSummary): MENSAJE DE ÉXITO Y RESUMEN EJECUTIVO DE LO CARGADO A LA SÁBANA */}
+        {commitSummary ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
+            <div style={{ padding: '1.1rem 1.5rem', backgroundColor: '#ECFDF5', borderBottom: '2px solid #6EE7B7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#16A34A', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)' }}>
+                  <CheckCircle2 size={26} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#064E3B' }}>
+                      Planilla Inyectada con Éxito al Balance Diario
+                    </h3>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 9px', borderRadius: '999px', backgroundColor: '#D1FAE5', color: '#065F46', border: '1px solid #34D399' }}>
+                      Jornada: {commitSummary.balanceDate}
+                    </span>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 9px', borderRadius: '999px', backgroundColor: '#FFFFFF', color: '#047857', border: '1px solid #6EE7B7' }}>
+                      Tiempo de inyección: {commitSummary.durationSec}s
+                    </span>
+                  </div>
+                  <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#047857', fontWeight: 600 }}>
+                    Se cargaron únicamente los productos parametrizados con cantidad mayor a cero (&gt; 0). La Sábana de 24 Columnas ya fue actualizada.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  onClick={handleResetWorkspace}
+                  style={{ padding: '8px 14px', borderRadius: '10px', border: '1.5px solid #059669', backgroundColor: '#FFFFFF', color: '#065F46', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Plus size={15} />
+                  <span>Cargar Otra Planilla / Hoja</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', backgroundColor: '#16A34A', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)' }}
+                >
+                  <span>Cerrar y Ver en la Sábana</span>
+                  <ArrowRight size={15} />
+                </button>
+              </div>
+            </div>
+
+            {/* TARJETAS KPI DEL RESUMEN DE CARGUE */}
+            <div style={{ padding: '0.9rem 1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#FFFFFF' }}>
+              <div style={{ padding: '0.75rem 1rem', borderRadius: '12px', backgroundColor: '#F0FDF4', border: '1.5px solid #86EFAC' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>Productos Inyectados (&gt; 0)</div>
+                <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#14532D', marginTop: '2px' }}>
+                  {commitSummary.injectedProductsCount} <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>SKUs</span>
+                </div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#15803D', marginTop: '2px' }}>
+                  {commitSummary.insertedCount} nuevos · {commitSummary.updatedCount} actualizados
+                </div>
+              </div>
+
+              {(['G', 'T', 'Q', 'R', 'X'] as TargetBalanceColumn[])
+                .filter(col => commitSummary.totalsByCol[col].count > 0)
+                .map(col => (
+                  <div key={col} style={{ padding: '0.75rem 1rem', borderRadius: '12px', backgroundColor: '#EFF6FF', border: '1.5px solid #93C5FD' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#1E40AF', textTransform: 'uppercase' }}>
+                      Total Cargado en Columna {col}
+                    </div>
+                    <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#1E3A8A', marginTop: '2px' }}>
+                      {commitSummary.totalsByCol[col].totalQty.toLocaleString('es-CO', { maximumFractionDigits: 2 })}{' '}
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>Kg / Und</span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1D4ED8', marginTop: '2px' }}>
+                      En {commitSummary.totalsByCol[col].count} productos de Col {col}
+                    </div>
+                  </div>
+                ))}
+
+              <div style={{ padding: '0.75rem 1rem', borderRadius: '12px', backgroundColor: '#F8FAFC', border: '1.5px solid #CBD5E1' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Renglones en Cero Omitidos</div>
+                <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#334155', marginTop: '2px' }}>
+                  {commitSummary.omittedZeroOrUnmatchedRows} <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>de {commitSummary.totalExtractedRows}</span>
+                </div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748B', marginTop: '2px' }}>
+                  Descartados por tener raya (&mdash;) o valor 0
+                </div>
+              </div>
+            </div>
+
+            {/* TABLA DETALLADA DE LOS PRODUCTOS CARGADOS */}
+            <div style={{ flex: 1, padding: '0.85rem 1.5rem', overflowY: 'auto' }}>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #CBD5E1', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', padding: '0.6rem 0.85rem', borderBottom: '2px solid #E2E8F0', fontSize: '0.7rem', fontWeight: 800, color: '#475569' }}>#</th>
+                      <th style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', padding: '0.6rem 0.85rem', borderBottom: '2px solid #E2E8F0', fontSize: '0.7rem', fontWeight: 800, color: '#475569' }}>ID CONTABLE</th>
+                      <th style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', padding: '0.6rem 0.85rem', borderBottom: '2px solid #E2E8F0', fontSize: '0.7rem', fontWeight: 800, color: '#475569' }}>PRODUCTO HOMOLOGADO</th>
+                      <th style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', padding: '0.6rem 0.85rem', borderBottom: '2px solid #E2E8F0', fontSize: '0.7rem', fontWeight: 800, color: '#475569' }}>DETALLE EN PLANILLA</th>
+                      <th style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', padding: '0.6rem 0.85rem', borderBottom: '2px solid #E2E8F0', fontSize: '0.7rem', fontWeight: 800, color: '#475569', textAlign: 'center' }}>COLUMNA</th>
+                      <th style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', padding: '0.6rem 0.85rem', borderBottom: '2px solid #E2E8F0', fontSize: '0.7rem', fontWeight: 800, color: '#475569', textAlign: 'right' }}>CANTIDAD INYECTADA</th>
+                      <th style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', padding: '0.6rem 0.85rem', borderBottom: '2px solid #E2E8F0', fontSize: '0.7rem', fontWeight: 800, color: '#475569', textAlign: 'center' }}>OPERACIÓN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {commitSummary.items.map((item, idx) => (
+                      <tr key={`${item.productId}-${item.targetColumn}`} style={{ backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}>
+                        <td style={{ padding: '0.5rem 0.85rem', borderBottom: '1px solid #F1F5F9', color: '#64748B', fontWeight: 700 }}>{idx + 1}</td>
+                        <td style={{ padding: '0.5rem 0.85rem', borderBottom: '1px solid #F1F5F9', fontWeight: 800, color: '#0F172A' }}>{item.accountingId}</td>
+                        <td style={{ padding: '0.5rem 0.85rem', borderBottom: '1px solid #F1F5F9', fontWeight: 800, color: '#0F172A' }}>{item.productName}</td>
+                        <td style={{ padding: '0.5rem 0.85rem', borderBottom: '1px solid #F1F5F9', color: '#475569', fontSize: '0.76rem' }}>{item.rawDetails}</td>
+                        <td style={{ padding: '0.5rem 0.85rem', borderBottom: '1px solid #F1F5F9', textAlign: 'center' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD' }}>
+                            Col {item.targetColumn}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.5rem 0.85rem', borderBottom: '1px solid #F1F5F9', textAlign: 'right', fontWeight: 900, color: '#065F46', fontSize: '0.88rem' }}>
+                          {item.totalQuantity.toLocaleString('es-CO', { maximumFractionDigits: 2 })} {item.unit}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.85rem', borderBottom: '1px solid #F1F5F9', textAlign: 'center' }}>
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              fontSize: '0.68rem',
+                              fontWeight: 800,
+                              backgroundColor: item.status === 'inserted' ? '#DCFCE7' : '#FEF3C7',
+                              color: item.status === 'inserted' ? '#15803D' : '#B45309',
+                              border: item.status === 'inserted' ? '1px solid #86EFAC' : '1px solid #FDE68A'
+                            }}
+                          >
+                            {item.status === 'inserted' ? 'Nuevo registro' : 'Actualizado'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : !isStaging ? (
           <div style={{ flex: 1, padding: '1.75rem 2.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', backgroundColor: '#FFFFFF' }}>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <div style={{ display: 'inline-flex', padding: '4px', backgroundColor: '#E2E8F0', borderRadius: '12px', gap: '4px' }}>
