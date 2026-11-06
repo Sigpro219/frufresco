@@ -212,6 +212,7 @@ export default function DailyBalanceExcelImportModal({
                     return letterIdx < headers.length ? letterIdx : -1;
                 };
 
+                const idxA_date = getColIdx('A', 'fecha');
                 const idxB_id = getColIdx('B', 'idproducto');
                 const idxD_name = getColIdx('D', 'producto');
                 const idxE_init = getColIdx('E', 'inicial');
@@ -222,18 +223,32 @@ export default function DailyBalanceExcelImportModal({
                 const idxJ_weightUn = getColIdx('J', 'peso venta');
                 const idxK_shortage = getColIdx('K', 'escaso');
                 const idxL_unship = getColIdx('L', 'sin enviar');
-                const idxM_extra = getColIdx('M', 'adicional cliente');
-                const idxN_employee = getColIdx('N', 'empleado');
+                const idxUnprepared = headers.findIndex(h => h.toLowerCase().includes('sin alistar'));
+                const idxM_extra = headers.findIndex(h => {
+                    const clean = h.toLowerCase().trim();
+                    return clean.includes('adicional cliente') || clean === 'venta adicional' || (clean.includes('venta adicional') && !clean.includes('empleado'));
+                });
+                const idxN_employee = headers.findIndex(h => {
+                    const clean = h.toLowerCase().trim();
+                    return clean.includes('empleado') || clean.includes('nómina') || clean.includes('nomina');
+                });
                 const idxO_returns = getColIdx('O', 'devoluci');
                 const idxP_weigh = getColIdx('P', 'pesada');
                 const idxQ_damage = getColIdx('Q', 'desperdicio');
                 const idxR_cleaning = getColIdx('R', 'basura');
                 const idxT_physical = getColIdx('T', 'agregado bodega');
-                const idxX_foodBank = getColIdx('X', 'banco de alimentos');
+                const idxX_foodBank = headers.findIndex(h => {
+                    const clean = h.toLowerCase().trim();
+                    return clean.includes('banco de alimentos') || clean.includes('donaci');
+                });
+
+                const ACCOUNTING_ID_ALIASES: Record<number, number> = { 767: 866 };
 
                 const parsedList: ParsedOperationRow[] = [];
                 let emptyStreak = 0;
-                const seenAccountingIds = new Set<number>();
+                const seenDetailAccountingIds = new Set<number>();
+                let currentGroupDetailIndices: number[] = [];
+                let detectedSheetDate: string | null = null;
 
                 for (let r = headerRowIndex + 1; r < rawSheet.length; r++) {
                     const row = rawSheet[r];
@@ -251,17 +266,31 @@ export default function DailyBalanceExcelImportModal({
                     }
                     emptyStreak = 0;
 
+                    if (!detectedSheetDate && idxA_date !== -1 && row[idxA_date]) {
+                        const rawDateStr = String(row[idxA_date]).trim();
+                        const dmyMatch = rawDateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                        const ymdMatch = rawDateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+                        if (dmyMatch) detectedSheetDate = `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
+                        else if (ymdMatch) detectedSheetDate = `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
+                    }
+
                     const rawIdVal = idxB_id !== -1 ? row[idxB_id] : '';
-                    const parsedAccId = rawIdVal && !isNaN(Number(rawIdVal)) ? Number(rawIdVal) : null;
+                    const rawParsedAccId = rawIdVal && !isNaN(Number(rawIdVal)) ? Number(rawIdVal) : null;
+                    const parsedAccId = rawParsedAccId !== null ? (ACCOUNTING_ID_ALIASES[rawParsedAccId] ?? rawParsedAccId) : null;
                     const rawNameVal = idxD_name !== -1 ? String(row[idxD_name] || '').trim() : '';
 
                     if (!parsedAccId && !rawNameVal) continue;
                     if (rawNameVal.toLowerCase().startsWith('inventario de') && !parsedAccId) continue;
 
-                    // Detección de fila de resumen / totalizador: si el ID contable ya apareció en una presentación previa
-                    const isDuplicateSummaryRow = parsedAccId !== null && seenAccountingIds.has(parsedAccId);
-                    if (parsedAccId !== null) {
-                        seenAccountingIds.add(parsedAccId);
+                    const opColIndices = [
+                        idxE_init, idxF_corr, idxG_purch, idxH_salesKg, idxI_salesUn, idxJ_weightUn,
+                        idxK_shortage, idxL_unship, idxUnprepared, idxM_extra, idxN_employee,
+                        idxO_returns, idxP_weigh, idxQ_damage, idxR_cleaning
+                    ].filter(i => i !== -1);
+                    const explicitZeroCount = opColIndices.filter(colIdx => String(row[colIdx] ?? '').trim() === '0').length;
+                    const isDuplicateSummaryRow = explicitZeroCount >= 6 || (parsedAccId !== null && seenDetailAccountingIds.has(parsedAccId));
+                    if (!isDuplicateSummaryRow && parsedAccId !== null) {
+                        seenDetailAccountingIds.add(parsedAccId);
                     }
 
                     let matched: ProductItem | null = null;
@@ -296,6 +325,19 @@ export default function DailyBalanceExcelImportModal({
                         ? parseNum(rawPhysical) 
                         : null;
 
+                    const rowUnshipped = parseNum(idxL_unship !== -1 ? row[idxL_unship] : 0) +
+                        parseNum(idxUnprepared !== -1 ? row[idxUnprepared] : 0);
+                    const rowWeighingWaste = parseNum(idxP_weigh !== -1 ? row[idxP_weigh] : 0);
+
+                    if (isDuplicateSummaryRow && rowWeighingWaste > 0 && currentGroupDetailIndices.length > 0) {
+                        const groupHasWeighing = currentGroupDetailIndices.some(idx => parsedList[idx].weighingWaste > 0);
+                        if (!groupHasWeighing) {
+                            const targetDetailIdx = currentGroupDetailIndices.find(idx => parsedList[idx].accountingId === parsedAccId) ?? currentGroupDetailIndices[0];
+                            parsedList[targetDetailIdx].weighingWaste = rowWeighingWaste;
+                        }
+                    }
+
+                    const newRowIndex = parsedList.length;
                     parsedList.push({
                         rawId: rawIdVal,
                         accountingId: parsedAccId,
@@ -310,22 +352,31 @@ export default function DailyBalanceExcelImportModal({
                         salesUnits: parseNum(idxI_salesUn !== -1 ? row[idxI_salesUn] : 0),
                         weightSalesUnits: parseNum(idxJ_weightUn !== -1 ? row[idxJ_weightUn] : 0),
                         shortage: parseNum(idxK_shortage !== -1 ? row[idxK_shortage] : 0),
-                        unshipped: parseNum(idxL_unship !== -1 ? row[idxL_unship] : 0),
+                        unshipped: rowUnshipped,
                         additionalSales: parseNum(idxM_extra !== -1 ? row[idxM_extra] : 0),
                         employeeSales: parseNum(idxN_employee !== -1 ? row[idxN_employee] : 0),
                         returns: parseNum(idxO_returns !== -1 ? row[idxO_returns] : 0),
-                        weighingWaste: parseNum(idxP_weigh !== -1 ? row[idxP_weigh] : 0),
+                        weighingWaste: rowWeighingWaste,
                         damageWaste: parseNum(idxQ_damage !== -1 ? row[idxQ_damage] : 0),
                         cleaningWaste: parseNum(idxR_cleaning !== -1 ? row[idxR_cleaning] : 0),
                         physicalCount,
                         foodBank: parseNum(idxX_foodBank !== -1 ? row[idxX_foodBank] : 0),
                     });
+
+                    if (isDuplicateSummaryRow) {
+                        currentGroupDetailIndices = [];
+                    } else {
+                        currentGroupDetailIndices.push(newRowIndex);
+                    }
                 }
 
                 if (parsedList.length === 0) {
                     throw new Error('No se encontraron filas con productos válidos en el archivo.');
                 }
 
+                if (detectedSheetDate) {
+                    setTargetDate(detectedSheetDate);
+                }
                 setParsedRows(parsedList);
             } catch (err: any) {
                 console.error('Error parseando archivo Excel:', err);
