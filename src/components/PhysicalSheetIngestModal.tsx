@@ -393,7 +393,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           confidence: prod ? 100 : 0,
           opsCurrentValue: Math.round(opsVal * 100) / 100,
           conciliationStatus: status,
-          selected: Boolean(prod?.id) && r.quantity >= 0
+          selected: Boolean(prod?.id) && r.quantity > 0
         };
       })
     );
@@ -405,7 +405,12 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         if (r.rowId !== rowId) return r;
         const status =
           r.opsCurrentValue <= 0.001 ? 'new_entry' : Math.abs(r.opsCurrentValue - safeQty) <= 0.05 ? 'matched_ops' : 'discrepancy';
-        return { ...r, quantity: safeQty, conciliationStatus: status };
+        return {
+          ...r,
+          quantity: safeQty,
+          conciliationStatus: status,
+          selected: safeQty > 0 ? Boolean(r.matchedProductId) : false
+        };
       })
     );
   };
@@ -448,7 +453,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
     ]);
   };
   const stats = useMemo(() => {
-    const active = reconciledRows.filter(r => r.selected && r.matchedProductId);
+    const active = reconciledRows.filter(r => r.selected && r.matchedProductId && r.quantity > 0);
     return {
       total: reconciledRows.length,
       active: active.length,
@@ -459,10 +464,10 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   }, [reconciledRows]);
   const handleApproveAndCommit = async () => {
     const rowsToApply = reconciledRows.filter(
-      r => r.selected && r.matchedProductId && r.quantity >= 0 && r.resolution === 'use_sheet'
+      r => r.selected && r.matchedProductId && r.quantity > 0 && r.resolution === 'use_sheet'
     );
     if (rowsToApply.length === 0) {
-      setErrorMsg('No hay filas activas homologadas para inyectar a la Sábana.');
+      setErrorMsg('No hay filas activas con cantidad mayor a cero (> 0) para inyectar a la Sábana.');
       return;
     }
     setIsSaving(true);
@@ -513,8 +518,8 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
       const endIso = `${balanceDate}T23:59:59.999Z`;
       const timestampIso = `${balanceDate}T12:00:00.000Z`;
       for (const item of grouped.values()) {
-        // Si la cantidad consolidada es 0 en columnas de entrada/merma/donación (G, Q, R, X), omitir inserción en BD
-        if (item.targetColumn !== 'T' && item.totalQuantity <= 0) {
+        // Exportar e inyectar al Balance Diario únicamente aquellos productos con cantidad > 0 en todas las columnas (G, T, Q, R, X)
+        if (item.totalQuantity <= 0) {
           continue;
         }
         const movType: 'entry' | 'exit' | 'adjustment' =
@@ -939,7 +944,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                 reconciledRows={reconciledRows}
                 filteredCatalog={catalog}
                 onToggleSelect={(rowId, selected) => setReconciledRows(prev => prev.map(r => (r.rowId === rowId ? { ...r, selected } : r)))}
-                onToggleSelectAll={selected => setReconciledRows(prev => prev.map(r => ({ ...r, selected })))}
+                onToggleSelectAll={selected => setReconciledRows(prev => prev.map(r => ({ ...r, selected: selected && r.quantity > 0 && Boolean(r.matchedProductId) })))}
                 onProductChange={handleRowProductChange}
                 onColChange={handleRowColChange}
                 onQtyChange={handleRowQtyChange}

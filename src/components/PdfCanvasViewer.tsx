@@ -78,6 +78,7 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
         if (!pdfDoc || !containerRef.current) return;
 
         let isCancelled = false;
+        let activeRenderTask: any = null;
         const renderPages = async () => {
             const container = containerRef.current;
             if (!container) return;
@@ -87,6 +88,7 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
                 if (isCancelled) break;
                 try {
                     const page = await pdfDoc.getPage(pageNum);
+                    if (isCancelled) break;
                     const pixelRatio = window.devicePixelRatio || 1;
                     const viewport = page.getViewport({ scale: zoom });
 
@@ -111,11 +113,14 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         ctx.scale(pixelRatio, pixelRatio);
-                        await page.render({
+                        activeRenderTask = page.render({
                             canvasContext: ctx,
                             viewport: viewport
-                        }).promise;
+                        });
+                        await activeRenderTask.promise;
+                        activeRenderTask = null;
                     }
+                    if (isCancelled) break;
 
                     const pageLabel = document.createElement('div');
                     pageLabel.innerText = `Página ${pageNum} de ${pdfDoc.numPages}`;
@@ -127,8 +132,10 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
                     pageWrapper.appendChild(canvas);
                     pageWrapper.appendChild(pageLabel);
                     container.appendChild(pageWrapper);
-                } catch (e) {
-                    console.warn(`Error renderizando página ${pageNum}:`, e);
+                } catch (e: any) {
+                    if (!isCancelled && e?.name !== 'RenderingCancelledException') {
+                        console.warn(`Error renderizando página ${pageNum}:`, e);
+                    }
                 }
             }
         };
@@ -137,6 +144,9 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
 
         return () => {
             isCancelled = true;
+            if (activeRenderTask && typeof activeRenderTask.cancel === 'function') {
+                try { activeRenderTask.cancel(); } catch {}
+            }
         };
     }, [pdfDoc, zoom]);
 

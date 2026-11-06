@@ -224,7 +224,7 @@ export function buildReconciledSheetRows(
         opsCurrentValue: Math.round(opsVal * 100) / 100,
         conciliationStatus,
         resolution: 'use_sheet',
-        selected: Boolean(product?.id)
+        selected: Boolean(product?.id) && qty > 0
       });
     };
 

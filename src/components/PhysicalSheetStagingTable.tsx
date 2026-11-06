@@ -146,8 +146,9 @@ export default function PhysicalSheetStagingTable({
     });
   }, [reconciledRows, rowFilterQuery, sortField, sortOrder]);
 
+  const eligiblePositiveRows = reconciledRows.filter(r => r.quantity > 0 && Boolean(r.matchedProductId));
   const allSelected =
-    reconciledRows.length > 0 && reconciledRows.every(r => r.selected);
+    eligiblePositiveRows.length > 0 && eligiblePositiveRows.every(r => r.selected);
 
   // Protocolo 4.1 estandar-galerias-frufresco: Tolerancia Fonética Z<->S, Multi-Token no contiguo y prioridad (ID) +8000 pts
   const getScoredProductsForQuery = (query: string): CatalogProductOption[] => {
