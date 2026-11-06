@@ -61,7 +61,9 @@ import {
     Maximize2,
     Minimize2,
     RotateCcw,
-    GripVertical
+    GripVertical,
+    ArrowUpAZ,
+    ArrowDownZA
 } from 'lucide-react';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { WorkCell } from '@/types/workCells';
@@ -89,7 +91,7 @@ import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSales
 import DailyBalanceExcelImportModal from '@/components/DailyBalanceExcelImportModal';
 import FastPlazaPurchasesModal from '@/components/FastPlazaPurchasesModal';
 import PhysicalSheetIngestModal from '@/components/PhysicalSheetIngestModal';
-import { InventoryColumnFilterPopover } from './InventoryColumnFilterPopover';
+import { InventoryColumnFilterPopover, HierarchyFilterType, CellFilterOption } from './InventoryColumnFilterPopover';
 
 interface ProductItem {
     id: string;
@@ -490,10 +492,22 @@ export default function InventoryDailyBalanceTab({
         return columnOrder.some((col, idx) => col !== DEFAULT_COLUMN_ORDER[idx]);
     }, [columnOrder]);
 
-    // Fila de Filtros Conmutables por Columna (SPEC.md §8.8.9)
+    // Fila de Filtros y Ordenamiento Conmutables por Columna (SPEC.md §8.8.9)
     const [isColumnFilterOpen, setIsColumnFilterOpen] = useState<boolean>(false);
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+    const [columnSort, setColumnSort] = useState<{ colKey: string; direction: 'asc' | 'desc' } | null>(null);
+    const [selectedCellsFilter, setSelectedCellsFilter] = useState<string[]>([]);
+    const [hierarchyFilter, setHierarchyFilter] = useState<HierarchyFilterType>('ALL');
+    const [selectedUnitFilter, setSelectedUnitFilter] = useState<string>('ALL');
     const [activeFilterPopover, setActiveFilterPopover] = useState<{ colKey: string; anchorRect: DOMRect } | null>(null);
+
+    const clearAllColumnFilters = useCallback(() => {
+        setColumnFilters({});
+        setColumnSort(null);
+        setSelectedCellsFilter([]);
+        setHierarchyFilter('ALL');
+        setSelectedUnitFilter('ALL');
+    }, []);
 
     // Atajo de teclado estándar Excel Ctrl+Shift+L para alternar filtros
     useEffect(() => {
@@ -508,8 +522,13 @@ export default function InventoryDailyBalanceTab({
     }, []);
 
     const activeFilterCount = useMemo(() => {
-        return Object.values(columnFilters).filter(v => v && v.trim().length > 0).length;
-    }, [columnFilters]);
+        let count = Object.values(columnFilters).filter(v => v && v.trim().length > 0).length;
+        if (selectedCellsFilter.length > 0) count++;
+        if (hierarchyFilter !== 'ALL') count++;
+        if (selectedUnitFilter !== 'ALL') count++;
+        if (columnSort) count++;
+        return count;
+    }, [columnFilters, selectedCellsFilter, hierarchyFilter, selectedUnitFilter, columnSort]);
 
     // Gobernanza SoD: Solo Yina Cortés (Jefatura de Inventario) o Superadmins tienen permiso de edición
     const canEditSheet = useMemo(() => {
@@ -1747,23 +1766,153 @@ interface CommittedSaleData {
         return filteredFamilies.reduce((acc, f) => acc + 1 + f.children.length, 0);
     }, [filteredFamilies]);
 
-    // Modo Lista Continua con Soporte de Filtros Conmutables en Cabecera (SPEC.md §8.8.9)
+    // Opciones y conteos enriquecidos para los Popovers de Columna C (Célula) y Columna D (Producto)
+    const cellOptionsWithCounts = useMemo<CellFilterOption[]>(() => {
+        return cellOptions.map(opt => {
+            const count = opt.value === 'ALL'
+                ? filteredFamilies.length
+                : filteredFamilies.filter(f => {
+                    const g = (f.consolidated.colC_inventoryGroup || '').toUpperCase();
+                    const v = opt.value.toUpperCase();
+                    return g.includes(v) || v.includes(g);
+                }).length;
+            return {
+                value: opt.value,
+                label: opt.label,
+                fullLabel: opt.fullLabel || opt.label,
+                count
+            };
+        });
+    }, [cellOptions, filteredFamilies]);
+
+    const hierarchyCounts = useMemo(() => {
+        let parents = 0;
+        let children = 0;
+        let independents = 0;
+        for (const f of filteredFamilies) {
+            if (f.isParent || f.isP) parents++;
+            if (f.isParent && f.children.length > 0) children++;
+            if (!f.isParent && !f.isP && !f.isH) independents++;
+        }
+        return {
+            all: filteredFamilies.length,
+            parents,
+            children,
+            independents
+        };
+    }, [filteredFamilies]);
+
+    const unitOptionsWithCounts = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const f of filteredFamilies) {
+            const uParent = (f.parent.unit_of_measure || '').trim();
+            if (uParent) {
+                map.set(uParent, (map.get(uParent) || 0) + 1);
+            }
+            for (const c of f.children) {
+                const uChild = (c.unit_of_measure || '').trim();
+                if (uChild && uChild !== uParent) {
+                    map.set(uChild, (map.get(uChild) || 0) + 1);
+                }
+            }
+        }
+        return Array.from(map.entries())
+            .map(([unit, count]) => ({ unit, count }))
+            .sort((a, b) => b.count - a.count);
+    }, [filteredFamilies]);
+
+    // Modo Lista Continua con Soporte de Filtros y Ordenamiento Conmutables en Cabecera (SPEC.md §8.8.9)
     const displayedFamilies = useMemo(() => {
         const activeFilters = Object.entries(columnFilters).filter(([_, v]) => v && v.trim().length > 0);
-        if (activeFilters.length === 0) return filteredFamilies;
 
-        return filteredFamilies.filter(family => {
+        const matchIdFilter = (idVal: string | number | null | undefined, filterStr: string): boolean => {
+            const raw = (filterStr || '').trim();
+            if (!raw) return true;
+            const idStr = String(idVal || '').trim();
+            const idNum = Number(idStr);
+
+            if (raw.includes(',')) {
+                const tokens = raw.split(',').map(t => t.replace(/^#/, '').trim()).filter(Boolean);
+                return tokens.some(tok => idStr === tok);
+            }
+            if (raw.includes('..') || raw.startsWith('>') || raw.startsWith('<') || raw.startsWith('=') || raw.startsWith('!')) {
+                return !isNaN(idNum) && matchNumericFilter(idNum, raw.replace(/^#/, ''));
+            }
+            if (raw.startsWith('#')) {
+                return idStr === raw.slice(1).trim();
+            }
+            return idStr === raw || idStr.startsWith(raw);
+        };
+
+        const getColSortValue = (row: InventoryDailyRow, colKey: string): number => {
+            switch (colKey) {
+                case 'E': return row.colE_initialStock;
+                case 'F': return row.colF_corrections;
+                case 'G': return row.colG_purchases;
+                case 'H': return row.colH_salesKg;
+                case 'I': return row.colJ_weightSalesUnits > 0 ? row.colJ_weightSalesUnits : row.colI_salesUnits;
+                case 'J': return row.colJ_weightSalesUnits;
+                case 'K': return row.colK_shortage;
+                case 'L': return row.colL_unshipped;
+                case 'M': return row.colM_additionalSales;
+                case 'N': return row.colN_employeeSales;
+                case 'O': return row.colO_returns;
+                case 'O2': return row.colO2_returnShortage;
+                case 'P': return row.colP_weighingWaste;
+                case 'Q': return row.colQ_damageWaste;
+                case 'R': return row.colR_cleaningWaste;
+                case 'S': return row.colS_calculated;
+                case 'T': return row.colT_physicalCount ?? -999999;
+                case 'U': return row.colU_bodegaPost10am ?? -999999;
+                case 'V': return row.colV_missing;
+                case 'W': return row.colW_surplus;
+                case 'X': return row.colX_foodBank;
+                default: return 0;
+            }
+        };
+
+        const filtered = filteredFamilies.filter(family => {
+            // 1. Filtro visual multi-célula en Columna C
+            if (selectedCellsFilter.length > 0) {
+                const groupUpper = (family.consolidated.colC_inventoryGroup || '').toUpperCase();
+                const matchesSelectedCell = selectedCellsFilter.some(cellVal => {
+                    const cu = cellVal.toUpperCase();
+                    return groupUpper.includes(cu) || cu.includes(groupUpper);
+                });
+                if (!matchesSelectedCell) return false;
+            }
+
+            // 2. Filtro de Jerarquía en 1 Clic (Padres P / Hijos H / Independientes)
+            if (hierarchyFilter === 'PARENTS_ONLY' && !(family.isParent || family.isP)) {
+                return false;
+            }
+            if (hierarchyFilter === 'CHILDREN_ONLY' && !(family.isParent && family.children.length > 0)) {
+                return false;
+            }
+            if (hierarchyFilter === 'INDEPENDENTS_ONLY' && (family.isParent || family.isP || family.isH)) {
+                return false;
+            }
+
+            // 3. Filtro por Unidad de Medida
+            if (selectedUnitFilter !== 'ALL') {
+                const parentUnitMatch = (family.parent.unit_of_measure || '') === selectedUnitFilter;
+                const childUnitMatch = family.children.some(c => (c.unit_of_measure || '') === selectedUnitFilter);
+                if (!parentUnitMatch && !childUnitMatch) return false;
+            }
+
+            if (activeFilters.length === 0) return true;
+
             const testRow = (row: InventoryDailyRow): boolean => {
                 return activeFilters.every(([colKey, filterStr]) => {
                     switch (colKey) {
                         case 'A':
                         case 'date': return (row.colA_date || '').toLowerCase().includes(filterStr.toLowerCase());
                         case 'B':
-                        case 'id': return String(row.colB_idProducto || '').includes(filterStr);
+                        case 'id': return matchIdFilter(row.colB_idProducto, filterStr);
                         case 'C':
-                        case 'cell': return (row.colC_inventoryGroup || '').toLowerCase().includes(filterStr.toLowerCase());
+                        case 'cell': return normalizeSearchText(row.colC_inventoryGroup).includes(normalizeSearchText(filterStr));
                         case 'D':
-                        case 'product': return (row.colD_productName || '').toLowerCase().includes(filterStr.toLowerCase());
+                        case 'product': return normalizeSearchText(row.colD_productName).includes(normalizeSearchText(filterStr));
                         case 'E': return matchNumericFilter(row.colE_initialStock, filterStr);
                         case 'F': return matchNumericFilter(row.colF_corrections, filterStr);
                         case 'G': return matchNumericFilter(row.colG_purchases, filterStr);
@@ -1795,11 +1944,50 @@ interface CommittedSaleData {
             }
             return testRow(family.parent);
         });
-    }, [filteredFamilies, columnFilters]);
 
-    // Estado colapsado de familias (por defecto colapsadas para vista ejecutiva compacta, auto-expandidas al buscar)
+        if (!columnSort) return filtered;
+
+        const { colKey, direction } = columnSort;
+        const factor = direction === 'asc' ? 1 : -1;
+
+        return [...filtered].map(fam => {
+            if ((colKey === 'product' || colKey === 'D') && fam.children.length > 1) {
+                return {
+                    ...fam,
+                    children: [...fam.children].sort((a, b) =>
+                        factor * (a.colD_productName || '').localeCompare(b.colD_productName || '', 'es', { sensitivity: 'base' })
+                    )
+                };
+            }
+            return fam;
+        }).sort((a, b) => {
+            if (colKey === 'product' || colKey === 'D') {
+                return factor * (a.consolidated.colD_productName || '').localeCompare(b.consolidated.colD_productName || '', 'es', { sensitivity: 'base' });
+            }
+            if (colKey === 'cell' || colKey === 'C') {
+                const cellA = getCompactCellLabel(a.consolidated.colC_inventoryGroup || '');
+                const cellB = getCompactCellLabel(b.consolidated.colC_inventoryGroup || '');
+                const cmp = cellA.localeCompare(cellB, 'es', { sensitivity: 'base' });
+                if (cmp !== 0) return factor * cmp;
+                return (a.consolidated.colD_productName || '').localeCompare(b.consolidated.colD_productName || '', 'es', { sensitivity: 'base' });
+            }
+            if (colKey === 'id' || colKey === 'B') {
+                const idA = Number(a.consolidated.colB_idProducto) || 0;
+                const idB = Number(b.consolidated.colB_idProducto) || 0;
+                return factor * (idA - idB);
+            }
+            const valA = getColSortValue(a.consolidated, colKey);
+            const valB = getColSortValue(b.consolidated, colKey);
+            if (Math.abs(valA - valB) > 0.0001) {
+                return factor * (valA - valB);
+            }
+            return (a.consolidated.colD_productName || '').localeCompare(b.consolidated.colD_productName || '', 'es', { sensitivity: 'base' });
+        });
+    }, [filteredFamilies, columnFilters, selectedCellsFilter, hierarchyFilter, selectedUnitFilter, columnSort]);
+
+    // Estado colapsado de familias (por defecto colapsadas para vista ejecutiva compacta, auto-expandidas al buscar o filtrar hijos)
     const [collapsedFamilies, setCollapsedFamilies] = useState<Record<string, boolean>>({});
-    const isSearchActive = searchQuery.trim().length > 0;
+    const isSearchActive = searchQuery.trim().length > 0 || hierarchyFilter === 'CHILDREN_ONLY' || Boolean(columnFilters['product']?.trim());
 
     const toggleFamily = useCallback((familyId: string) => {
         setCollapsedFamilies(prev => {
@@ -4096,7 +4284,7 @@ interface CommittedSaleData {
                         {activeFilterCount > 0 && (
                             <button
                                 type="button"
-                                onClick={() => setColumnFilters({})}
+                                onClick={clearAllColumnFilters}
                                 style={{
                                     padding: '0 0.5rem',
                                     height: '32px',
@@ -4651,7 +4839,21 @@ interface CommittedSaleData {
                                 ) : (
                                     <React.Fragment key="header-traditional-id">
                                         <th key="header-A" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: 'sticky', top: 0, left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0F172A' }}>Fecha</th>
-                                        <th key="header-B" style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: 'sticky', top: 0, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0F172A' }}>ID Prod</th>
+                                        <th 
+                                            key="header-B" 
+                                            onClick={() => setColumnSort(prev => prev?.colKey === 'id' ? (prev.direction === 'asc' ? { colKey: 'id', direction: 'desc' } : null) : { colKey: 'id', direction: 'asc' })}
+                                            title="Clic para ordenar por ID Contable (1→999 / 999→1)"
+                                            style={{ height: '32px', boxSizing: 'border-box', padding: '6px 6px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: 'sticky', top: 0, left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0F172A', cursor: 'pointer', userSelect: 'none' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                                                <span style={{ color: columnSort?.colKey === 'id' ? '#34D399' : '#F8FAFC' }}>ID Prod</span>
+                                                {columnSort?.colKey === 'id' && (
+                                                    <span style={{ fontSize: '0.65rem', color: '#34D399', fontWeight: '900' }}>
+                                                        {columnSort.direction === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </th>
                                         <th 
                                             key="header-C"
                                             onClick={() => setCellColumnMode(prev => prev === 'collapsed' ? 'expanded' : 'collapsed')}
@@ -4676,12 +4878,14 @@ interface CommittedSaleData {
                                         >
                                             {isCellCollapsed ? (
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8' }}>C</span>
+                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: columnSort?.colKey === 'cell' || selectedCellsFilter.length > 0 ? '#34D399' : '#94A3B8' }}>C</span>
                                                     <span style={{ fontSize: '0.55rem', color: '#64748B' }}>▶</span>
                                                 </div>
                                             ) : (
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                                                    <span>Célula</span>
+                                                    <span style={{ color: columnSort?.colKey === 'cell' || selectedCellsFilter.length > 0 ? '#34D399' : '#F8FAFC' }}>
+                                                        Célula {columnSort?.colKey === 'cell' ? (columnSort.direction === 'asc' ? '↑' : '↓') : ''}
+                                                    </span>
                                                     <span style={{ fontSize: '0.58rem', color: '#64748B' }} title="Colapsar célula">◀</span>
                                                 </div>
                                             )}
@@ -4689,6 +4893,8 @@ interface CommittedSaleData {
                                         <th 
                                             key="header-D"
                                             data-sticky-last="true"
+                                            onClick={() => setColumnSort(prev => prev?.colKey === 'product' ? (prev.direction === 'asc' ? { colKey: 'product', direction: 'desc' } : null) : { colKey: 'product', direction: 'asc' })}
+                                            title="Clic para ordenar Padres y Productos alfabéticamente (A → Z / Z → A)"
                                             style={{ 
                                                 height: '32px',
                                                 boxSizing: 'border-box',
@@ -4704,10 +4910,28 @@ interface CommittedSaleData {
                                                 zIndex: isPanesFrozen ? 55 : 45, 
                                                 backgroundColor: '#0F172A', 
                                                 boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
+                                                cursor: 'pointer',
+                                                userSelect: 'none',
                                                 transition: 'left 0.2s ease, width 0.2s ease'
                                             }}
                                         >
-                                            Producto
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                                <span style={{ color: columnSort?.colKey === 'product' ? '#34D399' : '#F8FAFC' }}>Producto</span>
+                                                <span style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    fontSize: '0.60rem',
+                                                    fontWeight: '800',
+                                                    padding: '1px 5px',
+                                                    borderRadius: '4px',
+                                                    backgroundColor: columnSort?.colKey === 'product' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.08)',
+                                                    color: columnSort?.colKey === 'product' ? '#34D399' : '#94A3B8',
+                                                    textTransform: 'none'
+                                                }}>
+                                                    {columnSort?.colKey === 'product' ? (columnSort.direction === 'asc' ? 'A→Z ↑' : 'Z→A ↓') : 'A↕Z'}
+                                                </span>
+                                            </div>
                                         </th>
                                     </React.Fragment>
                                 )}
@@ -4761,6 +4985,11 @@ interface CommittedSaleData {
                                                 <span style={{ fontSize: '0.69rem', fontWeight: '800', letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {meta?.shortName || meta?.title || colKey}
                                                 </span>
+                                                {columnSort?.colKey === colKey && (
+                                                    <span style={{ fontSize: '0.66rem', color: '#34D399', fontWeight: '900', flexShrink: 0 }}>
+                                                        {columnSort.direction === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
                                             </div>
 
                                             {/* Tirador Interactivo de Redimensión por Arrastre (Opción 1 - Excel Col-Resize) */}
@@ -4789,88 +5018,357 @@ interface CommittedSaleData {
                                 })}
                             </tr>
 
-                            {/* FILA DE FILTROS EN CABECERA (IN-HEADER FILTERS - 28px de altura) (SPEC.md §8.8.9) */}
+                            {/* FILA DE FILTROS Y ORDENAMIENTO DE ALTO CONTRASTE WCAG AAA (34px) (SPEC.md §8.8.9) */}
                             {isColumnFilterOpen && (
-                                <tr style={{ height: '28px', backgroundColor: '#0B132B', borderBottom: '2px solid #334155' }}>
+                                <tr style={{ height: '34px', backgroundColor: '#E2E8F0', borderBottom: '2px solid #94A3B8' }}>
                                     {/* Identificación A-D Filtros */}
                                     {isCompactIdentification ? (
                                         <th
                                             key="filter-compact-id"
                                             style={{
-                                                height: '28px',
-                                                padding: '2px 6px',
+                                                height: '34px',
+                                                padding: '3px 6px',
                                                 position: 'sticky',
                                                 top: '32px',
                                                 left: isPanesFrozen ? 0 : undefined,
                                                 zIndex: isPanesFrozen ? 55 : 45,
-                                                backgroundColor: '#0B132B',
-                                                borderRight: '2px solid #334155'
+                                                backgroundColor: '#E2E8F0',
+                                                borderRight: '2px solid #94A3B8'
                                             }}
                                         >
-                                            <input
-                                                type="text"
-                                                placeholder="Filtrar prod / SKU..."
-                                                value={columnFilters['product'] || ''}
-                                                onChange={e => setColumnFilters(prev => ({ ...prev, product: e.target.value }))}
-                                                style={{
-                                                    width: '100%',
-                                                    height: '22px',
-                                                    backgroundColor: '#1E293B',
-                                                    border: columnFilters['product'] ? '1px solid #10B981' : '1px solid #334155',
-                                                    borderRadius: '4px',
-                                                    padding: '1px 6px',
-                                                    fontSize: '0.67rem',
-                                                    color: '#F8FAFC',
-                                                    outline: 'none',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                            />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%', height: '26px' }}>
+                                                <div style={{ position: 'relative', flex: 1, height: '26px', display: 'flex', alignItems: 'center' }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Buscar prod / #ID..."
+                                                        value={columnFilters['product'] || ''}
+                                                        onChange={e => setColumnFilters(prev => ({ ...prev, product: e.target.value }))}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '26px',
+                                                            backgroundColor: columnFilters['product'] ? '#ECFDF5' : '#FFFFFF',
+                                                            border: columnFilters['product'] ? '1.5px solid #059669' : '1.5px solid #94A3B8',
+                                                            borderRadius: '6px',
+                                                            padding: '2px 22px 2px 7px',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '700',
+                                                            color: '#0F172A',
+                                                            outline: 'none',
+                                                            boxSizing: 'border-box'
+                                                        }}
+                                                    />
+                                                    {columnFilters['product'] && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setColumnFilters(prev => ({ ...prev, product: '' }))}
+                                                            style={{ position: 'absolute', right: '4px', background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 0, display: 'flex' }}
+                                                        >
+                                                            <X size={12} strokeWidth={2.5} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const rect = (e.currentTarget.parentElement as HTMLElement)?.getBoundingClientRect() || e.currentTarget.getBoundingClientRect();
+                                                        setActiveFilterPopover(prev => (prev?.colKey === 'product' ? null : { colKey: 'product', anchorRect: rect }));
+                                                    }}
+                                                    title="Ordenar Padres A→Z / Filtrar Padres (P) o Hijos (H)"
+                                                    style={{
+                                                        height: '26px',
+                                                        padding: '0 6px',
+                                                        borderRadius: '6px',
+                                                        border: (hierarchyFilter !== 'ALL' || selectedUnitFilter !== 'ALL' || columnSort?.colKey === 'product') ? '1.5px solid #059669' : '1.5px solid #94A3B8',
+                                                        backgroundColor: (hierarchyFilter !== 'ALL' || selectedUnitFilter !== 'ALL' || columnSort?.colKey === 'product') ? '#059669' : '#FFFFFF',
+                                                        color: (hierarchyFilter !== 'ALL' || selectedUnitFilter !== 'ALL' || columnSort?.colKey === 'product') ? '#FFFFFF' : '#0F172A',
+                                                        fontSize: '0.66rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '2px',
+                                                        flexShrink: 0
+                                                    }}
+                                                >
+                                                    <span>{hierarchyFilter === 'PARENTS_ONLY' ? 'P' : hierarchyFilter === 'CHILDREN_ONLY' ? 'H' : 'A-Z'}</span>
+                                                    <ChevronDown size={11} strokeWidth={2.5} />
+                                                </button>
+                                            </div>
                                         </th>
                                     ) : (
                                         <React.Fragment key="filter-traditional-id">
-                                            <th key="filter-A" style={{ height: '28px', padding: '2px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0B132B' }}>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Fecha..."
-                                                    value={columnFilters['date'] || ''}
-                                                    onChange={e => setColumnFilters(prev => ({ ...prev, date: e.target.value }))}
-                                                    style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['date'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
-                                                />
+                                            {/* A: Botón Maestro Limpiar Todo / Contador */}
+                                            <th key="filter-A" style={{ height: '34px', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
+                                                {activeFilterCount > 0 ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={clearAllColumnFilters}
+                                                        title="Quitar todos los filtros y ordenamientos activos"
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '26px',
+                                                            backgroundColor: '#DC2626',
+                                                            border: '1.5px solid #B91C1C',
+                                                            borderRadius: '6px',
+                                                            color: '#FFFFFF',
+                                                            fontSize: '0.67rem',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '3px',
+                                                            boxShadow: '0 1px 2px rgba(220, 38, 38, 0.25)'
+                                                        }}
+                                                    >
+                                                        <X size={11} strokeWidth={2.8} />
+                                                        <span>Limpiar ({activeFilterCount})</span>
+                                                    </button>
+                                                ) : (
+                                                    <div
+                                                        title="Total de familias visibles"
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '26px',
+                                                            backgroundColor: '#F8FAFC',
+                                                            border: '1px solid #CBD5E1',
+                                                            borderRadius: '6px',
+                                                            color: '#334155',
+                                                            fontSize: '0.67rem',
+                                                            fontWeight: '800',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}
+                                                    >
+                                                        {displayedFamilies.length} fam.
+                                                    </div>
+                                                )}
                                             </th>
-                                            <th key="filter-B" style={{ height: '28px', padding: '2px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0B132B' }}>
-                                                <input
-                                                    type="text"
-                                                    placeholder="ID..."
-                                                    value={columnFilters['id'] || ''}
-                                                    onChange={e => setColumnFilters(prev => ({ ...prev, id: e.target.value }))}
-                                                    style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['id'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
-                                                />
+
+                                            {/* B: ID Producto (Input Alto Contraste + Popover Orden/Rango) */}
+                                            <th key="filter-B" style={{ height: '34px', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', height: '26px' }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="#ID"
+                                                        value={columnFilters['id'] || ''}
+                                                        onChange={e => setColumnFilters(prev => ({ ...prev, id: e.target.value }))}
+                                                        title="Filtrar por #ID exacto (ej: 15), varios (1, 5) o rango (1..50). Pulsa ▾ para ordenar 1→999 o 999→1."
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '26px',
+                                                            backgroundColor: (columnFilters['id'] || columnSort?.colKey === 'id') ? '#ECFDF5' : '#FFFFFF',
+                                                            border: (columnFilters['id'] || columnSort?.colKey === 'id') ? '1.5px solid #059669' : '1.5px solid #94A3B8',
+                                                            borderRadius: '6px',
+                                                            padding: '2px 16px 2px 5px',
+                                                            fontSize: '0.71rem',
+                                                            fontWeight: '800',
+                                                            color: '#0F172A',
+                                                            outline: 'none',
+                                                            textAlign: 'center',
+                                                            boxSizing: 'border-box'
+                                                        }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const rect = (e.currentTarget.parentElement as HTMLElement)?.getBoundingClientRect() || e.currentTarget.getBoundingClientRect();
+                                                            setActiveFilterPopover(prev => (prev?.colKey === 'id' ? null : { colKey: 'id', anchorRect: rect }));
+                                                        }}
+                                                        title="Ordenar por ID (1→999 / 999→1) o elegir rango"
+                                                        style={{
+                                                            position: 'absolute',
+                                                            right: '2px',
+                                                            width: '14px',
+                                                            height: '22px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            background: 'transparent',
+                                                            border: 'none',
+                                                            color: (columnFilters['id'] || columnSort?.colKey === 'id') ? '#047857' : '#334155',
+                                                            cursor: 'pointer',
+                                                            padding: 0
+                                                        }}
+                                                    >
+                                                        <ChevronDown size={11} strokeWidth={2.5} />
+                                                    </button>
+                                                </div>
                                             </th>
-                                            <th key="filter-C" style={{ height: '28px', padding: '2px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '155px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0B132B' }}>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Cél..."
-                                                    value={columnFilters['cell'] || ''}
-                                                    onChange={e => setColumnFilters(prev => ({ ...prev, cell: e.target.value }))}
-                                                    style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['cell'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 4px', fontSize: '0.65rem', color: '#F8FAFC', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }}
-                                                />
+
+                                            {/* C: Célula (Selector Visual 1-Clic sin Digitar + Orden por Célula) */}
+                                            <th key="filter-C" style={{ height: '34px', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '155px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', height: '26px' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const rect = e.currentTarget.getBoundingClientRect();
+                                                            setActiveFilterPopover(prev => (prev?.colKey === 'cell' ? null : { colKey: 'cell', anchorRect: rect }));
+                                                        }}
+                                                        title="Clic para elegir Célula(s) sin digitar u ordenar por Célula (A→Z)"
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '26px',
+                                                            backgroundColor: (selectedCellsFilter.length > 0 || columnSort?.colKey === 'cell') ? '#ECFDF5' : '#FFFFFF',
+                                                            border: (selectedCellsFilter.length > 0 || columnSort?.colKey === 'cell') ? '1.5px solid #059669' : '1.5px solid #94A3B8',
+                                                            borderRadius: '6px',
+                                                            padding: isCellCollapsed ? '0 2px' : '0 6px',
+                                                            fontSize: '0.71rem',
+                                                            fontWeight: '800',
+                                                            color: (selectedCellsFilter.length > 0 || columnSort?.colKey === 'cell') ? '#065F46' : '#0F172A',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: isCellCollapsed ? 'center' : 'space-between',
+                                                            gap: '3px',
+                                                            boxSizing: 'border-box',
+                                                            overflow: 'hidden'
+                                                        }}
+                                                    >
+                                                        {isCellCollapsed ? (
+                                                            <span>{selectedCellsFilter.length > 0 ? selectedCellsFilter.length : '▾'}</span>
+                                                        ) : (
+                                                            <>
+                                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                    {selectedCellsFilter.length === 0
+                                                                        ? (columnSort?.colKey === 'cell' ? `Célula (${columnSort.direction === 'asc' ? 'A→Z' : 'Z→A'})` : 'Todas las células')
+                                                                        : selectedCellsFilter.length === 1
+                                                                            ? (cellOptionsWithCounts.find(c => c.value === selectedCellsFilter[0])?.label || selectedCellsFilter[0])
+                                                                            : `${selectedCellsFilter.length} células`}
+                                                                </span>
+                                                                <ChevronDown size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                    {selectedCellsFilter.length > 0 && !isCellCollapsed && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedCellsFilter([]);
+                                                            }}
+                                                            title="Mostrar todas las células"
+                                                            style={{
+                                                                position: 'absolute',
+                                                                right: '18px',
+                                                                background: 'none',
+                                                                border: 'none',
+                                                                color: '#047857',
+                                                                cursor: 'pointer',
+                                                                padding: 0,
+                                                                display: 'flex'
+                                                            }}
+                                                        >
+                                                            <X size={11} strokeWidth={2.5} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </th>
-                                            <th key="filter-D" style={{ height: '28px', padding: '2px 6px', position: 'sticky', top: '32px', left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#0B132B', borderRight: '2px solid #334155' }}>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Filtrar producto..."
-                                                    value={columnFilters['product'] || ''}
-                                                    onChange={e => setColumnFilters(prev => ({ ...prev, product: e.target.value }))}
-                                                    style={{ width: '100%', height: '22px', backgroundColor: '#1E293B', border: columnFilters['product'] ? '1px solid #10B981' : '1px solid #334155', borderRadius: '4px', padding: '1px 6px', fontSize: '0.67rem', color: '#F8FAFC', outline: 'none', boxSizing: 'border-box' }}
-                                                />
+
+                                            {/* D: Producto (Buscador Alto Contraste + Botón Orden A-Z + Popover Jerarquía P/H y Unidad) */}
+                                            <th key="filter-D" style={{ height: '34px', padding: '3px 6px', position: 'sticky', top: '32px', left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0', borderRight: '2px solid #94A3B8' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%', height: '26px' }}>
+                                                    <div style={{ position: 'relative', flex: 1, height: '26px', display: 'flex', alignItems: 'center' }}>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Buscar producto..."
+                                                            value={columnFilters['product'] || ''}
+                                                            onChange={e => setColumnFilters(prev => ({ ...prev, product: e.target.value }))}
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '26px',
+                                                                backgroundColor: columnFilters['product'] ? '#ECFDF5' : '#FFFFFF',
+                                                                border: columnFilters['product'] ? '1.5px solid #059669' : '1.5px solid #94A3B8',
+                                                                borderRadius: '6px',
+                                                                padding: '2px 20px 2px 7px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '700',
+                                                                color: '#0F172A',
+                                                                outline: 'none',
+                                                                boxSizing: 'border-box'
+                                                            }}
+                                                        />
+                                                        {columnFilters['product'] && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setColumnFilters(prev => ({ ...prev, product: '' }))}
+                                                                title="Limpiar texto de producto"
+                                                                style={{ position: 'absolute', right: '4px', background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 0, display: 'flex' }}
+                                                            >
+                                                                <X size={12} strokeWidth={2.5} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Botón 1-Clic Orden Alfabético A→Z / Z→A */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setColumnSort(prev => prev?.colKey === 'product' ? (prev.direction === 'asc' ? { colKey: 'product', direction: 'desc' } : null) : { colKey: 'product', direction: 'asc' })}
+                                                        title="Ordenar Padres y Productos alfabéticamente (A→Z / Z→A)"
+                                                        style={{
+                                                            height: '26px',
+                                                            padding: '0 5px',
+                                                            borderRadius: '6px',
+                                                            border: columnSort?.colKey === 'product' ? '1.5px solid #059669' : '1.5px solid #94A3B8',
+                                                            backgroundColor: columnSort?.colKey === 'product' ? '#059669' : '#FFFFFF',
+                                                            color: columnSort?.colKey === 'product' ? '#FFFFFF' : '#0F172A',
+                                                            fontSize: '0.66rem',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexShrink: 0
+                                                        }}
+                                                    >
+                                                        {columnSort?.colKey === 'product' && columnSort.direction === 'desc' ? <ArrowDownZA size={13} strokeWidth={2.4} /> : <ArrowUpAZ size={13} strokeWidth={2.4} />}
+                                                    </button>
+
+                                                    {/* Botón Popover Jerarquía (Padres P / Hijos H / Independientes / Unidad) */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const rect = (e.currentTarget.parentElement as HTMLElement)?.getBoundingClientRect() || e.currentTarget.getBoundingClientRect();
+                                                            setActiveFilterPopover(prev => (prev?.colKey === 'product' ? null : { colKey: 'product', anchorRect: rect }));
+                                                        }}
+                                                        title="Filtrar por Jerarquía (Solo Padres P, Con Hijos H, Independientes) o por Unidad de Medida"
+                                                        style={{
+                                                            height: '26px',
+                                                            padding: '0 5px',
+                                                            borderRadius: '6px',
+                                                            border: (hierarchyFilter !== 'ALL' || selectedUnitFilter !== 'ALL') ? '1.5px solid #059669' : '1.5px solid #94A3B8',
+                                                            backgroundColor: (hierarchyFilter !== 'ALL' || selectedUnitFilter !== 'ALL') ? '#ECFDF5' : '#FFFFFF',
+                                                            color: (hierarchyFilter !== 'ALL' || selectedUnitFilter !== 'ALL') ? '#065F46' : '#0F172A',
+                                                            fontSize: '0.66rem',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '2px',
+                                                            flexShrink: 0
+                                                        }}
+                                                    >
+                                                        {hierarchyFilter === 'PARENTS_ONLY' && <span style={{ backgroundColor: '#4F46E5', color: '#FFF', padding: '0 3px', borderRadius: '3px', fontSize: '0.60rem' }}>P</span>}
+                                                        {hierarchyFilter === 'CHILDREN_ONLY' && <span style={{ backgroundColor: '#0D7A57', color: '#FFF', padding: '0 3px', borderRadius: '3px', fontSize: '0.60rem' }}>H</span>}
+                                                        {hierarchyFilter === 'INDEPENDENTS_ONLY' && <span style={{ backgroundColor: '#475569', color: '#FFF', padding: '0 3px', borderRadius: '3px', fontSize: '0.60rem' }}>1:1</span>}
+                                                        {selectedUnitFilter !== 'ALL' && <span style={{ fontSize: '0.62rem' }}>{selectedUnitFilter}</span>}
+                                                        <ChevronDown size={11} strokeWidth={2.5} />
+                                                    </button>
+                                                </div>
                                             </th>
                                         </React.Fragment>
                                     )}
 
-                                    {/* Filtros numéricos con opciones avanzadas desplegables (igual, diferente, mayor, menor, rango, blanco, valores) */}
+                                    {/* Filtros numéricos E..X de Alto Contraste WCAG AAA con Ordenamiento Mayor/Menor y Presets 1-Clic */}
                                     {columnOrder.map((colKey, colIdx) => {
                                         const filterVal = columnFilters[colKey] || '';
                                         const isActive = filterVal.trim().length > 0;
+                                        const isSorted = columnSort?.colKey === colKey;
                                         const isPianoDark = colIdx % 2 === 1;
                                         const hasRightBorder = colKey === 'G' || colKey === 'I' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
                                         const isMenuOpen = activeFilterPopover?.colKey === colKey;
@@ -4880,34 +5378,50 @@ interface CommittedSaleData {
                                             <th
                                                 key={`filter-${colKey}`}
                                                 style={{
-                                                    height: '28px',
+                                                    height: '34px',
                                                     width: `${colWidth}px`,
                                                     minWidth: `${colWidth}px`,
                                                     maxWidth: `${colWidth}px`,
-                                                    padding: '2px 4px',
+                                                    padding: '3px 4px',
                                                     position: 'sticky',
                                                     top: '32px',
                                                     zIndex: 40,
-                                                    backgroundColor: isPianoDark ? '#1E293B' : '#0B132B',
-                                                    borderRight: hasRightBorder ? '2px solid #334155' : '1px solid #1E293B'
+                                                    backgroundColor: isPianoDark ? '#CBD5E1' : '#E2E8F0',
+                                                    borderRight: hasRightBorder ? '2px solid #64748B' : '1px solid #CBD5E1'
                                                 }}
                                             >
-                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', height: '22px' }}>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', height: '26px' }}>
+                                                    {isSorted && (
+                                                        <span
+                                                            title={`Ordenado ${columnSort?.direction === 'asc' ? 'Menor a Mayor (↑)' : 'Mayor a Menor (↓)'}`}
+                                                            style={{
+                                                                position: 'absolute',
+                                                                left: '4px',
+                                                                fontSize: '0.66rem',
+                                                                fontWeight: '900',
+                                                                color: '#047857',
+                                                                pointerEvents: 'none'
+                                                            }}
+                                                        >
+                                                            {columnSort?.direction === 'asc' ? '↑' : '↓'}
+                                                        </span>
+                                                    )}
                                                     <input
                                                         type="text"
-                                                        placeholder=">0, =0..."
+                                                        placeholder="Filtrar..."
                                                         value={filterVal}
                                                         onChange={e => setColumnFilters(prev => ({ ...prev, [colKey]: e.target.value }))}
-                                                        title={`Filtro ${colKey}: Escribe o pulsa el selector para elegir: igual, diferente, mayor, menor, en rango, en blanco o con valores`}
+                                                        title={`Columna ${colKey}: Escribe (>0, =0, 10..50) o pulsa ▾ para Ordenar de Mayor a Menor / Menor a Mayor y elegir filtros en 1 clic`}
                                                         style={{
                                                             width: '100%',
-                                                            height: '22px',
-                                                            backgroundColor: isActive ? 'rgba(16, 185, 129, 0.15)' : (isMenuOpen ? '#1E293B' : '#1E293B'),
-                                                            border: isActive ? '1px solid #10B981' : (isMenuOpen ? '1px solid #38BDF8' : '1px solid #334155'),
-                                                            borderRadius: '4px',
-                                                            padding: isActive ? '1px 28px 1px 4px' : '1px 18px 1px 4px',
-                                                            fontSize: '0.64rem',
-                                                            color: isActive ? '#34D399' : '#CBD5E1',
+                                                            height: '26px',
+                                                            backgroundColor: (isActive || isSorted) ? '#ECFDF5' : '#FFFFFF',
+                                                            border: (isActive || isSorted) ? '1.5px solid #059669' : (isMenuOpen ? '1.5px solid #0284C7' : '1.5px solid #94A3B8'),
+                                                            borderRadius: '6px',
+                                                            padding: isActive ? '2px 28px 2px 6px' : '2px 18px 2px 6px',
+                                                            fontSize: '0.70rem',
+                                                            fontWeight: (isActive || isSorted) ? '800' : '700',
+                                                            color: (isActive || isSorted) ? '#065F46' : '#0F172A',
                                                             outline: 'none',
                                                             textAlign: 'right',
                                                             fontVariantNumeric: 'tabular-nums',
@@ -4930,24 +5444,24 @@ interface CommittedSaleData {
                                                             title="Limpiar filtro"
                                                             style={{
                                                                 position: 'absolute',
-                                                                right: '15px',
-                                                                width: '12px',
-                                                                height: '12px',
+                                                                right: '16px',
+                                                                width: '13px',
+                                                                height: '13px',
                                                                 display: 'flex',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
                                                                 background: 'transparent',
                                                                 border: 'none',
-                                                                color: '#94A3B8',
+                                                                color: '#047857',
                                                                 cursor: 'pointer',
                                                                 padding: 0
                                                             }}
                                                         >
-                                                            <X size={10} />
+                                                            <X size={11} strokeWidth={2.5} />
                                                         </button>
                                                     )}
 
-                                                    {/* Botón desplegable para abrir popover con las 9 opciones */}
+                                                    {/* Botón desplegable para abrir popover con Ordenamiento y Opciones */}
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
@@ -4955,24 +5469,24 @@ interface CommittedSaleData {
                                                             const rect = (e.currentTarget.parentElement as HTMLElement)?.getBoundingClientRect() || e.currentTarget.getBoundingClientRect();
                                                             setActiveFilterPopover(prev => (prev?.colKey === colKey ? null : { colKey, anchorRect: rect }));
                                                         }}
-                                                        title={`Desplegar opciones de filtro para Columna ${colKey}`}
+                                                        title={`Opciones de ordenamiento y filtro para Columna ${colKey}`}
                                                         style={{
                                                             position: 'absolute',
                                                             right: '2px',
-                                                            width: '14px',
-                                                            height: '18px',
+                                                            width: '15px',
+                                                            height: '22px',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
-                                                            background: isMenuOpen ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                                                            background: isMenuOpen ? '#E0F2FE' : 'transparent',
                                                             border: 'none',
-                                                            color: isActive ? '#10B981' : (isMenuOpen ? '#38BDF8' : '#64748B'),
+                                                            color: (isActive || isSorted) ? '#047857' : (isMenuOpen ? '#0284C7' : '#334155'),
                                                             cursor: 'pointer',
                                                             padding: 0,
-                                                            borderRadius: '2px'
+                                                            borderRadius: '4px'
                                                         }}
                                                     >
-                                                        <ChevronDown size={11} />
+                                                        <ChevronDown size={12} strokeWidth={2.5} />
                                                     </button>
                                                 </div>
                                             </th>
@@ -5440,11 +5954,16 @@ interface CommittedSaleData {
                 }}
             />
 
-            {/* Popover Desplegable Universal de Filtro por Columna (Igual, Diferente, Mayor, Menor, Rango, Blanco, Valores) */}
+            {/* Popover Desplegable Universal de Filtro y Ordenamiento por Columna (Alto Contraste WCAG AAA) */}
             {activeFilterPopover && (
                 <InventoryColumnFilterPopover
                     colKey={activeFilterPopover.colKey}
-                    colTitle={COLUMN_METADATA[activeFilterPopover.colKey]?.title || `Columna ${activeFilterPopover.colKey}`}
+                    colTitle={
+                        activeFilterPopover.colKey === 'id' ? 'ID Producto' :
+                        activeFilterPopover.colKey === 'cell' ? 'Célula de Trabajo' :
+                        activeFilterPopover.colKey === 'product' ? 'Producto & Jerarquía' :
+                        (COLUMN_METADATA[activeFilterPopover.colKey]?.title || `Columna ${activeFilterPopover.colKey}`)
+                    }
                     colSign={COLUMN_METADATA[activeFilterPopover.colKey]?.sign}
                     currentValue={columnFilters[activeFilterPopover.colKey] || ''}
                     anchorRect={activeFilterPopover.anchorRect}
@@ -5460,6 +5979,23 @@ interface CommittedSaleData {
                             return next;
                         });
                     }}
+                    sortDirection={columnSort?.colKey === activeFilterPopover.colKey ? columnSort.direction : null}
+                    onApplySort={(dir) => {
+                        if (!dir) {
+                            setColumnSort(prev => (prev?.colKey === activeFilterPopover.colKey ? null : prev));
+                        } else {
+                            setColumnSort({ colKey: activeFilterPopover.colKey, direction: dir });
+                        }
+                    }}
+                    cellOptions={cellOptionsWithCounts}
+                    selectedCells={selectedCellsFilter}
+                    onChangeSelectedCells={setSelectedCellsFilter}
+                    hierarchyFilter={hierarchyFilter}
+                    onChangeHierarchyFilter={setHierarchyFilter}
+                    hierarchyCounts={hierarchyCounts}
+                    unitOptions={unitOptionsWithCounts}
+                    selectedUnit={selectedUnitFilter}
+                    onChangeSelectedUnit={setSelectedUnitFilter}
                 />
             )}
         </div>

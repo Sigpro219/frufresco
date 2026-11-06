@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.369 (Escenarios 383 a 392: Diccionario Canónico de las 24 Columnas de la Sábana Oficial de Inventarios, Origen Transaccional OPS vs Planillas Físicas IA, Gobernanza de Mermas y Arnés de Calidad)
-> **Fecha:** 4 de Noviembre, 2026  
-> **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.372 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..393 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje & Planta de Producción de Procesados MES IV Gama)
+> **Fecha:** 6 de Noviembre, 2026  
+> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos, 368 Escenarios BDD Ininterrumpidos (1..368)
+> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..393) | Fase II (`onFRU v2.0`): Capítulos 45 y 46 (Escenarios 400..405)
 
 ---
 
@@ -28,7 +28,8 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL** | **onFRU SCOS (TENANT FRUFRESCO) FULL-STACK** | **76** | **43 Capítulos** | **304 Escenarios Canónicos (1..304)** | **🟢 100%** |
+| **TOTAL FASE I** | **onFRU SCOS v1.9.x (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **393 Escenarios Canónicos (1..393)** | **🟢 100%** |
+| **FASE II (`v2.0`)** | **onFRU 2.0: Telemetría WFM, Radar RTLS Indoor & Planta de Producción de Procesados (MES)** | **+4 (Nuevas)** | **Capítulos 45 y 46 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 405)** | **🚀 Fase II (Cotización Independiente)** |
 
 ---
 
@@ -1825,14 +1826,15 @@ A partir del hallazgo operativo en planta (Líder de Inventario reportando sobre
 
 A partir del hallazgo operativo en planta y el perfil de la Jefatura de Inventario (nativa de Microsoft Excel de alta velocidad), se integra la experiencia de captura ergonómica sin fricción de ratón:
 
-1. **Navegación Celda a Celda por Teclado (`Enter`, `Shift+Enter`, `Tab`, `Shift+Tab`, `ArrowDown`, `ArrowUp`):**
-   - **Tecla `Enter` (Siguiente Fila Hacia Abajo):** Al ingresar o modificar un valor numérico o fórmula en cualquier celda editable (Cols F, G, H, I, J, K, L, M, N, O, P, Q, R, T, X) y presionar `Enter`, el dato se procesa inmediatamente y el foco de edición salta de forma instantánea a la celda de la misma columna en la **siguiente fila visible** (`down`), replicando con fidelidad 100% el comportamiento de Excel de escritorio.
-   - **Tecla `Shift+Enter` (Fila Anterior Hacia Arriba):** Guarda el dato y salta a la celda de la misma columna en la fila visible anterior (`up`).
-   - **Teclas `Tab` y `Shift+Tab` (Navegación Horizontal):** Guarda el dato y avanza a la siguiente columna editable de la misma fila (`next_col`) o retrocede a la columna editable anterior (`prev_col`).
-   - **Flechas `↓` (ArrowDown) y `↑` (ArrowUp):** Permiten desplazamiento vertical directo entre celdas editables sin necesidad de recurrir al mouse.
-   - **Tecla `Escape` (Cancelar Edición):** Restaura el valor previo y cierra el foco de la celda sin efectuar mutaciones.
-   - **Auto-Scroll Suave y Preciso (`scrollIntoView`):** Al descender o ascender con `Enter` hacia celdas situadas fuera del área visible del monitor, el contenedor se desplaza automáticamente (`block: 'nearest'`, `behavior: 'smooth'`), manteniendo la celda activa siempre centrada y visible en el campo de visión de la operadora.
-   - **Persistencia Reactiva a 0ms (Zero-Latency Optimistic Update):** La transición de foco se ejecuta en 0 milisegundos en memoria mediante el estado local `flatVisibleRows`, recalculando al instante las fórmulas de balance (Col S: Calculado Final, Col U: Bodega, Col V: Faltantes, Col W: Sobrantes y Totales de pie de página). La sincronización con Supabase (`inventory_movements` o metadata) se despacha de forma asíncrona no-bloqueante sin detener el ritmo de captura acelerada.
+1. **Navegación Celda a Celda 4-Direcciones por Teclado (`Enter`, `Shift+Enter`, `Tab`, `Shift+Tab`, `ArrowDown`, `ArrowUp`, `ArrowLeft`, `ArrowRight`) en Modo Edición y Sábana Oficial:**
+   - **Tecla `Enter` (Siguiente Fila Hacia Abajo):** Al ingresar o modificar un valor numérico o fórmula en cualquier celda editable y presionar `Enter`, el dato se procesa inmediatamente y el foco salta a la misma columna en la **siguiente fila visible** (`down`).
+   - **Tecla `Shift+Enter` (Fila Anterior Hacia Arriba):** Guarda el dato y salta a la misma columna en la fila visible anterior (`up`).
+   - **Teclas `Tab` / `Shift+Tab` y Flechas Laterales `←` (`ArrowLeft`) / `→` (`ArrowRight`):** En Modo Edición, cuando el cursor se encuentra al inicio o fin del texto o con el texto seleccionado, las flechas izquierda/derecha guardan y navegan horizontalmente entre todas las columnas editables en su orden visual activo (`columnOrder` filtrando columnas de solo lectura `E, H, I, J, O, S, V, W`).
+   - **Flechas `↓` (`ArrowDown`) y `↑` (`ArrowUp`):** Permiten desplazamiento vertical directo entre celdas sin necesidad de recurrir al mouse.
+   - **Réplica de Cursor de Lectura en Sábana Oficial (`sheetMode === 'view'`):** En el modo de consulta (`Sábana Oficial`), hacer clic en cualquier celda numérica (`E` a `X`) activa un cursor de navegación visual tipo Excel (`boxShadow: inset 0 0 0 2px #0D7A57`) que permite desplazarse con las 4 flechas (`↑ ↓ ← →`), `Enter` y `Tab` con auto-scroll horizontal y vertical (`scrollIntoView`), manteniendo **100% bloqueada la edición**.
+   - **Tecla `Escape` (Cancelar Edición / Soltar Cursor):** Restaura el valor previo y cierra el foco de la celda sin efectuar mutaciones.
+   - **Auto-Scroll Suave y Preciso (`scrollIntoView`):** Al desplazarse vertical u horizontalmente hacia celdas fuera del área visible, el contenedor se desplaza automáticamente (`block: 'nearest'`, `inline: 'nearest'`, `behavior: 'smooth'`).
+   - **Persistencia Reactiva a 0ms (Zero-Latency Optimistic Update):** La transición de foco se ejecuta en 0 milisegundos en memoria mediante `flatVisibleRows`, recalculando al instante las fórmulas de balance.
    - **Motor de Fórmulas Matemáticas Inline Preservado:** Admite operaciones de suma y resta directa en la celda (ej. `=15+20`, `+50-10`, `30+5`) evaluándose antes del salto de cursor.
 
 2. **Conmutador Ergonómico de Paneles (`[📌 Inmovilizado / Movilizar Filas]`):**
@@ -1897,33 +1899,40 @@ A partir de la necesidad de erradicar la duplicidad vertical de cabeceras en la 
    - Ahorro de 32px verticales adicionales en la zona superior de la tabla.
    - Eliminación del ruido visual provocado por bloques cromáticos superpuestos, permitiendo al operador concentrarse exclusivamente en los números y en el flujo de datos.
 
-#### 8.8.9 Fila de Filtros Conmutable por Columna (In-Header Column Filters) con Atajo Excel y Operadores Numéricos (Resolutivo Gemba Octubre 2026)
+#### 8.8.9 Fila de Filtros y Ordenamiento Conmutable por Columna (High-Contrast WCAG AAA In-Header Filters & Multi-Sort) (Resolutivo Gemba Noviembre 2026)
 
-Para brindar la velocidad de segmentación del software legado sin penalizar permanentemente la altura vertical útil, se implementa la arquitectura de **Filtros por Columna Conmutables (Excel Style)**:
+Para brindar la máxima legibilidad industrial en bodega y eliminar la digitación manual en cajas estrechas, se implementa la arquitectura de **Filtros y Ordenamiento por Columna de Alto Contraste (WCAG AAA)**:
 
-1. **Conmutación Inteligente & Zero Desperdicio Espacial:**
-   - La fila de micro-filtros por columna no es estática ni forzada; se activa o contrae a demanda mediante el botón conmutador **`[🔍 Filtros de Columna]`** ubicado en la barra Zen o mediante el atajo de teclado nativo de Excel **`[Ctrl + Shift + L]`**.
-   - **Estado Colapsado (Predeterminado):** 0px de consumo espacial vertical, máxima superficie para datos puros.
-   - **Estado Expandido:** Despliega una fila ultra-slim de 24px de altura directamente debajo de los títulos de columna (`<th>`), con inputs individuales de fondo `#1E293B`, bordes finos y placeholders de ayuda.
+1. **Conmutación Inteligente & Superficie de Alto Contraste (WCAG AAA):**
+   - La fila de filtros se activa o contrae mediante el botón **`[🔍 Filtros Columna]`** o el atajo **`[Ctrl + Shift + L]`**.
+   - **Erradicación del antipatrón "oscuro sobre oscuro":** La fila de filtros (`34px` de altura) emplea cajas de entrada y selectores de **alto contraste sobre superficie clara (`#FFFFFF` con texto `#0F172A` en negrita `700` y bordes `#CBD5E1`)**, garantizando legibilidad instantánea en monitores de planta.
+   - **Estado Activo Inconfundible:** Toda columna con filtro u orden activo se ilumina en **Verde Esmeralda de Alta Visibilidad (`#ECFDF5`, borde `#059669`, texto `#065F46`)** con botón `✕` de borrado en 1 clic.
 
-2. **Capacidades de Filtrado Especializadas por Tipo de Dato:**
-   - **Columnas de Texto (`ID`, `Célula`, `Producto`):**
-     - Filtrado instantáneo reactivo en memoria con normalización fonética (`normalizeSearchText`), permitiendo coincidencias insensibles a tildes, mayúsculas y caracteres especiales.
-   - **Columnas Numéricas y de Balance (Cols E a X):**
-     - Admite coincidencia numérica exacta y operadores de comparación lógica directa:
-       - `>0`: Aísla inmediatamente filas con valores positivos.
-       - `<0`: Aísla en 1 clic los productos con saldo o stock negativo.
-       - `=0` o `0`: Muestra únicamente los SKUs sin movimiento o en cero.
-       - `!=0`: Descarta todos los ceros para auditar filas vivas.
-       - Comparadores cuantitativos: `>=50`, `<100`.
-     - **Casos de Uso de Piso Inmediatos:**
-       - En `Desperdicio (Col Q)`: Ingresar `>0` para auditar exclusivamente los productos dados de baja por avería.
-       - En `Calculado (Col S)`: Ingresar `<0` para aislar los descuadres negativos y requerir compras de ajuste.
-       - En `Faltantes (Col V)`: Ingresar `>0` para fiscalizar las pérdidas netas de bodega.
+2. **Capacidades de Ordenamiento y Filtrado Especializadas por Columna (Cero Digitación Forzada):**
+   - **Columna A (`FECHA` / Control Maestro de Filtros):**
+     - Como la sábana opera sobre una fecha única seleccionada, la celda de filtro A funciona como **indicador de estado / botón maestro `[✕ Limpiar Todo]`** cuando existen filtros u ordenamientos activos, o muestra el conteo vivo de familias filtradas.
+   - **Columna B (`ID PROD`):**
+     - **Ordenamiento 1-Clic (`1 → 999` / `999 → 1`):** Alterna orden ascendente o descendente por código contable.
+     - **Búsqueda Exacta, Lista o Rango:** Soporta coincidencia exacta (`#1` o `=1`), lista separada por comas (`1, 4, 12`), rangos (`1..50`) o coincidencia parcial.
+   - **Columna C (`CÉLULA` — Selector Visual 1-Clic sin Digitar):**
+     - Se erradica el input de texto manual truncado (`Cél...`) y se reemplaza por un **Botón Selector Desplegable (`Todas ▾`)** que abre un popover visual con:
+       - **Ordenar por Célula (`A → Z` / `Z → A`):** Agrupa la sábana por célula de trabajo sin ocultar registros.
+       - **Lista Interactiva de Células con Icono Lucide y Conteo en Vivo:** Permite filtrar en 1 clic (selección simple o múltiple) entre `Hortalizas`, `Verduras`, `Papas`, `Frutas`, `Abarrotes`, `Fresas` sin digitar una sola letra.
+   - **Columna D (`PRODUCTO` — Orden Alfabético, Jerarquía P/H y Unidad):**
+     - Dispone de buscador de alto contraste con botón `✕` y un **Botón de Opciones Avanzadas (`▾` / Orden `A-Z`)** que despliega:
+       - **Ordenar Padres Alfabéticamente (`A → Z` y `Z → A`):** Ordena todas las familias/padres alfabéticamente manteniendo sus presentaciones hijas agrupadas debajo.
+       - **Filtro de Jerarquía en 1 Clic:**
+         - `Todos los registros`
+         - `Solo Padres / Familias (P)` (Aísla únicamente las cabezas de familia / filas amarillas consolidadas)
+         - `Solo Hijos / Fraccionados (H)` (Filtra y expande las familias que poseen presentaciones hijas)
+         - `Solo Independientes` (Productos únicos sin familia ni hijos)
+       - **Filtro Rápido por Unidad de Medida (`Kg`, `Unidad`, `Lb`, `Atado`, `Paquete...`)** en 1 clic.
+   - **Columnas Numéricas y de Balance (`E` a `X` — `InventoryColumnFilterPopover.tsx`):**
+     - **Ordenamiento Directo en Popover y Cabecera:** Incluye en la parte superior del menú desplegable los botones **`Ordenar de Mayor a Menor (↓)`** (ideal para ver en 1 clic los mayores `Faltantes Col V`, `Desperdicio Col Q` o `Compras Col G`) y **`Ordenar de Menor a Mayor (↑)`**.
+     - **Accesos Rápidos de 1 Clic:** `Con datos (≠ 0)`, `En blanco (= 0)`, `Positivos (> 0)` y `Negativos (< 0)`, además de comparadores (`>`, `≥`, `=`, `≠`, `<`, `≤`) y `Rango (Mín..Máx)`.
 
 3. **Insignia Telemétrica de Filtros Activos & Limpieza Instantánea (1-Click Reset):**
-   - Cuando uno o más filtros por columna están activos, el botón conmutador muestra una insignia dinámica de telemetría: **`[🔍 Filtros Activos (N) | ✕ Limpiar]`**.
-   - Al pulsar `[✕ Limpiar]` o presionar la tecla `Escape` dos veces, todos los inputs de columna se vacían a 0ms en memoria, restaurando la visión total del catálogo sin necesidad de recargar la página.
+   - Cuando uno o más filtros u ordenamientos están activos, el botón conmutador y la celda A permiten restablecer toda la vista en 0ms en memoria.
 
 #### 8.8.10 Reordenamiento Dinámico de Columnas (Drag & Compare) con Retorno al Orden Canónico (Resolutivo Gemba Octubre 2026)
 
@@ -14815,4 +14824,350 @@ flowchart TD
 | **DT-18**<br>*(Escenario 391 & 392)* | 🟠 **Lista Editable + Formato Pedidos + Cable Pelado `/ops/procesados`** | **Columnas Q (`DESPERDICIO (-)`) y R (`BASURA (-)`)** | **1. Modo Manual:** Lista editable en `/admin/commercial/inventory` (`Gobernanza`, persistida en `app_settings` con `key = 'waste_susceptible_products'` sin SQL adicional y pre-cargada con los **109 productos** de `FORMATO DE DESPERDICIO.xlsx` + herencia Padre $\to$ Hijo) + nuevo formato imprimible en `/admin/orders/loading` con 2 columnas manuscritas (`Desperdicio` y `Basura`) + nueva entrada en Lector IA.<br>**2. Modo Automático (Cable Pelado):** Nuevo módulo **`Procesados` (`/ops/procesados`)** donde ingresan productos (generalmente Padres), una parte se convierte en Hijos y el resto se reparte entre Desperdicio (`Col Q`) y Basura (`Col R`). | ✅ **Modo Manual Ejecutado** *(Cable Pelado `/ops/procesados`)* |
 | **DT-19**<br>*(Escenario 391 & 392)* | 🟠 **Submódulo Supervisor + Lector IA Donaciones** | **Columna X (`DONACIONES / BANCO ALIMENTOS (-)`)** | **Autoridad única: Supervisor de Planta.**<br>**1. Modo Manual:** Lector IA para plantillas de donaciones en `PhysicalSheetIngestModal.tsx`.<br>**2. Modo Digital:** Submódulo **`Donaciones`** dentro de **`/ops/recepcion/supervisor`** (`http://localhost:3001/ops/recepcion/supervisor`) que exige productos, fotos de los productos y foto del documento soporte de donación al Banco de Alimentos. | ✅ **Ejecutado (2026-11-06)** |
 
+---
 
+### Escenario 393: Homologación Canónica 1:1 de Sucursales en Columna AD (`Encab: Sucursal`) para Migración World Office Desktop, Prioridad de Remoción de Matriz Compuesta y Override `world_office_branch` (`src/lib/worldOfficeExport.ts`) (SDD v1.9.371)
+
+#### 1. Contexto y Hallazgo Forense del Gemba
+- **Given** la plantilla oficial de migración masiva a World Office Desktop (`Detalle migración`, 57 columnas, Columna AD = `Encab: Sucursal`) auditada contra los 615 perfiles de clientes institucionales en `public.profiles`:
+  1. En World Office Desktop, la **Columna AD (`Encab: Sucursal`)** opera como una llave foránea de texto literal (sensible a prefijos irregulares como `ALDIMARK -CDS CONDIMENTOS EL REY`, `ALDIMARK - KELLOGSS`, espacios finales como `ALDIMARK- COLEGIO MIGUEL LA SALLE ` o grafías históricas propias del ERP como `HOTEL TENQUENDAMA SUITES SAS`).
+  2. Cuando el nombre de una Casa Matriz en `profiles.company_name` contenía por sí mismo el separador `' - '` (ej. `AMATU - AMA TU MASCOTA SAS`), el resolver `resolveWorldOfficeBranch` aplicaba `split(' - ')` antes de remover el nombre completo de la Casa Matriz, truncando erróneamente la sucursal como `AMA TU MASCOTA SAS - AMA TU MASCOTA` en lugar de `AMA TU MASCOTA`.
+  3. Existían 7 sucursales activas en OnFru con discrepancia tipográfica frente al maestro de World Office y 5 sedes/clientes del plano contable (`ALDIMARK- COLEGIO BILINGUE HISPANOAMERICANO`, `ALDIMARK- COLEGIO MIGUEL LA SALLE `, `ALDIMARK- COLEGIO MAYOR DE SAN BARTOLOME`, `CIEDI` y `UNIVERSIDAD DEL AREA ANDINA` NIT `860517302`) pendientes de alta en `profiles`.
+
+#### 2. Especificación Técnica y Orden de Precedencia en `resolveWorldOfficeBranch`
+- **When** el módulo de Facturación (`/admin/commercial/billing`) exporta planos `.xlsx` para World Office Desktop:
+- **Then** `resolveWorldOfficeBranch(profile, parentProfile)` resuelve la Columna AD bajo el siguiente orden determinista:
+  1. **Prioridad 0 — Override Explícito (`logistics_data.world_office_branch`):** Si el perfil (o su matriz en cuentas unisede) define `logistics_data.world_office_branch`, retorna la cadena literal exacta (preservando espacios internos o finales exigidos por World Office).
+  2. **Prioridad 1 — Remoción Exacta del Prefijo de Casa Matriz (`parentCandidates`):** Antes de dividir por guiones genéricos, verifica si `company_name` inicia con `parentProfile.company_name`, `parentProfile.razon_social` o `profile.razon_social` (en sucursales), removiendo el nombre completo de la matriz y el separador ` - ` subsiguiente.
+  3. **Prioridad 2 — Patrón `'EMPRESA - SUCURSAL'`:** Para sucursales sin objeto padre cargado en memoria, extrae el segmento posterior al primer `' - '`.
+  4. **Prioridad 3 & 4 — Sucursal Directa / Razón Social Unisede:** Retorna el nombre limpio de la sucursal o la razón social legal del cliente único (nunca `'Principal'`).
+
+
+
+
+---
+
+# 🚀 PARTE II: CONTRATO DE EXPANSIÓN `onFRU v2.0` (FASE II — ROADMAP COMERCIAL FACTURABLE POST-CIERRE v1.x)
+
+> [!IMPORTANT]
+> **CLÁUSULA DE FRONTERA CONTRACTUAL Y FINANCIERA (INDEPENDENCIA FASE I vs FASE II):**
+> 1. **Cierre Inmutable de Fase I (`onFRU v1.9.x` — Escenarios 1 al 393):** Los diez (10) dominios operativos, las setenta y seis (76) pantallas certificadas y la Sábana Oficial de Balance Diario de Inventarios (Columnas A–X) conforman el alcance 100% cumplido y cerrado de la Fase I.
+> 2. **Naturaleza de `onFRU v2.0` (Escenarios Serie 400+):** Todos los capítulos, módulos de software, integraciones IoT y escenarios numerados a partir del **Escenario 400** pertenecen exclusivamente a la **Segunda Fase Evolutiva (`onFRU v2.0`)**.
+> 3. **Cotización y Ejecución Independiente:** El desarrollo, suministro de hardware y puesta en marcha de los módulos de `onFRU v2.0` se cotizan, contratan y facturan de manera independiente con posterioridad a la liquidación de la Fase I, sin condicionar ni postergar las actas de entrega del ecosistema base.
+
+---
+
+## 45. Capítulo 45 (`onFRU v2.0` — Módulo 1): Sistema de Control de Permanencia en Planta, Telemetría de Productividad en Piso y Radar RTLS Indoor (WFM + IoT Anti-Sabotaje)
+
+### 45.1 Diagnóstico de Gemba y Planteamiento del Problema Operativo
+
+1. **El Dolor Operativo Real (Fuga de Horas-Hombre Post-Fichaje):**
+   - Durante el turno crítico de alistamiento y recepción de madrugada (04:00 AM – 09:00 AM), los operarios de bodega registran su ingreso formal de inicio de turno, pero posteriormente abandonan su célula de trabajo para salir a tomar café o realizar pausas no autorizadas fuera de la bodega en pleno horario laboral.
+   - La supervisión visual humana resulta insuficiente debido al flujo continuo de furgones, bultos y canastillas en los muelles de Corabastos / planta.
+
+2. **Auditoría Física e Ingeniería Lean ante Solicitudes de RFID / Tags (Por qué el RFID convencional fracasa en Fruver):**
+   - **Vulnerabilidad 1 — El Sabotaje del «Carnet en la Canastilla» (Costo de burla: $\$0$):** Si se entrega un carnet RFID o un tag Bluetooth suelto, el operario que sale a tomar café simplemente deja el carnet colgado en su estiba, sobre la mesa de acero o en el bolsillo de un compañero. El mapa mostraría un falso positivo de presencia dentro de la bodega mientras el colaborador se encuentra en la calle.
+   - **Vulnerabilidad 2 — Física de Radiofrecuencia en Bodegas Agrícolas (Agua + Metal):** Las frutas, verduras y tubérculos contienen hasta un $90\%$ de agua (alta absorción de ondas en $2.4\text{ GHz}$ y UHF $900\text{ MHz}$), sumado al rebote multipaso (*multipath fading*) en básculas y estructuras metálicas, lo que invalida el posicionamiento milimétrico tradicional sin sensores complementarios.
+   - **Vulnerabilidad 3 — Marco Legal Laboral Colombiano (CST & Habeas Data):** El control disciplinario y de nómina exige medir **disponibilidad efectiva en puesto de trabajo, pausas cronometradas y cruces de puerta**, evitando rastreos invasivos en zonas sanitarias.
+
+---
+
+### 45.2 Matriz Técnica y Financiera de Tecnologías Evaluadas para `onFRU v2.0`
+
+| Tecnología Evaluada | ¿Muestra Ubicación en Pantalla? | Precisión en Bodega Fruver | Inversión Estimada Hardware (25-30 Operarios) | Dictamen de Arquitectura `onFRU v2.0` |
+| :--- | :--- | :--- | :---: | :--- |
+| **A. Pulso Operativo en Software (`Takt-Time Watchdog`)** | 🟢 **Sí (Semáforo por Célula en TV 65")** | Exacta por transacción real en báscula/kiosco | **$\$0\text{ USD}$** *(100% Software sobre terminales actuales)* | **Obligatorio (Base Nivel 2.1).** Un bulto de papa no se pesa solo; detecta de inmediato a quien lleva $>10\text{ min}$ sin operar. |
+| **B. Esclusa Biométrica Facial de Salida Peatonal** | 🟢 **Sí (Bitácora de Salidas en Vivo)** | $100\%$ en puerta de calle (Intransferible) | **$\$350 - \$600\text{ USD}$** *(1 Lector Facial + Electroimán)* | **Altamente Recomendado (Nivel 2.2).** Nadie puede «prestar la cara» para abrir la puerta peatonal en hora pico. |
+| **C. Radar RTLS por Zonas con Manillas BLE Anti-Sabotaje** | 🟢 **Sí (Plano 2D de 6 Células en Vivo)** | $2\text{ a }4\text{ metros}$ (Nivel de Célula / Muelle) | **$\$900 - \$1.400\text{ USD}$** *(6 Antenas ESP32 PoE + 30 Manillas BLE)* | **Óptimo si se requiere Mapa Visual (Nivel 2.3).** Usa manillas con acelerómetro/termistor que alertan si el operario se la quita. |
+| **D. RFID Pasivo UHF (Arcos de Puerta)** | ❌ **No** (Solo cruce de arco) | Paso por pórtico | **$\$3.500 - \$7.000\text{ USD}$** | ❌ **Descartado.** Fácil de burlar dejando el carnet adentro o envolviéndolo en papel aluminio. |
+| **E. Ultra-Wideband (UWB Time-of-Flight)** | ✅ **Sí (Coordenada $(X,Y)$ continua)** | $10\text{ a }30\text{ cm}$ | **$\$8.000 - \$18.000\text{ USD}$** | ❌ **Descartado por Sobre-Ingeniería.** Costo desproporcionado para el retorno operativo buscado. |
+
+---
+
+### 45.3 Arquitectura de los 3 Paquetes Escalables de `onFRU v2.0` (Escenarios Serie 400+)
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│               ARQUITECTURA MODULAR DE CONTROL DE PERMANENCIA (onFRU v2.0)              │
+├───────────────────────────┬────────────────────────────┬───────────────────────────────┤
+│ 📦 NIVEL 2.1 (SOFTWARE)   │ 📦 NIVEL 2.2 (ESCLUSA)     │ 📦 NIVEL 2.3 (RADAR RTLS BLE) │
+│ • Doble Check-in (Puerta  │ • Lector Facial de Salida  │ • 6 Gateways ESP32 PoE Techo  │
+│   vs 1er Pick en Célula)  │   + Electroimán Peatonal   │ • Manillas BLE Termo-Selladas │
+│ • Reloj Hombre Muerto     │ • Bloqueo en Hora Pico     │   con Acelerómetro Anti-Retiro│
+│   (Alerta >10m sin pesar) │   (04:00 AM - 08:30 AM)    │ • Mapa 2D Live en TV 65" con  │
+│ • Kiosco QR de Pausas     │ • Descuento Automático de  │   Avatares por Célula y Alerta│
+│   con Cronómetro (8 min)  │   Minutos Fuera en /hr     │   "FUERA DE BODEGA > 2 MIN"   │
+└───────────────────────────┴────────────────────────────┴───────────────────────────────┘
+```
+
+---
+
+#### Escenario 400: Nivel 2.1 (Paquete Software Puro) — Motor «Takt-Time Watchdog» (Pulso Operativo de Báscula/Picking), Doble Check-in de Célula y Kiosco de Pausas Controladas QR (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** que el indicador irrefutable de que un operario está en su puesto dentro de la bodega es su interacción física con las básculas (`/ops/recepcion`) y los kioscos/terminales de alistamiento (`/ops/picking` y `/ops/picking/terminal`):
+- **When** se activa el módulo `WFM Takt-Time Watchdog` en `onFRU v2.0`:
+- **Then** el sistema gobierna la permanencia del colaborador sin requerir compra de antenas mediante cuatro (4) mecanismos Poka-Yoke:
+  1. **Desacople entre «Fichaje de Puerta» y «Activación en Célula» (Ventana Máxima de 7 Minutos):**
+     - Cuando el colaborador registra su entrada a planta (`shift_check_in_at`), su estado inicia en `EN_TRANSITO_VESTIER`.
+     - El colaborador dispone de máximo **7 minutos** (parametrizable en `/admin/settings`) para escanear su QR (`collaborators.qr_token`) o ejecutar su primera pesada/pick en su célula asignada (`first_operational_action_at`).
+     - Si supera los 7 minutos sin registrar actividad en piso, el sistema asienta automáticamente un **Retardo de Piso (`floor_arrival_delay_minutes`)** visible en `/ops/recepcion/supervisor` y `/admin/hr`.
+  2. **Reloj de Pulso Operativo («Dead-Man's Switch» / Heartbeat Transaccional):**
+     - Cada acción real en `/ops/recepcion` (pesaje de bulto/canastilla), `/ops/picking` (confirmación de ítem en bahía), `/ops/picking/terminal` (*1-Tap Pick*) o `/ops/rectificacion` actualiza el timestamp `last_heartbeat_at` y `last_station_zone` del colaborador en la tabla `wfm_collaborator_status`.
+     - Si un colaborador con turno activo supera el umbral de silencio operativo ($\Delta t > 10\text{ minutos}$ en hora pico de alistamiento sin ninguna transacción ni pausa autorizada), su estado transiciona automáticamente a **`🔴 ALERTA_INACTIVIDAD_PISO`**.
+  3. **Visualización Andon en Pantalla Gigante (`/ops/picking/dashboard`) y Supervisor (`/ops/recepcion/supervisor`):**
+     - En la barra superior de la Torre FIDS (`/ops/picking/dashboard`) se despliega el **HUD de Pulso de Cuadrilla**: los avatares de los operarios activos en verde (`🟢 Activo hace 1m — Frutas`), ámbar (`🟡 Sin pulso 7m`) o rojo pulsante con alarma sonora opcional (`🔴 AUSENTE / SIN PULSO 12m — Última vez: Célula Verduras`).
+  4. **Kiosco de Pausas Controladas con Cupo y Cronómetro Regresivo (Baño / Café Oficial):**
+     - Para ausentarse legítimamente de la célula, el operario debe escanear su código QR en la tablet de la célula y pulsar `[ ☕ PAUSA / BAÑO (8 MIN) ]`.
+     - El sistema valida que no haya agotado su cupo de pausas del turno y que la célula no quede con $0$ operarios activos (regla de cobertura mínima).
+     - En la pantalla corre un cronómetro regresivo gigante (`07:59...`). Si el operario no vuelve a escanear su QR en la célula antes de llegar a `00:00`, el exceso de tiempo se registra como **`tiempo_improductivo_excedido`** en `/admin/hr`.
+
+---
+
+#### Escenario 401: Nivel 2.2 (Paquete Control Físico de Esclusa) — Puerta Peatonal Inteligente con Biometría Facial de Salida y Liquidación de Tiempo Ausente en Nómina (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** que en la operación actual el colaborador registra su entrada pero puede cruzar la puerta hacia la calle sin registro de salida intermedia:
+- **When** se integra el **Control de Esclusa Biométrica Bidireccional** en la puerta de acceso de personal:
+- **Then** el sistema cierra físicamente la fuga de personal bajo las siguientes invariantes:
+  1. **Biometría Facial de Salida Obligatoria (0.3s, Manos Libres):**
+     - Para destrabar el electroimán o torniquete de salida hacia el exterior de la bodega, el colaborador debe mirar el terminal facial de salida (inmune a manos húmedas o guantes de fruver e **imposible de prestar a otro compañero**).
+  2. **Poka-Yoke de Ventana Crítica de Madrugada (04:00 AM – 08:30 AM):**
+     - Durante la ventana pico de despacho, si un colaborador intenta salir a la calle sin tener una pausa autorizada activa en `onFRU` (o autorización PIN/QR del Supervisor de Planta en `/ops/recepcion/supervisor`), el terminal deniega la apertura o dispara un evento crítico `UNAUTHORIZED_STREET_EXIT` en tiempo real via Webhook (`/api/v2/wfm/access-webhook`).
+  3. **Conciliación Automática de «Minutos Fuera de Bodega» hacia `/admin/hr`:**
+     - Todo intervalo comprendido entre un evento `STREET_EXIT` y el siguiente `STREET_REENTRY` que supere la franquicia de pausa reglamentaria se totaliza automáticamente en la pestaña de **Control de Tiempos y Ausentismo (`/admin/hr?tab=attendance`)**, permitiendo descontar o auditar con evidencia forense exacta cada salida a cafetería.
+
+---
+
+#### Escenario 402: Nivel 2.3 (Paquete IoT + Mapa en Vivo) — Radar RTLS Indoor por Células con Gateways ESP32 PoE y Manillas BLE Anti-Sabotaje (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** el requerimiento de Dirección General de visualizar en una pantalla el posicionamiento y desplazamiento de los colaboradores dentro de la bodega en tiempo real:
+- **When** se despliega la infraestructura **Radar RTLS Indoor (`onFRU v2.0`)**:
+- **Then** el sistema implementa localización por zonas con blindaje anti-sabotaje bajo las siguientes especificaciones:
+  1. **Hardware IoT de Bajo Costo y Grado Industrial:**
+     - **Nodos Receptores Fijos (6 a 8 Gateways ESP32-PoE / Bluetooth 5.1):** Instalados en el techo sobre cada una de las zonas canónicas de la bodega:
+       1. `ZONA_MUELLE_RECEPCION`
+       2. `ZONA_CELULA_FRUTAS`
+       3. `ZONA_CELULA_VERDURAS_HORTALIZAS`
+       4. `ZONA_CELULA_TUBERCULOS_ABARROTES`
+       5. `ZONA_BAHIA_DESPACHO_RECTIFICACION`
+       6. `ZONA_PUERTA_EXTERIOR_CALLE`
+     - **Manillas Activas BLE Selladas con Sensor Anti-Sabotaje (Prohibido Carnets Sueltos):** Cada colaborador porta en su muñeca una manilla BLE industrial IP67 dotada de **acelerómetro de 3 ejes y sensor de proximidad/temperatura epidérmica**.
+  2. **Algoritmo Anti-Sabotaje («Detección de Manilla Abandonada en Estiba»):**
+     - Si un operario se quita la manilla y la deja sobre una mesa o canastilla para salir a tomar café, la manilla detecta **varianza cero en el acelerómetro ($\sigma_{\text{acc}} = 0\text{ g}$ durante $> 180\text{ s}$) y caída de temperatura de contacto corporal**, transmitiendo el flag `tamper_status = 'UNWORN_OR_ABANDONED'`.
+     - El tablero central dispara de inmediato la alerta roja: **`🚨 ALERTA DE SABOTAJE: MANILLA DE [NOMBRE OPERARIO] ABandonada SIN MOVIMIENTO EN [CÉLULA]`**.
+  3. **Motor de Triangulación por Zona (RSSI Kalman Filter + Cruce con Pulso de Báscula):**
+     - Los Gateways ESP32 envían cada 3 segundos las lecturas RSSI (`dBm`) al endpoint `/api/v2/rtls/ingest`.
+     - Un filtro de media móvil exponencial (EMA) asigna al colaborador a la célula con mayor potencia de señal y cruza el dato con sus pesadas en `/ops/picking` (fusión de sensores IoT + Transaccional).
+     - Si las 6 antenas dejan de detectar la manilla por más de **90 segundos** (o el último nodo en verla fue `ZONA_PUERTA_EXTERIOR_CALLE` alejándose), el colaborador pasa automáticamente al estado **`🚨 FUERA DEL PERÍMETRO DE BODEGA`** con cronómetro de ausencia en vivo.
+  4. **Nueva Pantalla `/ops/radar` (y Widget Integrado en `/ops/picking/dashboard`):**
+     - Renderiza el **Plano Arquitectónico 2D Interactivo de la Bodega FruFresco** con las 6 células, muelles y pasillos.
+     - Muestra en tiempo real los avatares de los colaboradores moviéndose entre células, su estado de actividad (`🟢 Pesando/Alistando`, `🟡 Quieto en célula`, `⏸️ En Pausa Autorizada`, `🚨 Fuera de Bodega / Manilla Abandonada`) y el historial de recorrido del turno (*Breadcrumb Trail*).
+
+---
+
+### 45.4 Contrato de Datos Proyectado para `onFRU v2.0` (Tablas SQL Fase II)
+
+```sql
+-- 1. Estado en Vivo y Pulso Operativo por Colaborador (Nivel 2.1, 2.2 y 2.3)
+CREATE TABLE IF NOT EXISTS public.wfm_collaborator_live_status (
+  collaborator_id UUID PRIMARY KEY REFERENCES public.collaborators(id) ON DELETE CASCADE,
+  shift_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  check_in_door_at TIMESTAMPTZ,
+  first_cell_action_at TIMESTAMPTZ,
+  last_heartbeat_at TIMESTAMPTZ,
+  last_action_type TEXT, -- 'weighing_reception' | 'picking_confirm' | 'qr_scan' | 'ble_ping'
+  current_zone TEXT,     -- 'RECEPCION' | 'FRUTAS' | 'VERDURAS' | 'TUBERCULOS' | 'DESPACHO' | 'EXTERIOR'
+  presence_status TEXT NOT NULL DEFAULT 'OFF_SHIFT', 
+  -- 'ACTIVE_WORKING' | 'IDLE_WARNING' | 'ABSENT_ALERT' | 'AUTHORIZED_BREAK' | 'TAMPER_ALERT' | 'OUTSIDE_WAREHOUSE'
+  wearable_mac_address TEXT,
+  wearable_battery_pct INTEGER,
+  is_wrist_detected BOOLEAN DEFAULT TRUE,
+  accumulated_outside_minutes NUMERIC(6,2) DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. Bitácora Forense de Pausas, Salidas a Calle y Alertas de Inactividad (Auditable en /admin/hr)
+CREATE TABLE IF NOT EXISTS public.wfm_presence_incidents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  collaborator_id UUID NOT NULL REFERENCES public.collaborators(id),
+  shift_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  incident_type TEXT NOT NULL, 
+  -- 'FLOOR_ARRIVAL_DELAY' | 'INACTIVITY_TIMEOUT' | 'UNAUTHORIZED_EXIT' | 'BREAK_OVERSTAY' | 'WEARABLE_TAMPER'
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  duration_minutes NUMERIC(6,2),
+  zone_detected TEXT,
+  resolved_by UUID REFERENCES public.profiles(id),
+  resolution_notes TEXT
+);
+```
+
+---
+
+### 45.5 Resumen Ejecutivo para Cotización Comercial de Fase II (`onFRU v2.0`)
+
+| Paquete `onFRU v2.0` | Alcance Técnico Entregable | Hardware Requerido (CapEx Cliente) | Tiempo Estimado de Desarrollo |
+| :--- | :--- | :--- | :---: |
+| **Opción 1: `onFRU v2.0` — Nivel 2.1 (Software Puro)** | Motor *Takt-Time Watchdog*, Doble Check-in (Puerta vs Célula), Alerta Andon $>10\text{ min}$ sin pesar en TV 65", Kiosco QR de Pausas Cronometradas y Reporte de Tiempos Improductivos en `/admin/hr`. | **$\$0\text{ USD}$** *(Usa las tablets, básculas y TVs actuales)* | **1.5 a 2 Semanas** |
+| **Opción 2: `onFRU v2.0` — Nivel 2.2 (Software + Esclusa Biométrica)** | Incluye todo el **Nivel 2.1** + Integración Webhook con Lector Facial de Salida Peatonal, bloqueo/alerta en ventana pico (04:00–08:30 AM) y descuento automático de minutos en calle. | **$\sim \$450\text{ USD}$** *(1 Terminal Facial de Salida + Electroimán)* | **2 a 3 Semanas** |
+| **Opción 3: `onFRU v2.0` — Nivel 2.3 (Full Suite: Software + Radar RTLS BLE)** | Incluye **Nivel 2.1** + Mapa 2D Interactivo en Vivo (`/ops/radar`) con posicionamiento por Células, 6 Gateways ESP32 PoE y Manillas BLE con sensor anti-abandono. | **$\sim \$1.100\text{ USD}$** *(6 Gateways ESP32 PoE + 30 Manillas BLE IP67)* | **3 a 4 Semanas** |
+
+
+---
+
+## 46. Capítulo 46 (`onFRU v2.0` — Módulo 2): Sistema de Ejecución y Control de Producción de Planta de Procesados (MES Agroindustrial IV Gama, Recetas BOM, Rendimientos *Yield %* y Costeo Real de Transformación)
+
+### 46.1 Delimitación Contractual de Alcance: Fase I (Captura Simple de Masa) vs. Fase II (`onFRU v2.0` — Planta de Producción Industrial)
+
+| Dimensión | 🟢 Alcance en Fase I (`v1.9.x` — Cable Pelado `DT-18`) | 🚀 Alcance en Fase II (`onFRU v2.0` — Capítulo 46 MES Procesados) |
+| :--- | :--- | :--- |
+| **Propósito Funcional** | **Formulario sencillo de carga de información:** Registrar rápidamente cuántos kilos entraron de un SKU Padre, cuántos salieron de un SKU Hijo y cuánto fue a **Desperdicio (`Col Q`)** y **Basura (`Col R`)** para cuadrar la Sábana de Balance Diario. | **Sistema de Ejecución de Manufactura (MES) para Planta de Procesados (IV Gama):** Planificación de órdenes de producción desde pedidos, fichas técnicas de rendimiento botánico (*Yield %*), costeo real por absorción de merma + empaque + mano de obra, control de lotes/BPM INVIMA y destajo por operario. |
+| **Nivel de Automatización** | Registro manual/transaccional directo hacia `inventory_movements` (`waste_damage` y `waste_cleaning`). | Explosión automática de materia prima (MRP Inverso), alertas de desviación de cuchillo/pelado, recálculo automático de costo en `commercial_cost_matrix` e impresión de etiquetas de lote y vencimiento. |
+
+---
+
+### 46.2 Diagnóstico de Gemba y Dolor Financiero en la Planta de Procesados
+
+1. **La Caja Negra del Costo de Transformación (Merma No Absorbida en Precios):**
+   - Cuando la planta toma un producto bruto (**SKU Padre `[P]`**, ej. $100\text{ kg}$ de Mazorca en capacho comprada a $\$2.000/\text{kg} = \$200.000$) y lo transforma en un producto procesado (**SKU Hijo `[H]`**, ej. $40\text{ kg}$ de Mazorca Desgranada + $55\text{ kg}$ de capacho/basura `Col R` + $5\text{ kg}$ de avería `Col Q`), el costo real del kilo de producto terminado asciende a:
+     $$\text{Costo Real Hijo (COP/Kg)} = \frac{\text{Masa Padre Consumida} \times \text{Costo PPP Padre} + \text{Costo Empaque Vacío} + \text{Costo Mano de Obra}}{\text{Masa Neta Hijo Obtenida}}$$
+   - Sin un módulo de producción que liquide esta absorción de merma (NIC 2 / IAS 2), el área comercial corre el riesgo de vender productos procesados por debajo de su costo real de manufactura.
+2. **Falta de Explosión de Requerimientos de Materia Prima (MRP Inverso):**
+   - Si los pedidos de clientes institucionales para mañana demandan $80\text{ kg}$ de *Papa Pastusa Pelada en Cubos* y el rendimiento estándar de pelado es del $78\%$, Compras y Bodega necesitan que el sistema calcule automáticamente que deben entregar a la Planta de Procesados **$102,56\text{ kg}$ de Papa Bruta**, en lugar de calcularlo empíricamente.
+3. **Control de Eficiencia de Cuchillo y Rendimiento por Cuadrilla (*Yield Variance*):**
+   - Si la ficha técnica botánica establece que la Piña Oro Miel Pelada tiene un rendimiento mínimo del $65\%$ (máximo $35\%$ de cáscara/corona en `Col R`), y un lote reporta solo $50\%$ de rendimiento, la jefatura de planta requiere una alerta inmediata para auditar si fue mal corte del operario o calibre defectuoso del proveedor.
+
+---
+
+### 46.3 Arquitectura Funcional de la Planta de Procesados en `onFRU v2.0` (Escenarios 403 a 405)
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│            PLANTA DE PRODUCCIÓN DE PROCESADOS — MES AGROINDUSTRIAL (onFRU v2.0)        │
+├───────────────────────────┬────────────────────────────┬───────────────────────────────┤
+│ 📋 1. MRP & RECETAS (BOM) │ 🔪 2. EJECUCIÓN EN PLANTA  │ 💰 3. COSTEO NIC 2 & BPM      │
+│ • Fichas Técnicas Padre-> │ • Órdenes de Producción    │ • Absorción de Merma Real en  │
+│   Hijo con Yield % Teórico│   (OP) por Mesa de Corte   │   commercial_cost_matrix      │
+│ • Explosión automática de │ • Pesaje Entrada Bruta vs  │ • Control de Bolsas Vacío e   │
+│   Kilos Brutos desde los  │   Salida Neta + Col Q + R  │   Insumos de Sanitización     │
+│   Pedidos en para_compra  │ • Alerta si Merma > Tope % │ • Lote, Vencimiento y Rótulo  │
+└───────────────────────────┴────────────────────────────┴───────────────────────────────┘
+```
+
+---
+
+#### Escenario 403: Fichas Técnicas de Transformación (BOM Inverso), Estándares de Rendimiento Botánico (*Yield %*) y Explosión Automática de Órdenes de Producción desde Pedidos (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** los productos del catálogo clasificados en la categoría o línea de **Procesados / IV Gama** (SKUs Hijos obtenidos por pelado, picado, desgranado, troceado o empacado al vacío a partir de un SKU Padre):
+- **When** el Jefe de Planta configura las **Fichas Técnicas de Transformación (`processing_bom_recipes`)** y los pedidos del día pasan a `para_compra`:
+- **Then** el sistema automatiza la planificación de la planta bajo las siguientes reglas:
+  1. **Parametrización de Ficha Técnica por Producto Procesado:**
+     - **SKU Padre Origen (`raw_parent_product_id`):** Producto bruto que se consume de bodega (ej. *Cebolla Cabezona Blanca Sucia*).
+     - **SKU Hijo Terminado (`finished_child_product_id`):** Producto procesado que entra a stock disponible (ej. *Cebolla Blanca Pelada en Juliana Empacada al Vacío*).
+     - **Rendimiento Estándar Esperado (`standard_yield_pct`):** Porcentaje de masa aprovechable (ej. $82\%$).
+     - **Tolerancia Máxima de Basura/Descapote (`max_cleaning_waste_pct` $\to$ Col R):** Ej. $15\%$.
+     - **Tolerancia Máxima de Avería (`max_damage_waste_pct` $\to$ Col Q):** Ej. $3\%$.
+     - **Insumos de Empaque Asociados:** Tipo de bolsa de vacío/bandeja y costo unitario de empaque por kilo.
+  2. **Explosión Automática de Órdenes de Producción (`production_orders`):**
+     - Al consolidar la tanda de pedidos en `/admin/orders/loading`, el motor detecta la demanda neta de todos los SKUs procesados ($\text{Demanda Hijo} - \text{Stock Hijo Disponible}$) y genera automáticamente las **Órdenes de Producción del Turno** calculando la masa bruta exacta a solicitar a bodega:
+       $$\text{Masa Bruta Padre Requerida (Kg)} = \frac{\text{Masa Neta Hijo a Producir (Kg)}}{\text{standard\_yield\_pct} / 100}$$
+  3. **Requisición Directa a Compras y Bodega:**
+     - La masa bruta requerida se suma automáticamente a la necesidad del SKU Padre en `/ops/compras` para que los compradores de Corabastos adquieran el volumen bruto total (incluyendo la cáscara que se perderá en planta).
+
+---
+
+#### Escenario 404: Consola Táctica de Piso `/ops/procesados` (Versión Industrial MES), Control de Mesas de Corte, Invariante de Masa y Semáforo de Desviación de Rendimiento (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** una Orden de Producción activa en la consola de planta `/ops/procesados`:
+- **When** el supervisor o líder de mesa ejecuta y cierra el lote de transformación:
+- **Then** el sistema controla el balance físico y la productividad por operario:
+  1. **Asignación de Cuadrilla / Operario de Mesa de Corte:**
+     - Vincula la orden de producción al colaborador o cuadrilla responsable (integrado con `collaborators` y el pulso de actividad del Capítulo 45).
+  2. **Ecuación Estricta de Cierre de Lote (Poka-Yoke de Conservación de Masa):**
+     - El lote no puede cerrarse si la suma de salidas no cuadra con la masa bruta entregada a la mesa (dentro de la tolerancia de hidratación/escurrido $\pm 1.5\%$):
+       $$M_{\text{Padre Entregado}} = \sum M_{\text{Hijos Obtenidos}} + M_{\text{Desperdicio (Col Q)}} + M_{\text{Basura/Cáscara (Col R)}}$$
+  3. **Semáforo Poka-Yoke de Desviación de Cuchillo (*Yield Variance Alert*):**
+     - El sistema calcula en vivo el rendimiento real del lote:
+       $$\text{Yield Real \%} = \left( \frac{\sum M_{\text{Hijos Obtenidos}}}{M_{\text{Padre Entregado}}} \right) \times 100$$
+     - Si $\text{Yield Real \%} < (\text{standard\_yield\_pct} - \text{tolerancia})$, la pantalla bloquea el cierre simple y exige **Justificación de Sobremema + Evidencia Fotográfica** (diferenciando si fue *«Materia prima de mala calidad desde compra»* o *«Error de corte en mesa»*).
+  4. **Inyección Atómica a la Sábana de Balance Diario:**
+     - Al cerrar la Orden de Producción, el motor ejecuta en una sola transacción ACID:
+       - Descarga del SKU Padre y carga del SKU Hijo procesado (`type = 'transfer' / 'production_transform'`).
+       - Registro automático en **Columna Q (`DESPERDICIO (-)` — `'waste_damage'`)**.
+       - Registro automático en **Columna R (`BASURA (-)` — `'waste_cleaning'`)**.
+
+---
+
+#### Escenario 405: Costeo Industrial de Transformación (NIC 2) hacia Matriz Comercial, Trazabilidad de Lotes BPM / INVIMA y Rótulo Térmico de Vencimiento (`onFRU v2.0`)
+
+##### 1. Propósito y Reglas de Negocio
+- **Given** el cierre exitoso de una Orden de Producción en `/ops/procesados`:
+- **When** el producto procesado ingresa al stock disponible de bodega:
+- **Then** el sistema ejecuta la liquidación financiera y sanitaria del lote:
+  1. **Cálculo y Propagación del Costo Real del Producto Procesado (`commercial_cost_matrix`):**
+     - Toma el Costo Promedio Ponderado Diario ($\text{PPP}_{\text{Padre}}$) del SKU Padre, multiplica por los kilos brutos consumidos (absorbiendo el costo de la cáscara y merma), suma el costo de bolsas/insumos de empaque y divide entre los kilos netos buenos obtenidos del Hijo.
+     - Actualiza automáticamente `commercial_cost_matrix.manual_cost` del SKU Hijo procesado, garantizando que Dirección Comercial vea el margen real del producto procesado.
+  2. **Bitácora de Inocuidad BPM / INVIMA y Etiquetado de Lote:**
+     - Registra en el lote de producción los parámetros obligatorios de inocuidad: concentración de desinfectante (`ppm`), tiempo de inmersión, temperatura de cuarto frío y fecha de vencimiento calculada (`shelf_life_days`).
+     - Emite el rótulo térmico Zebra con código QR de trazabilidad interna, fecha de empaque, fecha de vencimiento y lote.
+
+---
+
+### 46.4 Contrato de Datos Proyectado para Planta de Procesados (`onFRU v2.0`)
+
+```sql
+-- 1. Recetas y Fichas Técnicas de Rendimiento Botánico (Padre -> Hijo)
+CREATE TABLE IF NOT EXISTS public.processing_bom_recipes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  raw_parent_product_id UUID NOT NULL REFERENCES public.products(id),
+  finished_child_product_id UUID NOT NULL REFERENCES public.products(id),
+  process_type TEXT NOT NULL, -- 'PEELED' | 'DICED' | 'JULIENNE' | 'SHUCKED' | 'VACUUM_PACKED' | 'PULP'
+  standard_yield_pct NUMERIC(5,2) NOT NULL DEFAULT 80.00,
+  max_cleaning_waste_pct NUMERIC(5,2) NOT NULL DEFAULT 17.00, -- Tope Col R (Basura/Cáscara)
+  max_damage_waste_pct NUMERIC(5,2) NOT NULL DEFAULT 3.00,    -- Tope Col Q (Desperdicio)
+  packaging_cost_per_kg NUMERIC(10,2) DEFAULT 0,
+  labor_cost_per_kg NUMERIC(10,2) DEFAULT 0,
+  shelf_life_days INTEGER DEFAULT 5,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. Órdenes de Producción y Liquidación de Masa/Costos en Planta de Procesados
+CREATE TABLE IF NOT EXISTS public.production_orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sequence_code TEXT NOT NULL, -- Ej. 'OP-20261106-001'
+  operation_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  recipe_id UUID REFERENCES public.processing_bom_recipes(id),
+  raw_parent_product_id UUID NOT NULL REFERENCES public.products(id),
+  finished_child_product_id UUID NOT NULL REFERENCES public.products(id),
+  assigned_collaborator_id UUID REFERENCES public.collaborators(id),
+  status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  planned_finished_qty_kg NUMERIC(10,2) NOT NULL,
+  required_raw_qty_kg NUMERIC(10,2) NOT NULL,
+  actual_raw_input_kg NUMERIC(10,2),
+  actual_finished_output_kg NUMERIC(10,2),
+  actual_waste_damage_kg NUMERIC(10,2) DEFAULT 0,   -- Alimenta Col Q ('waste_damage')
+  actual_waste_cleaning_kg NUMERIC(10,2) DEFAULT 0, -- Alimenta Col R ('waste_cleaning')
+  actual_yield_pct NUMERIC(5,2),
+  calculated_unit_cost_cop NUMERIC(12,2),           -- Costo real NIC 2 inyectado al Hijo
+  sanitization_ppm NUMERIC(6,2),
+  expiration_date DATE,
+  evidence_photo_url TEXT,
+  supervisor_notes TEXT,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+### 46.5 Resumen Consolidado del Portafolio Comercial `onFRU v2.0` (Fase II)
+
+| Capítulo `onFRU v2.0` | Módulo / Solución Industrial | Escenarios SDD | Problema de Negocio que Erradica | Estado |
+| :---: | :--- | :---: | :--- | :---: |
+| **Capítulo 45** | **WFM, Pulso Operativo (`Takt-Time Watchdog`), Esclusa Facial & Radar RTLS BLE Anti-Sabotaje** | **Escenarios 400 a 402** | Fuga de horas-hombre post-fichaje (salidas a tomar café en turno activo) y sabotaje de tags/carnets tradicionales. | 🚀 **Listo para Cotizar (Fase II)** |
+| **Capítulo 46** | **Planta de Producción de Procesados (MES Agroindustrial IV Gama, Recetas Yield % y Costeo NIC 2)** | **Escenarios 403 a 405** | Pérdida oculta de margen en productos pelados/picados por no absorber la merma en el costo, falta de explosión de compras brutas y descontrol de cuchillo en mesa. | 🚀 **Listo para Cotizar (Fase II)** |
