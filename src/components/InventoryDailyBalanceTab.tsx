@@ -877,54 +877,55 @@ interface CommittedSaleData {
                 setClosingRecord(null);
             }
 
-            // 0.1 Cargar último cierre oficial previo (D-1 flexible) para heredar el saldo inicial oficial inmutable
+            // 0.1 & 0.2 Cargar saldo inicial oficial desde el Conteo Físico (Col T) de la última jornada previa (D-1)
             const prevClosingSnapshots: Record<string, number> = {};
             try {
-                const { data: prevCloseData } = await supabase
-                    .from('daily_inventory_closings')
-                    .select('snapshot_items, closing_date')
-                    .lt('closing_date', balanceDate)
-                    .order('closing_date', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
+                const [{ data: prevCloseData }, { data: prevPhysicalMovs }] = await Promise.all([
+                    supabase
+                        .from('daily_inventory_closings')
+                        .select('snapshot_items, closing_date')
+                        .lt('closing_date', balanceDate)
+                        .order('closing_date', { ascending: false })
+                        .limit(1)
+                        .maybeSingle(),
+                    supabase
+                        .from('inventory_movements')
+                        .select('product_id, quantity, notes, created_at')
+                        .in('reference_type', ['blind_count', 'blind_count_shift_close'])
+                        .lt('created_at', `${balanceDate}T00:00:00.000Z`)
+                        .order('created_at', { ascending: false })
+                ]);
 
-                if (prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
+                const latestCloseDate = prevCloseData?.closing_date || null;
+                const latestMovDate = (prevPhysicalMovs && prevPhysicalMovs.length > 0 && prevPhysicalMovs[0].created_at)
+                    ? prevPhysicalMovs[0].created_at.slice(0, 10)
+                    : null;
+
+                // Si existen conteos físicos (Col T) en una jornada más reciente que el último cierre formal (ej. 04/11 operado tras línea base 03/11),
+                // tomar estrictamente la columna Conteo Físico (Col T) de esa jornada más reciente.
+                if (latestMovDate && (!latestCloseDate || latestMovDate > latestCloseDate)) {
+                    prevClosingSnapshots['__HAS_BASELINE__'] = 1;
+                    prevPhysicalMovs!.forEach((m: any) => {
+                        if (!m.product_id || !m.created_at?.startsWith(latestMovDate)) return;
+                        if (prevClosingSnapshots[m.product_id] !== undefined) return;
+                        const counted = parseBlindCountQuantity(m.notes);
+                        if (counted !== null) {
+                            prevClosingSnapshots[m.product_id] = Math.max(0, counted);
+                        }
+                    });
+                } else if (prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
+                    prevClosingSnapshots['__HAS_BASELINE__'] = 1;
                     prevCloseData.snapshot_items.forEach((item: any) => {
                         if (!item.productId || prevClosingSnapshots[item.productId] !== undefined) return;
-                        const finalStock = item.bodegaPost10am !== null && item.bodegaPost10am !== undefined
-                            ? Number(item.bodegaPost10am)
-                            : (item.physicalCount !== null && item.physicalCount !== undefined
-                                ? Number(item.physicalCount)
-                                : (item.calculatedStock !== null && item.calculatedStock !== undefined
-                                    ? Number(item.calculatedStock)
-                                    : 0));
+                        // Regla Canónica: El Inventario Inicial (Col E) de D+1 toma estrictamente la columna CONTEO (physicalCount / Col T), jamás el Cálculo (Col S)
+                        const finalStock = item.physicalCount !== null && item.physicalCount !== undefined
+                            ? Number(item.physicalCount)
+                            : 0;
                         prevClosingSnapshots[item.productId] = Math.max(0, finalStock);
                     });
                 }
             } catch (prevErr) {
-                console.warn('No se pudo cargar cierre del día anterior:', prevErr);
-            }
-
-            // 0.2 Si no hubo cierre oficial formal, buscar conteos físicos registrados previamente en inventory_movements (T de ayer)
-            try {
-                const { data: prevPhysicalMovs } = await supabase
-                    .from('inventory_movements')
-                    .select('product_id, quantity, notes, created_at')
-                    .in('reference_type', ['blind_count', 'blind_count_shift_close'])
-                    .lt('created_at', `${balanceDate}T00:00:00.000Z`)
-                    .order('created_at', { ascending: false });
-
-                if (prevPhysicalMovs && prevPhysicalMovs.length > 0) {
-                    prevPhysicalMovs.forEach((m: any) => {
-                        if (!m.product_id || prevClosingSnapshots[m.product_id] !== undefined) return;
-                        const counted = parseBlindCountQuantity(m.notes);
-                        if (counted !== null) {
-                            prevClosingSnapshots[m.product_id] = counted;
-                        }
-                    });
-                }
-            } catch (pCountErr) {
-                console.warn('Error cargando conteos físicos previos:', pCountErr);
+                console.warn('No se pudo cargar conteo previo del día anterior:', prevErr);
             }
 
             setPreviousClosingMap(prevClosingSnapshots);
@@ -1395,6 +1396,9 @@ interface CommittedSaleData {
             let initialStock = 0;
             if (previousClosingMap[p.id] !== undefined) {
                 initialStock = previousClosingMap[p.id];
+            } else if (previousClosingMap['__HAS_BASELINE__'] !== undefined) {
+                // Si existe corte previo (Cierre Oficial o Conteo Físico D-1), los SKUs sin conteo en D-1 inician estrictamente en 0
+                initialStock = 0;
             } else if (balanceDate > todayStr) {
                 // Fecha futura o de mañana: si no hay cierre previo, hereda el stock vivo disponible en bodega
                 initialStock = Math.max(0, currentStock);
@@ -1410,8 +1414,8 @@ interface CommittedSaleData {
             // S = E + F + G - H - J - K + L - M - N + O - O2 - P - Q - R - X
             const calculatedStock = initialStock + f_corrections + g_purchases - h_salesKg - j_weightSalesUnits - k_shortage + l_unshipped - m_additionalSales - n_employeeSales + o_returns - o2_returnShortage - p_weighingWaste - q_damageWaste - r_cleaningWaste - x_foodBank;
 
-            // U: Unificado 1:1 con Conteo Físico T (SDD DT-19: Col U suprimida en UI)
-            const bodegaPost10 = physicalCount !== null ? physicalCount : calculatedStock;
+            // U: Unificado 1:1 con Conteo Físico T (SDD DT-19: Col U suprimida en UI, nunca hereda Cálculo S)
+            const bodegaPost10 = physicalCount !== null ? physicalCount : 0;
 
             // V & W: Faltantes y Sobrantes (Magnitudes positivas como en el Excel del cliente)
             let missing = 0;
@@ -1567,7 +1571,7 @@ interface CommittedSaleData {
                 hasPhysicalCount: row.hasPhysicalCount || children.some(c => c.hasPhysicalCount),
                 colU_bodegaPost10am: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
                     ? ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0))
-                    : (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0)),
+                    : 0,
                 colV_missing: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
                     ? Math.max(0, (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0)) - ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)))
                     : 0,
