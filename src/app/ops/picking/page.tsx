@@ -628,7 +628,7 @@ export default function PickingExecutionPage() {
     const alertPct = totalTasks > 0 ? (alertTasks / totalTasks) * 100 : 0;
 
     return (
-        <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#0A111C', minHeight: '100vh', paddingBottom: '7rem', color: '#F8FAFC' }}>
+        <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: 'var(--ops-bg)', minHeight: '100vh', paddingBottom: '7rem', color: 'var(--ops-text)' }}>
             
             {/* Título y Botón (No pegajosos, se ocultan al hacer scroll) */}
             <div
@@ -636,7 +636,7 @@ export default function PickingExecutionPage() {
                 style={{
                     paddingTop: "0.5rem",
                     paddingBottom: "0.5rem",
-                    backgroundColor: "#0A111C",
+                    backgroundColor: "var(--ops-bg)",
                 }}
             >
                 <div
@@ -667,7 +667,7 @@ export default function PickingExecutionPage() {
                             onClick={() => router.push('/ops')}
                             className="header-tutor-btn"
                             style={{
-                                backgroundColor: '#121D2D', color: '#0D7A57', border: '1px solid #0D7A57',
+                                backgroundColor: 'var(--ops-surface)', color: '#0D7A57', border: '1px solid #0D7A57',
                                 padding: '0.5rem 0.75rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', cursor: 'pointer',
                                 display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap'
                             }}
@@ -684,10 +684,10 @@ export default function PickingExecutionPage() {
                         position: "sticky",
                         top: "57px",
                         zIndex: 50,
-                        backgroundColor: "#0A111C",
+                        backgroundColor: "var(--ops-bg)",
                         padding: "0 1rem 0.8rem 1rem",
                         marginBottom: "1rem",
-                        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderBottom: "1px solid var(--ops-border)",
                     }}
                 >
                     {/* Barra de Progreso Lineal (General) */}
@@ -695,10 +695,10 @@ export default function PickingExecutionPage() {
                         <div style={{
                             width: "100%",
                             height: "8px",
-                            backgroundColor: "#121D2D",
+                            backgroundColor: "var(--ops-surface)",
                             borderRadius: "4px",
                             overflow: "hidden",
-                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            border: "1px solid var(--ops-border)",
                             display: 'flex'
                         }}>
                             <div style={{ width: `${readyPct}%`, height: '100%', backgroundColor: '#0D7A57', transition: 'width 0.5s ease-out' }} />
@@ -710,10 +710,10 @@ export default function PickingExecutionPage() {
                     {/* Dashboard de Estados (Semáforo) */}
                     <div
                         style={{
-                            backgroundColor: "#121D2D",
+                            backgroundColor: "var(--ops-surface)",
                             padding: "0.6rem 0.8rem",
                             borderRadius: "16px",
-                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            border: "1px solid var(--ops-border)",
                             boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
                             display: "flex",
                             justifyContent: "space-evenly",
@@ -723,7 +723,7 @@ export default function PickingExecutionPage() {
                     >
                         {/* Pendiente */}
                         <div style={{ textAlign: "center" }}>
-                            <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#94A3B8" }}>
+                            <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "var(--ops-text-muted)" }}>
                                 {pendingTasks}
                             </div>
                             <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
@@ -768,7 +768,7 @@ export default function PickingExecutionPage() {
                         <div
                             style={{
                                 textAlign: "center",
-                                borderLeft: "1px solid rgba(255, 255, 255, 0.08)",
+                                borderLeft: "1px solid var(--ops-border)",
                                 paddingLeft: "0.8rem",
                                 marginLeft: "0.2rem",
                                 display: "flex",
@@ -786,19 +786,19 @@ export default function PickingExecutionPage() {
                                     transition: "all 0.4s ease",
                                 }}
                             >
-                                <div style={{ fontSize: "1.2rem", fontWeight: "900", color: "white", lineHeight: "1" }}>
+                                <div style={{ fontSize: "1.2rem", fontWeight: "900", color: "var(--ops-text)", lineHeight: "1" }}>
                                     {progress}%
                                 </div>
-                                <div style={{ fontSize: "0.5rem", fontWeight: "900", color: "white", opacity: 0.8, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                <div style={{ fontSize: "0.5rem", fontWeight: "900", color: "var(--ops-text)", opacity: 0.8, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                     AVANCE
                                 </div>
                             </div>
                             <button
                                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                                 style={{
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                                    color: 'white',
+                                    background: 'var(--ops-border)',
+                                    border: '1px solid var(--ops-border)',
+                                    color: 'var(--ops-text)',
                                     borderRadius: '8px',
                                     width: '28px',
                                     height: '28px',
@@ -831,7 +831,7 @@ export default function PickingExecutionPage() {
                                     borderRadius: "12px",
                                     backgroundColor: "rgba(13, 122, 87, 0.12)",
                                     border: "1px solid #0D7A57",
-                                    color: "white",
+                                    color: "var(--ops-text)",
                                     fontSize: "0.75rem",
                                     fontWeight: "800",
                                     textTransform: "uppercase",
@@ -856,9 +856,9 @@ export default function PickingExecutionPage() {
                                     width: "40px",
                                     height: "40px",
                                     borderRadius: "12px",
-                                    border: `1px solid ${showFilterGrid ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
-                                    backgroundColor: showFilterGrid ? "rgba(13, 122, 87, 0.15)" : "#121D2D",
-                                    color: showFilterGrid ? "#0D7A57" : "#94A3B8",
+                                    border: `1px solid ${showFilterGrid ? "#0D7A57" : "var(--ops-border)"}`,
+                                    backgroundColor: showFilterGrid ? "rgba(13, 122, 87, 0.15)" : "var(--ops-surface)",
+                                    color: showFilterGrid ? "#0D7A57" : "var(--ops-text-muted)",
                                     fontSize: "1rem",
                                     display: "flex",
                                     alignItems: "center",
@@ -909,11 +909,11 @@ export default function PickingExecutionPage() {
                                                 style={{
                                                     padding: "0.55rem 0.75rem",
                                                     borderRadius: "10px",
-                                                    border: `1px solid ${isActive ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
+                                                    border: `1px solid ${isActive ? "#0D7A57" : "var(--ops-border)"}`,
                                                     backgroundColor: isActive
                                                         ? "rgba(13, 122, 87, 0.12)"
-                                                        : "#121D2D",
-                                                    color: isActive ? "white" : "#94A3B8",
+                                                        : "var(--ops-surface)",
+                                                    color: isActive ? "var(--ops-text)" : "var(--ops-text-muted)",
                                                     fontSize: "0.7rem",
                                                     fontWeight: "700",
                                                     textAlign: "left",
@@ -944,16 +944,16 @@ export default function PickingExecutionPage() {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{
-                                width: '100%', height: '40px', padding: '0 1rem 0 2.5rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)',
-                                backgroundColor: '#121D2D', color: 'white', fontSize: '0.9rem', outline: 'none', transition: 'all 0.2s',
+                                width: '100%', height: '40px', padding: '0 1rem 0 2.5rem', borderRadius: '12px', border: '1px solid var(--ops-border)',
+                                backgroundColor: 'var(--ops-surface)', color: 'var(--ops-text)', fontSize: '0.9rem', outline: 'none', transition: 'all 0.2s',
                                 boxSizing: 'border-box'
                             }}
                         />
-                        <Search size={16} strokeWidth={2.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, color: '#94A3B8' }} />
+                        <Search size={16} strokeWidth={2.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, color: 'var(--ops-text-muted)' }} />
                         {searchTerm && (
                             <button 
                                 onClick={() => setSearchTerm('')}
-                                style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--ops-text-muted)', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                 <X size={16} />
                             </button>
                         )}
@@ -968,7 +968,7 @@ export default function PickingExecutionPage() {
                         borderRadius: '12px',
                         display: 'grid',
                         gridTemplateColumns: '1fr 1fr',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        border: '1px solid var(--ops-border)',
                         boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
                     }}>
                         <button
@@ -979,7 +979,7 @@ export default function PickingExecutionPage() {
                                 borderRadius: '8px',
                                 border: 'none',
                                 backgroundColor: viewMode === 'client' ? '#0D7A57' : 'transparent',
-                                color: viewMode === 'client' ? 'white' : '#94A3B8',
+                                color: viewMode === 'client' ? 'white' : 'var(--ops-text-muted)',
                                 fontWeight: '900',
                                 fontSize: '0.8rem',
                                 cursor: 'pointer',
@@ -1000,7 +1000,7 @@ export default function PickingExecutionPage() {
                                 borderRadius: '8px',
                                 border: 'none',
                                 backgroundColor: viewMode === 'product' ? '#0D7A57' : 'transparent',
-                                color: viewMode === 'product' ? 'white' : '#94A3B8',
+                                color: viewMode === 'product' ? 'white' : 'var(--ops-text-muted)',
                                 fontWeight: '900',
                                 fontSize: '0.8rem',
                                 cursor: 'pointer',
@@ -1022,7 +1022,7 @@ export default function PickingExecutionPage() {
                 {loading ? (
                     <div style={{ textAlign: "center", padding: "4rem 2rem", animation: "pulse 2s infinite", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
                         <RefreshCw size={36} style={{ color: "#0D7A57", animation: "spin 2s linear infinite" }} />
-                        <p style={{ color: "#94A3B8", fontWeight: "700", letterSpacing: "0.05em" }}>
+                        <p style={{ color: "var(--ops-text-muted)", fontWeight: "700", letterSpacing: "0.05em" }}>
                             BUSCANDO PEDIDOS...
                         </p>
                     </div>
@@ -1040,10 +1040,10 @@ export default function PickingExecutionPage() {
                             <div style={{
                                 textAlign: 'center',
                                 padding: '4rem 2rem',
-                                backgroundColor: '#121D2D',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                backgroundColor: 'var(--ops-surface)',
+                                border: '1px solid var(--ops-border)',
                                 borderRadius: '16px',
-                                color: '#94A3B8',
+                                color: 'var(--ops-text-muted)',
                                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
                                 marginTop: '1rem',
                                 display: 'flex',
@@ -1051,7 +1051,7 @@ export default function PickingExecutionPage() {
                                 alignItems: 'center'
                             }}>
                                 <CheckCircle size={48} strokeWidth={1.5} style={{ color: '#0D7A57', marginBottom: '1rem' }} />
-                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#F8FAFC', margin: '0 0 0.5rem 0' }}>
+                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--ops-text)', margin: '0 0 0.5rem 0' }}>
                                     {hasAnyTasks ? '¡Todo alistado!' : 'Sin pedidos'}
                                 </h3>
                                 <p style={{ fontSize: '0.85rem', margin: 0 }}>
@@ -1067,33 +1067,33 @@ export default function PickingExecutionPage() {
                         <div style={{ display: 'grid', gap: '1rem' }}>
                             {filteredTasks.map(task => (
                             <div key={task.id} style={{
-                                backgroundColor: '#121D2D', borderRadius: '16px', overflow: 'hidden',
-                                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-                                borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-                                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                                backgroundColor: 'var(--ops-surface)', borderRadius: '16px', overflow: 'hidden',
+                                borderTop: '1px solid var(--ops-border)',
+                                borderRight: '1px solid var(--ops-border)',
+                                borderBottom: '1px solid var(--ops-border)',
                                 borderLeft: `6px solid ${task.status === 'ready' ? '#0D7A57' : (task.status === 'partial' ? '#EAB308' : '#64748B')}`,
                                 boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)',
                                 opacity: task.status === 'ready' ? 0.6 : 1,
                                 transition: 'all 0.2s ease-in-out'
                             }} className="client-card">
                                 <div style={{ 
-                                    padding: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '1rem', 
+                                    padding: '1rem', borderBottom: '1px solid var(--ops-border)', display: 'flex', alignItems: 'center', gap: '1rem', 
                                     backgroundColor: task.hasAlert ? 'rgba(239, 68, 68, 0.05)' : 'rgba(255,255,255,0.01)',
                                 }}>
-                                    <div style={{ padding: '0.5rem', minWidth: '80px', height: '45px', backgroundColor: '#0A111C', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: '#0D7A57', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <div style={{ padding: '0.5rem', minWidth: '80px', height: '45px', backgroundColor: 'var(--ops-bg)', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: '#0D7A57', border: '1px solid var(--ops-border)' }}>
                                         <div style={{ fontSize: '0.6rem', opacity: 0.6, lineHeight: 1 }}>ESPACIO</div>
                                         <div style={{ fontSize: '1.4rem', lineHeight: 1 }}>{task.assigned_space}</div>
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#F8FAFC' }}>{task.company_name?.toUpperCase() || 'CLIENTE SIN NOMBRE'}</div>
+                                                    <div style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--ops-text)' }}>{task.company_name?.toUpperCase() || 'CLIENTE SIN NOMBRE'}</div>
                                                     <SpecialClientBadge state={task.special_attention} darkMode />
                                                 </div>
-                                        {task.zone && <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'bold' }}>RUTA: {task.zone.toUpperCase()}</div>}
+                                        {task.zone && <div style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)', fontWeight: 'bold' }}>RUTA: {task.zone.toUpperCase()}</div>}
                                     </div>
                                     <button 
                                         onClick={() => setShowCompleted(!showCompleted)}
-                                        style={{ fontSize: '0.65rem', backgroundColor: 'rgba(255,255,255,0.05)', color: '#94A3B8', padding: '0.4rem 0.6rem', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+                                        style={{ fontSize: '0.65rem', backgroundColor: 'var(--ops-border)', color: 'var(--ops-text-muted)', padding: '0.4rem 0.6rem', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
                                         {showCompleted ? 'OCULTAR LISTOS' : 'VER LISTOS'}
                                     </button>
                                 </div>
@@ -1101,9 +1101,9 @@ export default function PickingExecutionPage() {
                                     {task.items.map(item => {
                                         const isDone = item.picked_quantity >= item.quantity;
                                         return (
-                                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem 0', borderBottom: '1px solid var(--ops-border)' }}>
                                                 <div onClick={() => openExceptionModal(item)} style={{ flex: 1, cursor: 'pointer' }}>
-                                                    <div style={{ fontSize: '0.95rem', fontWeight: '700', color: isDone ? '#94A3B8' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                                                    <div style={{ fontSize: '0.95rem', fontWeight: '700', color: isDone ? 'var(--ops-text-muted)' : 'var(--ops-text)', display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
                                                         {item.product_name} 
                                                         {selectedCategory === 'TODAS' && item.category && (
                                                             <span style={{ fontSize: '0.65rem', color: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
@@ -1119,8 +1119,8 @@ export default function PickingExecutionPage() {
                                                         {!isDone && (
                                                             <span style={{ 
                                                                 fontSize: '0.75rem', 
-                                                                color: (item.available_stock || 0) === 0 ? '#EF4444' : '#94A3B8',
-                                                                backgroundColor: (item.available_stock || 0) === 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                                                                color: (item.available_stock || 0) === 0 ? '#EF4444' : 'var(--ops-text-muted)',
+                                                                backgroundColor: (item.available_stock || 0) === 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--ops-border)',
                                                                 padding: '2px 6px',
                                                                 borderRadius: '4px',
                                                                 fontWeight: 'bold',
@@ -1142,8 +1142,8 @@ export default function PickingExecutionPage() {
                                                                 onClick={(e) => { e.stopPropagation(); openExceptionModal(item); }} 
                                                                 style={{ 
                                                                     backgroundColor: '#1E293B', 
-                                                                    color: '#94A3B8', 
-                                                                    border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                                                    color: 'var(--ops-text-muted)', 
+                                                                    border: '1px solid var(--ops-border)', 
                                                                     padding: '0.5rem 1rem', 
                                                                     borderRadius: '10px', 
                                                                     fontWeight: '900', 
@@ -1182,10 +1182,10 @@ export default function PickingExecutionPage() {
                             <div style={{
                                 textAlign: 'center',
                                 padding: '4rem 2rem',
-                                backgroundColor: '#121D2D',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                backgroundColor: 'var(--ops-surface)',
+                                border: '1px solid var(--ops-border)',
                                 borderRadius: '16px',
-                                color: '#94A3B8',
+                                color: 'var(--ops-text-muted)',
                                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
                                 marginTop: '1rem',
                                 display: 'flex',
@@ -1193,7 +1193,7 @@ export default function PickingExecutionPage() {
                                 alignItems: 'center'
                             }}>
                                 <CheckCircle size={48} strokeWidth={1.5} style={{ color: '#0D7A57', marginBottom: '1rem' }} />
-                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#F8FAFC', margin: '0 0 0.5rem 0' }}>
+                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--ops-text)', margin: '0 0 0.5rem 0' }}>
                                     {hasAnyGroups ? '¡Todo alistado!' : 'Sin pedidos'}
                                 </h3>
                                 <p style={{ fontSize: '0.85rem', margin: 0 }}>
@@ -1208,7 +1208,7 @@ export default function PickingExecutionPage() {
                     return (
                         <div style={{ display: 'grid', gap: '1.5rem' }}>
                             {filteredProductGroups.map(group => (
-                            <div key={group.name} style={{ backgroundColor: '#121D2D', borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}>
+                            <div key={group.name} style={{ backgroundColor: 'var(--ops-surface)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--ops-border)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}>
                                 <div style={{ padding: '1.2rem', backgroundColor: '#0D7A57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
                                         <h2 style={{ fontSize: '1.2rem', fontWeight: '900', margin: 0 }}>{group.name.toUpperCase()}</h2>
@@ -1217,7 +1217,7 @@ export default function PickingExecutionPage() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <span style={{
                                             fontSize: '0.8rem',
-                                            backgroundColor: (group.available_stock || 0) === 0 ? '#EF4444' : '#121D2D',
+                                            backgroundColor: (group.available_stock || 0) === 0 ? '#EF4444' : 'var(--ops-surface)',
                                             color: 'white',
                                             padding: '4px 10px',
                                             borderRadius: '8px',
@@ -1241,7 +1241,7 @@ export default function PickingExecutionPage() {
                                             style={{ 
                                                 display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem 0.5rem', 
                                                 borderRadius: '16px',
-                                                borderBottom: '1px solid rgba(255,255,255,0.08)', 
+                                                borderBottom: '1px solid var(--ops-border)', 
                                                 opacity: (target.isDone && !target.quality_status) ? 0.4 : 1,
                                                 backgroundColor: target.quality_status === 'red' ? 'rgba(239, 68, 68, 0.15)' : (target.quality_status === 'yellow' ? 'rgba(234, 179, 8, 0.15)' : 'transparent'),
                                                 border: target.quality_status === 'red' ? '2px solid rgba(239, 68, 68, 0.5)' : (target.quality_status === 'yellow' ? '2px solid rgba(234, 179, 8, 0.5)' : '1px solid transparent'),
@@ -1249,12 +1249,12 @@ export default function PickingExecutionPage() {
                                                 transition: 'all 0.2s'
                                             }}
                                         >
-                                            <div style={{ padding: '0.3rem', minWidth: '60px', height: '40px', backgroundColor: '#0A111C', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: target.quality_status === 'red' ? '#EF4444' : '#0D7A57', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                            <div style={{ padding: '0.3rem', minWidth: '60px', height: '40px', backgroundColor: 'var(--ops-bg)', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: target.quality_status === 'red' ? '#EF4444' : '#0D7A57', border: '1px solid var(--ops-border)' }}>
                                                 <div style={{ fontSize: '0.5rem', opacity: 0.6, lineHeight: 1 }}>ESP</div>
                                                 <div style={{ fontSize: '1.1rem', lineHeight: 1 }}>{target.space}</div>
                                             </div>
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--ops-text)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                     {target.company_name}
                                                     {target.quality_status === 'red' && <span style={{ color: '#EF4444', fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertCircle size={10} /> RECHAZO</span>}
                                                     {target.quality_status === 'yellow' && <span style={{ color: '#EAB308', fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertTriangle size={10} /> VERIF</span>}
@@ -1282,8 +1282,8 @@ export default function PickingExecutionPage() {
                                                             onClick={(e) => { e.stopPropagation(); openExceptionModal({ ...target, product_name: group.name, unit: group.unit }); }} 
                                                             style={{ 
                                                                 backgroundColor: '#1E293B', 
-                                                                color: '#94A3B8', 
-                                                                border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                                                color: 'var(--ops-text-muted)', 
+                                                                border: '1px solid var(--ops-border)', 
                                                                 padding: '0.5rem 1rem', 
                                                                 borderRadius: '8px', 
                                                                 fontWeight: '800', 
@@ -1330,7 +1330,7 @@ export default function PickingExecutionPage() {
                     justifyContent: 'center',
                 }}>
                     <div style={{ 
-                        backgroundColor: '#121D2D',
+                        backgroundColor: 'var(--ops-surface)',
                         width: '100%',
                         maxWidth: '500px',
                         borderTopLeftRadius: '24px',
@@ -1343,11 +1343,11 @@ export default function PickingExecutionPage() {
                         color: 'white',
                         maxHeight: '90vh',
                         overflowY: 'auto',
-                        border: '1px solid rgba(255,255,255,0.08)',
+                        border: '1px solid var(--ops-border)',
                         borderBottom: 'none'
                     }}>
                         {/* Close Button */}
-                        <button onClick={handleCloseExceptionModal} style={{ position: 'absolute', top: '1rem', right: '1rem', background: '#0A111C', border: '1px solid rgba(255,255,255,0.08)', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>
+                        <button onClick={handleCloseExceptionModal} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'var(--ops-bg)', border: '1px solid var(--ops-border)', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ops-text-muted)' }}>
                             <X size={18} />
                         </button>
 
@@ -1359,24 +1359,24 @@ export default function PickingExecutionPage() {
 
                         {/* Product Info Chips */}
                         <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
-                            <div style={{ backgroundColor: '#0A111C', border: '1px solid rgba(255,255,255,0.08)', padding: '0.8rem 1rem', borderRadius: '16px', flex: 1 }}>
-                                <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px' }}>PRODUCTO</div>
+                            <div style={{ backgroundColor: 'var(--ops-bg)', border: '1px solid var(--ops-border)', padding: '0.8rem 1rem', borderRadius: '16px', flex: 1 }}>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--ops-text-muted)', fontWeight: 'bold', marginBottom: '4px' }}>PRODUCTO</div>
                                 <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'white' }}>{exceptionItem.product_name}</div>
                             </div>
-                            <div style={{ backgroundColor: '#0A111C', border: '1px dashed rgba(13, 122, 87, 0.4)', padding: '0.8rem 1rem', borderRadius: '16px', minWidth: '80px', textAlign: 'center' }}>
+                            <div style={{ backgroundColor: 'var(--ops-bg)', border: '1px dashed rgba(13, 122, 87, 0.4)', padding: '0.8rem 1rem', borderRadius: '16px', minWidth: '80px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.65rem', color: '#0D7A57', fontWeight: 'bold', marginBottom: '4px' }}>A ALISTAR</div>
-                                <div style={{ fontSize: '1rem', fontWeight: '900', color: 'white' }}>{exceptionItem.quantity} <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>{exceptionItem.unit}</span></div>
+                                <div style={{ fontSize: '1rem', fontWeight: '900', color: 'white' }}>{exceptionItem.quantity} <span style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)' }}>{exceptionItem.unit}</span></div>
                             </div>
                             <div style={{ 
-                                backgroundColor: '#0A111C', 
-                                border: `1px solid ${(exceptionItem.available_stock || 0) === 0 ? '#EF4444' : 'rgba(255,255,255,0.08)'}`, 
+                                backgroundColor: 'var(--ops-bg)', 
+                                border: `1px solid ${(exceptionItem.available_stock || 0) === 0 ? '#EF4444' : 'var(--ops-border)'}`, 
                                 padding: '0.8rem 1rem', 
                                 borderRadius: '16px', 
                                 minWidth: '80px', 
                                 textAlign: 'center' 
                             }}>
-                                <div style={{ fontSize: '0.65rem', color: (exceptionItem.available_stock || 0) === 0 ? '#EF4444' : '#94A3B8', fontWeight: 'bold', marginBottom: '4px' }}>STOCK DISP.</div>
-                                <div style={{ fontSize: '1rem', fontWeight: '900', color: (exceptionItem.available_stock || 0) === 0 ? '#EF4444' : 'white' }}>{exceptionItem.available_stock || 0} <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>{exceptionItem.unit}</span></div>
+                                <div style={{ fontSize: '0.65rem', color: (exceptionItem.available_stock || 0) === 0 ? '#EF4444' : 'var(--ops-text-muted)', fontWeight: 'bold', marginBottom: '4px' }}>STOCK DISP.</div>
+                                <div style={{ fontSize: '1rem', fontWeight: '900', color: (exceptionItem.available_stock || 0) === 0 ? '#EF4444' : 'white' }}>{exceptionItem.available_stock || 0} <span style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)' }}>{exceptionItem.unit}</span></div>
                             </div>
                         </div>
 
@@ -1464,17 +1464,17 @@ export default function PickingExecutionPage() {
                                     <CheckCircle size={18} className="text-emerald-500" /> Cantidad Correcta ({exceptionQty} {exceptionItem.unit})
                                 </div>
 
-                                <h3 style={{ textAlign: 'center', fontSize: '1rem', color: '#94A3B8', margin: '0.5rem 0' }}>Validar Calidad</h3>
+                                <h3 style={{ textAlign: 'center', fontSize: '1rem', color: 'var(--ops-text-muted)', margin: '0.5rem 0' }}>Validar Calidad</h3>
                                 
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '1rem' }}>
                                     <button 
                                         onClick={() => setExceptionQuality('green')}
                                         style={{ 
                                             width: '64px', height: '64px', borderRadius: '50%', 
-                                            backgroundColor: exceptionQuality === 'green' ? '#0D7A57' : '#0A111C',
+                                            backgroundColor: exceptionQuality === 'green' ? '#0D7A57' : 'var(--ops-bg)',
                                             color: exceptionQuality === 'green' ? 'white' : '#64748B',
                                             fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
-                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            border: '1px solid var(--ops-border)',
                                             boxShadow: exceptionQuality === 'green' ? '0 10px 15px -3px rgba(13, 122, 87, 0.4)' : 'none',
                                             transform: exceptionQuality === 'green' ? 'scale(1.1)' : 'scale(1)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -1486,10 +1486,10 @@ export default function PickingExecutionPage() {
                                         onClick={() => setExceptionQuality('yellow')}
                                         style={{ 
                                             width: '64px', height: '64px', borderRadius: '50%', 
-                                            backgroundColor: exceptionQuality === 'yellow' ? '#EAB308' : '#0A111C',
+                                            backgroundColor: exceptionQuality === 'yellow' ? '#EAB308' : 'var(--ops-bg)',
                                             color: exceptionQuality === 'yellow' ? 'black' : '#64748B',
                                             fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
-                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            border: '1px solid var(--ops-border)',
                                             boxShadow: exceptionQuality === 'yellow' ? '0 10px 15px -3px rgba(234, 179, 8, 0.4)' : 'none',
                                             transform: exceptionQuality === 'yellow' ? 'scale(1.1)' : 'scale(1)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -1501,10 +1501,10 @@ export default function PickingExecutionPage() {
                                         onClick={() => setExceptionQuality('red')}
                                         style={{ 
                                             width: '64px', height: '64px', borderRadius: '50%', 
-                                            backgroundColor: exceptionQuality === 'red' ? '#EF4444' : '#0A111C',
+                                            backgroundColor: exceptionQuality === 'red' ? '#EF4444' : 'var(--ops-bg)',
                                             color: exceptionQuality === 'red' ? 'white' : '#64748B',
                                             fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
-                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            border: '1px solid var(--ops-border)',
                                             boxShadow: exceptionQuality === 'red' ? '0 10px 15px -3px rgba(239, 68, 68, 0.4)' : 'none',
                                             transform: exceptionQuality === 'red' ? 'scale(1.1)' : 'scale(1)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -1517,7 +1517,7 @@ export default function PickingExecutionPage() {
                                 {/* Rejection Reasons Chips */}
                                 {exceptionQuality && exceptionQuality !== 'green' && (
                                     <div style={{ marginBottom: '1rem' }}>
-                                        <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', marginBottom: '0.6rem', textAlign: 'center' }}>¿CUÁL ES EL MOTIVO?</h4>
+                                        <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--ops-text-muted)', marginBottom: '0.6rem', textAlign: 'center' }}>¿CUÁL ES EL MOTIVO?</h4>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
                                             {REJECTION_REASONS.map(reason => (
                                                 <button
@@ -1525,11 +1525,11 @@ export default function PickingExecutionPage() {
                                                     onClick={() => setExceptionReason(reason)}
                                                     style={{
                                                         padding: '0.5rem 0.8rem', borderRadius: '12px',
-                                                        backgroundColor: exceptionReason === reason ? 'white' : '#0A111C',
-                                                        color: exceptionReason === reason ? 'black' : '#94A3B8',
+                                                        backgroundColor: exceptionReason === reason ? 'white' : 'var(--ops-bg)',
+                                                        color: exceptionReason === reason ? 'black' : 'var(--ops-text-muted)',
                                                         fontSize: '0.7rem', fontWeight: '700', cursor: 'pointer',
                                                         transition: 'all 0.2s',
-                                                        border: exceptionReason === reason ? '2px solid white' : '2px solid rgba(255,255,255,0.08)'
+                                                        border: exceptionReason === reason ? '2px solid white' : '2px solid var(--ops-border)'
                                                     }}
                                                 >
                                                     {reason}

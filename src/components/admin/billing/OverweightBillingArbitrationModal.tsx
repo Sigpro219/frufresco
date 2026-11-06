@@ -32,6 +32,7 @@ interface RawOrderItemProduct {
     name?: string | null;
     sku?: string | null;
     unit_of_measure?: string | null;
+    iva_rate?: number | null;
 }
 
 interface RawOrderItemRecord {
@@ -203,6 +204,9 @@ export default function OverweightBillingArbitrationModal({
                 .in('reference_type', ['waste_weighing', 'additional_sale']);
 
             if (warehouseId) {
+                const movementDate = (row.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(row.deliveryDate))
+                    ? row.deliveryDate
+                    : (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : new Date().toISOString().slice(0, 10));
                 await supabase.from('inventory_movements').insert([{
                     product_id: row.productId,
                     warehouse_id: warehouseId,
@@ -211,19 +215,34 @@ export default function OverweightBillingArbitrationModal({
                     status_to: 'available',
                     notes: noteTag,
                     reference_type: targetRefType,
-                    reference_id: row.orderItemId
+                    reference_id: row.orderItemId,
+                    created_at: `${movementDate}T12:00:00.000Z`
                 }]);
             }
 
             // SDD DT-17: Recalcular liquidación financiera del pedido (orders.total / subtotal / tax) según arbitraje Col M vs Col P
-            const { data: allOrderItems } = await supabase
-                .from('order_items')
-                .select('id, quantity, picked_quantity, unit_price, selected_options')
-                .eq('order_id', row.orderId);
+            const [{ data: orderMeta }, { data: allOrderItems }] = await Promise.all([
+                supabase
+                    .from('orders')
+                    .select('id, profiles:profile_id ( iva_responsible )')
+                    .eq('id', row.orderId)
+                    .maybeSingle(),
+                supabase
+                    .from('order_items')
+                    .select('id, quantity, picked_quantity, unit_price, selected_options, products:product_id ( iva_rate )')
+                    .eq('order_id', row.orderId)
+            ]);
 
             if (allOrderItems && allOrderItems.length > 0) {
+                const profRaw = (orderMeta as { profiles?: { iva_responsible?: boolean } | Array<{ iva_responsible?: boolean }> | null } | null)?.profiles;
+                const profObj = Array.isArray(profRaw) ? profRaw[0] : profRaw;
+                const isIvaResponsible = Boolean(profObj?.iva_responsible);
+
                 let recalculatedTotal = 0;
-                (allOrderItems as RawOrderItemRecord[]).forEach((oi) => {
+                let recalculatedBase = 0;
+                let recalculatedTax = 0;
+
+                (allOrderItems as Array<RawOrderItemRecord & { products?: { iva_rate?: number | null } | Array<{ iva_rate?: number | null }> | null }>).forEach((oi) => {
                     const opts = (oi.id === row.orderItemId)
                         ? updatedOptions
                         : ((oi.selected_options && typeof oi.selected_options === 'object') ? oi.selected_options : {});
@@ -231,14 +250,28 @@ export default function OverweightBillingArbitrationModal({
                     const pickedQ = Number(oi.picked_quantity) || 0;
                     const billableQ = (opts._charge_overweight === true && pickedQ > orderedQ) ? pickedQ : orderedQ;
                     const price = Number(oi.unit_price) || 0;
-                    recalculatedTotal += billableQ * price;
+                    const lineGross = billableQ * price;
+
+                    const prodRaw = Array.isArray(oi.products) ? oi.products[0] : oi.products;
+                    const ivaRate = isIvaResponsible ? (Number(prodRaw?.iva_rate) || 0) : 0;
+                    const lineBase = ivaRate > 0 ? (lineGross / (1 + ivaRate / 100)) : lineGross;
+                    const lineTax = lineGross - lineBase;
+
+                    recalculatedTotal += lineGross;
+                    recalculatedBase += lineBase;
+                    recalculatedTax += lineTax;
                 });
+
                 const roundedTotal = Math.round(recalculatedTotal * 100) / 100;
+                const roundedBase = Math.round(recalculatedBase * 100) / 100;
+                const roundedTax = Math.round(recalculatedTax * 100) / 100;
+
                 await supabase
                     .from('orders')
                     .update({
-                        total: roundedTotal,
-                        subtotal: roundedTotal
+                        subtotal: roundedBase,
+                        tax: roundedTax,
+                        total: roundedTotal
                     })
                     .eq('id', row.orderId);
 
@@ -252,7 +285,8 @@ export default function OverweightBillingArbitrationModal({
                     await supabase
                         .from('billing_invoices')
                         .update({
-                            total_base: roundedTotal,
+                            total_base: roundedBase,
+                            total_tax: roundedTax,
                             total_final: roundedTotal
                         })
                         .eq('id', existingInv.id);

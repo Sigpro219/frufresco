@@ -245,13 +245,13 @@ export default function DriverDashboard() {
     };
 
     return (
-        <div style={{ padding: '1.5rem', paddingBottom: '6rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: '#090D16' }}>
+        <div style={{ padding: '1.5rem', paddingBottom: '6rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: 'var(--ops-bg)' }}>
             <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                    <h1 style={{ fontSize: '1.8rem', fontWeight: '900', margin: 0, color: 'white', letterSpacing: '-0.5px' }}>
+                    <h1 style={{ fontSize: '1.8rem', fontWeight: '900', margin: 0, color: 'var(--ops-text)', letterSpacing: '-0.5px' }}>
                         Despacho <span style={{ color: '#059669' }}>/ Salida</span>
                     </h1>
-                    <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginTop: '0.3rem' }}>Gestiona tu vehículo y tus rutas de hoy.</p>
+                    <p style={{ color: 'var(--ops-text-muted)', fontSize: '0.9rem', marginTop: '0.3rem' }}>Gestiona tu vehículo y tus rutas de hoy.</p>
                 </div>
                 <button 
                     onClick={() => setDemoMode(!demoMode)}
@@ -261,9 +261,9 @@ export default function DriverDashboard() {
                         borderRadius: '12px', 
                         fontSize: '0.7rem', 
                         fontWeight: '800',
-                        backgroundColor: demoMode ? '#059669' : 'rgba(255, 255, 255, 0.05)',
-                        color: 'white',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        backgroundColor: demoMode ? '#059669' : 'var(--ops-surface)',
+                        color: demoMode ? 'white' : 'var(--ops-text)',
+                        border: '1px solid var(--ops-border)',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
                     }}
@@ -284,9 +284,9 @@ export default function DriverDashboard() {
                         width: '100%', 
                         padding: '1rem 1.2rem', 
                         borderRadius: '16px', 
-                        backgroundColor: 'rgba(30, 41, 59, 0.4)', 
-                        border: '1px solid rgba(255, 255, 255, 0.08)', 
-                        color: 'white',
+                        backgroundColor: 'var(--ops-surface)', 
+                        border: '1px solid var(--ops-border)', 
+                        color: 'var(--ops-text)',
                         fontSize: '1rem',
                         fontWeight: '600',
                         appearance: 'none',
@@ -298,9 +298,9 @@ export default function DriverDashboard() {
                         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
                     }}
                 >
-                    <option value="" style={{ backgroundColor: '#090D16' }}>-- {demoMode ? 'TODOS LOS VEHÍCULOS' : 'Elige una placa'} --</option>
+                    <option value="" style={{ backgroundColor: 'var(--ops-bg)' }}>-- {demoMode ? 'TODOS LOS VEHÍCULOS' : 'Elige una placa'} --</option>
                     {plates.map(p => (
-                        <option key={p} value={p} style={{ backgroundColor: '#090D16' }}>{p}</option>
+                        <option key={p} value={p} style={{ backgroundColor: 'var(--ops-bg)' }}>{p}</option>
                     ))}
                 </select>
             </div>
@@ -313,9 +313,9 @@ export default function DriverDashboard() {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
                         <Gauge style={{ color: '#059669', width: '24px', height: '24px' }} />
-                        <h3 style={{ margin: 0, color: 'white', fontSize: '1.1rem', fontWeight: '800' }}>Actualiza el Kilometraje</h3>
+                        <h3 style={{ margin: 0, color: 'var(--ops-text)', fontSize: '1.1rem', fontWeight: '800' }}>Actualiza el Kilometraje</h3>
                     </div>
-                    <p style={{ color: '#9CA3AF', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.4' }}>
+                    <p style={{ color: 'var(--ops-text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.4' }}>
                         Ingresa el kilometraje actual de la placa <strong>{selectedPlate}</strong> para iniciar tu operación.
                     </p>
                     
@@ -329,9 +329,9 @@ export default function DriverDashboard() {
                                 width: '100%', 
                                 padding: '1.2rem', 
                                 borderRadius: '16px', 
-                                backgroundColor: 'rgba(9, 13, 22, 0.6)', 
-                                border: '1px solid rgba(255, 255, 255, 0.08)', 
-                                color: 'white',
+                                backgroundColor: 'var(--ops-bg)', 
+                                border: '1px solid var(--ops-border)', 
+                                color: 'var(--ops-text)',
                                 fontSize: '1.5rem',
                                 fontWeight: '800',
                                 textAlign: 'center',
@@ -397,8 +397,8 @@ export default function DriverDashboard() {
                                 {maintenanceAlert.estimated}
                             </div>
                         </div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'white', marginTop: '2px' }}>{maintenanceAlert.task_name}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '0.2rem' }}>Informa al administrador al terminar tu turno.</div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--ops-text)', marginTop: '2px' }}>{maintenanceAlert.task_name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--ops-text-muted)', marginTop: '0.2rem' }}>Informa al administrador al terminar tu turno.</div>
                     </div>
                 </div>
             )}
@@ -412,12 +412,12 @@ export default function DriverDashboard() {
                         />
                     )}
 
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem', color: 'white', letterSpacing: '-0.3px' }}>
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem', color: 'var(--ops-text)', letterSpacing: '-0.3px' }}>
                         {selectedPlate ? `Rutas para ${selectedPlate}` : 'Rutas Activas de la Flota'}
                     </h2>
 
                     {loading ? (
-                        <div style={{ textAlign: 'center', padding: '2rem', color: '#9CA3AF' }}>Actualizando...</div>
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--ops-text-muted)' }}>Actualizando...</div>
                     ) : routes.length === 0 ? (
                         <div className="premium-card" style={{ 
                             padding: '3rem 2rem', 
@@ -425,10 +425,10 @@ export default function DriverDashboard() {
                             borderStyle: 'dashed'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
-                                <MapPin style={{ width: '48px', height: '48px', color: '#9CA3AF', opacity: 0.5 }} />
+                                <MapPin style={{ width: '48px', height: '48px', color: 'var(--ops-text-muted)', opacity: 0.5 }} />
                             </div>
-                            <h3 style={{ margin: 0, color: 'white', fontSize: '1.1rem', fontWeight: '700' }}>Sin rutas asignadas</h3>
-                            <p style={{ color: '#9CA3AF', fontSize: '0.85rem', marginTop: '0.4rem' }}>No tienes viajes pendientes para la placa {selectedPlate}.</p>
+                            <h3 style={{ margin: 0, color: 'var(--ops-text)', fontSize: '1.1rem', fontWeight: '700' }}>Sin rutas asignadas</h3>
+                            <p style={{ color: 'var(--ops-text-muted)', fontSize: '0.85rem', marginTop: '0.4rem' }}>No tienes viajes pendientes para la placa {selectedPlate}.</p>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -446,8 +446,8 @@ export default function DriverDashboard() {
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                                             <div>
-                                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{route.vehicle_plate}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>Ruta ID: {route.id.split('-')[0]}</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--ops-text)' }}>{route.vehicle_plate}</div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--ops-text-muted)' }}>Ruta ID: {route.id.split('-')[0]}</div>
                                             </div>
                                             <div style={{ 
                                                 padding: '0.4rem 1rem', 
@@ -462,17 +462,17 @@ export default function DriverDashboard() {
                                         </div>
 
                                         <div style={{ marginBottom: '1rem' }}>
-                                            <div style={{ fontSize: '0.9rem', color: '#E2E8F0', marginTop: '0.2rem' }}>Iniciada: {new Date(route.start_time || Date.now()).toLocaleTimeString()}</div>
+                                            <div style={{ fontSize: '0.9rem', color: 'var(--ops-text-muted)', marginTop: '0.2rem' }}>Iniciada: {new Date(route.start_time || Date.now()).toLocaleTimeString()}</div>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                                            <div style={{ backgroundColor: 'rgba(9, 13, 22, 0.4)', padding: '0.75rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                                            <div style={{ backgroundColor: 'var(--ops-bg)', padding: '0.75rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
                                                 <div style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '800', letterSpacing: '0.5px' }}>PEDIDOS</div>
-                                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{route.total_orders}</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--ops-text)' }}>{route.total_orders}</div>
                                             </div>
-                                            <div style={{ backgroundColor: 'rgba(9, 13, 22, 0.4)', padding: '0.75rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                                            <div style={{ backgroundColor: 'var(--ops-bg)', padding: '0.75rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
                                                 <div style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '800', letterSpacing: '0.5px' }}>PESO TOTAL</div>
-                                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{route.total_kilos} <span style={{ fontSize: '0.6rem', color: '#9CA3AF' }}>KG</span></div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--ops-text)' }}>{route.total_kilos} <span style={{ fontSize: '0.6rem', color: 'var(--ops-text-muted)' }}>KG</span></div>
                                             </div>
                                         </div>
 
@@ -510,16 +510,16 @@ export default function DriverDashboard() {
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
                         <Key style={{ width: '64px', height: '64px', color: '#059669', opacity: 0.8 }} />
                     </div>
-                    <h3 style={{ color: 'white', margin: 0, fontSize: '1.2rem', fontWeight: '800' }}>Identifica tu Vehículo</h3>
-                    <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.4' }}>Usa el selector de arriba para ver tus tareas y el estado de tu camión.</p>
+                    <h3 style={{ color: 'var(--ops-text)', margin: 0, fontSize: '1.2rem', fontWeight: '800' }}>Identifica tu Vehículo</h3>
+                    <p style={{ color: 'var(--ops-text-muted)', fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.4' }}>Usa el selector de arriba para ver tus tareas y el estado de tu camión.</p>
                 </div>
             )}
 
             <style jsx>{`
                 .premium-card {
-                    background: rgba(30, 41, 59, 0.45);
+                    background: var(--ops-surface);
                     backdrop-filter: blur(12px);
-                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border: 1px solid var(--ops-border);
                     border-radius: 16px;
                     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
                     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -528,7 +528,7 @@ export default function DriverDashboard() {
                     transform: translateY(-2px);
                     border-color: rgba(5, 150, 105, 0.3);
                     box-shadow: 0 12px 40px 0 rgba(5, 150, 105, 0.1);
-                    background: rgba(30, 41, 59, 0.55);
+                    background: var(--ops-surface);
                 }
                 .demo-btn:hover {
                     opacity: 0.9;

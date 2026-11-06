@@ -15,7 +15,9 @@ import {
   Home,
   Sun,
   Moon,
-  ClipboardCheck
+  ClipboardCheck,
+  Layers,
+  RotateCcw
 } from 'lucide-react';
 
 export default function OpsLayout({ children }: { children: ReactNode }) {
@@ -305,6 +307,8 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 {hasPermission('ops.recepcion') && <NavItem href="/ops/recepcion" icon={Scale} label="RECEPCIÓN" />}
                 {hasPermission('ops.picking.terminal') && <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />}
                 {hasPermission('ops.picking.dashboard') && <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />}
+                <NavItem href="/ops/procesados" icon={Layers} label="PROCESADOS" />
+                <NavItem href="/ops/devoluciones" icon={RotateCcw} label="RETORNOS" />
                 <NavItem href="/ops/rectificacion" icon={ClipboardCheck} label="RECTIFICAR" />
                 {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="TRANSPORTE" />}
                 <NavItem href="/ops" icon={Home} label="INICIO" />

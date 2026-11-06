@@ -220,34 +220,44 @@ export function normalizeWorldOfficeUom(rawUom: string | null | undefined): stri
 export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): string {
     if (!profile && !parentProfile) return '';
 
+    // Priority 0: Explicit canonical World Office branch override (preserves literal characters/trailing spaces)
+    const explicitBranch = profile?.logistics_data?.world_office_branch ?? (!profile?.parent_id ? parentProfile?.logistics_data?.world_office_branch : undefined);
+    if (typeof explicitBranch === 'string' && explicitBranch.trim().length > 0) {
+        return explicitBranch;
+    }
+
     const fullName = (profile?.company_name || profile?.razon_social || profile?.contact_name || '').trim();
     const legalName = (profile?.razon_social || profile?.company_name || profile?.contact_name || parentProfile?.razon_social || parentProfile?.company_name || '').trim();
     if (!fullName && !legalName) return '';
 
     const isBranch = Boolean(profile?.parent_id) || Boolean(profile?.branch_id) || profile?.is_corporate_parent === false;
 
-    // Pattern 1: 'EMPRESA - SUCURSAL' (e.g. 'CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - EL CUBO')
-    if (fullName.includes(' - ')) {
+    // Priority 1: Strip exact parent company_name / razon_social BEFORE generic hyphen splitting
+    // (Prevents truncation when parent name itself contains ' - ', e.g. 'AMATU - AMA TU MASCOTA SAS')
+    const parentCandidates = [
+        parentProfile?.company_name,
+        parentProfile?.razon_social,
+        isBranch ? profile?.razon_social : null
+    ]
+        .map(c => (typeof c === 'string' ? c.trim() : ''))
+        .filter(Boolean);
+
+    for (const pName of parentCandidates) {
+        if (fullName && fullName.toLowerCase() !== pName.toLowerCase() && fullName.toLowerCase().startsWith(pName.toLowerCase())) {
+            const sub = fullName.slice(pName.length).trim().replace(/^[-–—:]+\s*/, '');
+            if (sub) return sub;
+        }
+    }
+
+    // Priority 2: 'EMPRESA - SUCURSAL' pattern when parent profile is not separately matched
+    if (isBranch && fullName.includes(' - ')) {
         const parts = fullName.split(' - ');
-        // Take everything after the first ' - '
         const candidate = parts.slice(1).join(' - ').trim();
         if (candidate) return candidate;
     }
 
-    // Pattern 2: If parent profile is available and child name differs from parent name
-    if (parentProfile) {
-        const parentName = (parentProfile.company_name || parentProfile.razon_social || '').trim();
-        if (fullName && parentName && fullName.toLowerCase() !== parentName.toLowerCase()) {
-            if (fullName.toLowerCase().startsWith(parentName.toLowerCase())) {
-                const sub = fullName.slice(parentName.length).trim().replace(/^[-–—:\s]+/, '');
-                if (sub) return sub;
-            }
-            return fullName;
-        }
-    }
-
-    // Pattern 3: If it is explicitly marked as branch without hyphen separator (e.g. 'ESCUELA URBANA EL PROGRESO')
-    if (isBranch && profile?.parent_id && fullName) {
+    // Priority 3: Explicitly marked as branch without hyphen separator (e.g. 'ESCUELA URBANA EL PROGRESO', 'CIEDI')
+    if (isBranch && fullName) {
         return fullName;
     }
 

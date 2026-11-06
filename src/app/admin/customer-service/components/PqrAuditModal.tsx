@@ -2752,14 +2752,26 @@ export default function PqrAuditModal({
                                 );
                             }
 
+                            const baseSelectedOpts = (matchedItem?.selected_options && typeof matchedItem.selected_options === 'object')
+                                ? matchedItem.selected_options
+                                : {};
                             itemsToReprogram.push({
                                 product_id: planItem.targetProductId,
                                 quantity: Number(planItem.targetQty),
                                 unit_price: 0,
-                                nickname: isSwapped
-                                    ? `${planItem.targetProductName} [Trueque por ${planItem.originalQty} ${planItem.originalUnit} de ${planItem.originalProductName}]`
-                                    : (matchedItem?.nickname || planItem.targetProductName),
-                                selected_options: matchedItem?.selected_options || null,
+                                nickname: isSwapped ? null : (matchedItem?.nickname || null),
+                                selected_options: isSwapped
+                                    ? {
+                                        ...baseSelectedOpts,
+                                        _substituted_from: {
+                                            product_id: planItem.originalProductId,
+                                            name: planItem.originalProductName,
+                                            quantity: planItem.originalQty,
+                                            unit: planItem.originalUnit,
+                                            pqr_id: pqr.id
+                                        }
+                                    }
+                                    : (matchedItem?.selected_options || null),
                                 variant_label: matchedItem?.variant_label || null
                             });
                         });
@@ -2824,7 +2836,13 @@ export default function PqrAuditModal({
                             origin_source: 'customer_service',
                             delivery_date: scheduledDate,
                             delivery_slot: scheduledSlot,
-                            logistics_data: originalOrder.logistics_data || pqr?.profiles?.logistics_data || null,
+                            logistics_data: {
+                                ...(originalOrder.logistics_data || pqr?.profiles?.logistics_data || {}),
+                                is_replacement: true,
+                                parent_order_id: originalOrder.id,
+                                parent_order_sequence_id: originalOrder.sequence_id,
+                                pqr_id: pqr.id
+                            },
                             shipping_address: originalOrder.shipping_address,
                             latitude: originalOrder.latitude,
                             longitude: originalOrder.longitude,

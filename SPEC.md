@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.372 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..393 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje, Planta de Procesados MES & Alianza Exclusiva `FruFresco × Friogan`)
+> **Versión:** 1.9.372 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..394 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje, Planta de Procesados MES & Alianza Exclusiva `FruFresco × Friogan`)
 > **Fecha:** 6 de Noviembre, 2026  
 > **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..393) | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..408)
+> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..394) | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
 
 ---
 
@@ -2260,6 +2260,32 @@ Para subsanar registros históricos de abarrotes configurados erróneamente en `
    - Script ejecutable en Node.js que sincroniza de forma segura los pesos reales auditados directamente hacia la tabla `products` de Supabase.
    - Implementa banderas de seguridad: `--dry-run` para previsualización no destructiva y `--use-nominal` como fallback controlado.
    - Preserva la regla de 2 decimales en pantalla y precisión física de 3 decimales (`0.001 kg`) en base de datos.
+
+---
+
+### 9.9 Estándar Unificado de Lenguaje de Diseño, Ergonomía Táctil y Experiencia de Usuario (UX/UI) para los Submódulos Operativos `/ops` (`onFRU OPS Design System`)
+
+Con el fin de garantizar una experiencia visual, ergonómica y cognitiva 100% homogénea entre las **11 estaciones operativas** (`/ops`, `/ops/compras`, `/ops/recogida`, `/ops/recepcion`, `/ops/recepcion/supervisor`, `/ops/picking`, `/ops/picking/dashboard`, `/ops/procesados`, `/ops/devoluciones`, `/ops/rectificacion`, `/ops/driver` y `/ops/inventory`), se consagra el **Sistema de Diseño Industrial `onFRU OPS`**:
+
+1. **Tokens Semánticos Reactivos y Adaptabilidad Bimodal (Modo Oscuro de Madrugada / Modo Claro de Muelle a Pleno Sol):**
+   - Todo submódulo dentro de `src/app/ops/**` hereda y consume obligatoriamente las variables CSS inyectadas por `src/app/ops/layout.tsx`:
+     - `--ops-bg`: Fondo principal del lienzo (`#0a111c` en Modo Oscuro / `#F3F4F6` en Modo Claro).
+     - `--ops-surface`: Superficie de tarjetas, cabeceras, barras fijas y modales (`#121d2d` en Modo Oscuro / `#FFFFFF` en Modo Claro).
+     - `--ops-text`: Color primario de texto de alto contraste WCAG AAA (`#F9FAFB` en Modo Oscuro / `#111827` en Modo Claro).
+     - `--ops-text-muted`: Texto secundario, etiquetas técnicas y metadatos (`#8295a5` en Modo Oscuro / `#6B7280` en Modo Claro).
+     - `--ops-border`: Bordes estructurales y divisores (`#22354c` en Modo Oscuro / `#E5E7EB` en Modo Claro).
+     - `--ops-primary`: Verde Esmeralda Corporativo de Acción (`#10B981` / `#0D7A57`).
+   - **Prohibición de Colores Oscuros Hardcodeados:** Queda estrictamente prohibido codificar en duro fondos como `#0A111C`, `#090D16`, `#080D12` o textos `color: 'white'` sobre superficies variables (`--ops-bg` / `--ops-surface`), garantizando que al alternar el botón de tema (`Sol / Luna`) en la barra superior de `OpsLayout`, ninguna pantalla quede con texto blanco ilegible sobre fondo claro.
+
+2. **Jerarquía Tipográfica e Identificación Contable Limpia:**
+   - **Títulos de Estación y KPIs Numéricos:** Fuente `'Outfit', sans-serif` (`fontWeight: 800–900`, `letterSpacing: '-0.02em'`, `fontVariantNumeric: 'tabular-nums'`).
+   - **Cuerpo, Controles de Formulario y Listas:** Fuente `'Inter', system-ui, sans-serif`.
+   - **Identificación por `#ID Contable` y Nombre Completo de Categoría (`AGENTS.md` Reglas 4 y 5):** En todas las listas, selectores y tarjetas de `/ops` se exhibe el código `accounting_id` (`#ID`) y el nombre completo de categoría en español (`CATEGORY_MAP`), con **cero emojis Unicode** y uso exclusivo de iconografía vectorial `lucide-react`.
+
+3. **Anatomía Estandarizada de Cabecera de Estación y Tarjetas Táctiles (Gemba Touch Ergonomics):**
+   - **Cabecera de Estación:** Contenedor en `--ops-surface` con borde `1px solid var(--ops-border)` y radio `16px–18px` que integra: botón táctil de retorno a `/ops` (`42px × 42px`), insignia de estación (`ESTACIÓN XX`), título principal con icono Lucide en `#10B981`, selector de fecha de jornada y acción de refresco en vivo.
+   - **Objetivos Táctiles de Guante / Muelle (`>= 44px`):** Todos los botones de acción primaria, selectores e inputs numéricos de pesaje mantienen una altura mínima de `44px` a `48px` y radios de `10px–14px` para operación sin errores con manos húmedas o guantes en planta.
+   - **Dock Inferior Unificado (`#ops-main-footer`):** Navegación persistente con efecto dock que conecta en 1 toque `COMPRAS`, `RECOGIDA`, `RECEPCIÓN`, `ALISTAR`, `TABLERO`, `PROCESADOS`, `RETORNOS`, `RECTIFICAR`, `TRANSPORTE` e `INICIO`.
 
 ---
 
@@ -14315,7 +14341,7 @@ Bajo los principios de ingeniería Lean y el algoritmo de simplificación de Spa
 - **Given** que el ciclo diario de inventario en FruFresco va de cierre a cierre (aproximadamente **7:00 PM**):
   1. Durante la jornada $D$, la disponibilidad (`Inv. Inicial + Compras Recibidas`) se distribuye entre todas las salidas operativas y comerciales hasta cerrar con el Conteo Físico de fin de turno (`Columna T`) a las 7:00 PM.
   2. Las devoluciones reportadas en ruta regresan en los camiones al final del día y su recepción física de canastillas/productos e inspección de calidad ocurre **después del cierre**, por lo que deben impactar matemáticamente el **balance del día siguiente ($D+1$)**.
-  3. El ingreso físico de las canastillas y productos devueltos por el camión se registra en el submódulo **`DEVOLUCIONES` de `/ops`** (*Retornos e Inconsistencias de Ruta*, tarjeta dedicada en `http://localhost:3001/ops`), aún por desarrollar como **Cable Pelado (`DT-13`)**.
+  3. El ingreso físico de las canastillas y productos devueltos por el camión se registra en el submódulo **`DEVOLUCIONES` de `/ops`** (*Retornos e Inconsistencias de Ruta*, tarjeta dedicada en `/ops/devoluciones` — **Conectado (`DT-13`)**).
 
 #### 2. Ecuación Canónica de Conservación de Masa para Devoluciones en $D+1$ (Ejemplo Canónico 30 kg Tomate)
 - **When** en la ruta del día $D$ se reporta una devolución de $\mathbf{30\text{ kg}}$ de Tomate y se procesa tras el cierre para el balance del día siguiente ($D+1$):
@@ -14481,13 +14507,13 @@ Para garantizar que la carga asistida por IA de documentos físicos y las operac
 
 #### 4. Criterios de Aceptación Contractual (Definition of Done)
 1. **Contrato y UI:** Botón `[ 📷 Cargar Planillas Físicas (IA) ]` disponible en `src/components/InventoryDailyBalanceTab.tsx` en Modo Edición.
-2. **Modal Modular Especializado:** Implementado en `src/components/PhysicalSheetIngestModal.tsx` (<= 600 líneas) con selector de tipo de documento, visor de imágenes/PDF y tabla de reconciliación staging.
+2. **Modal Modular Especializado:** Implementado en `src/components/PhysicalSheetIngestModal.tsx` (<= 1.400 líneas, incluyendo la mesa de trabajo multimodal y la pantalla de resumen ejecutivo post-inyección `commitSummary`) con selector de tipo de documento, visor de imágenes/PDF y tabla de reconciliación staging.
 3. **Endpoint de Extracción:** `POST /api/commercial/inventory/extract-physical-sheet` consumiendo Gemini con heurística de Corabastos y homologación de 663 SKUs.
 4. **Cero Colisión Verificada:** Las escrituras en `inventory_movements` registran `origin_source: 'physical_sheet_ocr'` y respetan el arbitraje de discrepancias sin duplicar compras ni conteos.
 5. **Refresco Reactivo:** Al pulsar `[ Aprobar y Aplicar a la Sábana ]`, las columnas G, T, Q y R se actualizan instantáneamente en la interfaz sin necesidad de recargar la página.
 6. **Conmutación Reactiva Instantánea de Columna Destino (`0 ms` sin Re-análisis IA):** Al cambiar entre cualquiera de las 5 pestañas de tipo de documento en `PhysicalSheetIngestModal.tsx` (`1. Planilla Compras -> Col G`, `2. Conteo Físico -> Col T`, `3. Formato Pedidos -> Cols Q/R`, `4. Desperdicio/Basura -> Cols Q/R`, `5. Donaciones -> Col X`), los renglones en staging re-mapean automáticamente su `targetColumn` en memoria sin requerir re-invocación del motor OCR.
 7. **Inyección Paralela por Lote (`< 1s`) y Resumen Ejecutivo Post-Inyección (`commitSummary`):** La confirmación de planillas físicas ejecuta las llamadas `onCommitCell` en paralelo (`Promise.all`) seguidas de un único refresco consolidado y despliega una pantalla de éxito con el desglose exacto de productos, kilogramos y unidades cargados por columna destino (`Col G`, `Col T`, `Col Q`, `Col R`, `Col X`).
-8. **Invariante de Alineación Geométrica del Bloque Sticky Izquierdo (`Cols A–D`):** En `InventoryDailyBalanceTab.tsx`, la Columna D (`PRODUCTO`) mantiene un ancho estricto de `260px` (`box-sizing: border-box`, `overflow: hidden`) sincronizado entre `<thead>`, la fila de filtros y `<tbody>`, mientras el `<tfoot>` (`colSpan={4}`) ajusta dinámicamente su ancho a `459px` (con `Col C` colapsada a `28px`) o `545px` (con `Col C` expandida a `114px`), garantizando una línea divisoria vertical continua sin escalones frente a las columnas desplazables `E..X`.
+8. **Invariante de Alineación Geométrica del Bloque Sticky Izquierdo (`Cols A–D`):** En `InventoryDailyBalanceTab.tsx`, la Columna D (`PRODUCTO`) mantiene un ancho estricto de `190px` (`box-sizing: border-box`, `overflow: hidden`) sincronizado entre `<thead>`, la fila de filtros y `<tbody>`, mientras el `<tfoot>` (`colSpan={4}`) ajusta dinámicamente su ancho a `389px` (con `Col C` colapsada a `28px`) o `475px` (con `Col C` expandida a `114px`), garantizando una línea divisoria vertical continua sin escalones frente a las columnas desplazables `E..X`.
 
 
 ---
@@ -14548,14 +14574,14 @@ Se incorpora de manera íntegra e inmutable al contrato maestro `SPEC.md` el lev
 | :---: | :--- | :---: | :--- |
 | **Col E** | **INV. INICIAL (+)** | **`[ OK ]`** | **Certificada.** Hereda canónicamente $E_D = T_{D-1}$ (conteo físico de anoche) y fallback a `inventory_stocks` para fechas futuras ($D+1$). Solo lectura blindada. |
 | **Col F** | **CORRECCIÓN (±)** | **`[ OK ]`** | **Certificada.** Perfectamente formulada para ajustes manuales $+/-$ de descuadre o ingreso extemporáneo. Soporta evaluación de expresiones estilo Excel y firma de auditor. |
-| **Col G** | **COMPRAS (+)** | **`[ OK / DT-12 CERRADA ]`** | **Certificada en SDD.** Consolida la sumatoria exacta de todos los lotes de compra del día para cada SKU específico desde la tabla `purchases` (`/ops/compras`), agregando compras fraccionadas (ej. 30 kg + 20 kg = 50 kg), más recepciones manuales o de planilla física salvo reemplazo explícito de arbitraje. |
+| **Col G** | **COMPRAS (+)** | **`[ OK / DT-12 CERRADA ]`** | **Certificada en SDD.** Consolida en modo automático exclusivamente la sumatoria de productos que entran efectivamente a bodega desde el módulo `/ops/recepcion` (`inventory_movements` con `reference_type = 'purchase_reception'`), agregando recepciones de hijos hacia el padre, más recepciones manuales por Excel o planilla física IA (`Entrada/`) en unidad de compra directa. |
 | **Col H** | **VENTA (KG) (-)** | **`[ OK ]`** | **Certificada.** Consolida en tiempo real pedidos en `para_compra` formulados expresamente por kilos puros de peso. |
 | **Col I** | **VENTA (UND) (-)** | **`[ OK ]`** | **Certificada (Optimizada Opción 1).** Consolida el peso total en kilogramos deducido en la cifra superior (`12,80`), y renderiza el micro-badge consolidado por gramaje (`80 und de 160 gr`). |
 | **Col J** | **PESO VENTA UND** | **`[ SUPRIMIDA EN UI ]`** | **Optimizada Lean / SpaceX.** Retirada de la pantalla por redundancia para liberar 95px de ancho útil. Su valor se visualiza en Col I. Preservada en exportador Excel para World Office. |
-| **Col M** | **VENTA ADICIONAL (-)** | **`[ OK / SDD Escenario 389 ]`** | **Renombrada y Canónica.** Su origen son los pedidos para esa fecha que ingresaron con posterioridad al cierre / hora de corte (`cutoff_hour_admin`), más despachos de última hora o mostrador. Descuenta en balance de masa sin contaminar la venta ordinaria en tanda (Cols H e I). |
-| **Col O** | **DEVOLUCIONES (+)** | **`[ CABLE PELADO - CALIDAD (ANGIE) ]`** | **Diseño SDD Escenario 388.** No admite digitación libre en sábana. Su única fuente autorizada será el dictamen de Gestión de Calidad (Angie Rivas): producto conforme reingresa en Col O (+); producto averiado se desvía a Col Q (-). Arnés de integración listo en `inventory_movements` (`route_return`). |
-| **Col P** | **MERMA PESADA (-)** | **`[ OK / SDD Escenario 390 ]`** | **Certificada y Parametrizada.** Absorbe la tolerancia permisible de pesaje no cobrada al cliente para frutas indivisibles de gran calibre (ej. Papaya, Melón) parametrizadas con `charge_overweight = false`. Si el producto sí cobra el excedente (ej. Plátano), el sobrepeso viaja a Col M. |
-| **Cols K, L, N, Q, R, S-X**| **Contingencias, Mermas y Cierre** | *En curso* | En proceso de certificación paso a paso. |
+| **Col M** | **VENTA ADICIONAL (-)** | **`[ OK / SDD Escenario 389 ]`** | **Renombrada y Canónica.** Su origen son los pedidos para esa fecha que ingresaron con posterioridad al cierre / hora de corte (`cutoff_hour_admin`), más excedentes de báscula cuando en Facturación se marca `¿Se cobra excedente? = SÍ`. Descuenta en balance de masa sin contaminar la venta ordinaria en tanda (Cols H e I). |
+| **Col O / O2** | **DEVOLUCIONES (+) / FALTANTE DEV (-)** | **`[ OK / DT-13 EJECUTADA ]`** | **Diseño SDD Escenario 388 (`/ops/devoluciones`).** Concilia en $D+1$ post-cierre (7:00 PM) el retorno reportado en ruta (`Col O` `route_return`), el faltante físico que no llegó en el camión (`Col O2` `return_shortage`), la avería (`Col Q` `waste_damage`) y el reingreso neto disponible. |
+| **Col P** | **MERMA PESADA (-)** | **`[ OK / SDD Escenario 390 ]`** | **Certificada y Conectada a Facturación (`DT-15 / DT-17`).** No está atada estáticamente al SKU en catálogo; en `/admin/commercial/billing` (`OverweightBillingArbitrationModal.tsx` y badge en fila del pedido) se decide por **Pedido y Producto**: si `¿Se cobra excedente? = NO`, el sobrepeso va a Col P (`waste_weighing`); si es `SÍ`, viaja a Col M (`additional_sale`) y se factura `picked_quantity`. |
+| **Cols K, L, N, Q, R, S-X**| **Contingencias, Mermas, Procesados y Cierre** | **`[ OK / DT-18 & DT-19 EJECUTADAS ]`** | Certificadas en código y SDD (`/ops/procesados` para Cols Q y R; `/ops/recepcion/supervisor` y Lector IA para Col X). |
 
 ---
 
@@ -14669,7 +14695,7 @@ La información ingresa a través de **tres mecanismos complementarios**:
   evitando alterar o romper los consolidados de compra y picking de la tanda principal.
 
 #### Gobernanza de las Devoluciones Post-Cierre (7:00 PM) para el Balance del Día Siguiente ($D+1$) — Módulo `/ops` (Devoluciones) y Nueva Columna `FALTANTE DE DEVOLUCIONES (-)` (SDD Escenario 388):
-* **Ciclo Cierre a Cierre (~7:00 PM):** El inventario diario opera de cierre a cierre. Las devoluciones reportadas en ruta vuelven en el camión y se procesan **después del cierre**, afectando el balance del **día siguiente ($D+1$)** a través del módulo **`DEVOLUCIONES`** de `/ops` (*Retornos e Inconsistencias de Ruta*, aún por desarrollar).
+* **Ciclo Cierre a Cierre (~7:00 PM):** El inventario diario opera de cierre a cierre. Las devoluciones reportadas en ruta vuelven en el camión y se procesan **después del cierre**, afectando el balance del **día siguiente ($D+1$)** a través del módulo **`DEVOLUCIONES`** de `/ops/devoluciones` (*Retornos e Inconsistencias de Ruta* — **Conectado (`DT-13`)**).
 * **Desglose Matemático y Balance de Masa (Ejemplo Canónico $30\text{ kg}$ de Tomate):**
   1. **Reporte en Ruta $\to$ `Columna O: DEVOLUCIONES (+)` ($+30\text{ kg}$):** Registra la cantidad total reportada como devuelta por el cliente.
   2. **Llegada Física a Bodega en Camión ($20\text{ kg}$) $\to$ `Nueva Columna: FALTANTE DE DEVOLUCIONES (-)` ($-10\text{ kg}$):** Si se reportaron $30\text{ kg}$ pero a bodega solo llegaron $20\text{ kg}$, los $10\text{ kg}$ faltantes del transporte se registran en la nueva columna **`FALTANTE DE DEVOLUCIONES (-)`** (`reference_type = 'return_shortage'`).
@@ -14704,8 +14730,8 @@ La información ingresa a través de **tres mecanismos complementarios**:
     1. **Columna `DESPERDICIO (Kg)`** (para reportar a mano el desperdicio/avería).
     2. **Columna `BASURA / MERMA (Kg)`** (para reportar a mano la cáscara/descapote).
   - **Nueva Entrada en el Lector Multimodal IA (`PhysicalSheetIngestModal.tsx`):** Lee este documento bicolumna y asigna directamente la columna `Desperdicio` a **Columna Q (`-`)** y la columna `Basura` a **Columna R (`-`)**, además de permitir ajustes manuales en celda o por Excel.
-* **2. Modo Automático (Cable Pelado — Nuevo Módulo Operativo `/ops/procesados`):**
-  - **Módulo de OPS `Procesados` (`/ops/procesados`, inexistente aún — Cable Pelado):** Permite registrar la transformación física en planta bajo conservación estricta de masa:
+* **2. Modo Automático (Módulo Operativo `/ops/procesados` — Conectado `DT-18`):**
+  - **Módulo de OPS `Procesados` (`/ops/procesados` — Conectado `DT-18`):** Permite registrar la transformación física en planta bajo conservación estricta de masa:
     1. **Entrada a Proceso ($M_{\text{Padre Entrada}}$):** Se ingresan los kilos brutos del producto (generalmente un **SKU Padre `[P]`**, ej. $50\text{ kg}$ de Cebolla Cabezona Sucia).
     2. **Conversión en Hijos ($\sum M_{\text{Hijos}}$):** Los kilos procesados y aprovechables se convierten en **SKUs Hijos `[H]`** (ej. $+42\text{ kg}$ de Cebolla Pelada / Limpia; genera transferencia interna $-42\text{ kg}$ en el Padre y $+42\text{ kg}$ en el Hijo, manteniendo efecto neto $0\text{ kg}$ en la familia consolidada).
     3. **Bifurcación del Resto entre Desperdicio y Basura:** La masa restante se reparte entre **Columna Q (`DESPERDICIO (-)` — `waste_damage`, ej. $-3\text{ kg}$)** y **Columna R (`BASURA (-)` — `waste_cleaning`, ej. $-5\text{ kg}`)**.
@@ -14846,8 +14872,8 @@ flowchart TD
 | **Escenario 391**<br>*(SDD v1.9.370)* | 📷 **Feature Clave Gemba** | **3 Caminos de Carga & Planillas Físicas IA** | 3 caminos oficiales (1. Automático OPS, 2. 100% Excel, 3. Fotos IA + Manual). En `Entrada/` ($\to$ Col G) entran únicamente cantidades en **unidad de compra directa** (`Kg` o `Unidad`, cero recálculos de bultos/canastillas). | ✅ **Ejecutado (2026-11-06)** |
 | **DT-12 / DT-17**<br>*(Escenario 387)* | 🟠 **Ajuste Origen P1** | **Columna G: `COMPRAS (+)`** | Alimentar la Columna G en modo automático exclusivamente con la sumatoria de productos que entran a bodega desde el módulo **`/ops/recepcion`** (`http://localhost:3001/ops/recepcion`). | ✅ **Ejecutado (2026-11-06)** |
 | **DT-15 / DT-17**<br>*(Escenario 390)* | 🟠 **Cable Pelado Facturación** | **Picking (`/ops/picking`) & Facturación (Col P vs Col M)** | Restringir `/ops/picking` a despachar únicamente productos con stock real en inventario, retirar el vínculo fijo por SKU y dejar el **Cable Pelado hacia Facturación** para decidir por **Pedido y Producto** si el excedente se cobra (`SÍ` $\to$ Col M / `NO` $\to$ Col P). | ✅ **Ejecutado (2026-11-06)** |
-| **DT-13**<br>*(Escenario 388)* | 🔴 **Cable Pelado Devoluciones** | **Módulo `DEVOLUCIONES` de `/ops` ($D+1$): Col O, Nueva Col `Faltante Devoluciones (-)` y Col Q** | Ciclo post-cierre (7:00 PM) al día siguiente ($D+1$): Devolución reportada (ej. $30\text{ kg} \to$ Col O `+`), recibo en camión ($20\text{ kg}$), diferencia no entregada ($10\text{ kg} \to$ Nueva Columna `Faltante de Devoluciones (-)`), merma dañada ($10\text{ kg} \to$ Col Q `-`) y reingreso neto a inventario disponible ($+10\text{ kg}$). | ✅ **Columna `O2` (`return_shortage`) Ejecutada** *(Cable Pelado `/ops/devoluciones`)* |
-| **DT-18**<br>*(Escenario 391 & 392)* | 🟠 **Lista Editable + Formato Pedidos + Cable Pelado `/ops/procesados`** | **Columnas Q (`DESPERDICIO (-)`) y R (`BASURA (-)`)** | **1. Modo Manual:** Lista editable en `/admin/commercial/inventory` (`Gobernanza`, persistida en `app_settings` con `key = 'waste_susceptible_products'` sin SQL adicional y pre-cargada con los **109 productos** de `FORMATO DE DESPERDICIO.xlsx` + herencia Padre $\to$ Hijo) + nuevo formato imprimible en `/admin/orders/loading` con 2 columnas manuscritas (`Desperdicio` y `Basura`) + nueva entrada en Lector IA.<br>**2. Modo Automático (Cable Pelado):** Nuevo módulo **`Procesados` (`/ops/procesados`)** donde ingresan productos (generalmente Padres), una parte se convierte en Hijos y el resto se reparte entre Desperdicio (`Col Q`) y Basura (`Col R`). | ✅ **Modo Manual Ejecutado** *(Cable Pelado `/ops/procesados`)* |
+| **DT-13**<br>*(Escenario 388)* | 🔴 **Módulo Devoluciones `/ops/devoluciones`** | **Módulo `DEVOLUCIONES` de `/ops` ($D+1$): Col O, Nueva Col `Faltante Devoluciones (-)` y Col Q** | Ciclo post-cierre (7:00 PM) al día siguiente ($D+1$): Devolución reportada (ej. $30\text{ kg} \to$ Col O `+`), recibo en camión ($20\text{ kg}$), diferencia no entregada ($10\text{ kg} \to$ Nueva Columna `Faltante de Devoluciones (-)`), merma dañada ($10\text{ kg} \to$ Col Q `-`) y reingreso neto a inventario disponible ($+10\text{ kg}$). | ✅ **Ejecutado (2026-11-06)** (`src/app/ops/devoluciones/page.tsx` + Col `O2`) |
+| **DT-18**<br>*(Escenario 391 & 392)* | 🟠 **Lista Editable + Formato Pedidos + Módulo `/ops/procesados`** | **Columnas Q (`DESPERDICIO (-)`) y R (`BASURA (-)`)** | **1. Modo Manual:** Lista editable en `/admin/commercial/inventory` (`Gobernanza`, persistida en `app_settings` con `key = 'waste_susceptible_products'` sin SQL adicional y pre-cargada con los **109 productos** de `FORMATO DE DESPERDICIO.xlsx` + herencia Padre $\to$ Hijo) + nuevo formato imprimible en `/admin/orders/loading` con 2 columnas manuscritas (`Desperdicio` y `Basura`) + nueva entrada en Lector IA.<br>**2. Modo Automático (`/ops/procesados`):** Módulo operativo `src/app/ops/procesados/page.tsx` donde ingresan productos Padres, se transforman en Hijos y el resto se reparte entre Desperdicio (`Col Q`) y Basura (`Col R`) bajo conservación estricta de masa. | ✅ **Ejecutado (2026-11-06)** (`src/app/ops/procesados/page.tsx` + Modo Manual) |
 | **DT-19**<br>*(Escenario 391 & 392)* | 🟠 **Submódulo Supervisor + Lector IA Donaciones** | **Columna X (`DONACIONES / BANCO ALIMENTOS (-)`)** | **Autoridad única: Supervisor de Planta.**<br>**1. Modo Manual:** Lector IA para plantillas de donaciones en `PhysicalSheetIngestModal.tsx`.<br>**2. Modo Digital:** Submódulo **`Donaciones`** dentro de **`/ops/recepcion/supervisor`** (`http://localhost:3001/ops/recepcion/supervisor`) que exige productos, fotos de los productos y foto del documento soporte de donación al Banco de Alimentos. | ✅ **Ejecutado (2026-11-06)** |
 
 ---
@@ -14868,8 +14894,21 @@ flowchart TD
   3. **Prioridad 2 — Patrón `'EMPRESA - SUCURSAL'`:** Para sucursales sin objeto padre cargado en memoria, extrae el segmento posterior al primer `' - '`.
   4. **Prioridad 3 & 4 — Sucursal Directa / Razón Social Unisede:** Retorna el nombre limpio de la sucursal o la razón social legal del cliente único (nunca `'Principal'`).
 
+---
 
+### Escenario 394: Blindaje Anti-Falsos Positivos del Sentinel de Salud IA (`/api/ai/health`): Cascada Automática ante Micro-Cortes de Red, Deduplicación Concurrente y Caché de 60 Segundos (`src/app/api/ai/health/route.ts`) (SDD v1.9.372)
 
+#### 1. Contexto y Diagnóstico Forense del Gemba
+- **Given** que el módulo de Alistamiento y Carga de Pedidos (`/admin/orders/loading`) y el submódulo embebido de Bandeja de Correo (`EmailDraftsModule.tsx`) invocan concurrentemente `GET /api/ai/health` al montar la vista (hasta 4 peticiones simultáneas en React StrictMode):
+  1. Tras periodos de reposo de red (idle socket reset), una petición aislada al modelo primario (`gemini-2.5-flash`) puede sufrir un micro-corte transitorio de socket (`fetch failed` en $< 60\text{ ms}$) mientras la petición hermana en el mismo segundo responde con éxito (`200 OK`).
+  2. Anteriormente, `/api/ai/health` realizaba un único intento sin recorrer la cascada de modelos (`CANONICAL_MODEL_CASCADE`) ni deduplicar peticiones en vuelo, provocando que el banner ámbar `Aviso de Motor IA` parpadeara brevemente por un falso positivo de red antes de auto-limpiarse.
+
+#### 2. Especificación Técnica de Resiliencia (`src/app/api/ai/health/route.ts`)
+- **When** cualquier cliente o módulo invoca `GET /api/ai/health`:
+- **Then** el endpoint garantiza disponibilidad continua y cero falsos positivos mediante tres mecanismos:
+  1. **Reintento Automático en Cascada (`pingWithCascadeFallback`):** Si el ping inicial falla por un micro-corte de red (`fetch failed`), `503 Service Unavailable` o modelo deprecado (`404`), el Sentinel recorre automáticamente `CANONICAL_MODEL_CASCADE` (`gemini-2.5-flash` $\to$ `gemini-flash-latest` $\to$ `gemini-3.8-flash` $\to$ `gemini-3.7-flash` $\to$ `gemini-3.5-flash`). Únicamente aborta de inmediato ante errores no recuperables de credenciales o cuota (`429 QUOTA_EXCEEDED`, `API_KEY_INVALID`).
+  2. **Deduplicación de Peticiones en Vuelo (`inFlightHealthCheck`):** Si llegan múltiples llamadas HTTP simultáneas al montar `/admin/orders/loading` y `EmailDraftsModule`, comparten la misma promesa en vuelo hacia Google Cloud en lugar de disparar múltiples pings redundantes.
+  3. **Caché en Memoria de Estado Saludable (`HEALTH_CACHE_TTL_MS = 60_000`):** Cuando el motor IA responde `healthy`, el resultado se conserva en caché durante 60 segundos (`cached: true`) para respuestas instantáneas ($< 5\text{ ms}$), permitiendo forzar una verificación fresca mediante `?refresh=true` o `?strict=true`.
 
 ---
 
@@ -14877,7 +14916,7 @@ flowchart TD
 
 > [!IMPORTANT]
 > **CLÁUSULA DE FRONTERA CONTRACTUAL Y FINANCIERA (INDEPENDENCIA FASE I vs FASE II):**
-> 1. **Cierre Inmutable de Fase I (`onFRU v1.9.x` — Escenarios 1 al 393):** Los diez (10) dominios operativos, las setenta y seis (76) pantallas certificadas y la Sábana Oficial de Balance Diario de Inventarios (Columnas A–X) conforman el alcance 100% cumplido y cerrado de la Fase I.
+> 1. **Cierre Inmutable de Fase I (`onFRU v1.9.x` — Escenarios 1 al 394):** Los diez (10) dominios operativos, las setenta y seis (76) pantallas certificadas y la Sábana Oficial de Balance Diario de Inventarios (Columnas A–X) conforman el alcance 100% cumplido y cerrado de la Fase I.
 > 2. **Naturaleza de `onFRU v2.0` (Escenarios Serie 400+):** Todos los capítulos, módulos de software, integraciones IoT y escenarios numerados a partir del **Escenario 400** pertenecen exclusivamente a la **Segunda Fase Evolutiva (`onFRU v2.0`)**.
 > 3. **Cotización y Ejecución Independiente:** El desarrollo, suministro de hardware y puesta en marcha de los módulos de `onFRU v2.0` se cotizan, contratan y facturan de manera independiente con posterioridad a la liquidación de la Fase I, sin condicionar ni postergar las actas de entrega del ecosistema base.
 

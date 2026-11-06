@@ -16,7 +16,8 @@ import {
   Server,
   ShieldAlert,
   Monitor,
-  ClipboardCheck
+  ClipboardCheck,
+  Layers
 } from 'lucide-react';
 
 interface OpsStats {
@@ -232,13 +233,24 @@ export default function OpsHome() {
                 </Link>
 
                 {/* 9. DEVOLUCIONES */}
-                <Link href="/ops/inventory" style={{ textDecoration: 'none' }}>
+                <Link href="/ops/devoluciones" style={{ textDecoration: 'none' }}>
                     <div className="card-op">
                         <div className="op-icon-wrapper">
                             <RotateCcw size={24} strokeWidth={1.5} />
                         </div>
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>DEVOLUCIONES</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Retornos e Inconsistencias de Ruta</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Retornos D+1 (Cols O, O2 y Q)</div>
+                    </div>
+                </Link>
+
+                {/* 10. PROCESADOS */}
+                <Link href="/ops/procesados" style={{ textDecoration: 'none' }}>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <Layers size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>PROCESADOS</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Transformación Padre a Hijo (Cols Q y R)</div>
                     </div>
                 </Link>
 

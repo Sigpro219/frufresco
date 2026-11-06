@@ -628,7 +628,6 @@ interface CommittedSaleData {
 
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [movements, setMovements] = useState<RawMovement[]>([]);
-    const [opsPurchasesMap, setOpsPurchasesMap] = useState<Map<string, number>>(new Map());
     const [committedSalesMap, setCommittedSalesMap] = useState<Map<string, CommittedSaleData>>(new Map());
     const [postCutoffSalesMap, setPostCutoffSalesMap] = useState<Map<string, number>>(new Map());
     const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
@@ -1007,48 +1006,6 @@ interface CommittedSaleData {
             if (movErr) throw movErr;
             setMovements((movData as any) || []);
 
-            // 2.1 Cargar compras transaccionales del día desde /ops/compras (DT-12 — Escenario 387)
-            try {
-                const { data: dayTasks } = await supabase
-                    .from('procurement_tasks')
-                    .select('id, product_id, total_purchased')
-                    .eq('delivery_date', balanceDate);
-
-                const taskIds = (dayTasks || []).map(t => t.id).filter(Boolean);
-                const purMap = new Map<string, number>();
-
-                if (taskIds.length > 0) {
-                    const { data: dayPurchases } = await supabase
-                        .from('purchases')
-                        .select('product_id, quantity')
-                        .in('task_id', taskIds);
-
-                    if (dayPurchases && dayPurchases.length > 0) {
-                        dayPurchases.forEach(pur => {
-                            if (!pur.product_id) return;
-                            const q = Number(pur.quantity) || 0;
-                            if (q > 0) {
-                                purMap.set(pur.product_id, (purMap.get(pur.product_id) || 0) + q);
-                            }
-                        });
-                    }
-                }
-
-                // Fallback complementario: si una tarea tiene total_purchased > 0 pero sin desglose en purchases
-                (dayTasks || []).forEach(t => {
-                    if (!t.product_id) return;
-                    const taskPurchased = Number(t.total_purchased) || 0;
-                    if (taskPurchased > 0 && !purMap.has(t.product_id)) {
-                        purMap.set(t.product_id, taskPurchased);
-                    }
-                });
-
-                setOpsPurchasesMap(purMap);
-            } catch (purErr) {
-                console.warn('Error cargando compras de /ops/compras en balance diario:', purErr);
-                setOpsPurchasesMap(new Map());
-            }
-
             // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (SDD Escenarios 375 & 389 / DT-14)
             try {
                 const [{ data: cutoffSetting }, { data: launchedOrders, error: ordersErr }] = await Promise.all([
@@ -1312,8 +1269,8 @@ interface CommittedSaleData {
                 const signedQty = Number(m.quantity) || 0;
                 const ref = (m.reference_type || '').toLowerCase();
 
-                // F: Corrección de inventario
-                if (ref === INVENTORY_MOVEMENT_SUBTYPES.CORRECTION || (m.type === 'adjustment' && ref !== INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT)) {
+                // F: Corrección de inventario (incluyendo transferencias internas Padre <-> Hijo de /ops/procesados)
+                if (ref === INVENTORY_MOVEMENT_SUBTYPES.CORRECTION || ref === 'production_transform' || (m.type === 'adjustment' && ref !== INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT)) {
                     f_corrections += signedQty;
                 }
                 // G: Compra del día (+) — Coexistencia aditiva (DT-12 / Escenario 387) salvo reemplazo explícito de arbitraje o celda
@@ -1489,7 +1446,7 @@ interface CommittedSaleData {
                 evidencePhotosX: evidenceX
             };
         });
-    }, [balanceDate, products, movements, opsPurchasesMap, previousClosingMap, costMatrixMap, committedSalesMap, postCutoffSalesMap]);
+    }, [balanceDate, products, movements, previousClosingMap, costMatrixMap, committedSalesMap, postCutoffSalesMap]);
 
     // Mapa en vivo para arbitraje Anti-Colisión OPS en Lector Multimodal de Planillas Físicas (SDD Escenario 391 / DT-19)
     const opsCurrentByProductAndCol = useMemo(() => {

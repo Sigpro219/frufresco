@@ -24,19 +24,67 @@ export interface AiHealthResponse {
   catalogAudit: CatalogAuditResult;
   cascade: string[];
   timestamp: string;
+  cached?: boolean;
   code?: string;
   message?: string;
   details?: string;
 }
 
+const HEALTH_CACHE_TTL_MS = 60_000;
+let cachedHealthResponse: { data: AiHealthResponse; expiresAt: number } | null = null;
+let inFlightHealthCheck: Promise<{ body: AiHealthResponse; isHealthy: boolean }> | null = null;
+
+function isNonRetryableError(errMsg: string): boolean {
+  return (
+    errMsg.includes('429') ||
+    errMsg.includes('Quota exceeded') ||
+    errMsg.includes('Too Many Requests') ||
+    errMsg.includes('RESOURCE_EXHAUSTED') ||
+    errMsg.includes('API_KEY_INVALID') ||
+    errMsg.includes('API key not valid') ||
+    errMsg.includes('API_KEY_NOT_VALID')
+  );
+}
+
+async function pingWithCascadeFallback(apiKey: string): Promise<{ activeModel: string; latencyMs: number }> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  let lastError: any = null;
+
+  for (const candidateModel of CANONICAL_MODEL_CASCADE) {
+    try {
+      const model = genAI.getGenerativeModel({ model: candidateModel });
+      const pingStart = Date.now();
+      const result = await model.generateContent('ping');
+      result.response.text();
+      return {
+        activeModel: candidateModel,
+        latencyMs: Date.now() - pingStart,
+      };
+    } catch (err: any) {
+      lastError = err;
+      const msg = err?.message || '';
+      if (isNonRetryableError(msg)) {
+        throw err;
+      }
+      // If primary model had a transient network/503 blip or 404, try next model in cascade
+    }
+  }
+
+  throw lastError || new Error('AI health ping failed across all cascade models');
+}
+
 export async function GET(request?: Request) {
   let isStrict = false;
+  let forceRefresh = false;
+  const hasHttpRequest = Boolean(request);
+
   if (request) {
     try {
       const url = new URL(request.url);
       isStrict =
         url.searchParams.get('strict') === 'true' ||
         request.headers?.get('x-health-strict') === 'true';
+      forceRefresh = url.searchParams.get('refresh') === 'true';
     } catch {
       // Ignore URL parsing errors for non-standard Request objects
     }
@@ -64,23 +112,22 @@ export async function GET(request?: Request) {
     return NextResponse.json(errorBody, { status: isStrict ? 500 : 200 });
   }
 
-  const overallStartTime = Date.now();
-  let latencyMs = 0;
+  // Return 60s cached healthy response for standard browser polling to prevent duplicate spikes
+  if (hasHttpRequest && !isStrict && !forceRefresh && cachedHealthResponse && Date.now() < cachedHealthResponse.expiresAt) {
+    return NextResponse.json({ ...cachedHealthResponse.data, cached: true }, { status: 200 });
+  }
 
-  try {
-    // 1. Test connectivity and measure active latency on PRIMARY_AI_MODEL (gemini-3.8-flash)
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: PRIMARY_AI_MODEL });
-    const pingStart = Date.now();
-    const result = await model.generateContent('ping');
-    result.response.text();
-    latencyMs = Date.now() - pingStart;
+  const overallStartTime = Date.now();
+
+  const runProbe = async (): Promise<{ body: AiHealthResponse; isHealthy: boolean }> => {
+    // 1. Test connectivity with automatic cascade fallback on transient blips
+    const { activeModel, latencyMs } = await pingWithCascadeFallback(apiKey);
 
     // 2. Query Google /v1beta/models catalog to audit primary model & superior version availability
     let catalogAudit: CatalogAuditResult = {
       isPrimaryModelAvailable: true,
       totalModelsCount: 1,
-      availableModels: [PRIMARY_AI_MODEL],
+      availableModels: [activeModel],
       alert: null,
     };
 
@@ -118,7 +165,6 @@ export async function GET(request?: Request) {
           if (!isPrimaryAvailable) {
             alert = `Primary model '${PRIMARY_AI_MODEL}' is discontinued or not supported for generateContent in Google Cloud catalog.`;
           } else {
-            // Detect if a newer/superior Flash version is available in the catalog
             const currentMatch = PRIMARY_AI_MODEL.match(/^gemini-(\d+(?:\.\d+)?)-flash/);
             const currentVer = currentMatch ? parseFloat(currentMatch[1]) : 3.8;
 
@@ -147,22 +193,45 @@ export async function GET(request?: Request) {
       console.warn('[AI Health Sentinel] Catalog inspection non-blocking warning:', catalogErr?.message || catalogErr);
     }
 
-    const isHealthy = catalogAudit.isPrimaryModelAvailable;
+    const isHealthy = catalogAudit.isPrimaryModelAvailable || Boolean(activeModel);
     const status: 'healthy' | 'degraded' = isHealthy ? 'healthy' : 'degraded';
 
     const responseBody: AiHealthResponse = {
       ok: isHealthy,
       status,
       primaryModel: PRIMARY_AI_MODEL,
-      model: PRIMARY_AI_MODEL,
+      model: activeModel,
       latencyMs,
       catalogAudit,
       cascade: Array.from(CANONICAL_MODEL_CASCADE),
       timestamp: new Date().toISOString(),
     };
 
-    return NextResponse.json(responseBody, {
-      status: (!isHealthy && isStrict) ? 503 : 200,
+    if (hasHttpRequest && isHealthy) {
+      cachedHealthResponse = {
+        data: responseBody,
+        expiresAt: Date.now() + HEALTH_CACHE_TTL_MS,
+      };
+    }
+
+    return { body: responseBody, isHealthy };
+  };
+
+  try {
+    let result: { body: AiHealthResponse; isHealthy: boolean };
+    if (hasHttpRequest && !isStrict && !forceRefresh) {
+      if (!inFlightHealthCheck) {
+        inFlightHealthCheck = runProbe().finally(() => {
+          inFlightHealthCheck = null;
+        });
+      }
+      result = await inFlightHealthCheck;
+    } else {
+      result = await runProbe();
+    }
+
+    return NextResponse.json(result.body, {
+      status: (!result.isHealthy && isStrict) ? 503 : 200,
     });
   } catch (error: any) {
     const errMsg = error?.message || '';
@@ -232,4 +301,3 @@ export async function GET(request?: Request) {
     return NextResponse.json(fallbackBody, { status: httpStatus });
   }
 }
-

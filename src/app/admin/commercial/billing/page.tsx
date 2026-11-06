@@ -1447,7 +1447,7 @@ export default function BillingDashboard() {
                         id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
                     ),
                     order_items (
-                        count
+                        id, quantity, picked_quantity, unit_price, selected_options
                     ),
                     billing_returns (
                         id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number, product_id,
@@ -2962,7 +2962,7 @@ export default function BillingDashboard() {
                         id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
-                        id, quantity, unit_price, nickname, unit,
+                        id, quantity, picked_quantity, unit_price, nickname, unit, selected_options,
                         products (
                             accounting_id, sku, name, unit_of_measure, iva_rate
                         )
@@ -3113,7 +3113,7 @@ export default function BillingDashboard() {
                         id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
-                        id, quantity, unit_price, nickname, unit,
+                        id, quantity, picked_quantity, unit_price, nickname, unit, selected_options,
                         products (
                             accounting_id, sku, name, unit_of_measure, iva_rate
                         )
@@ -5472,6 +5472,41 @@ export default function BillingDashboard() {
                                                                 <ShoppingBag size={11} style={{ color: '#0D7A57' }} />
                                                                 <span>{itemCount} ítems</span>
                                                             </button>
+                                                            {(() => {
+                                                                const owItems = Array.isArray(order.order_items)
+                                                                    ? order.order_items.filter((it: any) => (Number(it.picked_quantity) || 0) - (Number(it.quantity) || 0) > 0.001)
+                                                                    : [];
+                                                                if (owItems.length === 0) return null;
+                                                                const chargedCount = owItems.filter((it: any) => it.selected_options?._charge_overweight === true).length;
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setIsOverweightModalOpen(true);
+                                                                        }}
+                                                                        title="Este pedido tiene excedentes de pesaje en báscula. Clic para arbitrar cobro (Col M vs Col P)."
+                                                                        style={{
+                                                                            marginTop: '3px',
+                                                                            backgroundColor: chargedCount > 0 ? '#ECFDF5' : '#FFFBEB',
+                                                                            border: `1px solid ${chargedCount > 0 ? '#6EE7B7' : '#FDE68A'}`,
+                                                                            color: chargedCount > 0 ? '#065F46' : '#B45309',
+                                                                            borderRadius: '5px',
+                                                                            padding: '0.12rem 0.38rem',
+                                                                            fontSize: '0.58rem',
+                                                                            fontWeight: '800',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '3px',
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}
+                                                                    >
+                                                                        <Scale size={10} />
+                                                                        <span>Excedente ({owItems.length}) • {chargedCount > 0 ? `${chargedCount} Col M` : 'Col P'}</span>
+                                                                    </button>
+                                                                );
+                                                            })()}
                                                             <div style={{ fontSize: '0.62rem', color: '#0D7A57', fontWeight: '700', marginTop: '1px', cursor: 'pointer' }}>
                                                                 Ver productos ↗
                                                             </div>
