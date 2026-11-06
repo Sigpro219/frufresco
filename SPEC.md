@@ -1694,7 +1694,7 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
 #### 2. Protocolo de Cierre Diario y Congelación Contable
 - **Botón Manual de "Cierre Diario Oficial":** La jornada contable no se congela por cron ciego; requiere la ejecución explícita del botón de Cierre Diario por parte del Administrador o Supervisor de Operaciones.
 - **Congelación Estricta:** Al ejecutar el cierre, los registros de la fecha se persisten atómicamente en la tabla `daily_inventory_closings` en estado `is_locked = true`, capturando el snapshot completo de ítems auditados y bloqueando modificaciones retroactivas no auditadas salvo autorización de superadmin.
-- **Herencia Estricta de Saldos (Col T Conteo Físico $\rightarrow$ Col E del día siguiente):** El Inventario Inicial (Col E) de una jornada $D$ hereda obligatoriamente el saldo de la **Columna T (`Conteo Físico` / `physicalCount`)** de la última jornada operada anterior a dicha fecha ($D-1$), comparando cronológicamente la fecha del último cierre oficial (`daily_inventory_closings.closing_date`) frente a la fecha de los últimos conteos físicos registrados en movimientos (`inventory_movements` con `blind_count` / `blind_count_shift_close`). Jamás cae en fallback a la columna `Cálculo (Col S)`, y los SKUs no contados en $D-1$ inician en cero ($0$).
+- **Herencia Estricta de Saldos (Col T Conteo Físico $\rightarrow$ Col E del día siguiente):** El Inventario Inicial (Col E) de una jornada $D$ hereda obligatoriamente el saldo de la **Columna T (`Conteo Físico` / `physicalCount`)** de la última jornada operada anterior a dicha fecha ($D-1$), comparando cronológicamente la fecha del último cierre oficial (`daily_inventory_closings.closing_date`) frente a la fecha de los últimos conteos físicos registrados en movimientos (`inventory_movements` con `blind_count` / `blind_count_shift_close`). Si para la misma fecha $D-1$ coexisten tanto un registro en `daily_inventory_closings` como movimientos `blind_count` en `inventory_movements`, se carga el snapshot base de `daily_inventory_closings` y los movimientos `blind_count` de $D-1$ sobreponen su valor sobre dicho snapshot base. Jamás cae en fallback a la columna `Cálculo (Col S)`, y los SKUs no contados en $D-1$ inician en cero ($0$).
 - **Trazabilidad:** Se registra en auditoría: `closed_at`, `closed_by_name`, `total_calculated`, `total_physical`, `total_missing`, `total_surplus` y snapshot JSON inmutable.
 
 #### 3. Política de Desvío en Auditoría Cíclica: Tolerancia Cero (0%)
@@ -1980,13 +1980,13 @@ Para el procesamiento de planillas físicas escaneadas o fotografiadas en bodega
    - **Tabla Lado a Lado con Encabezados Sticky Sólidos y Ordenamiento Tri-Estado:** La tabla de validación implementa `borderCollapse: 'separate', borderSpacing: 0` con `position: 'sticky', top: 0, zIndex: 30` y fondo opaco `#F8FAFC` en cada `<th>`, ordenamiento Tri-Estado (`Ascendente` $\rightarrow$ `Descendente` $\rightarrow$ `Orden Natural del Documento`) en `NOMBRE EN DOCUMENTO`, `TU PRODUCTO (ID)` y `CANT. / COL`, y buscador rápido con tolerancia fonética (`Z` $\leftrightarrow$ `S`).
 
 2. **Doble Blindaje para PDFs Escaneados Pesados (Cero Error `HTTP 413` / `HTTP 400`) y Cancelación Atómica de Render en Zoom (`PdfCanvasViewer`):**
-   - **Desglose Automático por Páginas Ligeras en Cliente:** Cuando un PDF escaneado (ej. *CamScanner*) supera `3.2 MB`, el cliente desglosa automáticamente sus páginas mediante `PDF.js 3.11.174` en imágenes JPEG de `1600px` (`~220 KB` por página) y las envía en lotes seguros (`<= 2 páginas` / `<= 2.8 MB` por petición HTTP), complementado con un canal de carga firmada con `service_role` (`createSignedUploadUrl`) como respaldo.
+   - **Desglose Automático por Páginas Ligeras en Cliente:** Cuando un PDF escaneado (ej. *CamScanner*) supera `3.2 MB`, el cliente desglosa automáticamente la totalidad de sus páginas (hasta un máximo explícito de 50 páginas; si supera dicho umbral debe alertar explícitamente al operador, prohibiéndose el truncamiento silencioso) mediante `PDF.js 3.11.174` en imágenes JPEG de `1600px` (`~220 KB` por página) y las envía en lotes seguros (`<= 2 páginas` / `<= 2.8 MB` por petición HTTP), complementado con un canal de carga firmada con `service_role` (`createSignedUploadUrl`) como respaldo.
    - **Invariante Anti-Duplicación de Páginas al Hacer Zoom (`PdfCanvasViewer.tsx`):** Al modificar el nivel de zoom (`zoom`), el visor cancela explícitamente la tarea activa de `page.render()` (`renderTask.cancel()`) y verifica `if (isCancelled) break;` tanto después de `pdfDoc.getPage()` como después de `page.render().promise` antes de ejecutar `container.appendChild(pageWrapper)`. Esto erradica la condición de carrera donde una página del zoom anterior se insertaba duplicada al inicio del visor, garantizando que el número de páginas renderizadas coincida siempre 1:1 con el documento original y en su orden exacto (`Página 1` a `Página N`).
 
 3. **Regla de Raya Horizontal o Celda Vacía = `0` en Auditoría Visual, pero Exportación Estricta `> 0` al Balance Diario:**
-   - **Extracción Fiel 1:1 en Mesa de Trabajo:** Toda fila impresa o manuscrita cuya casilla `KG` tenga una línea horizontal atravesada (`—`, `-`, raya) o esté en blanco se extrae con `quantityKg: 0` y `rawQuantityText: "0"` (limpiando prefijos numéricos como `"1 - Ahuyama"` $\rightarrow$ `"Ahuyama"` y sin duplicar filas por notas al margen). De este modo, el operador visualiza en la tabla Lado a Lado el listado completo de la hoja física.
+   - **Extracción Fiel 1:1 en Mesa de Trabajo:** Toda fila impresa o manuscrita cuya casilla `KG` tenga explícitamente una línea horizontal atravesada (`—`, `-`, raya) o carezca simultáneamente de texto numérico y de valores positivos en `quantityKg`, `wasteQtyKg` y `garbageQtyKg` se extrae con `quantityKg: 0` y `rawQuantityText: "0"` (limpiando prefijos numéricos como `"1 - Ahuyama"` $\rightarrow$ `"Ahuyama"` y sin duplicar filas por notas al margen). Si Gemini omite `rawQuantityText` pero provee `quantityKg > 0`, `wasteQtyKg > 0` o `garbageQtyKg > 0`, queda prohibido anular dichos valores a `0`. De este modo, el operador visualiza en la tabla Lado a Lado el listado completo de la hoja física.
    - **Selección y Exportación Exclusiva de Cantidades `> 0` (`handleApproveAndCommit`):**
-     - En la mesa de trabajo, únicamente quedan seleccionados por defecto (`selected: true`) los renglones homologados cuya cantidad sea estrictamente mayor a cero (**`quantity > 0`**). Si el operador digita un valor `> 0` en un renglón que venía en `0`, el renglón se marca automáticamente (`selected: true`); si lo deja en `0`, se desmarca (`selected: false`).
+     - En la mesa de trabajo, únicamente pueden estar seleccionados (`selected: true`) los renglones homologados (`matchedProductId !== null`) cuya cantidad sea estrictamente mayor a cero (**`quantity > 0`**). Si el operador digita un valor `> 0` en un renglón que venía en `0`, el renglón se marca automáticamente (`selected: true`); si lo deja en `0` o sin producto homologado, permanece desmarcado (`selected: false`) y el checkbox individual se deshabilita mientras la cantidad sea `0` o carezca de producto homologado.
      - Al pulsar **`Confirmar e Inyectar a la Sábana`**, el motor filtra estrictamente **`r.quantity > 0`** (`item.totalQuantity > 0`) para **todas las columnas de destino (`Col G`, `Col T`, `Col Q`, `Col R`, `Col X`)**, garantizando que al Balance Diario se exporten e inyecten únicamente los productos parametrizados con valor **`> 0`**.
 
 ---
@@ -15264,17 +15264,35 @@ CREATE TABLE IF NOT EXISTS public.production_orders (
 
 ---
 
-### 47.3 Resumen Consolidado del Portafolio Comercial `onFRU v2.0` (Fase II)
+### 47.3 Escenario 409 (`onFRU v2.0` — Gobernanza Financiera): Consola Ejecutiva de Liquidación de Utilidad Delta ($\Delta$) y «Taxímetro de Valor (`VDD`)» en `/admin/dashboard`
+
+#### 1. Propósito y Reglas de Negocio
+- **Given** el acuerdo estratégico de **Participación en Utilidad Delta ($\Delta$ Profit-Sharing)** entre **Delta CoreTech**, **FruFresco** y la alianza **Friogan**:
+- **When** Dirección General accede al Dashboard Ejecutivo (`/admin/dashboard`):
+- **Then** el sistema despliega el **Widget de Telemetría y Liquidación de Valor Delta (`VDD` — Value-Delta Driven)** bajo las siguientes invariantes inmutables:
+  1. **Liquidación sobre Margen de Contribución Auditable en Software (Cero Distorsión Contable Externa):**
+     - **Bolsa A — Alianza `FruFresco × Friogan` (Línea Base $= \$0\text{ COP}$):**
+       $$\Delta \text{Utilidad Bolsa A} = \sum_{i \in \text{cell\_proteinas\_friogan}} \left(\text{Precio Venta Facturado}_{i} - \text{Costo Compra Friogan}_{i}\right)$$
+     - **Bolsa B — Operación Core Fruver + Procesados + Eficiencia de Bodega (Sobre Línea Base Histórica Congelada $\text{MB}_{0}$):**
+       $$\Delta \text{Utilidad Bolsa B} = (\text{Margen Bruto Mes Actual} - \text{MB}_{0}) + \Delta \text{Ahorro en Mermas/Faltantes (Cols P, Q, R, V)}$$
+  2. **Taxímetro de Valor en Tiempo Real (3 Contadores Ejecutivos):**
+     - **💰 $\Delta$ Margen Incremental Generado ($ COP):** Suma en vivo de Bolsa A + Bolsa B y cálculo automático de la participación correspondiente a **Delta CoreTech**.
+     - **🛡️ $\Delta$ Fugas Operativas Bloqueadas por Poka-Yokes ($ COP):** Valorización en pesos de los faltantes de devolución detectados (`Col O2`), sobrepesos liquidados en facturación (`Col M`) y rechazos en muelle.
+     - **⚡ $\Delta$ Horas-Hombre Liberadas por IA:** Total de órdenes B2B y planillas físicas procesadas por los motores multimodales sin digitación manual.
+
+---
+
+### 47.4 Resumen Consolidado del Portafolio Comercial `onFRU v2.0` (Fase II)
 
 | Capítulo `onFRU v2.0` | Módulo / Solución Industrial | Escenarios SDD | Problema de Negocio que Erradica | Estado |
 | :---: | :--- | :---: | :--- | :---: |
 | **Capítulo 45** | **WFM, Pulso Operativo (`Takt-Time Watchdog`), Esclusa Facial & Radar RTLS BLE Anti-Sabotaje** | **Escenarios 400 a 402** | Fuga de horas-hombre post-fichaje (salidas a tomar café en turno activo) y sabotaje de tags/carnets tradicionales. | 🚀 **Listo para Cotizar (Fase II)** |
 | **Capítulo 46** | **Planta de Producción de Procesados (MES Agroindustrial IV Gama, Recetas Yield % y Costeo NIC 2)** | **Escenarios 403 a 405** | Pérdida oculta de margen en productos pelados/picados por no absorber la merma en el costo, falta de explosión de compras brutas y descontrol de cuchillo en mesa. | 🚀 **Listo para Cotizar (Fase II)** |
-| **Capítulo 47** | **Alianza Estratégica `FruFresco × Friogan` (Proteínas Estandarizadas al Vacío & Bodega Especial de Carnes)** | **Escenarios 406 a 408** | Apertura de nueva línea de ingresos de alto ticket (proteína cárnica al vacío) con proveedor exclusivo, bodega/cava controlada y despacho sobre la misma flota logística. | 🚀 **Listo para Cotizar (Fase II)** |
+| **Capítulo 47** | **Alianza Estratégica `FruFresco × Friogan` (Proteínas Estandarizadas al Vacío, Bodega Carnes & Taxímetro $\Delta$ `VDD`)** | **Escenarios 406 a 409** | Apertura de línea de ingresos de alto ticket (proteína cárnica al vacío) con proveedor exclusivo, cava controlada y liquidación transparente de **Utilidad Delta ($\Delta$)**. | 🚀 **Listo para Cotizar (Fase II)** |
 
 ---
 
-### 47.4 Protocolo de Gobernanza Documental, Resguardo de Propiedad Intelectual (Delta CoreTech) e Impronta del Documento de Entrega al Cliente (`DT-20` — Pendiente Estratégico)
+### 47.5 Protocolo de Gobernanza Documental, Resguardo de Propiedad Intelectual (Delta CoreTech) e Impronta del Documento de Entrega al Cliente (`DT-20` — Pendiente Estratégico)
 
 > [!CAUTION]
 > **DIRECTIVA DE PROPIEDAD INTELECTUAL Y SECRETO INDUSTRIAL (DELTA CORETECH):**

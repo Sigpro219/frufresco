@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { X, UploadCloud, Sparkles, Truck, ClipboardCheck, Trash2, AlertTriangle, ZoomIn, ZoomOut, RotateCw, FileText, RefreshCw, ArrowRight, ShieldCheck, CheckCircle2, MessageSquare, Zap, Maximize2, Loader2, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
@@ -7,6 +7,32 @@ import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
 import PhysicalSheetStagingTable from '@/components/PhysicalSheetStagingTable';
 import { PhysicalSheetType, TargetBalanceColumn, CatalogProductOption, ReconciledSheetRow, RawExtractedSheetRow, ArbitrationResolution, buildReconciledSheetRows } from '@/lib/inventory/physical-sheet-parser';
+
+interface PdfJsViewport {
+  width: number;
+  height: number;
+}
+interface PdfJsPage {
+  getViewport: (opts: { scale: number }) => PdfJsViewport;
+  render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: PdfJsViewport }) => { promise: Promise<void> };
+}
+interface PdfJsDocument {
+  numPages: number;
+  getPage: (pageNum: number) => Promise<PdfJsPage>;
+}
+interface PdfJsLibrary {
+  GlobalWorkerOptions: { workerSrc: string };
+  getDocument: (opts: { data: Uint8Array }) => { promise: Promise<PdfJsDocument> };
+}
+interface WindowWithPdfJs extends Window {
+  pdfjsLib?: PdfJsLibrary;
+}
+interface ExtractPhysicalSheetApiResponse {
+  success?: boolean;
+  error?: string;
+  results?: Array<{ fileName: string; items: RawExtractedSheetRow[] }>;
+}
+
 interface PhysicalSheetIngestModalProps { isOpen: boolean; onClose: () => void; balanceDate: string; catalog: CatalogProductOption[]; opsCurrentByProductAndCol: Map<string, { G: number; T: number; Q: number; R: number; X?: number }>; supervisorName: string; onSuccess: () => void; }
 export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate, catalog, opsCurrentByProductAndCol, supervisorName, onSuccess }: PhysicalSheetIngestModalProps) {
   const [sheetType, setSheetType] = useState<PhysicalSheetType>('entrada');
@@ -29,18 +55,28 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const [collapseStatsBar, setCollapseStatsBar] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendFileInputRef = useRef<HTMLInputElement>(null);
+  const previewUrlsRef = useRef<string[]>([]);
+  previewUrlsRef.current = previewUrls;
   const isStaging = reconciledRows.length > 0;
 
+  useEffect(() => {
+    return () => {
+      previewUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
+    };
+  }, []);
+
   // Si un PDF escaneado supera 3.2 MB (ej. CamScanner pesado), desglosar sus páginas en imágenes JPEG ligeras (~220 KB c/u) usando el mismo motor PDF.js 3.11.174 de PdfCanvasViewer
-  const sliceHeavyPdfIntoPageJpegs = async (file: File): Promise<File[]> => {
+  const sliceHeavyPdfIntoPageJpegs = async (file: File): Promise<{ pages: File[]; warning: string | null }> => {
     const MAX_VERCEL_SAFE_BYTES = 3.2 * 1024 * 1024;
+    const MAX_PDF_PAGES = 50;
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     if (!isPdf || file.size <= MAX_VERCEL_SAFE_BYTES || typeof window === 'undefined') {
-      return [file];
+      return { pages: [file], warning: null };
     }
     try {
       setExtractionProgress(`Optimizando páginas de ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)...`);
-      if (!(window as any).pdfjsLib) {
+      const win = window as unknown as WindowWithPdfJs;
+      if (!win.pdfjsLib) {
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
         script.async = true;
@@ -49,12 +85,22 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           script.onerror = reject;
           document.head.appendChild(script);
         });
-        (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
-          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        if (win.pdfjsLib) {
+          win.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+      }
+      if (!win.pdfjsLib) {
+        return { pages: [file], warning: null };
       }
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await (window as any).pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-      const totalPages = Math.min(pdf.numPages || 1, 20);
+      const pdf = await win.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+      const rawNumPages = pdf.numPages || 1;
+      const totalPages = Math.min(rawNumPages, MAX_PDF_PAGES);
+      const pageLimitWarning =
+        rawNumPages > MAX_PDF_PAGES
+          ? `Advertencia: El archivo ${file.name} contiene ${rawNumPages} páginas; se procesaron las primeras ${MAX_PDF_PAGES} páginas permitidas por lote.`
+          : null;
       const baseName = file.name.replace(/\.pdf$/i, '');
       const pageFiles: File[] = [];
 
@@ -83,10 +129,10 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           );
         }
       }
-      return pageFiles.length > 0 ? pageFiles : [file];
+      return { pages: pageFiles.length > 0 ? pageFiles : [file], warning: pageLimitWarning };
     } catch (pdfErr) {
       console.warn('Fallback a archivo PDF original:', pdfErr);
-      return [file];
+      return { pages: [file], warning: null };
     }
   };
 
@@ -171,7 +217,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (k && (k.includes('sb-') || k.includes('supabase.auth.token'))) {
-              const parsed = JSON.parse(localStorage.getItem(k) || '{}');
+              const parsed = JSON.parse(localStorage.getItem(k) || '{}') as { access_token?: string; currentSession?: { access_token?: string } };
               const found = parsed?.access_token || parsed?.currentSession?.access_token || null;
               if (found) {
                 token = found;
@@ -179,7 +225,9 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
               }
             }
           }
-        } catch {}
+        } catch (storageErr) {
+          console.warn('No se pudo leer token de respaldo en localStorage:', storageErr);
+        }
       }
 
       const headers: Record<string, string> = {};
@@ -188,12 +236,14 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
       }
 
       const extractedRows: ReconciledSheetRow[] = [];
+      let accumulatedWarning: string | null = null;
 
       // 2. Preparar archivos (si algún PDF supera 3.2 MB, desglosar sus páginas en JPEGs ligeros ~220 KB c/u para no chocar jamás con el límite de 4.5 MB de Vercel)
       if (targetFiles.length > 0) {
         const expandedFiles: File[] = [];
         for (const f of targetFiles) {
-          const pagesOrFile = await sliceHeavyPdfIntoPageJpegs(f);
+          const { pages: pagesOrFile, warning } = await sliceHeavyPdfIntoPageJpegs(f);
+          if (warning) accumulatedWarning = warning;
           for (const pf of pagesOrFile) {
             expandedFiles.push(await ensureFileUnderVercelLimit(pf));
           }
@@ -275,9 +325,9 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           });
 
           const responseText = await response.text();
-          let data: any = null;
+          let data: ExtractPhysicalSheetApiResponse | null = null;
           try {
-            data = JSON.parse(responseText);
+            data = JSON.parse(responseText) as ExtractPhysicalSheetApiResponse;
           } catch {
             if (response.status === 413) {
               throw new Error(`El bloque (${batchLabel}) excedió el límite de red (413). Intenta nuevamente.`);
@@ -288,8 +338,8 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
             throw new Error('Respuesta no válida de la API de extracción');
           }
 
-          if (!response.ok || !data.success) {
-            throw new Error(data.error || 'No fue posible extraer la planilla física.');
+          if (!response.ok || !data?.success) {
+            throw new Error(data?.error || 'No fue posible extraer la planilla física.');
           }
 
           (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
@@ -310,9 +360,9 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         });
 
         const responseText = await response.text();
-        let data: any = null;
+        let data: ExtractPhysicalSheetApiResponse | null = null;
         try {
-          data = JSON.parse(responseText);
+          data = JSON.parse(responseText) as ExtractPhysicalSheetApiResponse;
         } catch {
           if (!response.ok) {
             throw new Error(responseText || `Error de servidor (${response.status})`);
@@ -320,8 +370,8 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           throw new Error('Respuesta no válida de la API de extracción');
         }
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || 'No fue posible extraer la planilla física.');
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.error || 'No fue posible extraer la planilla física.');
         }
 
         (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
@@ -335,7 +385,9 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         setCollapseTitleBar(true);
         setCollapseStatsBar(true);
       }
-      if (extractedRows.length === 0 && !appendMode) {
+      if (accumulatedWarning) {
+        setErrorMsg(accumulatedWarning);
+      } else if (extractedRows.length === 0 && !appendMode) {
         setErrorMsg('No se detectaron renglones con cantidades diligenciadas en el documento.');
       }
     } catch (err: unknown) {
@@ -347,6 +399,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   };
   const handleInitialFilesSelected = (selectedList: FileList | null) => {
     if (!selectedList || selectedList.length === 0) return;
+    previewUrls.forEach(u => URL.revokeObjectURL(u));
     const newFiles = Array.from(selectedList);
     setFiles(newFiles);
     setPreviewUrls(newFiles.map(f => URL.createObjectURL(f)));
@@ -376,6 +429,10 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
     setActiveFileIdx(0);
     setCollapseTitleBar(false);
     setCollapseStatsBar(false);
+  };
+  const handleCloseModal = () => {
+    previewUrls.forEach(u => URL.revokeObjectURL(u));
+    onClose();
   };
   const handleRowProductChange = (rowId: string, newProductId: string) => {
     const prod = catalog.find(c => c.id === newProductId) || null;
@@ -448,7 +505,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         opsCurrentValue: 0,
         conciliationStatus: 'new_entry',
         resolution: 'use_sheet',
-        selected: true
+        selected: false
       }
     ]);
   };
@@ -615,7 +672,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         }
       }
       onSuccess();
-      onClose();
+      handleCloseModal();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Error guardando en la base de datos.');
     } finally {
@@ -665,7 +722,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                 <ChevronUp size={14} />
                 <span>Ocultar título</span>
               </button>
-              <button type="button" onClick={onClose} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '9px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button type="button" onClick={handleCloseModal} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '9px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X size={16} />
               </button>
             </div>
@@ -754,7 +811,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                 <span>{isCompactMode ? 'Expandir' : 'Compactar'}</span>
               </button>
               {collapseTitleBar && (
-                <button type="button" onClick={onClose} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '8px', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button type="button" onClick={handleCloseModal} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '8px', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <X size={15} />
                 </button>
               )}
@@ -943,7 +1000,15 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                 sheetType={sheetType}
                 reconciledRows={reconciledRows}
                 filteredCatalog={catalog}
-                onToggleSelect={(rowId, selected) => setReconciledRows(prev => prev.map(r => (r.rowId === rowId ? { ...r, selected } : r)))}
+                onToggleSelect={(rowId, selected) =>
+                  setReconciledRows(prev =>
+                    prev.map(r =>
+                      r.rowId === rowId
+                        ? { ...r, selected: selected && r.quantity > 0 && Boolean(r.matchedProductId) }
+                        : r
+                    )
+                  )
+                }
                 onToggleSelectAll={selected => setReconciledRows(prev => prev.map(r => ({ ...r, selected: selected && r.quantity > 0 && Boolean(r.matchedProductId) })))}
                 onProductChange={handleRowProductChange}
                 onColChange={handleRowColChange}

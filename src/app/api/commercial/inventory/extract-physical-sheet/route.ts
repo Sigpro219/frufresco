@@ -4,7 +4,7 @@ import { verifySessionAndRole } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase';
 import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
 import { getGeminiApiKey } from '@/lib/ai/aiModelConfig';
-import { PhysicalSheetType, RawExtractedSheetRow, parseHandwrittenQuantity } from '@/lib/inventory/physical-sheet-parser';
+import { PhysicalSheetType, RawExtractedSheetRow, normalizeGeminiItems } from '@/lib/inventory/physical-sheet-parser';
 
 const SheetTypeSchema = z.enum(['entrada', 'inv_manual', 'desperdicio', 'pedidos_desperdicio', 'donaciones']);
 const GeminiExtractionItemSchema = z.object({
@@ -25,40 +25,17 @@ const GeminiResponseSchema = z.object({
   items: z.array(GeminiExtractionItemSchema).optional().default([])
 });
 
-function normalizeGeminiItems(rawResponse: unknown): {
+function parseAndNormalizeGeminiResponse(rawResponse: unknown): {
   sheetTitleDetected?: string;
   dateDetected?: string;
   items: RawExtractedSheetRow[];
 } {
   const parsed = GeminiResponseSchema.safeParse(rawResponse);
   const safeData = parsed.success ? parsed.data : { items: [] };
-  const items: RawExtractedSheetRow[] = safeData.items.map(it => {
-    const rawQtyStr = String(it.rawQuantityText ?? '').trim();
-    const isDashOrEmpty = !rawQtyStr || /^[-—–_/\s]+$/.test(rawQtyStr);
-    const parsedFromText = isDashOrEmpty ? 0 : parseHandwrittenQuantity(it.rawQuantityText ?? it.quantityKg, it.rawPresentation ?? null);
-    const parsedQty = isDashOrEmpty
-      ? 0
-      : (parsedFromText > 0 ? parsedFromText : (typeof it.quantityKg === 'number' && it.quantityKg > 0 ? it.quantityKg : 0));
-    const wasteQty = parseHandwrittenQuantity(it.wasteQtyKg);
-    const garbageQty = parseHandwrittenQuantity(it.garbageQtyKg);
-    const finalQty = parsedQty > 0 ? parsedQty : (wasteQty + garbageQty);
-    return {
-      rawProductName: String(it.rawProductName || '').trim().replace(/^\d+\s*[-.]\s*/, '').trim(),
-      rawQuantityText: isDashOrEmpty ? '0' : String(it.rawQuantityText ?? (wasteQty > 0 || garbageQty > 0 ? `Desp:${wasteQty} / Bas:${garbageQty}` : finalQty)),
-      quantityKg: finalQty,
-      wasteQtyKg: wasteQty > 0 ? wasteQty : null,
-      garbageQtyKg: garbageQty > 0 ? garbageQty : null,
-      rawPresentation: it.rawPresentation ?? null,
-      unitCostPaid: typeof it.unitCostPaid === 'number' ? it.unitCostPaid : null,
-      supplierName: it.supplierName ?? null,
-      wasteTypeHint: it.wasteTypeHint === 'cleaning' || it.wasteTypeHint === 'damage' ? it.wasteTypeHint : null,
-      sourceNote: it.sourceNote ?? null
-    };
-  });
   return {
     sheetTitleDetected: safeData.sheetTitleDetected,
     dateDetected: safeData.dateDetected,
-    items: items.filter(r => r.rawProductName.length > 0 && r.quantityKg >= 0)
+    items: normalizeGeminiItems(safeData.items)
   };
 }
 
@@ -230,7 +207,7 @@ export async function POST(req: Request) {
       const arrayBuffer = await remoteRes.arrayBuffer();
       const base64Data = Buffer.from(arrayBuffer).toString('base64');
       const rawResponse = await fetchGeminiExtraction(apiKey, basePrompt, base64Data, remoteMimeType, 90000);
-      const normalized = normalizeGeminiItems(rawResponse);
+      const normalized = parseAndNormalizeGeminiResponse(rawResponse);
       resultsByFile.push({
         fileName: remoteFileName,
         sheetTitleDetected: normalized.sheetTitleDetected || remoteFileName,
@@ -242,13 +219,8 @@ export async function POST(req: Request) {
     const validFiles = uploadedFiles.filter(file => file && file.size > 0);
     const fileResults = await Promise.all(
       validFiles.map(async file => {
-        let fileBytes: Uint8Array;
-        try {
-          fileBytes = await (file as any).bytes();
-        } catch {
-          const ab = await file.arrayBuffer();
-          fileBytes = new Uint8Array(ab);
-        }
+        const ab = await file.arrayBuffer();
+        const fileBytes = new Uint8Array(ab);
         const lowerName = file.name.toLowerCase();
         const isSpreadsheet = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
@@ -268,7 +240,7 @@ export async function POST(req: Request) {
           const mimeType = file.type || (lowerName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
           rawResponse = await fetchGeminiExtraction(apiKey, basePrompt, base64Data, mimeType, 90000);
         }
-        const normalized = normalizeGeminiItems(rawResponse);
+        const normalized = parseAndNormalizeGeminiResponse(rawResponse);
 
         return {
           fileName: file.name,
@@ -283,7 +255,7 @@ export async function POST(req: Request) {
     if (textInput.trim().length > 0) {
       const textPrompt = `${basePrompt}\n\nTEXTO A PROCESAR:\n"""\n${textInput.trim()}\n"""`;
       const rawResponse = await fetchGeminiExtraction(apiKey, textPrompt);
-      const normalized = normalizeGeminiItems(rawResponse);
+      const normalized = parseAndNormalizeGeminiResponse(rawResponse);
 
       resultsByFile.push({
         fileName: 'Texto / WhatsApp',

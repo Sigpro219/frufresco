@@ -8,20 +8,50 @@ interface PdfCanvasViewerProps {
     fileUrl?: string | null;
 }
 
+interface PdfJsViewport {
+    width: number;
+    height: number;
+}
+
+interface PdfJsRenderTask {
+    promise: Promise<void>;
+    cancel?: () => void;
+}
+
+interface PdfJsPage {
+    getViewport: (opts: { scale: number }) => PdfJsViewport;
+    render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: PdfJsViewport }) => PdfJsRenderTask;
+}
+
+interface PdfJsDocument {
+    numPages: number;
+    getPage: (pageNum: number) => Promise<PdfJsPage>;
+}
+
+interface PdfJsLibrary {
+    GlobalWorkerOptions: { workerSrc: string };
+    getDocument: (opts: { data: Uint8Array }) => { promise: Promise<PdfJsDocument> };
+}
+
+interface WindowWithPdfJs extends Window {
+    pdfjsLib?: PdfJsLibrary;
+}
+
 export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [numPages, setNumPages] = useState<number>(0);
     const [zoom, setZoom] = useState<number>(0.95);
-    const [pdfDoc, setPdfDoc] = useState<any>(null);
+    const [pdfDoc, setPdfDoc] = useState<PdfJsDocument | null>(null);
 
     // 1. Cargar el script de PDF.js si no existe
     useEffect(() => {
         let isMounted = true;
 
         const loadPdfJs = async () => {
-            if (!(window as any).pdfjsLib) {
+            const win = window as unknown as WindowWithPdfJs;
+            if (!win.pdfjsLib) {
                 const script = document.createElement('script');
                 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
                 script.async = true;
@@ -30,7 +60,9 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
                     script.onerror = reject;
                     document.head.appendChild(script);
                 });
-                (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                if (win.pdfjsLib) {
+                    win.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                }
             }
         };
 
@@ -50,12 +82,16 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
                     return;
                 }
 
-                const pdf = await (window as any).pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+                const win = window as unknown as WindowWithPdfJs;
+                if (!win.pdfjsLib) {
+                    throw new Error('PDF.js no disponible');
+                }
+                const pdf = await win.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
                 if (!isMounted) return;
                 setPdfDoc(pdf);
                 setNumPages(pdf.numPages);
                 setLoading(false);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Error cargando PDF en Canvas:', err);
                 if (isMounted) {
                     setError('No se pudo renderizar el PDF en pantalla');
@@ -65,7 +101,7 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
         };
 
         if (file || fileUrl) {
-            initPdf();
+            void initPdf();
         }
 
         return () => {
@@ -78,7 +114,7 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
         if (!pdfDoc || !containerRef.current) return;
 
         let isCancelled = false;
-        let activeRenderTask: any = null;
+        let activeRenderTask: PdfJsRenderTask | null = null;
         const renderPages = async () => {
             const container = containerRef.current;
             if (!container) return;
@@ -132,20 +168,25 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
                     pageWrapper.appendChild(canvas);
                     pageWrapper.appendChild(pageLabel);
                     container.appendChild(pageWrapper);
-                } catch (e: any) {
-                    if (!isCancelled && e?.name !== 'RenderingCancelledException') {
+                } catch (e: unknown) {
+                    const errName = e instanceof Error ? e.name : (typeof e === 'object' && e !== null && 'name' in e ? String((e as { name: unknown }).name) : '');
+                    if (!isCancelled && errName !== 'RenderingCancelledException') {
                         console.warn(`Error renderizando página ${pageNum}:`, e);
                     }
                 }
             }
         };
 
-        renderPages();
+        void renderPages();
 
         return () => {
             isCancelled = true;
             if (activeRenderTask && typeof activeRenderTask.cancel === 'function') {
-                try { activeRenderTask.cancel(); } catch {}
+                try {
+                    activeRenderTask.cancel();
+                } catch (cancelErr) {
+                    console.debug('Cancelación de renderizado PDF en curso:', cancelErr);
+                }
             }
         };
     }, [pdfDoc, zoom]);

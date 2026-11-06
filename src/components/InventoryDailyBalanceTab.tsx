@@ -897,6 +897,7 @@ interface CommittedSaleData {
                         .in('reference_type', ['blind_count', 'blind_count_shift_close'])
                         .lt('created_at', `${balanceDate}T00:00:00.000Z`)
                         .order('created_at', { ascending: false })
+                        .limit(5000)
                 ]);
 
                 const latestCloseDate = prevCloseData?.closing_date || null;
@@ -904,28 +905,39 @@ interface CommittedSaleData {
                     ? prevPhysicalMovs[0].created_at.slice(0, 10)
                     : null;
 
-                // Si existen conteos físicos (Col T) en una jornada más reciente que el último cierre formal (ej. 04/11 operado tras línea base 03/11),
-                // tomar estrictamente la columna Conteo Físico (Col T) de esa jornada más reciente.
-                if (latestMovDate && (!latestCloseDate || latestMovDate > latestCloseDate)) {
-                    prevClosingSnapshots['__HAS_BASELINE__'] = 1;
-                    prevPhysicalMovs!.forEach((m: any) => {
-                        if (!m.product_id || !m.created_at?.startsWith(latestMovDate)) return;
-                        if (prevClosingSnapshots[m.product_id] !== undefined) return;
-                        const counted = parseBlindCountQuantity(m.notes);
-                        if (counted !== null) {
-                            prevClosingSnapshots[m.product_id] = Math.max(0, counted);
-                        }
-                    });
-                } else if (prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
-                    prevClosingSnapshots['__HAS_BASELINE__'] = 1;
-                    prevCloseData.snapshot_items.forEach((item: any) => {
-                        if (!item.productId || prevClosingSnapshots[item.productId] !== undefined) return;
-                        // Regla Canónica: El Inventario Inicial (Col E) de D+1 toma estrictamente la columna CONTEO (physicalCount / Col T), jamás el Cálculo (Col S)
-                        const finalStock = item.physicalCount !== null && item.physicalCount !== undefined
-                            ? Number(item.physicalCount)
-                            : 0;
-                        prevClosingSnapshots[item.productId] = Math.max(0, finalStock);
-                    });
+                // Determinar la jornada D-1 más reciente con datos de cierre o conteo físico (SPEC.md §8.6.2)
+                const targetDMinus1Date = latestMovDate && (!latestCloseDate || latestMovDate > latestCloseDate)
+                    ? latestMovDate
+                    : latestCloseDate;
+
+                if (targetDMinus1Date) {
+                    // 1. Si existe snapshot de cierre formal en la jornada D-1 objetivo, cargarlo como línea base
+                    if (latestCloseDate === targetDMinus1Date && prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
+                        prevClosingSnapshots['__HAS_BASELINE__'] = 1;
+                        (prevCloseData.snapshot_items as Array<{ productId?: string; physicalCount?: number | string | null }>).forEach((item) => {
+                            if (!item.productId || prevClosingSnapshots[item.productId] !== undefined) return;
+                            // Regla Canónica: El Inventario Inicial (Col E) de D+1 toma estrictamente la columna CONTEO (physicalCount / Col T), jamás el Cálculo (Col S)
+                            const finalStock = item.physicalCount !== null && item.physicalCount !== undefined
+                                ? Number(item.physicalCount)
+                                : 0;
+                            prevClosingSnapshots[item.productId] = Math.max(0, finalStock);
+                        });
+                    }
+
+                    // 2. Si existen conteos físicos (Col T) en la misma jornada D-1 objetivo (o más reciente), superponerlos sobre la línea base
+                    if (latestMovDate === targetDMinus1Date && prevPhysicalMovs) {
+                        prevClosingSnapshots['__HAS_BASELINE__'] = 1;
+                        const seenMovProducts = new Set<string>();
+                        (prevPhysicalMovs as Array<{ product_id?: string | null; notes?: string | null; created_at?: string | null }>).forEach((m) => {
+                            if (!m.product_id || !m.created_at?.startsWith(targetDMinus1Date)) return;
+                            if (seenMovProducts.has(m.product_id)) return;
+                            const counted = parseBlindCountQuantity(m.notes ?? null);
+                            if (counted !== null) {
+                                seenMovProducts.add(m.product_id);
+                                prevClosingSnapshots[m.product_id] = Math.max(0, counted);
+                            }
+                        });
+                    }
                 }
             } catch (prevErr) {
                 console.warn('No se pudo cargar conteo previo del día anterior:', prevErr);
@@ -2138,7 +2150,7 @@ interface CommittedSaleData {
             }
         }
         return list;
-    }, [displayedFamilies, collapsedFamilies]);
+    }, [displayedFamilies, collapsedFamilies, isSearchActive]);
 
     // KPIs Lean Agregados sobre todas las familias filtradas
     const kpis = useMemo(() => {
@@ -2891,8 +2903,12 @@ interface CommittedSaleData {
         }
         const contRect = container.getBoundingClientRect();
         const cellRect = tdEl.getBoundingClientRect();
+        const stickyHeader = container.querySelector('[data-sticky-last="true"]');
+        const stickyRect = stickyHeader?.getBoundingClientRect();
         const stickyLeftWidth = isPanesFrozen
-            ? (isCompactIdentification ? 240 : (isCellCollapsed ? 389 : 475))
+            ? (stickyRect
+                ? Math.round(stickyRect.right - contRect.left)
+                : (isCompactIdentification ? 240 : (isCellCollapsed ? 389 : 475)))
             : 0;
         const stickyTopHeight = isPanesFrozen ? (isColumnFilterOpen ? 66 : 32) : 0;
         const stickyBottomHeight = isPanesFrozen ? 36 : 0;
@@ -3413,6 +3429,9 @@ interface CommittedSaleData {
                             key={`cell-${key}-D`}
                             style={{ 
                             padding: '6px 10px', 
+                            width: '190px',
+                            minWidth: '190px',
+                            maxWidth: '190px',
                             fontWeight: isParent ? '800' : '700', 
                             color: isParent ? '#854D0E' : '#0F172A', 
                             borderRight: '2px solid #CBD5E1',
@@ -5762,7 +5781,7 @@ interface CommittedSaleData {
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <span style={{ letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '0.72rem', color: '#E2E8F0' }}>
-                                            TOTAL ({filteredFamilies.length} FAMILIAS)
+                                            TOTAL ({displayedFamilies.length} FAMILIAS)
                                         </span>
                                         <span style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: '700' }}>
                                             {totalActiveSkusCount} SKUs
@@ -5776,10 +5795,11 @@ interface CommittedSaleData {
                                     const isPianoDark = colIdx % 2 === 1;
                                     const hasRightBorder = colKey === 'G' || colKey === 'I' || colKey === 'J' || colKey === 'N' || colKey === 'R' || colKey === 'U' || colKey === 'W';
                                     const decimals = 2;
+                                    const colWidth = getColWidth(colKey);
 
                                     // Totales S unificados con el resto de columnas
 
-                                    const totalVal = (columnTotals as any)[`total${colKey}`] ?? 0;
+                                    const totalVal = (columnTotals as Record<string, number>)[`total${colKey}`] ?? 0;
 
                                     return (
                                         <td
@@ -5792,9 +5812,9 @@ interface CommittedSaleData {
                                                 padding: colKey === 'U' ? '6px 4px' : '6px 8px',
                                                 textAlign: 'right',
                                                 color: meta?.color || '#F8FAFC',
-                                                width: '95px',
-                                                minWidth: '95px',
-                                                maxWidth: '95px',
+                                                width: `${colWidth}px`,
+                                                minWidth: `${colWidth}px`,
+                                                maxWidth: `${colWidth}px`,
                                                 borderTop: '2px solid #334155',
                                                 borderRight: hasRightBorder ? '2px solid #334155' : undefined
                                             }}

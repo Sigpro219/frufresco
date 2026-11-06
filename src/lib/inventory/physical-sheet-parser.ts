@@ -65,65 +65,87 @@ const NOISE_WORDS = [
 ];
 
 const SYNONYM_MAP: Record<string, string> = {
-  brocoly: 'brocoli',
-  zukiny: 'zukini',
-  zuquini: 'zukini',
-  habichuelin: 'habichuela',
-  ceboll: 'cebolla',
-  yerbabuena: 'hierbabuena',
-  huevos: 'cubeta huevos'
+  brocoly: 'brocoli', zukiny: 'zukini', zuquini: 'zukini',
+  habichuelin: 'habichuela', ceboll: 'cebolla', yerbabuena: 'hierbabuena', huevos: 'cubeta huevos'
 };
+
+export function cleanPhysicalSheetProductName(rawName: string): string {
+  return String(rawName || '').trim().replace(/^\d+\s*[-.]\s*/, '').trim();
+}
 
 export function normalizeProductToken(input: string): string {
   if (!input) return '';
-  let clean = input
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
+  let clean = input.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   Object.entries(SYNONYM_MAP).forEach(([wrong, right]) => {
     clean = clean.replace(new RegExp(`\\b${wrong}\\b`, 'g'), right);
   });
   return clean;
 }
 
-/**
- * Evalúa la cantidad manuscrita directamente en su unidad de compra (Kg o Unidad).
- * CERO RECÁLCULOS por bultos, canastillas, arrobas o docenas (SDD Escenario 391 §2.1).
- * Únicamente evalúa fracciones explícitas (1/2 = 0.5) o sumas aritméticas en la misma celda (ej. 408 + 70 = 478).
- */
-export function parseHandwrittenQuantity(
-  rawText: string | number | null | undefined,
-  _rawPresentation?: string | null
-): number {
+export function parseHandwrittenQuantity(rawText: string | number | null | undefined, _rawPresentation?: string | null): number {
   if (rawText === null || rawText === undefined) return 0;
   if (typeof rawText === 'number') return Number.isFinite(rawText) && rawText > 0 ? Math.round(rawText * 100) / 100 : 0;
-
   const str = String(rawText).trim();
-  if (!str) return 0;
-
+  if (!str || /^[-—–_/\s]+$/.test(str)) return 0;
   const expr = str
     .replace(/,/g, '.')
-    .replace(/(\d+)\s+1\/2\b/g, '$1.5')
-    .replace(/\b1\/2\b/g, '0.5')
-    .replace(/(\d+)\s+1\/4\b/g, '$1.25')
-    .replace(/\b1\/4\b/g, '0.25')
-    .replace(/(\d+)\s+3\/4\b/g, '$1.75')
-    .replace(/\b3\/4\b/g, '0.75')
+    .replace(/(\d+)\s+1\/2\b/g, '$1.5').replace(/\b1\/2\b/g, '0.5')
+    .replace(/(\d+)\s+1\/4\b/g, '$1.25').replace(/\b1\/4\b/g, '0.25')
+    .replace(/(\d+)\s+3\/4\b/g, '$1.75').replace(/\b3\/4\b/g, '0.75')
     .replace(/[^0-9.+]/g, '');
-
   const parts = expr.split('+').map(s => parseFloat(s.trim())).filter(n => Number.isFinite(n) && n > 0);
   const numericSum = parts.length > 0 ? parts.reduce((acc, v) => acc + v, 0) : 0;
   return numericSum > 0 ? Math.round(numericSum * 100) / 100 : 0;
 }
 
-export function classifyWasteTargetColumn(
-  rawProductName: string,
-  wasteTypeHint?: 'damage' | 'cleaning' | null
-): 'Q' | 'R' {
+export interface RawGeminiItemInput {
+  rawProductName?: string | null;
+  rawQuantityText?: string | number | null;
+  quantityKg?: number | string | null;
+  wasteQtyKg?: number | string | null;
+  garbageQtyKg?: number | string | null;
+  rawPresentation?: string | null;
+  unitCostPaid?: number | null;
+  supplierName?: string | null;
+  wasteTypeHint?: 'damage' | 'cleaning' | null;
+  sourceNote?: string | null;
+}
+
+export function normalizeGeminiItems(rawItems: RawGeminiItemInput[]): RawExtractedSheetRow[] {
+  return (rawItems || [])
+    .map(it => {
+      const rawQtyStr = String(it.rawQuantityText ?? '').trim();
+      const isExplicitDash = rawQtyStr.length > 0 && /^[-—–_/]+$/.test(rawQtyStr);
+      const parsedFromText = isExplicitDash ? 0 : parseHandwrittenQuantity(rawQtyStr || null, it.rawPresentation ?? null);
+      const rawNumericQty = parseHandwrittenQuantity(it.quantityKg);
+      const parsedQty = isExplicitDash ? 0 : parsedFromText > 0 ? parsedFromText : rawNumericQty;
+      const wasteQty = isExplicitDash ? 0 : parseHandwrittenQuantity(it.wasteQtyKg);
+      const garbageQty = isExplicitDash ? 0 : parseHandwrittenQuantity(it.garbageQtyKg);
+      const finalQty = parsedQty > 0 ? parsedQty : Math.round((wasteQty + garbageQty) * 100) / 100;
+      const resolvedRawText = isExplicitDash
+        ? '0'
+        : rawQtyStr.length > 0
+        ? rawQtyStr
+        : wasteQty > 0 || garbageQty > 0
+        ? `Desp:${wasteQty} / Bas:${garbageQty}`
+        : String(finalQty);
+      return {
+        rawProductName: cleanPhysicalSheetProductName(it.rawProductName || ''),
+        rawQuantityText: resolvedRawText,
+        quantityKg: finalQty,
+        wasteQtyKg: wasteQty > 0 ? wasteQty : null,
+        garbageQtyKg: garbageQty > 0 ? garbageQty : null,
+        rawPresentation: it.rawPresentation ?? null,
+        unitCostPaid: typeof it.unitCostPaid === 'number' ? it.unitCostPaid : null,
+        supplierName: it.supplierName ?? null,
+        wasteTypeHint: it.wasteTypeHint === 'cleaning' || it.wasteTypeHint === 'damage' ? it.wasteTypeHint : null,
+        sourceNote: it.sourceNote ?? null
+      };
+    })
+    .filter(r => r.rawProductName.length > 0 && r.quantityKg >= 0);
+}
+
+export function classifyWasteTargetColumn(rawProductName: string, wasteTypeHint?: 'damage' | 'cleaning' | null): 'Q' | 'R' {
   if (wasteTypeHint === 'cleaning') return 'R';
   if (wasteTypeHint === 'damage') return 'Q';
   const normalized = normalizeProductToken(rawProductName);
@@ -133,22 +155,14 @@ export function classifyWasteTargetColumn(
 
 export function extractCoreProductNameForMatch(rawProductName: string): string {
   const norm = normalizeProductToken(rawProductName);
-  const words = norm.split(' ').filter(w => {
-    if (!w) return false;
-    if (CLEANING_KEYWORDS.includes(w) && w !== 'pelada') return false;
-    if (NOISE_WORDS.includes(w)) return false;
-    return true;
-  });
+  const words = norm.split(' ').filter(w => Boolean(w) && (!CLEANING_KEYWORDS.includes(w) || w === 'pelada') && !NOISE_WORDS.includes(w));
   const res = words.join(' ').trim();
   if (res === 'cebolla roja') return 'cebolla cabezona roja';
   if (res === 'cebolla blanca') return 'cebolla cabezona blanca';
   return res || norm;
 }
 
-export function matchProductAgainstCatalog(
-  rawProductName: string,
-  catalog: CatalogProductOption[]
-): { product: CatalogProductOption | null; confidence: number } {
+export function matchProductAgainstCatalog(rawProductName: string, catalog: CatalogProductOption[]): { product: CatalogProductOption | null; confidence: number } {
   if (!rawProductName || catalog.length === 0) return { product: null, confidence: 0 };
   const fullNorm = normalizeProductToken(rawProductName);
   const coreNorm = extractCoreProductNameForMatch(rawProductName);
@@ -159,7 +173,6 @@ export function matchProductAgainstCatalog(
     const prodNorm = normalizeProductToken(item.name);
     if (!prodNorm) continue;
     if (prodNorm === fullNorm || prodNorm === coreNorm) return { product: item, confidence: 99 };
-
     let score = 0;
     if (prodNorm.startsWith(coreNorm) || coreNorm.startsWith(prodNorm)) {
       const ratio = Math.min(prodNorm.length, coreNorm.length) / Math.max(prodNorm.length, coreNorm.length);
@@ -202,9 +215,7 @@ export function buildReconciledSheetRows(
       const conciliationStatus: ConciliationStatus =
         opsVal <= 0.001 ? 'new_entry' : Math.abs(opsVal - qty) <= 0.05 ? 'matched_ops' : 'discrepancy';
       const cleanedRawQtyText =
-        raw.rawQuantityText && !/^[-—–_/\s]+$/.test(raw.rawQuantityText.trim())
-          ? raw.rawQuantityText.trim()
-          : String(qty);
+        raw.rawQuantityText && !/^[-—–_/\s]+$/.test(raw.rawQuantityText.trim()) ? raw.rawQuantityText.trim() : String(qty);
       result.push({
         rowId: `${sourceFileName}-${idx}-${subIdx}-${Date.now()}`,
         sourceFileName,
@@ -217,7 +228,7 @@ export function buildReconciledSheetRows(
         sourceNote: noteOverride ?? (raw.sourceNote || ''),
         matchedProductId: product?.id || null,
         matchedProductName: product?.name || 'Sin homologar — Seleccionar SKU',
-        matchedAccountingId: product?.accounting_id || product?.sku || 'S/N',
+        matchedAccountingId: String(product?.accounting_id ?? product?.sku ?? 'S/N'),
         matchedUnit: product?.unit_of_measure || 'Kg',
         confidence,
         targetColumn: targetCol,
@@ -228,9 +239,17 @@ export function buildReconciledSheetRows(
       });
     };
 
-    if (sheetType === 'pedidos_desperdicio' && ((raw.wasteQtyKg && raw.wasteQtyKg > 0) || (raw.garbageQtyKg && raw.garbageQtyKg > 0))) {
-      if (raw.wasteQtyKg && raw.wasteQtyKg > 0) pushRow(raw.wasteQtyKg, 'Q', 'Q', 'Col 1: Desperdicio');
-      if (raw.garbageQtyKg && raw.garbageQtyKg > 0) pushRow(raw.garbageQtyKg, 'R', 'R', 'Col 2: Basura / Merma');
+    if (sheetType === 'pedidos_desperdicio') {
+      const wQty = raw.wasteQtyKg && raw.wasteQtyKg > 0 ? raw.wasteQtyKg : 0;
+      const gQty = raw.garbageQtyKg && raw.garbageQtyKg > 0 ? raw.garbageQtyKg : 0;
+      if (wQty > 0 || gQty > 0) {
+        if (wQty > 0) pushRow(wQty, 'Q', 'Q', 'Col 1: Desperdicio');
+        if (gQty > 0) pushRow(gQty, 'R', 'R', 'Col 2: Basura / Merma');
+      } else {
+        const fallbackQty = raw.quantityKg > 0 ? raw.quantityKg : parseHandwrittenQuantity(raw.rawQuantityText, raw.rawPresentation);
+        const targetCol = classifyWasteTargetColumn(raw.rawProductName, raw.wasteTypeHint);
+        pushRow(fallbackQty, targetCol, targetCol, targetCol === 'R' ? 'Col 2: Basura / Merma' : 'Col 1: Desperdicio');
+      }
       return;
     }
 

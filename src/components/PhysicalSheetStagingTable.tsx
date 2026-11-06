@@ -354,8 +354,20 @@ export default function PhysicalSheetStagingTable({
                   <input
                     type="checkbox"
                     checked={row.selected}
+                    disabled={!row.matchedProductId || row.quantity <= 0}
+                    title={
+                      !row.matchedProductId
+                        ? 'Homologa primero el producto del catálogo para habilitar su selección'
+                        : row.quantity <= 0
+                        ? 'Solo los renglones con cantidad > 0 se inyectan al Balance Diario'
+                        : 'Seleccionar renglón para inyectar a la Sábana'
+                    }
                     onChange={e => onToggleSelect(row.rowId, e.target.checked)}
-                    style={{ transform: 'scale(1.15)', cursor: 'pointer' }}
+                    style={{
+                      transform: 'scale(1.15)',
+                      cursor: !row.matchedProductId || row.quantity <= 0 ? 'not-allowed' : 'pointer',
+                      opacity: !row.matchedProductId || row.quantity <= 0 ? 0.45 : 1
+                    }}
                   />
                 </td>
 
